@@ -44,6 +44,7 @@
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat_random.h"
 #include "mod-ollama-chat_context.h"
+#include "mod-ollama-chat_crowd.h"
 #include <iomanip>
 #include <unordered_set>
 #include "SpellMgr.h"
@@ -64,6 +65,19 @@
 // Forward declarations for internal helper functions.
 static bool IsBotEligibleForChatChannelLocal(Player* bot, Player* player,
                                              ChatChannelSourceLocal source, Channel* channel = nullptr, Player* receiver = nullptr);
+
+// Crowd replies (defined further down, next to Crowd_FireSlot).
+static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
+                                  ChatChannelSourceLocal source, Channel* channel,
+                                  const std::string& scopeKey, uint64_t seq,
+                                  const ContextAddressee& addressee,
+                                  const std::vector<Player*>& candidates);
+static void HandleCrowdBotLine(Player* bot, const std::string& msg,
+                               ChatChannelSourceLocal source, Channel* channel,
+                               const std::string& scopeKey, uint64_t seq,
+                               const ContextAddressee& addressee,
+                               const std::vector<Player*>& candidates,
+                               uint8_t chainDepth, uint64_t crowdPlanId);
 
 // Position of botName inside msg as a whole word, or npos. Case-insensitive.
 // Hoisted out of ProcessChat because being named is also what makes a message
@@ -308,6 +322,11 @@ bool PlayerBotChatHandler::OnPlayerCanUseChat(Player* player, uint32_t type, uin
     if (!g_Enable)
         return true;
 
+    // Same reason as above: bot lines reach ProcessChat through the
+    // dispatcher, at their real chain depth and with their crowd attached.
+    if (OllamaIsBotPlayer(player))
+        return true;
+
     ChatChannelSourceLocal sourceLocal = GetChannelSourceLocal(type);
     ProcessChat(player, type, lang, msg, sourceLocal, nullptr, nullptr);
     return true;
@@ -318,6 +337,9 @@ bool PlayerBotChatHandler::OnPlayerCanUseChat(Player* player, uint32_t type, uin
     if (!g_Enable)
         return true;
 
+    if (OllamaIsBotPlayer(player))
+        return true;
+
     ChatChannelSourceLocal sourceLocal = GetChannelSourceLocal(type);
     ProcessChat(player, type, lang, msg, sourceLocal, nullptr, nullptr);
     return true;
@@ -326,6 +348,9 @@ bool PlayerBotChatHandler::OnPlayerCanUseChat(Player* player, uint32_t type, uin
 bool PlayerBotChatHandler::OnPlayerCanUseChat(Player* player, uint32_t type, uint32_t lang, std::string& msg, Channel* channel)
 {
     if (!g_Enable)
+        return true;
+
+    if (OllamaIsBotPlayer(player))
         return true;
 
     ChatChannelSourceLocal sourceLocal = GetChannelSourceLocal(type);
@@ -529,7 +554,8 @@ void DeleteBotConversationHistoryFromDB(uint64_t botGuid)
 
 // Called when a bot sends a message (random chatter or other bot-initiated messages)
 // This triggers other bots to potentially reply
-void ProcessBotChatMessage(Player* bot, const std::string& msg, ChatChannelSourceLocal sourceLocal, Channel* channel, uint8_t chainDepth)
+void ProcessBotChatMessage(Player* bot, const std::string& msg, ChatChannelSourceLocal sourceLocal, Channel* channel, uint8_t chainDepth,
+                           uint64_t crowdPlanId)
 {
     if (!bot || msg.empty())
         return;
@@ -673,7 +699,8 @@ void ProcessBotChatMessage(Player* bot, const std::string& msg, ChatChannelSourc
     uint32_t lang = bot->GetTeamId() == TEAM_ALLIANCE ? LANG_COMMON : LANG_ORCISH;
     
     // Call the main ProcessChat function with bot as sender
-    PlayerBotChatHandler::ProcessChat(bot, type, lang, mutableMsg, sourceLocal, channel, nullptr, chainDepth);
+    PlayerBotChatHandler::ProcessChat(bot, type, lang, mutableMsg, sourceLocal, channel, nullptr, chainDepth,
+                                      crowdPlanId);
 }
 
 std::string GetBotHistoryPrompt(uint64_t botGuid, uint64_t playerGuid, std::string playerMessage)
@@ -1105,7 +1132,8 @@ std::string GenerateBotGameStateSnapshot(Player* bot)
 }
 
 
-void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32_t lang, std::string& msg, ChatChannelSourceLocal sourceLocal, Channel* channel, Player* receiver, uint8_t chainDepth)
+void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32_t lang, std::string& msg, ChatChannelSourceLocal sourceLocal, Channel* channel, Player* receiver, uint8_t chainDepth,
+                                       uint64_t crowdPlanId)
 {
     if (player == nullptr) {
         LOG_ERROR("module.ollamachat", "[Ollama Chat] ProcessChat: player is null");
@@ -1526,10 +1554,25 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
     
     if (g_DebugEnabled && notEligibleCount > 0)
     {
-        LOG_INFO("module.ollamachat", "[Ollama Chat] {} bots not eligible for {} (distance/guild/party checks failed)", 
+        LOG_INFO("module.ollamachat", "[Ollama Chat] {} bots not eligible for {} (distance/guild/party checks failed)",
                 notEligibleCount, ChatChannelSourceLocalStr[sourceLocal]);
     }
-    
+
+    // Crowd replies: the line gets a planned set of answers, typed one after
+    // another by different bots, instead of an independent roll per listening
+    // bot capped at MaxBotsToPick. Whispers keep the path below: a whisper
+    // only ever has one listener.
+    if (g_CrowdEnable && g_ContextEnable && sourceLocal != SRC_WHISPER_LOCAL)
+    {
+        if (senderIsBot)
+            HandleCrowdBotLine(player, msg, sourceLocal, channel, scopeKey, contextSeq,
+                               addressee, candidateBots, chainDepth, crowdPlanId);
+        else
+            PlanCrowdForHumanLine(player, msg, sourceLocal, channel, scopeKey, contextSeq,
+                                  addressee, candidateBots);
+        return;
+    }
+
     // Determine reply chance based on channel type
     uint32_t chance;
     if (sourceLocal == SRC_SAY_LOCAL || sourceLocal == SRC_YELL_LOCAL)
@@ -2064,6 +2107,765 @@ static bool IsBotEligibleForChatChannelLocal(Player* bot, Player* player, ChatCh
         default:
             return false;
     }
+}
+
+// --------------------------------------------------------------------------
+// Crowd replies
+//
+// ProcessChat hands every channel line here (see mod-ollama-chat_crowd.h for
+// the why). A person's line gets a plan: who answers, in what order. A bot's
+// line either adds an answer-back to the crowd it belongs to, or -- with
+// nothing running -- may get a bot or two answering it.
+// --------------------------------------------------------------------------
+
+namespace
+{
+    std::mt19937& CrowdRng()
+    {
+        static std::mt19937 rng{ std::random_device{}() };
+        return rng;
+    }
+
+    uint32_t PlayerReplyChanceFor(ChatChannelSourceLocal source)
+    {
+        switch (source)
+        {
+            case SRC_PARTY_LOCAL:
+            case SRC_RAID_LOCAL:    return g_PlayerReplyChance_Party;
+            case SRC_GUILD_LOCAL:
+            case SRC_OFFICER_LOCAL: return g_PlayerReplyChance_Guild;
+            case SRC_GENERAL_LOCAL: return g_PlayerReplyChance_Channel;
+            default:                return g_PlayerReplyChance_Say;
+        }
+    }
+
+    uint32_t BotLineReplyChanceFor(ChatChannelSourceLocal source)
+    {
+        switch (source)
+        {
+            case SRC_PARTY_LOCAL:
+            case SRC_RAID_LOCAL:    return g_ContextBotLineReplyChance_Party;
+            case SRC_GUILD_LOCAL:
+            case SRC_OFFICER_LOCAL: return g_ContextBotLineReplyChance_Guild;
+            case SRC_GENERAL_LOCAL: return g_ContextBotLineReplyChance_Channel;
+            default:                return g_ContextBotLineReplyChance_Say;
+        }
+    }
+
+    // Bots that could answer this line at all.
+    std::vector<Player*> CrowdPool(Player* speaker, ChatChannelSourceLocal source,
+                                   const std::vector<Player*>& candidates)
+    {
+        std::vector<Player*> pool;
+        pool.reserve(candidates.size());
+        for (Player* bot : candidates)
+        {
+            if (!bot || bot == speaker || !bot->IsInWorld())
+                continue;
+            if (g_DisableRepliesInCombat && bot->IsInCombat())
+                continue;
+            // Cross-faction /say arrives as gibberish; a fluent answer would
+            // be the most immersion-breaking thing the module could do.
+            if ((source == SRC_SAY_LOCAL || source == SRC_YELL_LOCAL) &&
+                Roleplay_IsLanguageBarrier(speaker, bot))
+                continue;
+            pool.push_back(bot);
+        }
+        return pool;
+    }
+
+    // Bots named in the line, in the order they are named.
+    std::vector<Player*> NamedBots(const std::string& msg, const std::vector<Player*>& pool, size_t max)
+    {
+        std::vector<std::pair<size_t, Player*>> found;
+        for (Player* bot : pool)
+        {
+            const size_t pos = OllamaFindBotNameMention(msg, bot->GetName());
+            if (pos != std::string::npos)
+                found.emplace_back(pos, bot);
+        }
+
+        std::sort(found.begin(), found.end(),
+                  [](const std::pair<size_t, Player*>& a, const std::pair<size_t, Player*>& b)
+                  { return a.first < b.first; });
+
+        std::vector<Player*> out;
+        for (const auto& entry : found)
+        {
+            if (out.size() >= max)
+                break;
+            out.push_back(entry.second);
+        }
+        return out;
+    }
+
+    Player* FindInPool(const std::vector<Player*>& pool, uint64_t guid)
+    {
+        if (!guid)
+            return nullptr;
+        for (Player* bot : pool)
+            if (bot->GetGUID().GetRawValue() == guid)
+                return bot;
+        return nullptr;
+    }
+
+    // `count` more voices for a crowd that should sound like several different
+    // people: a different personality each where possible, playful and
+    // straight styles taking turns, and nobody who has only just spoken.
+    std::vector<Player*> PickCrowdVoices(const std::vector<Player*>& pool,
+                                         const std::vector<Player*>& fixed, uint32_t count)
+    {
+        std::vector<Player*> out;
+        if (count == 0)
+            return out;
+
+        // Bots that have not spoken lately first; the ones that just did only
+        // when there are not enough others, so a small group does not fall
+        // silent just because everyone in it has already said something.
+        std::vector<Player*> rest, stale;
+        for (Player* bot : pool)
+        {
+            if (std::find(fixed.begin(), fixed.end(), bot) != fixed.end())
+                continue;
+            (Governor_BotIsFresh(bot->GetGUID()) ? rest : stale).push_back(bot);
+        }
+        std::shuffle(rest.begin(), rest.end(), CrowdRng());
+        if (rest.size() < count)
+        {
+            std::shuffle(stale.begin(), stale.end(), CrowdRng());
+            rest.insert(rest.end(), stale.begin(), stale.end());
+        }
+        if (rest.empty())
+            return out;
+
+        // Looking a personality up can assign one, and assigning writes to the
+        // database -- so only a handful of shuffled candidates are considered.
+        const size_t window = std::min<size_t>(rest.size(), std::max<size_t>(12, size_t(count) * 3));
+        rest.resize(window);
+
+        std::vector<std::string> keys;
+        keys.reserve(rest.size());
+        for (Player* bot : rest)
+            keys.push_back(GetBotPersonality(bot));
+
+        std::unordered_set<std::string> usedKeys;
+        uint32_t playful  = 0;
+        uint32_t straight = 0;
+        for (Player* bot : fixed)
+        {
+            const std::string key = GetBotPersonality(bot);
+            usedKeys.insert(key);
+            if (Crowd_IsPlayful(key))
+                ++playful;
+            else
+                ++straight;
+        }
+
+        std::vector<bool> taken(rest.size(), false);
+        while (out.size() < count)
+        {
+            const bool wantPlayful = (playful == straight) ? (urand(0, 1) == 0) : (playful < straight);
+
+            int best = -1, unused = -1, any = -1;
+            for (size_t i = 0; i < rest.size(); ++i)
+            {
+                if (taken[i])
+                    continue;
+                if (any < 0)
+                    any = int(i);
+                if (usedKeys.count(keys[i]))
+                    continue;
+                if (unused < 0)
+                    unused = int(i);
+                if (Crowd_IsPlayful(keys[i]) == wantPlayful)
+                {
+                    best = int(i);
+                    break;
+                }
+            }
+
+            const int pick = best >= 0 ? best : (unused >= 0 ? unused : any);
+            if (pick < 0)
+                break;
+
+            taken[size_t(pick)] = true;
+            out.push_back(rest[size_t(pick)]);
+            usedKeys.insert(keys[size_t(pick)]);
+            if (Crowd_IsPlayful(keys[size_t(pick)]))
+                ++playful;
+            else
+                ++straight;
+        }
+        return out;
+    }
+
+    std::string CrowdNames(const CrowdPlan& plan)
+    {
+        std::string names;
+        for (const CrowdSlot& slot : plan.slots)
+        {
+            Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(slot.botGuid));
+            if (!names.empty())
+                names += ", ";
+            names += bot ? bot->GetName() : std::string("?");
+            if (slot.addressed)
+                names += "*";
+        }
+        return names;
+    }
+
+    const char* CrowdKindName(CrowdLineKind kind)
+    {
+        switch (kind)
+        {
+            case CrowdLineKind::Aimed:   return "aimed";
+            case CrowdLineKind::Open:    return "open call";
+            case CrowdLineKind::Ambient: return "to the room";
+            case CrowdLineKind::BotLine: return "bot line";
+        }
+        return "?";
+    }
+
+    // One running plan per key. Party, raid and guild chat are one
+    // conversation each; a channel and /say area are one per faction, since
+    // the two sides never see each other's lines there.
+    std::string CrowdKeyFor(const std::string& scopeKey, ChatChannelSourceLocal source, Player* speaker)
+    {
+        switch (source)
+        {
+            case SRC_GENERAL_LOCAL:
+            case SRC_SAY_LOCAL:
+            case SRC_YELL_LOCAL:
+                return scopeKey + "|t" + std::to_string(uint32(speaker->GetTeamId()));
+            default:
+                return scopeKey;
+        }
+    }
+
+    // Names a line might be addressed to, so "ty Lahu" still reads as a thank-you.
+    std::vector<std::string> NamesOf(const std::vector<Player*>& bots, const std::string& extra = std::string())
+    {
+        std::vector<std::string> names;
+        names.reserve(bots.size() + 1);
+        for (Player* bot : bots)
+            names.push_back(bot->GetName());
+        if (!extra.empty())
+            names.push_back(extra);
+        return names;
+    }
+
+    CrowdPlan NewPlan(Player* speaker, const std::string& msg, ChatChannelSourceLocal source,
+                      Channel* channel, const std::string& scopeKey, uint64_t seq)
+    {
+        CrowdPlan plan;
+        plan.key          = CrowdKeyFor(scopeKey, source, speaker);
+        plan.scopeKey     = scopeKey;
+        plan.source       = source;
+        plan.channelName  = channel ? channel->GetName() : std::string();
+        plan.channelId    = channel ? channel->GetChannelId() : 0;
+        plan.speakerGuid  = speaker->GetGUID().GetRawValue();
+        plan.speakerIsBot = OllamaIsBotPlayer(speaker);
+        plan.speakerName  = speaker->GetName();
+        plan.message      = msg;
+        plan.messageSeq   = seq;
+        return plan;
+    }
+}
+
+static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
+                                  ChatChannelSourceLocal source, Channel* channel,
+                                  const std::string& scopeKey, uint64_t seq,
+                                  const ContextAddressee& addressee,
+                                  const std::vector<Player*>& candidates)
+{
+    const std::vector<Player*> pool = CrowdPool(player, source, candidates);
+    if (pool.empty())
+        return;
+
+    // "ty", "lol", "ok" -- even shouted, even with a name -- are said to
+    // whoever spoke last or was named, if anyone. "HELLO IS ANYONE THERE!?"
+    // is said to everyone, and so is any other shout ("IM ON FIRE"): a shout
+    // is for the whole room to hear.
+    const CrowdText::LineTraits traits =
+        CrowdText::Classify(Context_CleanText(msg), g_CrowdAckWords, g_CrowdOpenCallPhrases,
+                            NamesOf(candidates, addressee.name));
+    const bool shouted   = traits.shouted;
+    const bool ack       = traits.ack;
+    const bool openWords = traits.openWords;
+    const bool open      = traits.open;
+
+    const uint32_t listeners = static_cast<uint32_t>(pool.size());
+    const uint32_t cap = CrowdText::Capacity(listeners, g_CrowdBotsPerResponder, g_CrowdMaxResponders);
+
+    // Who it is aimed at. Names first -- and a named bot that cannot answer
+    // right now (in combat, or the roll) does not hand its line to whoever
+    // spoke last.
+    std::vector<Player*> fixed;
+    const std::vector<Player*> firstNamed = NamedBots(msg, candidates, 1);
+    const bool someoneNamed = !firstNamed.empty();
+    for (Player* bot : NamedBots(msg, pool, std::min<uint32_t>(cap, 3)))
+        if (urand(0, 99) < g_DirectAddressReplyChance)
+            fixed.push_back(bot);
+
+    // ...then the bot they were just talking to -- unless they are plainly
+    // asking everyone else ("anyone else about?"), which is exactly when the
+    // last bot must NOT be the one to answer.
+    bool aimedAtSomeoneElse = someoneNamed && fixed.empty();
+    if (!someoneNamed && !openWords)
+    {
+        Player* aimed = nullptr;
+        if (addressee.guid)
+        {
+            aimed = addressee.isBot ? FindInPool(pool, addressee.guid) : nullptr;
+            aimedAtSomeoneElse = !aimed;   // a person, or a bot that cannot answer now
+        }
+        else
+        {
+            for (Player* bot : pool)
+            {
+                if (Governor_InConversation(bot->GetGUID(), player->GetGUID(), scopeKey))
+                {
+                    aimed = bot;
+                    break;
+                }
+            }
+        }
+
+        if (aimed && urand(0, 99) < g_DirectAddressReplyChance)
+            fixed.push_back(aimed);
+    }
+
+    // A small party is a conversation, not a crowd.
+    bool smallParty = false;
+    if (source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL)
+    {
+        if (Group* group = player->GetGroup())
+            smallParty = g_DirectAddressGroupSize > 0 &&
+                         group->GetMembersCount() <= g_DirectAddressGroupSize;
+    }
+
+    CrowdLineKind kind = CrowdLineKind::Ambient;
+    uint32_t total = 0;
+
+    if (ack)
+    {
+        // At most the bot it was aimed at, and often nobody: "ty" is not a
+        // conversation starter.
+        if (fixed.empty() || urand(0, 99) >= g_CrowdAckReplyChance)
+            return;
+        fixed.resize(1);
+        kind  = CrowdLineKind::Aimed;
+        total = 1;
+    }
+    else if (open)
+    {
+        // Busy channel: three to five answers. Quiet one: one or two.
+        kind = CrowdLineKind::Open;
+        const uint32_t low = std::max<uint32_t>(1, (cap + 1) / 2);
+        total = std::max<uint32_t>(urand(low, cap), static_cast<uint32_t>(fixed.size()));
+    }
+    else if (!fixed.empty() || aimedAtSomeoneElse)
+    {
+        // Aimed at one bot (or at someone else): they answer, and now and
+        // then somebody else chimes in.
+        kind  = CrowdLineKind::Aimed;
+        total = static_cast<uint32_t>(fixed.size());
+        const uint32_t room     = cap > total ? cap - total : 0;
+        const uint32_t maxExtra = std::min<uint32_t>(g_CrowdChimeInMax, room);
+        for (uint32_t i = 0; i < maxExtra && urand(0, 99) < g_CrowdChimeInChance; ++i)
+            ++total;
+    }
+    else if (smallParty)
+    {
+        total = urand(1, cap);
+    }
+    else
+    {
+        if (urand(0, 99) >= PlayerReplyChanceFor(source))
+            return;
+        total = urand(1, std::max<uint32_t>(1, (cap + 1) / 2));
+    }
+
+    std::vector<Player*> extras;
+    if (total > fixed.size())
+        extras = PickCrowdVoices(pool, fixed, total - static_cast<uint32_t>(fixed.size()));
+
+    if (fixed.empty() && extras.empty())
+        return;
+
+    CrowdPlan plan = NewPlan(player, msg, source, channel, scopeKey, seq);
+    plan.kind       = kind;
+    plan.shouted    = shouted;
+    plan.listeners  = listeners;
+    if (kind == CrowdLineKind::Aimed)
+        plan.aimedAt = !fixed.empty() ? fixed.front()->GetName()
+                     : someoneNamed   ? firstNamed.front()->GetName()
+                                      : addressee.name;
+
+    for (Player* bot : fixed)
+    {
+        CrowdSlot slot;
+        slot.botGuid   = bot->GetGUID().GetRawValue();
+        slot.addressed = true;
+        plan.slots.push_back(slot);
+    }
+    for (Player* bot : extras)
+    {
+        CrowdSlot slot;
+        slot.botGuid = bot->GetGUID().GetRawValue();
+        plan.slots.push_back(slot);
+    }
+
+    if (g_DebugEnabled)
+        LOG_INFO("module.ollamachat",
+                 "[Ollama Chat] Crowd for {}'s line in {} ({}{}, {} listening, room for {}): [{}]",
+                 player->GetName(), ChatChannelSourceLocalStr[source], CrowdKindName(kind),
+                 shouted ? ", shouted" : "", listeners, cap, CrowdNames(plan));
+
+    Crowd_Start(std::move(plan));
+}
+
+static void HandleCrowdBotLine(Player* bot, const std::string& msg,
+                               ChatChannelSourceLocal source, Channel* channel,
+                               const std::string& scopeKey, uint64_t seq,
+                               const ContextAddressee& addressee,
+                               const std::vector<Player*>& candidates,
+                               uint8_t chainDepth, uint64_t crowdPlanId)
+{
+    // chainDepth counts the hops to this line's replies; the first answer to
+    // a line is not decayed, each answer to an answer is.
+    const uint8_t hops = chainDepth > 0 ? static_cast<uint8_t>(chainDepth - 1) : 0;
+    const uint64_t self = bot->GetGUID().GetRawValue();
+
+    const std::string clean = Context_CleanText(msg);
+
+    // A line that was one voice of a crowd stays inside that crowd. Looked up
+    // by id, not by where it was said: a voice standing over a zone border is
+    // still part of it. Once the crowd has ended or been replaced its late
+    // lines start nothing at all -- that is what keeps a chain from escaping.
+    if (crowdPlanId != 0)
+    {
+        CrowdPlan* plan = Crowd_FindById(crowdPlanId);
+        if (!plan || plan->replyBacks >= g_CrowdMaxReplyBacks)
+            return;
+
+        // "ty Lahu" from a bot does not need an answer back.
+        std::vector<std::string> names;
+        for (uint64_t guid : plan->answeredGuids)
+            if (Player* p = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid)))
+                names.push_back(p->GetName());
+        if (plan->speakerIsBot)
+            names.push_back(plan->speakerName);
+        if (CrowdText::Classify(clean, g_CrowdAckWords, g_CrowdOpenCallPhrases, names).ack)
+            return;
+
+        // Only an answer-back: a bot this line names, who has already spoken
+        // in this crowd, may answer it.
+        Player* target = nullptr;
+        size_t  bestPos = std::string::npos;
+        auto consider = [&](uint64_t guid)
+        {
+            if (guid == 0 || guid == self)
+                return;
+            Player* other = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid));
+            if (!other || !OllamaIsBotPlayer(other))
+                return;
+            const size_t pos = OllamaFindBotNameMention(msg, other->GetName());
+            if (pos != std::string::npos && (bestPos == std::string::npos || pos < bestPos))
+            {
+                bestPos = pos;
+                target  = other;
+            }
+        };
+        for (uint64_t guid : plan->answeredGuids)
+            consider(guid);
+        if (plan->speakerIsBot)
+            consider(plan->speakerGuid);
+
+        // Two bots already trading lines: the one just answered may answer
+        // back without being named.
+        if (!target && plan->kind == CrowdLineKind::BotLine &&
+            addressee.guid && addressee.isBot && addressee.guid != self)
+        {
+            const bool participant = addressee.guid == plan->speakerGuid ||
+                std::find(plan->answeredGuids.begin(), plan->answeredGuids.end(), addressee.guid) !=
+                    plan->answeredGuids.end();
+            if (participant)
+                target = ObjectAccessor::FindConnectedPlayer(ObjectGuid(addressee.guid));
+        }
+
+        if (!target)
+            return;
+
+        const uint32_t chance = Governor_ApplyChainDecay(g_ContextBotAddressedChance, hops);
+        if (urand(0, 99) >= chance)
+            return;
+
+        CrowdSlot slot;
+        slot.botGuid    = target->GetGUID().GetRawValue();
+        slot.addressed  = true;
+        slot.replyBack  = true;
+        slot.chainDepth = chainDepth;
+        slot.answerGuid = self;
+        slot.answerText = msg;
+        slot.answerSeq  = seq;
+
+        const size_t at = std::min(plan->next, plan->slots.size());
+        plan->slots.insert(plan->slots.begin() + static_cast<std::ptrdiff_t>(at), std::move(slot));
+        ++plan->replyBacks;
+        Crowd_NoteReplyBack();
+
+        if (g_DebugEnabled)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] Crowd: {} will answer {} back (chance {}%).",
+                     target->GetName(), bot->GetName(), chance);
+        return;
+    }
+
+    // An ambient line: random chatter, or anything else a bot said on its own.
+    // If a conversation is already going on here, it does not start another.
+    const std::string key = CrowdKeyFor(scopeKey, source, bot);
+    if (Crowd_Find(key))
+        return;
+
+    const std::vector<Player*> pool = CrowdPool(bot, source, candidates);
+    if (pool.empty())
+        return;
+
+    if (CrowdText::Classify(clean, g_CrowdAckWords, g_CrowdOpenCallPhrases, NamesOf(pool)).ack)
+        return;
+
+    Player* aimed = nullptr;
+    {
+        const std::vector<Player*> named = NamedBots(msg, pool, 1);
+        if (!named.empty())
+            aimed = named.front();
+        else if (addressee.guid && addressee.isBot)
+            aimed = FindInPool(pool, addressee.guid);
+    }
+
+    uint32_t chance = Governor_ApplyChainDecay(BotLineReplyChanceFor(source), hops);
+    if (aimed)
+        chance = std::max(chance, Governor_ApplyChainDecay(g_ContextBotAddressedChance, hops));
+    if (urand(0, 99) >= chance)
+        return;
+
+    std::vector<Player*> fixed;
+    if (aimed)
+        fixed.push_back(aimed);
+
+    const uint32_t listeners = static_cast<uint32_t>(pool.size());
+    const uint32_t cap = CrowdText::Capacity(listeners, g_CrowdBotsPerResponder, g_CrowdMaxResponders);
+    uint32_t total = 1;
+    if (cap >= 2 && urand(0, 99) < g_CrowdBotLineSecondChance)
+        total = 2;
+
+    std::vector<Player*> extras;
+    if (total > fixed.size())
+        extras = PickCrowdVoices(pool, fixed, total - static_cast<uint32_t>(fixed.size()));
+
+    if (fixed.empty() && extras.empty())
+        return;
+
+    CrowdPlan plan = NewPlan(bot, msg, source, channel, scopeKey, seq);
+    plan.kind      = CrowdLineKind::BotLine;
+    plan.listeners = listeners;
+
+    for (Player* p : fixed)
+    {
+        CrowdSlot slot;
+        slot.botGuid    = p->GetGUID().GetRawValue();
+        slot.addressed  = true;
+        slot.chainDepth = chainDepth;
+        plan.slots.push_back(slot);
+    }
+    for (Player* p : extras)
+    {
+        CrowdSlot slot;
+        slot.botGuid    = p->GetGUID().GetRawValue();
+        slot.chainDepth = chainDepth;
+        plan.slots.push_back(slot);
+    }
+
+    if (g_DebugEnabled)
+        LOG_INFO("module.ollamachat",
+                 "[Ollama Chat] Crowd for bot {}'s line in {} (depth {}, {} listening): [{}]",
+                 bot->GetName(), ChatChannelSourceLocalStr[source], chainDepth, listeners, CrowdNames(plan));
+
+    // Bots read before they answer, too.
+    const uint32_t lo = std::min(g_CrowdGapMinMs, g_CrowdGapMaxMs);
+    const uint32_t hi = std::max(g_CrowdGapMinMs, g_CrowdGapMaxMs);
+    Crowd_Start(std::move(plan), lo == hi ? lo : urand(lo, hi));
+}
+
+bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
+{
+    if (index >= plan.slots.size())
+        return false;
+
+    const CrowdSlot slot = plan.slots[index];   // a copy: answer-backs may insert later
+
+    Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(slot.botGuid));
+    if (!bot || !bot->IsInWorld() || bot->IsBeingTeleported())
+        return false;
+    if (g_DisableRepliesInCombat && bot->IsInCombat())
+        return false;
+
+    const uint64_t answerGuid = slot.replyBack ? slot.answerGuid : plan.speakerGuid;
+    Player* speaker = ObjectAccessor::FindConnectedPlayer(ObjectGuid(answerGuid));
+    if (!speaker || !speaker->IsInWorld() || speaker == bot)
+        return false;
+
+    // A crowd takes a minute. People move, leave channels and drop group in
+    // that time, so who can still hear the line -- and whether a person can
+    // still see the answer -- is checked again now.
+    OllamaWorldSnapshot world;
+    world.Build();
+
+    switch (plan.source)
+    {
+        case SRC_GENERAL_LOCAL:
+        {
+            ChannelMgr* mgr = ChannelMgr::forTeam(bot->GetTeamId());
+            Channel* channel = mgr ? mgr->GetChannel(plan.channelName, bot) : nullptr;
+            if (!channel || !OllamaIsOnChannel(channel, bot->GetGUID()) || !world.RealPlayerInChannel(channel))
+                return false;
+            break;
+        }
+
+        case SRC_SAY_LOCAL:
+        case SRC_YELL_LOCAL:
+        {
+            const float range = (plan.source == SRC_SAY_LOCAL) ? g_SayDistance : g_YellDistance;
+            if (!IsBotEligibleForChatChannelLocal(bot, speaker, plan.source, nullptr, nullptr) ||
+                !world.RealPlayerWithin(bot, range) ||
+                Roleplay_IsLanguageBarrier(speaker, bot))
+                return false;
+            break;
+        }
+
+        case SRC_PARTY_LOCAL:
+        case SRC_RAID_LOCAL:
+            if (!IsBotEligibleForChatChannelLocal(bot, speaker, plan.source, nullptr, nullptr) ||
+                !OllamaGroupHasRealPlayer(bot))
+                return false;
+            break;
+
+        case SRC_GUILD_LOCAL:
+        case SRC_OFFICER_LOCAL:
+            if (!IsBotEligibleForChatChannelLocal(bot, speaker, plan.source, nullptr, nullptr) ||
+                !world.GuildHasRealPlayer(bot->GetGuildId()))
+                return false;
+            break;
+
+        default:
+            return false;
+    }
+
+    if (!Governor_CanSendPaced(bot->GetGUID(), plan.scopeKey, slot.addressed))
+        return false;
+
+    // Who has already answered, as far as this bot could hear: in /say a
+    // voice thirty yards off is not in its transcript, so it must not be told
+    // to "see the chat above" for it.
+    std::vector<std::string> heard;
+    if (plan.source == SRC_SAY_LOCAL || plan.source == SRC_YELL_LOCAL)
+    {
+        const float range = (plan.source == SRC_SAY_LOCAL) ? g_SayDistance : g_YellDistance;
+        for (size_t i = 0; i < plan.answeredGuids.size() && i < plan.answeredBy.size(); ++i)
+        {
+            Player* voice = ObjectAccessor::FindConnectedPlayer(ObjectGuid(plan.answeredGuids[i]));
+            if (voice && voice->IsInWorld() && voice->GetMapId() == bot->GetMapId() &&
+                bot->IsWithinDistInMap(voice, range))
+                heard.push_back(plan.answeredBy[i]);
+        }
+    }
+    else
+    {
+        heard = plan.answeredBy;
+    }
+
+    // The first voice answers the line itself. Later ones see it in the
+    // transcript, in order, with the answers that came after it.
+    const bool followUp = !slot.replyBack && !heard.empty();
+    const std::string& message = slot.replyBack ? slot.answerText : plan.message;
+    const uint64_t excludeSeq  = slot.replyBack ? slot.answerSeq : (followUp ? 0 : plan.messageSeq);
+
+    const std::string speakerName  = speaker->GetName();
+    const std::string listenerText = CrowdText::ListenerPhrase(plan.listeners);
+    const std::string answered     = CrowdText::JoinNames(heard);
+    auto hintFrom = [&](const std::string& templ) -> std::string
+    {
+        if (templ.empty())
+            return {};
+        std::string out = SafeFormat(templ,
+                                     fmt::arg("player_name", speakerName),
+                                     fmt::arg("replied_to", speakerName),
+                                     fmt::arg("addressee", plan.aimedAt),
+                                     fmt::arg("listeners", listenerText),
+                                     fmt::arg("answered", answered),
+                                     fmt::arg("pass_token", g_ContextPassToken));
+        return out == "[Format Error]" ? std::string() : out;
+    };
+
+    std::string hint;
+    if (slot.replyBack)
+        hint = hintFrom(g_CrowdHintReplyBack);
+    else if (slot.addressed)
+        hint = g_ContextHintAddressed;
+    else if (followUp)
+        hint = hintFrom(g_CrowdHintFollowUp);
+    else if (plan.kind == CrowdLineKind::Open)
+        hint = hintFrom(g_CrowdHintOpenCall);
+    else if (plan.kind == CrowdLineKind::Aimed && !plan.aimedAt.empty())
+        hint = hintFrom(g_ContextHintBystander);   // meant for someone else, who has not answered
+    else
+        hint = hintFrom(g_ContextHintOpen);
+
+    if (plan.shouted && !slot.replyBack)
+    {
+        const std::string shout = hintFrom(g_CrowdHintShout);
+        if (!shout.empty())
+            hint += (hint.empty() ? "" : " ") + shout;
+    }
+
+    std::string prompt = GenerateBotPrompt(bot, message, speaker, plan.source, plan.channelName,
+                                           excludeSeq, hint);
+    if (prompt.empty())
+        return false;
+
+    const bool toPerson = OllamaIsRealPlayer(speaker);
+
+    OllamaChatRequest request;
+    request.botGuid       = slot.botGuid;
+    request.targetGuid    = answerGuid;
+    request.source        = plan.source;
+    request.channelName   = plan.channelName;
+    request.channelId     = plan.channelId;
+    request.chainDepth    = slot.chainDepth;
+    request.directAddress = slot.addressed;
+    request.scopeKey      = plan.scopeKey;
+    request.prompt        = std::move(prompt);
+    request.botName       = bot->GetName();
+    request.originMessage = message;
+    request.kind = (g_RoleplayEnable && g_RoleplayStrictness >= 1)
+                       ? OllamaRequestKind::RoleplayReply
+                       : OllamaRequestKind::ChatReply;
+    request.triggerBotReplies = true;
+    request.recordHistory     = toPerson;
+    // One sentiment read per line, by the bot it was aimed at -- not one per
+    // voice in the crowd, each of which would be its own LLM call.
+    request.updateSentiment   = toPerson && slot.addressed && g_EnableSentimentTracking;
+    request.crowdPlanId       = plan.id;
+    request.crowdSlot         = static_cast<uint32_t>(index);
+
+    if (!OllamaDispatch_Submit(std::move(request)))
+        return false;
+
+    if (g_DebugEnabled)
+        LOG_INFO("module.ollamachat", "[Ollama Chat] Crowd voice {}/{}: {} answers {}{}.",
+                 index + 1, plan.slots.size(), bot->GetName(), speakerName,
+                 slot.replyBack ? " (answering back)" : (followUp ? " (after others)" : ""));
+    return true;
 }
 
 std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player,

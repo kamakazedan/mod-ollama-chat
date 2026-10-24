@@ -7,6 +7,7 @@
 #include "Log.h"
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_capability.h"
+#include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_roleplay.h"
@@ -175,6 +176,7 @@ uint32_t g_ScopeHistorySize              = 30;
 float    g_RepetitionSimilarityThreshold = 0.72f;
 uint32_t g_RepetitionWindowSeconds       = 1800;
 uint32_t g_OpenerHistorySize             = 8;
+uint32_t g_RepetitionShortLineWindowSeconds = 300;
 
 // --------------------------------------------
 // Shared chat context
@@ -204,6 +206,29 @@ std::vector<std::string> g_ContextFillerWords;
 uint32_t    g_ContextMaxFillersPerLine        = 1;
 uint32_t    g_ContextFillerScopeLines         = 6;
 uint32_t    g_ContextFillerBotCooldownSeconds = 900;
+
+// --------------------------------------------
+// Crowd replies
+// --------------------------------------------
+bool        g_CrowdEnable                 = true;
+uint32_t    g_CrowdMaxResponders          = 5;
+uint32_t    g_CrowdBotsPerResponder       = 3;
+uint32_t    g_CrowdChimeInChance          = 40;
+uint32_t    g_CrowdChimeInMax             = 2;
+uint32_t    g_CrowdAckReplyChance         = 50;
+uint32_t    g_CrowdGapMinMs               = 1000;
+uint32_t    g_CrowdGapMaxMs               = 4000;
+uint32_t    g_CrowdSlotTimeoutSeconds     = 30;
+uint32_t    g_CrowdMaxPlanSeconds         = 120;
+uint32_t    g_CrowdMaxReplyBacks          = 2;
+uint32_t    g_CrowdBotLineSecondChance    = 25;
+std::vector<std::vector<std::string>> g_CrowdOpenCallPhrases;
+std::vector<std::vector<std::string>> g_CrowdAckWords;
+std::unordered_set<std::string>       g_CrowdPlayfulPersonalities;
+std::string g_CrowdHintOpenCall;
+std::string g_CrowdHintFollowUp;
+std::string g_CrowdHintReplyBack;
+std::string g_CrowdHintShout;
 
 // --------------------------------------------
 // Topic engine
@@ -844,6 +869,7 @@ void LoadOllamaChatConfig()
     g_RepetitionSimilarityThreshold   = sConfigMgr->GetOption<float>("OllamaChat.Repetition.SimilarityThreshold", 0.72f);
     g_RepetitionWindowSeconds         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.WindowSeconds", 1800);
     g_OpenerHistorySize               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.OpenerHistorySize", 8);
+    g_RepetitionShortLineWindowSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.ShortLineWindowSeconds", 300);
 
     // --- Shared chat context ---------------------------------------------
     g_ContextEnable                   = sConfigMgr->GetOption<bool>("OllamaChat.Context.Enable", true);
@@ -905,6 +931,75 @@ void LoadOllamaChatConfig()
              "pass token '{}', {} filler words rationed).",
              g_ContextEnable ? "on" : "off", g_ContextMaxLines, g_ContextMaxAgeSeconds,
              g_ContextReplyWindowSeconds, g_ContextPassToken, g_ContextFillerWords.size());
+
+    // --- Crowd replies ---------------------------------------------------
+    // Defaults live here, not only in the .conf, so a conf written before
+    // these keys existed still gets sensible crowds.
+    static const char* kDefaultOpenCallPhrases =
+        "anyone|anybody|any1|ne1|anyone else|anybody else|everyone|everybody|every1|evry1|"
+        "yall|you all|guys|people|ppl|peeps|folks|someone|somebody|sum1|who else|whos here|"
+        "who is here|whos around|who is around|whos on|who is on|whos up|who wants|who needs|"
+        "who can|hi all|hey all|hello all|hiya all|sup all|yo all|morning all|evening all|"
+        "night all|hi chat|hey chat|hello chat|yo chat|dead chat|chat dead|so quiet|too quiet|"
+        "quiet in here|talk to me|say something|lfg|lfm|lf1m|lf2m|lf3m|wts|wtb|wtt";
+    static const char* kDefaultAckWords =
+        "ty|thx|thnx|thanks|thank|tyvm|tysm|you|u|all|ok|okay|okey|k|kk|np|yw|lol*|lool*|lmao*|"
+        "lmfao*|rofl*|haha*|hehe*|xd*|gg|wp|brb|afk|bbl|bye|cya|nice|cool|yes|yeah|ya|yep|"
+        "yup|no|nah|nope|ah|oh|hmm*|same|true|rip|oof|gz|grats|gratz|grz|man|mate|bro|dude|"
+        "guys|everyone|everybody|yall|folks";
+    static const char* kDefaultPlayful =
+        "NAT_JOKER|NAT_TROLL|NAT_CONTRARIAN|NAT_REACTOR|NAT_HYPE|NAT_BANTER|NAT_DEADPAN|"
+        "NAT_EXCITABLE|NAT_GRUMBLER";
+
+    g_CrowdEnable              = sConfigMgr->GetOption<bool>("OllamaChat.Crowd.Enable", true);
+    g_CrowdMaxResponders       = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.MaxResponders", 5), 1, 10);
+    g_CrowdBotsPerResponder    = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.BotsPerResponder", 3));
+    g_CrowdChimeInChance       = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.ChimeInChance", 40));
+    g_CrowdChimeInMax          = std::min<uint32_t>(4, sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.ChimeInMax", 2));
+    g_CrowdAckReplyChance      = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.AckReplyChance", 50));
+    g_CrowdGapMinMs            = sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.ReplyGapMinMs", 1000);
+    g_CrowdGapMaxMs            = sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.ReplyGapMaxMs", 4000);
+    g_CrowdSlotTimeoutSeconds  = sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.SlotTimeoutSeconds", 30);
+    g_CrowdMaxPlanSeconds      = sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.MaxPlanSeconds", 120);
+    g_CrowdMaxReplyBacks       = std::min<uint32_t>(6, sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.MaxReplyBacks", 2));
+    g_CrowdBotLineSecondChance = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.BotLineSecondChance", 25));
+
+    g_CrowdOpenCallPhrases = CrowdText::ParsePhrases(
+        sConfigMgr->GetOption<std::string>("OllamaChat.Crowd.OpenCallPhrases", kDefaultOpenCallPhrases));
+    g_CrowdAckWords = CrowdText::ParsePhrases(
+        sConfigMgr->GetOption<std::string>("OllamaChat.Crowd.AckWords", kDefaultAckWords));
+
+    g_CrowdPlayfulPersonalities.clear();
+    for (const std::string& raw : SplitString(
+             sConfigMgr->GetOption<std::string>("OllamaChat.Crowd.PlayfulPersonalities", kDefaultPlayful), '|'))
+    {
+        std::string key;
+        for (char c : raw)
+            if (!std::isspace(static_cast<unsigned char>(c)))
+                key += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        if (!key.empty())
+            g_CrowdPlayfulPersonalities.insert(key);
+    }
+
+    g_CrowdHintOpenCall = sConfigMgr->GetOption<std::string>("OllamaChat.Crowd.HintOpenCall",
+        "{player_name} said that to everyone here, and {listeners} can see the chat. Answer the way your "
+        "own chat style would: a straight answer, a joke, a tease or a quick reaction are all fine.");
+    g_CrowdHintFollowUp = sConfigMgr->GetOption<std::string>("OllamaChat.Crowd.HintFollowUp",
+        "{answered} already answered {player_name} (see the chat above). Add your own line only if you have "
+        "something different to say: your own answer, a joke, disagreeing with or teasing one of them, or just "
+        "a laugh if it was funny. If you are answering one of them rather than {player_name}, use their name. "
+        "Never repeat what was already said. If you have nothing to add, reply with just {pass_token}.");
+    g_CrowdHintReplyBack = sConfigMgr->GetOption<std::string>("OllamaChat.Crowd.HintReplyBack",
+        "{replied_to} said that to you. Answer them back if a real player would, short and in your own "
+        "style; otherwise reply with just {pass_token}.");
+    g_CrowdHintShout = sConfigMgr->GetOption<std::string>("OllamaChat.Crowd.HintShout",
+        "{player_name} typed it in capitals, like shouting; you can answer in capitals too if that suits you.");
+
+    LOG_INFO("module.ollamachat",
+             "[Ollama Chat] Crowd replies: {} (up to {} bots per line, one per {} listening, chime-in {}%, "
+             "{}-{} ms between replies, {} playful styles).",
+             (g_CrowdEnable && g_ContextEnable) ? "on" : "off", g_CrowdMaxResponders, g_CrowdBotsPerResponder,
+             g_CrowdChimeInChance, g_CrowdGapMinMs, g_CrowdGapMaxMs, g_CrowdPlayfulPersonalities.size());
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

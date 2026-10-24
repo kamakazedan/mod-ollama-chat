@@ -31,9 +31,13 @@ ChatChannelSourceLocal GetChannelSourceLocal(uint32_t type);
 // chainDepth is how many bot->bot hops led here; a message from a real player
 // is depth 0. The governor refuses beyond MaxChainDepth and decays the reply
 // chance at each hop, which is what stops the endless bot conversations.
+//
+// crowdPlanId is the crowd this line was one voice of (0 = none): a line from
+// a running crowd can only add an answer-back to that crowd, never start a
+// conversation of its own on top of it.
 void ProcessBotChatMessage(Player* bot, const std::string& msg,
                            ChatChannelSourceLocal sourceLocal, Channel* channel,
-                           uint8_t chainDepth = 1);
+                           uint8_t chainDepth = 1, uint64_t crowdPlanId = 0);
 
 void SaveBotConversationHistoryToDB();
 void DeleteBotConversationHistoryFromDB(uint64_t botGuid);
@@ -78,7 +82,8 @@ public:
 
     static void ProcessChat(Player* player, uint32_t type, uint32_t lang, std::string& msg,
                             ChatChannelSourceLocal sourceLocal, Channel* channel = nullptr,
-                            Player* receiver = nullptr, uint8_t chainDepth = 0);
+                            Player* receiver = nullptr, uint8_t chainDepth = 0,
+                            uint64_t crowdPlanId = 0);
 };
 
 // Housekeeping: prunes the per-bot maps that used to grow forever.

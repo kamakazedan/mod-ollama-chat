@@ -328,6 +328,7 @@ OllamaChat.EnableWhisperReplies = 0
 
 # OllamaChat.MaxBotsToPick
 #     Description: The maximum number of bots that can be randomly selected to reply when no bot name is explicitly mentioned.
+#                  Ignored while Crowd.Enable = 1: the crowd settings decide how many answer.
 #     Default:     2
 OllamaChat.MaxBotsToPick = 2
 
@@ -1342,6 +1343,15 @@ OllamaChat.Repetition.WindowSeconds = 1800
 #        Default: 8
 OllamaChat.Repetition.OpenerHistorySize = 8
 
+#    OllamaChat.Repetition.ShortLineWindowSeconds
+#        Lines of three words or fewer ("lol", "no", "hey there") are only
+#        compared with what was said in this many seconds. Over a busy evening
+#        the same short reaction is bound to come round again; with the full
+#        WindowSeconds most reactions in an active channel would be dropped.
+#        0 = use WindowSeconds for short lines too.
+#        Default: 300
+OllamaChat.Repetition.ShortLineWindowSeconds = 300
+
 ###############################################################################
 #
 #   OLLAMA CHAT - SHARED CHAT CONTEXT
@@ -1387,7 +1397,8 @@ OllamaChat.Context.ReplyWindowSeconds = 60
 
 #    OllamaChat.Context.BystanderChancePct
 #        When a person's line is clearly aimed at someone else, the other
-#        bots' reply chance is multiplied by this percentage.
+#        bots' reply chance is multiplied by this percentage. Not used while
+#        Crowd.Enable = 1 (see Crowd.ChimeInChance).
 #        Default: 25
 OllamaChat.Context.BystanderChancePct = 25
 
@@ -1409,10 +1420,11 @@ OllamaChat.Context.BotReplyPerMessage = 1
 #    OllamaChat.Context.BotLineReplyChance.Guild
 #    OllamaChat.Context.BotLineReplyChance.Channel
 #        With BotReplyPerMessage = 1: the chance (0-100) that a bot's line in
-#        that kind of channel gets an answer from another bot. The first hop
-#        is reduced by BotConversation.ChanceDecayPct, so 50 with the default
-#        decay is about 1 in 4. BotReplyChance.* is used instead when
-#        BotReplyPerMessage = 0.
+#        that kind of channel gets an answer from another bot. With
+#        Crowd.Enable = 1 the first answer uses it as it is and each answer to
+#        an answer is reduced by BotConversation.ChanceDecayPct; without crowds
+#        the first hop is already reduced, so 50 is about 1 in 4.
+#        BotReplyChance.* is used instead when BotReplyPerMessage = 0.
 #        Default: 50, 60, 50, 40
 OllamaChat.Context.BotLineReplyChance.Say = 50
 OllamaChat.Context.BotLineReplyChance.Party = 60
@@ -1482,8 +1494,131 @@ OllamaChat.Context.FillerScopeLines = 6
 
 #    OllamaChat.Context.FillerBotCooldownSeconds
 #        A bot does not use the same filler again within this many seconds.
+#        A reply that is nothing but a laugh is kept as a reaction, unless a
+#        bot's laugh-only line is already among the last FillerScopeLines.
+#        What counts as a laugh is FillerWords; empty turns all of this off.
 #        Default: 900
 OllamaChat.Context.FillerBotCooldownSeconds = 900
+
+###############################################################################
+#
+#   OLLAMA CHAT - CROWD REPLIES
+#
+#   A line said to a channel gets a planned set of answers from different
+#   bots instead of one roll per listening bot capped at MaxBotsToPick (which
+#   is ignored while this is on). "anyone around?" in a busy channel gets
+#   three to five answers; a line aimed at one bot gets that bot, and now and
+#   then someone else chiming in; "ty" or "lol" gets at most the bot it was
+#   meant for.
+#
+#   The answers come one at a time. Each bot only starts once the previous
+#   answer is in chat, and it sees that answer, so it can laugh at it,
+#   disagree with it or leave it ({pass_token}). The voices are picked to
+#   differ: a different personality each where possible, playful and
+#   straight styles taking turns.
+#
+#   Bots also answer each other through the same machinery: an ambient line
+#   can get one or two answers, and a crowd reply that names another bot in
+#   the same crowd can get an answer back. Event reactions (gz, rip, wb) never
+#   start a conversation.
+#
+#   Needs Context.Enable = 1. Whispers are unaffected.
+#
+###############################################################################
+
+#    OllamaChat.Crowd.Enable
+#        Default: 1
+OllamaChat.Crowd.Enable = 1
+
+#    OllamaChat.Crowd.MaxResponders
+#        Most bots that answer one line said to everyone (1-10).
+#        Default: 5
+OllamaChat.Crowd.MaxResponders = 5
+
+#    OllamaChat.Crowd.BotsPerResponder
+#        How busy a place must be: one possible responder per this many bots
+#        that can hear the line. With 3: up to 3 listening -> 1, 4-6 -> 2,
+#        7-9 -> 3, 13 or more -> MaxResponders. An open call gets between half
+#        of that and all of it; a line to nobody in particular, one up to half.
+#        Default: 3
+OllamaChat.Crowd.BotsPerResponder = 3
+
+#    OllamaChat.Crowd.ChimeInChance
+#    OllamaChat.Crowd.ChimeInMax
+#        A line aimed at one bot: the chance (0-100) that another bot chimes in
+#        as well, rolled again for each extra voice, up to ChimeInMax.
+#        Default: 40, 2
+OllamaChat.Crowd.ChimeInChance = 40
+OllamaChat.Crowd.ChimeInMax = 2
+
+#    OllamaChat.Crowd.AckReplyChance
+#        A line that is only thanks, a laugh or a yes/no ("ty", "lol", "ok np"):
+#        the chance the bot it was meant for answers at all. Nobody else does.
+#        Default: 50
+OllamaChat.Crowd.AckReplyChance = 50
+
+#    OllamaChat.Crowd.ReplyGapMinMs
+#    OllamaChat.Crowd.ReplyGapMaxMs
+#        Pause after one bot's answer appears before the next bot starts on
+#        theirs. Generation and TypingSimulation come on top.
+#        Default: 1000, 4000
+OllamaChat.Crowd.ReplyGapMinMs = 1000
+OllamaChat.Crowd.ReplyGapMaxMs = 4000
+
+#    OllamaChat.Crowd.SlotTimeoutSeconds
+#        A bot whose answer has not come back in this long is skipped.
+#        Default: 30
+OllamaChat.Crowd.SlotTimeoutSeconds = 30
+
+#    OllamaChat.Crowd.MaxPlanSeconds
+#        A crowd still going after this long is dropped.
+#        Default: 120
+OllamaChat.Crowd.MaxPlanSeconds = 120
+
+#    OllamaChat.Crowd.MaxReplyBacks
+#        Answers-back between bots inside one crowd (0-6). Chances follow
+#        Context.BotAddressedChance and BotConversation.ChanceDecayPct.
+#        Default: 2
+OllamaChat.Crowd.MaxReplyBacks = 2
+
+#    OllamaChat.Crowd.BotLineSecondChance
+#        When a bot's ambient line gets an answer: the chance a second bot
+#        joins in (where at least four bots can hear it).
+#        Default: 25
+OllamaChat.Crowd.BotLineSecondChance = 25
+
+#    OllamaChat.Crowd.OpenCallPhrases
+#        Words and phrases that make a line said to everyone, separated by |.
+#        A trailing * matches any word starting with it. A shout (a line
+#        mostly in capitals) counts as well.
+OllamaChat.Crowd.OpenCallPhrases = "anyone|anybody|any1|ne1|anyone else|anybody else|everyone|everybody|every1|evry1|yall|you all|guys|people|ppl|peeps|folks|someone|somebody|sum1|who else|whos here|who is here|whos around|who is around|whos on|who is on|whos up|who wants|who needs|who can|hi all|hey all|hello all|hiya all|sup all|yo all|morning all|evening all|night all|hi chat|hey chat|hello chat|yo chat|dead chat|chat dead|so quiet|too quiet|quiet in here|talk to me|say something|lfg|lfm|lf1m|lf2m|lf3m|wts|wtb|wtt"
+
+#    OllamaChat.Crowd.AckWords
+#        A line made only of these words is an acknowledgement (see
+#        AckReplyChance). Single words, separated by |; a trailing * matches
+#        any word starting with it.
+OllamaChat.Crowd.AckWords = "ty|thx|thnx|thanks|thank|tyvm|tysm|you|u|all|ok|okay|okey|k|kk|np|yw|lol*|lool*|lmao*|lmfao*|rofl*|haha*|hehe*|xd*|gg|wp|brb|afk|bbl|bye|cya|nice|cool|yes|yeah|ya|yep|yup|no|nah|nope|ah|oh|hmm*|same|true|rip|oof|gz|grats|gratz|grz|man|mate|bro|dude|guys|everyone|everybody|yall|folks"
+
+#    OllamaChat.Crowd.PlayfulPersonalities
+#        Personality keys that count as playful when a crowd mixes voices;
+#        every other personality counts as straight. Separated by |.
+OllamaChat.Crowd.PlayfulPersonalities = "NAT_JOKER|NAT_TROLL|NAT_CONTRARIAN|NAT_REACTOR|NAT_HYPE|NAT_BANTER|NAT_DEADPAN|NAT_EXCITABLE|NAT_GRUMBLER"
+
+#    OllamaChat.Crowd.HintOpenCall
+#    OllamaChat.Crowd.HintFollowUp
+#    OllamaChat.Crowd.HintReplyBack
+#    OllamaChat.Crowd.HintShout
+#        Added to a crowd voice's prompt: the first answer to a line said to
+#        everyone; any answer after someone else's; a bot answering another
+#        bot that spoke to it; and, on top, when the line was shouted.
+#        Placeholders: {player_name} (whoever said the line being answered),
+#        {replied_to} (the same), {listeners} ("a few other players", "lots
+#        of players"), {answered} (who already answered: "Lahu and Kael"),
+#        {addressee} and {pass_token}.
+OllamaChat.Crowd.HintOpenCall = "{player_name} said that to everyone here, and {listeners} can see the chat. Answer the way your own chat style would: a straight answer, a joke, a tease or a quick reaction are all fine."
+OllamaChat.Crowd.HintFollowUp = "{answered} already answered {player_name} (see the chat above). Add your own line only if you have something different to say: your own answer, a joke, disagreeing with or teasing one of them, or just a laugh if it was funny. If you are answering one of them rather than {player_name}, use their name. Never repeat what was already said. If you have nothing to add, reply with just {pass_token}."
+OllamaChat.Crowd.HintReplyBack = "{replied_to} said that to you. Answer them back if a real player would, short and in your own style; otherwise reply with just {pass_token}."
+OllamaChat.Crowd.HintShout = "{player_name} typed it in capitals, like shouting; you can answer in capitals too if that suits you."
 
 ###############################################################################
 #

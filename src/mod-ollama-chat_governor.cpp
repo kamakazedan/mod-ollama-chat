@@ -340,7 +340,8 @@ bool Governor_InConversation(ObjectGuid botGuid, ObjectGuid playerGuid,
 namespace
 {
     bool CheckSendLocked(ObjectGuid botGuid, const std::string& scopeKey,
-                         TimePoint now, bool reserve, bool directAddress)
+                         TimePoint now, bool reserve, bool directAddress,
+                         bool paced = false)
     {
         const uint64_t raw = botGuid.GetRawValue();
         BotState&   bot   = g_bots[raw];
@@ -349,16 +350,20 @@ namespace
         // Pacing, skipped for direct address. A bot that just said something
         // in /say would otherwise sit on its cooldown and silently ignore a
         // whisper, which reads as broken rather than as rate limiting.
+        //
+        // Also skipped for crowd replies (`paced`): their plan already spaces
+        // them out, and the scope cooldown would drop every voice but the
+        // first. The per-minute ceiling below still holds them in check.
         if (!directAddress)
         {
-            if (g_BotCooldownSeconds > 0 &&
+            if (!paced && g_BotCooldownSeconds > 0 &&
                 SecondsSince(bot.lastSend, now) < double(g_BotCooldownSeconds))
             {
                 ++g_stats.blockedCooldown;
                 return false;
             }
 
-            if (g_ScopeCooldownSeconds > 0 &&
+            if (!paced && g_ScopeCooldownSeconds > 0 &&
                 SecondsSince(scope.lastSend, now) < double(g_ScopeCooldownSeconds))
             {
                 ++g_stats.blockedCooldown;
@@ -412,6 +417,33 @@ bool Governor_CanSend(ObjectGuid botGuid, const std::string& scopeKey,
     return CheckSendLocked(botGuid, scopeKey, Clock::now(), false, directAddress);
 }
 
+bool Governor_TryConsumePaced(ObjectGuid botGuid, const std::string& scopeKey,
+                              bool directAddress)
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    return CheckSendLocked(botGuid, scopeKey, Clock::now(), true, directAddress, true);
+}
+
+bool Governor_CanSendPaced(ObjectGuid botGuid, const std::string& scopeKey,
+                           bool directAddress)
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    return CheckSendLocked(botGuid, scopeKey, Clock::now(), false, directAddress, true);
+}
+
+bool Governor_BotIsFresh(ObjectGuid botGuid)
+{
+    if (g_BotCooldownSeconds == 0)
+        return true;
+
+    std::lock_guard<std::mutex> lock(g_mutex);
+    auto it = g_bots.find(botGuid.GetRawValue());
+    if (it == g_bots.end())
+        return true;
+
+    return SecondsSince(it->second.lastSend, Clock::now()) >= double(g_BotCooldownSeconds);
+}
+
 // --- repetition -----------------------------------------------------------
 
 float Governor_Similarity(const std::string& a, const std::string& b)
@@ -445,6 +477,14 @@ bool Governor_IsRepetitive(ObjectGuid botGuid, const std::string& scopeKey,
     const GramCounts            candGrams  = BuildGrams(norm);
     const double                candNorm   = GramNorm(candGrams);
 
+    // "lol", "no", "hey there": over a busy evening the same short reaction
+    // is bound to come round again, and a 90-minute memory for it would
+    // silence most reactions in an active channel. Short lines are only
+    // compared with what was said lately.
+    double window = double(g_RepetitionWindowSeconds);
+    if (g_RepetitionShortLineWindowSeconds > 0 && Tokenize(norm, false).size() <= 3)
+        window = std::min(window, double(g_RepetitionShortLineWindowSeconds));
+
     std::lock_guard<std::mutex> lock(g_mutex);
     const TimePoint now = Clock::now();
 
@@ -452,7 +492,7 @@ bool Governor_IsRepetitive(ObjectGuid botGuid, const std::string& scopeKey,
     {
         for (const auto& u : hist)
         {
-            if (SecondsSince(u.when, now) > double(g_RepetitionWindowSeconds))
+            if (SecondsSince(u.when, now) > window)
                 continue;
             if (u.normalized == norm)
                 return true;
@@ -498,7 +538,7 @@ bool Governor_IsRepetitive(ObjectGuid botGuid, const std::string& scopeKey,
                  it != scopeIt->second.history.rend() && checked < g_OpenerHistorySize;
                  ++it, ++checked)
             {
-                if (SecondsSince(it->when, now) > double(g_RepetitionWindowSeconds))
+                if (SecondsSince(it->when, now) > window)
                     continue;
                 if (!it->opener.empty() && it->opener == opener)
                 {

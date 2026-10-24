@@ -7,6 +7,7 @@
 #include <deque>
 #include <unordered_map>
 #include <set>
+#include <unordered_set>
 #include <utility>
 #include <mutex>
 #include <ctime>
@@ -223,6 +224,10 @@ extern uint32_t g_ScopeHistorySize;
 extern float    g_RepetitionSimilarityThreshold;
 extern uint32_t g_RepetitionWindowSeconds;
 extern uint32_t g_OpenerHistorySize;
+// Lines of three words or fewer ("lol", "no", "hey") are only compared with
+// what was said this recently: across a whole busy evening the same short
+// reaction is bound to come up again, and that is not repetition.
+extern uint32_t g_RepetitionShortLineWindowSeconds;
 
 // --------------------------------------------
 // Shared chat context (mod-ollama-chat_context)
@@ -263,6 +268,37 @@ extern std::vector<std::string> g_ContextFillerWords;   // lowercase; "haha*" = 
 extern uint32_t    g_ContextMaxFillersPerLine;
 extern uint32_t    g_ContextFillerScopeLines;
 extern uint32_t    g_ContextFillerBotCooldownSeconds;
+
+// --------------------------------------------
+// Crowd replies (mod-ollama-chat_crowd)
+// --------------------------------------------
+extern bool        g_CrowdEnable;
+// Most bots that answer one line said to everyone.
+extern uint32_t    g_CrowdMaxResponders;
+// One possible responder per this many bots that can hear the line.
+extern uint32_t    g_CrowdBotsPerResponder;
+// A line aimed at one bot: chance that another joins in, rolled again for
+// each extra voice, up to ChimeInMax.
+extern uint32_t    g_CrowdChimeInChance;
+extern uint32_t    g_CrowdChimeInMax;
+// "ty", "ok", "lol": chance the bot it was aimed at answers at all.
+extern uint32_t    g_CrowdAckReplyChance;
+// Pause after one bot's line appears before the next starts on theirs.
+extern uint32_t    g_CrowdGapMinMs;
+extern uint32_t    g_CrowdGapMaxMs;
+extern uint32_t    g_CrowdSlotTimeoutSeconds;
+extern uint32_t    g_CrowdMaxPlanSeconds;
+// Bots answering each other inside one crowd.
+extern uint32_t    g_CrowdMaxReplyBacks;
+// A bot's line that another bot answers: chance a second bot joins in.
+extern uint32_t    g_CrowdBotLineSecondChance;
+extern std::vector<std::vector<std::string>> g_CrowdOpenCallPhrases;
+extern std::vector<std::vector<std::string>> g_CrowdAckWords;
+extern std::unordered_set<std::string>       g_CrowdPlayfulPersonalities;   // uppercase keys
+extern std::string g_CrowdHintOpenCall;
+extern std::string g_CrowdHintFollowUp;
+extern std::string g_CrowdHintReplyBack;
+extern std::string g_CrowdHintShout;
 
 // --------------------------------------------
 // Topic engine

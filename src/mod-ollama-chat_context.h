@@ -79,9 +79,21 @@ bool Context_IsPassReply(const std::string& text);
 // Ration lol/omg/xD-style fillers in a bot's reply: at most MaxFillersPerLine
 // per message, none that already appeared in the last FillerScopeLines lines
 // of the space, and none this bot used within FillerBotCooldownSeconds.
-// Returns the adjusted line; empty when the whole reply was filler.
+//
+// A reply that is nothing but a laugh ("lol", "haha") is a fine reaction once,
+// so it survives when it passes those checks -- unless a bot's laugh-only
+// line (its own or another's) is already among the last FillerScopeLines
+// lines, which is how a crowd would otherwise turn one joke into lol, haha,
+// lmao. What counts as a laugh is FillerWords, so with that empty all of this
+// is off.
+//
+// Returns the adjusted line; empty when nothing worth saying is left.
 std::string Context_RationFillers(Player* bot, ChatChannelSourceLocal source,
                                   const std::string& channelName, const std::string& text);
+
+// The visible text of a chat line: item/quest/spell link markup reduced to
+// "[Name]", colour codes and line breaks removed, length capped.
+std::string Context_CleanText(const std::string& text);
 
 // Housekeeping.
 void Context_Update();                  // prune old lines (maintenance tick)

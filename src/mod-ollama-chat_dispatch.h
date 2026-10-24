@@ -85,6 +85,12 @@ struct OllamaChatRequest
     bool triggerBotReplies = true;   // let other bots hear this line
     bool recordHistory     = false;  // append to conversation history
     bool updateSentiment   = false;  // run sentiment analysis on originMessage
+
+    // Set when this reply is one voice in a crowd (mod-ollama-chat_crowd):
+    // the plan is told how it went, and the plan -- not the per-bot and
+    // per-scope cooldowns -- paces it.
+    uint64_t crowdPlanId = 0;
+    uint32_t crowdSlot   = 0;
 };
 
 // Submit a request. Returns false when the queue is at MaxQueueDepth, in which

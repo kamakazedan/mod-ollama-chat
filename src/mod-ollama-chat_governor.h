@@ -70,6 +70,20 @@ bool Governor_TryConsumeSend(ObjectGuid botGuid, const std::string& scopeKey,
 bool Governor_CanSend(ObjectGuid botGuid, const std::string& scopeKey,
                       bool directAddress = false);
 
+// Crowd replies are paced by their own plan -- one at a time, each after the
+// one before it has landed -- so the per-bot and per-scope cooldowns would
+// only cut a crowd down to its first voice. These skip both and keep the
+// per-minute ceilings: the scope one unless the line was aimed at this bot,
+// the global one always.
+bool Governor_TryConsumePaced(ObjectGuid botGuid, const std::string& scopeKey,
+                              bool directAddress = false);
+bool Governor_CanSendPaced(ObjectGuid botGuid, const std::string& scopeKey,
+                           bool directAddress = false);
+
+// Has this bot been quiet for at least Cooldown.PerBotSeconds? A crowd prefers
+// voices that have not just spoken.
+bool Governor_BotIsFresh(ObjectGuid botGuid);
+
 // --- repetition -----------------------------------------------------------
 
 // True when text is too close to something this bot said recently, or to

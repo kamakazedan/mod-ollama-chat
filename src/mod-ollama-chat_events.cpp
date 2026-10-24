@@ -335,7 +335,11 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
         request.prompt      = std::move(prompt);
         request.botName     = bot->GetName();
         request.kind        = OllamaRequestKind::EventChatter;
-        request.triggerBotReplies = true;
+        // Reactions to an event ("gz", "rip", "wb") are not conversation
+        // starters. Several bots can already react to the event itself (up to
+        // EventChatterMaxBotsPerPlayer); bots answering each other's "gz" is
+        // how a level-up turned into a thank-you chain.
+        request.triggerBotReplies = false;
 
         if (!OllamaDispatch_Submit(std::move(request)))
             continue;

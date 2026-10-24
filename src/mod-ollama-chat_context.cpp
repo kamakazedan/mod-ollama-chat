@@ -558,6 +558,7 @@ std::string Context_RationFillers(Player* bot, ChatChannelSourceLocal source,
 
     std::set<std::string> recentlySaid;     // patterns heard in this space lately
     std::set<std::string> recentlyUsed;     // patterns this bot used lately
+    bool recentBareLaugh = false;           // a bot line lately (any bot) that was only filler
     {
         std::lock_guard<std::mutex> lock(g_mutex);
 
@@ -574,12 +575,24 @@ std::string Context_RationFillers(Player* bot, ChatChannelSourceLocal source,
                     if (line->kind == ContextLineKind::Event || !VisibleTo(*line, bot))
                         continue;
                     ++seen;
+
+                    bool onlyFiller = true;
+                    bool anyWord    = false;
                     for (const std::string& token : SplitSpaces(line->text))
                     {
-                        const std::string pattern = MatchFiller(NormalizeWord(token));
+                        const std::string word = NormalizeWord(token);
+                        if (word.empty())
+                            continue;
+                        anyWord = true;
+                        const std::string pattern = MatchFiller(word);
                         if (!pattern.empty())
                             recentlySaid.insert(pattern);
+                        else
+                            onlyFiller = false;
                     }
+
+                    if (line->kind == ContextLineKind::Bot && anyWord && onlyFiller)
+                        recentBareLaugh = true;
                 }
             }
         }
@@ -592,6 +605,27 @@ std::string Context_RationFillers(Player* bot, ChatChannelSourceLocal source,
                     if (SecondsBetween(when, now) < double(g_ContextFillerBotCooldownSeconds))
                         recentlyUsed.insert(pattern);
         }
+    }
+
+    // Nothing but a laugh: a fine reaction once, never the second in a row.
+    if (recentBareLaugh)
+    {
+        bool anyWord    = false;
+        bool onlyFiller = true;
+        for (const std::string& token : SplitSpaces(text))
+        {
+            const std::string word = NormalizeWord(token);
+            if (word.empty())
+                continue;
+            anyWord = true;
+            if (MatchFiller(word).empty())
+            {
+                onlyFiller = false;
+                break;
+            }
+        }
+        if (anyWord && onlyFiller)
+            return std::string();
     }
 
     std::vector<std::string> kept;
@@ -642,6 +676,11 @@ std::string Context_RationFillers(Player* bot, ChatChannelSourceLocal source,
     const bool hasWord = std::any_of(out.begin(), out.end(),
                                      [](char c) { return std::isalnum(static_cast<unsigned char>(c)); });
     return hasWord ? out : std::string();
+}
+
+std::string Context_CleanText(const std::string& text)
+{
+    return CleanText(text);
 }
 
 void Context_Update()

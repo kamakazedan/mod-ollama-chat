@@ -4,6 +4,7 @@
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_capability.h"
+#include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_response.h"
@@ -496,6 +497,17 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
     handler->PSendSysMessage("Blocked: {} cooldown, {} rate, {} repetition, {} chain-depth, {} no-audience",
                              gov.blockedCooldown, gov.blockedRate, gov.blockedRepetition,
                              gov.blockedChainDepth, gov.blockedNoAudience);
+
+    const CrowdStats crowd = Crowd_GetStats();
+    handler->PSendSysMessage("Crowds: {} ({} running, {} started) - {} voices asked, {} spoke, "
+                             "{} said nothing, {} skipped, {} answer-backs",
+                             (g_CrowdEnable && g_ContextEnable) ? "on" : "off", crowd.active,
+                             (unsigned long long)crowd.plansStarted,
+                             (unsigned long long)crowd.slotsFired,
+                             (unsigned long long)crowd.slotsLanded,
+                             (unsigned long long)crowd.slotsDropped,
+                             (unsigned long long)crowd.slotsSkipped,
+                             (unsigned long long)crowd.replyBacks);
 
     handler->PSendSysMessage("Roleplay: {} (strictness {})   Emote reactions: {}",
                              g_RoleplayEnable ? "on" : "off",

@@ -2,6 +2,7 @@
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
+#include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_memory.h"
@@ -106,6 +107,7 @@ namespace
         if (!api.ok)
         {
             RecordError(api.error);
+            Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
             return;
         }
 
@@ -133,6 +135,7 @@ namespace
                 LOG_INFO("module.ollamachat",
                          "[Ollama Chat] Bot {} produced nothing usable after cleanup.",
                          task.request.botName);
+            Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
             return;
         }
 
@@ -208,11 +211,15 @@ namespace
             {
                 RecordError(e.what());
                 LOG_ERROR("module.ollamachat", "[Ollama Chat] Worker exception: {}", e.what());
+                if (task.type == TaskType::ChatReply)
+                    Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
             }
             catch (...)
             {
                 RecordError("unknown exception");
                 LOG_ERROR("module.ollamachat", "[Ollama Chat] Unknown worker exception.");
+                if (task.type == TaskType::ChatReply)
+                    Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
             }
 
             --g_inFlight;
@@ -326,9 +333,36 @@ namespace
         }
     }
 
+    // Tells a crowd plan how its slot went. Every way out of Deliver that does
+    // not put the line in chat counts as "nothing said", so the plan moves on
+    // to its next voice instead of waiting out the slot timeout.
+    struct CrowdSlotReport
+    {
+        uint64_t planId = 0;
+        uint32_t slot   = 0;
+        bool     done   = false;
+
+        void Landed(uint64_t botGuid, const std::string& botName)
+        {
+            if (planId && !done)
+            {
+                done = true;
+                Crowd_OnSlotFinished(planId, slot, true, botGuid, botName);
+            }
+        }
+
+        ~CrowdSlotReport()
+        {
+            if (planId && !done)
+                Crowd_OnSlotFinished(planId, slot, false, 0, std::string());
+        }
+    };
+
     // By value: the line can still be trimmed here before it is spoken.
     void Deliver(Completion c, const OllamaWorldSnapshot& world)
     {
+        CrowdSlotReport crowdReport{ c.request.crowdPlanId, c.request.crowdSlot };
+
         Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.botGuid));
         if (!bot || !bot->IsInWorld())
             return;
@@ -390,7 +424,14 @@ namespace
             return;
         }
 
-        if (!Governor_TryConsumeSend(botGuid, c.request.scopeKey, directAddress))
+        // A crowd voice is paced by its crowd -- but only while that crowd is
+        // still running. A late line from one that has ended or been replaced
+        // gets the ordinary cooldowns like any other line.
+        const bool paced = c.request.crowdPlanId && Crowd_FindById(c.request.crowdPlanId);
+        const bool allowed = paced
+            ? Governor_TryConsumePaced(botGuid, c.request.scopeKey, directAddress)
+            : Governor_TryConsumeSend(botGuid, c.request.scopeKey, directAddress);
+        if (!allowed)
         {
             ++g_droppedGovernor;
             if (g_DebugEnabled)
@@ -461,13 +502,18 @@ namespace
                      bot->GetName(), ChatChannelSourceLocalStr[c.request.source],
                      c.request.chainDepth, c.text);
 
+        // The crowd hears it landed before other bots do, so an answer-back
+        // to this line is queued after it rather than in front of it.
+        crowdReport.Landed(c.request.botGuid, bot->GetName());
+
         // Let other bots hear it -- with the chain depth advanced, which is
         // what stops the reply loop that had no brakes before.
         if (c.request.triggerBotReplies &&
             c.request.source != SRC_WHISPER_LOCAL)
         {
             ProcessBotChatMessage(bot, c.text, c.request.source, channel,
-                                  static_cast<uint8_t>(c.request.chainDepth + 1));
+                                  static_cast<uint8_t>(c.request.chainDepth + 1),
+                                  c.request.crowdPlanId);
         }
     }
 }
