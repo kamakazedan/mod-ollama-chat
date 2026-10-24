@@ -1,5 +1,6 @@
 #include "mod-ollama-chat_events.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_dispatch.h"
@@ -15,6 +16,7 @@
 #include "AchievementMgr.h"
 #include "Containers.h"
 #include "GameObject.h"
+#include "Group.h"
 #include "Guild.h"
 #include "Item.h"
 #include "Log.h"
@@ -127,6 +129,50 @@ namespace
             return SafeFormat("{} learned {}", actor, detail);
         return "";
     }
+
+    // The line the shared chat transcript gets, as players would describe it.
+    // This is what lets a bot work out that a "gz" typed a moment later is for
+    // whoever dinged. Second member: whether it belongs in guild chat.
+    std::pair<std::string, bool> ContextNoteFor(const std::string& actor, const std::string& type,
+                                                const std::string& detail)
+    {
+        if (type == g_EventTypeLeveledUp)
+            return { SafeFormat("{} reached level {}", actor, detail), false };
+        if (type == g_EventTypeAchievement)
+            return { SafeFormat("{} earned the achievement [{}]", actor, detail), false };
+        if (type == g_EventTypeDied)
+            return { SafeFormat("{} died", actor), false };
+        if (type == g_EventTypeWonDuel)
+            return { SafeFormat("{} won a duel against {}", actor, detail), false };
+        if (type == g_EventTypeDefeatedPlayer)
+            return { SafeFormat("{} killed {} (enemy player)", actor, detail), false };
+
+        if (type == g_GuildEventTypeLevelUp)
+            return { SafeFormat("{} reached level {}", actor, detail), true };
+        if (type == g_GuildEventTypeGuildAchievement)
+            return { SafeFormat("{} earned the achievement [{}]", actor, detail), true };
+        if (type == g_GuildEventTypeGuildLogin)
+            return { SafeFormat("{} came online", actor), true };
+        if (type == g_GuildEventTypeGuildJoin)
+            return { SafeFormat("{} joined the guild", actor), true };
+        if (type == g_GuildEventTypeGuildLeave)
+            return { SafeFormat("{} left the guild", actor), true };
+        if (type == g_GuildEventTypeGuildPromotion)
+            return { SafeFormat("{} was promoted", actor), true };
+        if (type == g_GuildEventTypeEpicGear)
+            return { SafeFormat("{} looted [{}]", actor, detail), true };
+        return { std::string(), false };
+    }
+
+    // Party lines are scoped to the group, as in ProcessChat; keying them on
+    // the zone gave event lines and replies in the same party separate
+    // cooldowns and separate repetition histories.
+    uint32_t ScopeGroupOrZone(Player* bot, ChatChannelSourceLocal source)
+    {
+        if ((source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL) && bot->GetGroup())
+            return bot->GetGroup()->GetGUID().GetCounter();
+        return bot->GetZoneId();
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -163,6 +209,19 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
             hasNearbyRealPlayer = true;
             break;
         }
+    }
+
+    // Into the shared chat transcript too, also before any chance roll -- but
+    // only where a person could be following along. Thousands of bots level
+    // and die all over the world; recording all of it would push the actual
+    // conversation out of the transcript within seconds.
+    if (const auto [note, toGuild] = ContextNoteFor(source->GetName(), type, detail); !note.empty())
+    {
+        const bool audience = toGuild
+            ? isGuildEvent
+            : (!sourceIsBot || hasNearbyRealPlayer || OllamaGroupHasRealPlayer(source));
+        if (audience)
+            Context_RecordEvent(source, note, toGuild);
     }
 
     if (sourceIsBot && !hasNearbyRealPlayer && !isGuildEvent)
@@ -255,7 +314,7 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
         const std::string scopeKey = Governor_MakeScopeKey(
             ChatChannelSourceLocalStr[source_], 0, "",
             source_ == SRC_GUILD_LOCAL ? bot->GetGuildId() : 0,
-            bot->GetZoneId());
+            ScopeGroupOrZone(bot, source_));
 
         if (!Governor_CanSend(bot->GetGUID(), scopeKey))
             continue;
@@ -263,7 +322,7 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
         // Built here, on the world thread. The old code built the whole prompt
         // inside the worker, reading area, zone, spec and guild off-thread.
         std::string prompt = BuildPrompt(bot, g_EventChatterPromptTemplate, type, detail,
-                                         source->GetName());
+                                         source->GetName(), source_);
         if (prompt.empty())
             continue;
 
@@ -292,7 +351,7 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
 
 std::string OllamaBotEventChatter::BuildPrompt(Player* bot, std::string promptTemplate,
                                                std::string eventType, std::string eventDetail,
-                                               std::string actorName)
+                                               std::string actorName, ChatChannelSourceLocal chatSource)
 {
     if (!bot || promptTemplate.empty())
         return "";
@@ -314,6 +373,8 @@ std::string OllamaBotEventChatter::BuildPrompt(Player* bot, std::string promptTe
             sentimentInfo = GetSentimentPromptAddition(bot, actor);
     }
 
+    const std::string channelHistory = Context_BuildTranscript(bot, chatSource, "", 0);
+
     std::string prompt = SafeFormat(
         promptTemplate,
         fmt::arg("bot_name", bot->GetName()),
@@ -331,11 +392,25 @@ std::string OllamaBotEventChatter::BuildPrompt(Player* bot, std::string promptTe
         fmt::arg("event_type", eventType),
         fmt::arg("event_detail", eventDetail),
         fmt::arg("actor_name", actorName),
-        fmt::arg("sentiment_info", sentimentInfo));
+        fmt::arg("sentiment_info", sentimentInfo),
+        fmt::arg("channel_history", channelHistory),
+        fmt::arg("pass_token", g_ContextPassToken));
+
+    // What was just said where this line will go: a reaction lands in a
+    // conversation, not in a vacuum. Older templates get it in front.
+    if (!channelHistory.empty() && promptTemplate.find("{channel_history}") == std::string::npos)
+        prompt = channelHistory + prompt;
 
     prompt += Memory_BuildPromptSection(bot, nullptr);
     prompt += Roleplay_BuildVoicePrompt(bot);
     prompt += Expression_BuildGesturePrompt();
+
+    if (g_ContextEnable && !g_ContextHintEvent.empty())
+    {
+        const std::string hint = SafeFormat(g_ContextHintEvent, fmt::arg("pass_token", g_ContextPassToken));
+        if (hint != "[Format Error]")
+            prompt += " " + hint;
+    }
     return prompt;
 }
 

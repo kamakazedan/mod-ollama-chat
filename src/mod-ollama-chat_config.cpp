@@ -13,6 +13,8 @@
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat-utilities.h"
 #include <fmt/core.h>
+#include <algorithm>
+#include <cctype>
 #include <sstream>
 #include <fstream>
 
@@ -173,6 +175,35 @@ uint32_t g_ScopeHistorySize              = 30;
 float    g_RepetitionSimilarityThreshold = 0.72f;
 uint32_t g_RepetitionWindowSeconds       = 1800;
 uint32_t g_OpenerHistorySize             = 8;
+
+// --------------------------------------------
+// Shared chat context
+// --------------------------------------------
+bool        g_ContextEnable                   = true;
+uint32_t    g_ContextMaxLines                 = 10;
+uint32_t    g_ContextMaxAgeSeconds            = 300;
+uint32_t    g_ContextReplyWindowSeconds       = 60;
+uint32_t    g_ContextBystanderChancePct       = 25;
+uint32_t    g_ContextBotAddressedChance       = 40;
+bool        g_ContextBotReplyPerMessage       = true;
+uint32_t    g_ContextBotLineReplyChance_Say     = 50;
+uint32_t    g_ContextBotLineReplyChance_Party   = 60;
+uint32_t    g_ContextBotLineReplyChance_Guild   = 50;
+uint32_t    g_ContextBotLineReplyChance_Channel = 40;
+bool        g_ContextBotChatWithoutRecentHuman  = true;
+bool        g_ContextSuppressPairHistory      = true;
+std::string g_ContextPassToken                = "NOREPLY";
+std::string g_ContextPassTokenNorm            = "noreply";
+std::string g_ContextHistoryHeader;
+std::string g_ContextHintAddressed;
+std::string g_ContextHintBystander;
+std::string g_ContextHintOpen;
+std::string g_ContextHintEvent;
+std::string g_ContextHintAmbient;
+std::vector<std::string> g_ContextFillerWords;
+uint32_t    g_ContextMaxFillersPerLine        = 1;
+uint32_t    g_ContextFillerScopeLines         = 6;
+uint32_t    g_ContextFillerBotCooldownSeconds = 900;
 
 // --------------------------------------------
 // Topic engine
@@ -813,6 +844,67 @@ void LoadOllamaChatConfig()
     g_RepetitionSimilarityThreshold   = sConfigMgr->GetOption<float>("OllamaChat.Repetition.SimilarityThreshold", 0.72f);
     g_RepetitionWindowSeconds         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.WindowSeconds", 1800);
     g_OpenerHistorySize               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.OpenerHistorySize", 8);
+
+    // --- Shared chat context ---------------------------------------------
+    g_ContextEnable                   = sConfigMgr->GetOption<bool>("OllamaChat.Context.Enable", true);
+    g_ContextMaxLines                 = sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.MaxLines", 10);
+    g_ContextMaxAgeSeconds            = sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.MaxAgeSeconds", 300);
+    g_ContextReplyWindowSeconds       = sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.ReplyWindowSeconds", 60);
+    g_ContextBystanderChancePct       = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.BystanderChancePct", 25));
+    g_ContextBotAddressedChance       = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.BotAddressedChance", 40));
+    g_ContextBotReplyPerMessage       = sConfigMgr->GetOption<bool>("OllamaChat.Context.BotReplyPerMessage", true);
+    g_ContextBotLineReplyChance_Say     = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.BotLineReplyChance.Say", 50));
+    g_ContextBotLineReplyChance_Party   = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.BotLineReplyChance.Party", 60));
+    g_ContextBotLineReplyChance_Guild   = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.BotLineReplyChance.Guild", 50));
+    g_ContextBotLineReplyChance_Channel = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.BotLineReplyChance.Channel", 40));
+    g_ContextBotChatWithoutRecentHuman  = sConfigMgr->GetOption<bool>("OllamaChat.Context.BotChatWithoutRecentHuman", true);
+    g_ContextSuppressPairHistory      = sConfigMgr->GetOption<bool>("OllamaChat.Context.SuppressPairHistory", true);
+    g_ContextMaxFillersPerLine        = sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.MaxFillersPerLine", 1);
+    g_ContextFillerScopeLines         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.FillerScopeLines", 6);
+    g_ContextFillerBotCooldownSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.FillerBotCooldownSeconds", 900);
+
+    g_ContextPassToken = sConfigMgr->GetOption<std::string>("OllamaChat.Context.PassToken", "NOREPLY");
+    g_ContextPassTokenNorm.clear();
+    for (char c : g_ContextPassToken)
+        if (std::isalnum(static_cast<unsigned char>(c)))
+            g_ContextPassTokenNorm += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    g_ContextHistoryHeader = sConfigMgr->GetOption<std::string>("OllamaChat.Context.HistoryHeader",
+        "Recent {channel}, oldest first (context only):");
+    g_ContextHintAddressed = sConfigMgr->GetOption<std::string>("OllamaChat.Context.HintAddressed",
+        "They are talking to you, so answer them.");
+    g_ContextHintBystander = sConfigMgr->GetOption<std::string>("OllamaChat.Context.HintBystander",
+        "That message was most likely meant for {addressee}, not you. Usually stay out of it and reply with "
+        "just {pass_token}; only chip in if a real player would, with a joke, a correction or something useful.");
+    g_ContextHintOpen = sConfigMgr->GetOption<std::string>("OllamaChat.Context.HintOpen",
+        "It was said to everyone, not to you in particular. Answer if you know or have something to add; "
+        "if the chat above already covers it, reply with just {pass_token}.");
+    g_ContextHintEvent = sConfigMgr->GetOption<std::string>("OllamaChat.Context.HintEvent",
+        "If a real player in your place would not bother commenting, reply with just {pass_token}.");
+    g_ContextHintAmbient = sConfigMgr->GetOption<std::string>("OllamaChat.Context.HintAmbient",
+        "If that conversation is still going, you can add to it naturally instead of changing the subject.");
+
+    g_ContextFillerWords.clear();
+    for (std::string word : SplitString(sConfigMgr->GetOption<std::string>("OllamaChat.Context.FillerWords", ""), '|'))
+    {
+        std::string clean;
+        for (char c : word)
+        {
+            const unsigned char u = static_cast<unsigned char>(c);
+            if (std::isalnum(u))
+                clean += static_cast<char>(std::tolower(u));
+            else if (c == '*')
+                clean += '*';
+        }
+        if (!clean.empty() && clean != "*")
+            g_ContextFillerWords.push_back(clean);
+    }
+
+    LOG_INFO("module.ollamachat",
+             "[Ollama Chat] Shared chat context: {} (up to {} lines / {} s, reply window {} s, "
+             "pass token '{}', {} filler words rationed).",
+             g_ContextEnable ? "on" : "off", g_ContextMaxLines, g_ContextMaxAgeSeconds,
+             g_ContextReplyWindowSeconds, g_ContextPassToken, g_ContextFillerWords.size());
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

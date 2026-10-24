@@ -1,5 +1,6 @@
 #include "mod-ollama-chat_random.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_handler.h"
@@ -14,6 +15,7 @@
 
 #include "Channel.h"
 #include "ChannelMgr.h"
+#include "Group.h"
 #include "Guild.h"
 #include "Log.h"
 #include "Map.h"
@@ -129,7 +131,9 @@ namespace
         return true;
     }
 
-    std::string BuildRandomChatterPrompt(Player* bot, const std::string& environmentInfo)
+    std::string BuildRandomChatterPrompt(Player* bot, const std::string& environmentInfo,
+                                         ChatChannelSourceLocal source,
+                                         const std::string& channelName)
     {
         PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
         if (!botAI || !botAI->GetChatHelper())
@@ -140,6 +144,11 @@ namespace
 
         AreaTableEntry const* area = botAI->GetCurrentArea();
         AreaTableEntry const* zone = botAI->GetCurrentZone();
+
+        // Only when there is a conversation to join is the bot told it may.
+        std::string channelHistory = Context_BuildTranscript(bot, source, channelName, 0);
+        if (!channelHistory.empty() && !g_ContextHintAmbient.empty())
+            channelHistory += g_ContextHintAmbient + "\n\n";
 
         std::string prompt = SafeFormat(
             g_RandomChatterPromptTemplate,
@@ -155,7 +164,18 @@ namespace
             fmt::arg("bot_map", OllamaContinentName(bot)),
             fmt::arg("bot_personality", personalityPrompt),
             fmt::arg("bot_personality_name", personality),
-            fmt::arg("environment_info", environmentInfo));
+            fmt::arg("environment_info", environmentInfo),
+            fmt::arg("channel_history", channelHistory),
+            fmt::arg("pass_token", g_ContextPassToken));
+
+        // What people were just saying where this line will go, so the bot can
+        // join a conversation that is already going instead of talking over it.
+        // Older templates without the placeholder get it in front.
+        if (!channelHistory.empty() &&
+            g_RandomChatterPromptTemplate.find("{channel_history}") == std::string::npos)
+        {
+            prompt = channelHistory + prompt;
+        }
 
         // Statement or question. At roleplay strictness 2 the in-character
         // lists replace the shipped ones, which otherwise push bots toward
@@ -219,6 +239,7 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
         maintenanceTimer = 30000;
         Governor_Update();
         Topics_Update();
+        Context_Update();
     }
     else
     {
@@ -357,11 +378,18 @@ void OllamaBotRandomChatter::HandleRandomChatter()
 
         // Same inputs the reply path uses, so ambient lines and replies in the
         // same channel share one cooldown, rate limit and repetition history.
+        // Party scope keys on the group, as ProcessChat does, so ambient lines
+        // and replies in one party share a cooldown and repetition history.
+        const uint32_t groupOrZone =
+            ((source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL) && bot->GetGroup())
+                ? bot->GetGroup()->GetGUID().GetCounter()
+                : bot->GetZoneId();
+
         const std::string scopeKey = Governor_MakeScopeKey(
             ChatChannelSourceLocalStr[source],
             channelId, channelName,
             source == SRC_GUILD_LOCAL ? bot->GetGuildId() : 0,
-            bot->GetZoneId());
+            groupOrZone);
 
         if (!Governor_CanSend(bot->GetGUID(), scopeKey))
         {
@@ -369,7 +397,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
             continue;
         }
 
-        std::string prompt = BuildRandomChatterPrompt(bot, topic.text);
+        std::string prompt = BuildRandomChatterPrompt(bot, topic.text, source, channelName);
         if (prompt.empty())
         {
             reschedule();

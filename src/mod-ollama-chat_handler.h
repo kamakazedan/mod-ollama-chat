@@ -41,7 +41,18 @@ void AppendBotConversation(uint64_t botGuid, uint64_t playerGuid,
                            const std::string& playerMessage, const std::string& botReply);
 
 // Prompt builders. World thread only -- they read live world state.
-std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player);
+//
+// source/channelName say where the message was said, so the prompt can carry
+// that channel's recent transcript ({channel_history}); contextExcludeSeq is
+// the transcript line being answered, left out because the prompt quotes it
+// as {player_message}. replyHint tells the bot whether it is being spoken to
+// ({reply_hint}). A template without those placeholders gets the transcript
+// in front and the hint at the end.
+std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player,
+                              ChatChannelSourceLocal source = SRC_UNDEFINED_LOCAL,
+                              const std::string& channelName = std::string(),
+                              uint64_t contextExcludeSeq = 0,
+                              const std::string& replyHint = std::string());
 std::string BuildEmoteReactionPrompt(Player* bot, Player* player, uint32_t textEmote);
 
 // Bounded, distance-sorted snapshot helpers used by the prompt builders and

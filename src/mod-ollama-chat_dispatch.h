@@ -128,6 +128,7 @@ struct OllamaDispatchStats
     uint64_t totalDroppedQueueFull;
     uint64_t totalDroppedEmpty;
     uint64_t totalDroppedGovernor;
+    uint64_t totalDroppedPassed;      // the bot chose not to reply (pass token)
     uint64_t totalFailed;
     std::string lastError;
 };

@@ -43,7 +43,9 @@
 #include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat_random.h"
+#include "mod-ollama-chat_context.h"
 #include <iomanip>
+#include <unordered_set>
 #include "SpellMgr.h"
 #include "SpellInfo.h"
 #include "SharedDefines.h"
@@ -285,6 +287,15 @@ Channel* GetValidChannel(uint32_t teamId, const std::string& channelName, Player
 bool PlayerBotChatHandler::OnPlayerCanUseChat(Player* player, uint32_t type, uint32_t lang, std::string& msg)
 {
     if (!g_Enable)
+        return true;
+
+    // Player::Say and Player::Yell run this hook for bots too, so every /say
+    // line a bot delivered was processed twice: once here at chain depth 0,
+    // as if a person had just spoken, and once by the dispatcher at the real
+    // depth. The depth-0 pass escaped the chain limit and ignored
+    // triggerBotReplies = false. The dispatcher already hands bot lines to
+    // ProcessBotChatMessage, so bots are skipped here.
+    if (OllamaIsBotPlayer(player))
         return true;
 
     ChatChannelSourceLocal sourceLocal = GetChannelSourceLocal(type);
@@ -1217,7 +1228,13 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
             return;
         }
 
-        if (!Governor_HasRecentHuman(scopeKey))
+        // With one roll per bot line (Context.BotReplyPerMessage) the volume
+        // stays in hand without it, so bots may also chat while a person is
+        // only reading. The audience checks still apply.
+        const bool recentHumanRequired =
+            !(g_ContextBotReplyPerMessage && g_ContextBotChatWithoutRecentHuman);
+
+        if (recentHumanRequired && !Governor_HasRecentHuman(scopeKey))
         {
             if (g_DebugEnabled)
                 LOG_INFO("module.ollamachat",
@@ -1226,7 +1243,25 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
             return;
         }
     }
-    
+
+    // --- shared chat context ----------------------------------------------
+    // A person's line goes into the transcript now; a bot's line was recorded
+    // when it was delivered, just before it was handed here. Either way, find
+    // it, then work out who it was most likely aimed at.
+    const std::string contextChannel = channel ? channel->GetName() : std::string();
+    const uint64_t contextSeq = senderIsBot
+        ? Context_LatestLineFrom(player, sourceLocal, contextChannel)
+        : Context_RecordLine(player, sourceLocal, contextChannel, msg, ContextLineKind::Human);
+
+    const ContextAddressee addressee = (sourceLocal == SRC_WHISPER_LOCAL)
+        ? ContextAddressee{}
+        : Context_LikelyAddressee(player, sourceLocal, contextChannel, contextSeq);
+
+    if (g_DebugEnabled && addressee.guid)
+        LOG_INFO("module.ollamachat",
+                 "[Ollama Chat] {}'s line looks like a reply to {}.",
+                 player->GetName(), addressee.name);
+
     // One pass over the online players, reused by every eligibility test
     // below. These questions used to be answered by a fresh full walk per
     // candidate bot, inside a loop that was itself over every online player.
@@ -1535,6 +1570,20 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         chance = senderIsBot ? g_BotReplyChance_Say : g_PlayerReplyChance_Say;
     }
     
+    // One roll per bot line rather than per listening bot: the per-line
+    // chances live in their own keys, so BotReplyChance.* keeps its meaning.
+    if (senderIsBot && g_ContextBotReplyPerMessage && sourceLocal != SRC_WHISPER_LOCAL)
+    {
+        if (sourceLocal == SRC_SAY_LOCAL || sourceLocal == SRC_YELL_LOCAL)
+            chance = g_ContextBotLineReplyChance_Say;
+        else if (sourceLocal == SRC_PARTY_LOCAL || sourceLocal == SRC_RAID_LOCAL)
+            chance = g_ContextBotLineReplyChance_Party;
+        else if (sourceLocal == SRC_GUILD_LOCAL || sourceLocal == SRC_OFFICER_LOCAL)
+            chance = g_ContextBotLineReplyChance_Guild;
+        else if (sourceLocal == SRC_GENERAL_LOCAL)
+            chance = g_ContextBotLineReplyChance_Channel;
+    }
+
     // Each bot->bot hop makes the next reply less likely, so a chain runs out
     // of energy on its own well before it hits the hard depth ceiling. Never
     // applied to a whisper: bot-to-bot whispers are refused long before this,
@@ -1555,7 +1604,12 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         return;
     
     std::vector<Player*> finalCandidates;
-    
+
+    // Bots this line is aimed at: whispered, named, or the one being answered.
+    // They go first when MaxBotsToPick trims the list, and they get the "they
+    // are talking to you" hint rather than the bystander one.
+    std::unordered_set<Player*> addressedBots;
+
     // For whispers, handle directly - there should only be one receiver bot
     if (sourceLocal == SRC_WHISPER_LOCAL)
     {
@@ -1565,6 +1619,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
             if (!(g_DisableRepliesInCombat && whisperBot->IsInCombat()))
             {
                 finalCandidates.push_back(whisperBot);
+                addressedBots.insert(whisperBot);
                 if(g_DebugEnabled)
                 {
                     LOG_INFO("module.ollamachat", "[Ollama Chat] Whisper: Bot {} selected to respond", whisperBot->GetName());
@@ -1622,6 +1677,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
             if (!(g_DisableRepliesInCombat && chosen->IsInCombat()))
             {
                 finalCandidates.push_back(chosen);
+                addressedBots.insert(chosen);
                 if(g_DebugEnabled)
                 {
                     LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} selected (mentioned first at position {})", 
@@ -1631,6 +1687,8 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         }
         else
         {
+            // Bots that could answer at all.
+            std::vector<Player*> pool;
             for (Player* bot : candidateBots)
             {
                 if (g_DisableRepliesInCombat && bot->IsInCombat())
@@ -1648,28 +1706,111 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
                     continue;
                 }
 
-                // A bot already mid-conversation with this person answers at
-                // DirectAddressReplyChance rather than the ambient rate for the
-                // channel. Someone who has been talking to you does not go 50/50
-                // on whether to acknowledge your next sentence.
-                const bool botIsAddressed =
-                    OllamaIsDirectAddress(bot, player, sourceLocal, trimmedMsg, senderIsBot, scopeKey);
-                const uint32_t botChance = botIsAddressed
-                                               ? std::max(chance, g_DirectAddressReplyChance)
-                                               : chance;
+                pool.push_back(bot);
+            }
 
-                uint32_t roll = urand(0, 99);
-                if (roll < botChance)
+            // When the transcript shows who this line answers, that bot is
+            // the one being spoken to and everyone else is a bystander -- even
+            // a bot that chatted with this person a minute ago. Without that,
+            // every bot "in conversation" treated each new line as aimed at it
+            // and replied to someone else's exchange.
+            auto isAddressee = [&addressee](Player* bot)
+            {
+                return addressee.guid != 0 && bot->GetGUID().GetRawValue() == addressee.guid;
+            };
+
+            if (senderIsBot && g_ContextBotReplyPerMessage)
+            {
+                // One roll for the whole line: does anybody answer this bot?
+                // A roll per listening bot made a reply near-certain in a busy
+                // channel, however low BotReplyChance was set.
+                Player* aimedAt = nullptr;
+                std::vector<Player*> able;
+                for (Player* bot : pool)
                 {
-                    finalCandidates.push_back(bot);
-                    if(g_DebugEnabled)
-                    {
-                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} PASSED chance roll ({} < {}%{})", bot->GetName(), roll, botChance, botIsAddressed ? ", addressed" : "");
-                    }
+                    const bool aimed = isAddressee(bot);
+                    if (!Governor_CanSend(bot->GetGUID(), scopeKey, aimed))
+                        continue;
+                    if (aimed)
+                        aimedAt = bot;
+                    able.push_back(bot);
                 }
-                else if(g_DebugEnabled)
+
+                uint32_t lineChance = chance;   // already decayed for this hop
+                if (aimedAt)
+                    lineChance = std::max(lineChance,
+                                          Governor_ApplyChainDecay(g_ContextBotAddressedChance, chainDepth));
+
+                const uint32_t roll = urand(0, 99);
+                if (!able.empty() && roll < lineChance)
                 {
-                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} FAILED chance roll ({} >= {}%{})", bot->GetName(), roll, botChance, botIsAddressed ? ", addressed" : "");
+                    Player* pick = aimedAt ? aimedAt : able[urand(0, static_cast<uint32>(able.size() - 1))];
+                    finalCandidates.push_back(pick);
+                    if (pick == aimedAt)
+                        addressedBots.insert(pick);
+
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat",
+                                 "[Ollama Chat] Bot line from {} answered by {} ({} < {}%{})",
+                                 player->GetName(), pick->GetName(), roll, lineChance,
+                                 pick == aimedAt ? ", addressed" : "");
+                }
+                else if (g_DebugEnabled)
+                {
+                    LOG_INFO("module.ollamachat",
+                             "[Ollama Chat] Bot line from {} not answered ({} >= {}%, {} able)",
+                             player->GetName(), roll, lineChance, able.size());
+                }
+            }
+            else
+            {
+                for (Player* bot : pool)
+                {
+                    // Aimed at this bot: the transcript says it is the one being
+                    // answered. With no clear addressee the older rules apply --
+                    // an open conversation with this person, or a small party.
+                    const bool aimed = addressee.guid
+                        ? isAddressee(bot)
+                        : OllamaIsDirectAddress(bot, player, sourceLocal, trimmedMsg, senderIsBot, scopeKey);
+
+                    uint32_t botChance = chance;
+                    if (aimed)
+                    {
+                        botChance = senderIsBot
+                            ? std::max(chance, Governor_ApplyChainDecay(g_ContextBotAddressedChance, chainDepth))
+                            : std::max(chance, g_DirectAddressReplyChance);
+                    }
+                    else if (addressee.guid && !senderIsBot)
+                    {
+                        botChance = chance * g_ContextBystanderChancePct / 100;
+                    }
+
+                    // A bot on cooldown would only be dropped after being
+                    // picked, which could leave nobody answering at all.
+                    if (!Governor_CanSend(bot->GetGUID(), scopeKey, aimed))
+                    {
+                        if (g_DebugEnabled)
+                            LOG_INFO("module.ollamachat",
+                                     "[Ollama Chat] Bot {} not considered: cooldown or rate limit.",
+                                     bot->GetName());
+                        continue;
+                    }
+
+                    uint32_t roll = urand(0, 99);
+                    if (roll < botChance)
+                    {
+                        finalCandidates.push_back(bot);
+                        if (aimed)
+                            addressedBots.insert(bot);
+                        if(g_DebugEnabled)
+                        {
+                            LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} PASSED chance roll ({} < {}%{})", bot->GetName(), roll, botChance, aimed ? ", addressed" : "");
+                        }
+                    }
+                    else if(g_DebugEnabled)
+                    {
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} FAILED chance roll ({} >= {}%{})", bot->GetName(), roll, botChance, aimed ? ", addressed" : "");
+                    }
                 }
             }
         }
@@ -1697,7 +1838,11 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         std::random_device rd;
         std::mt19937 g(rd());
         std::shuffle(finalCandidates.begin(), finalCandidates.end(), g);
-        uint32_t countToPick = urand(1, g_MaxBotsToPick);
+        // Whoever the line was aimed at answers first; a random cut used to
+        // drop them and let a bystander answer in their place.
+        std::stable_partition(finalCandidates.begin(), finalCandidates.end(),
+                              [&addressedBots](Player* b) { return addressedBots.count(b) > 0; });
+        uint32_t countToPick = urand(1, std::max<uint32_t>(1, g_MaxBotsToPick));
         if(g_DebugEnabled)
         {
             LOG_INFO("module.ollamachat", "[Ollama Chat] Limiting {} bots to {} (MaxBotsToPick)", finalCandidates.size(), countToPick);
@@ -1730,8 +1875,9 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // call rather than after.
         // A line aimed at this bot is owed an answer, so it skips the pacing
         // cooldowns. The global messages-per-minute ceiling still applies.
-        const bool directAddress =
-            OllamaIsDirectAddress(bot, player, sourceLocal, trimmedMsg, senderIsBot, scopeKey);
+        const bool directAddress = addressedBots.count(bot) > 0 ||
+            (!addressee.guid &&
+             OllamaIsDirectAddress(bot, player, sourceLocal, trimmedMsg, senderIsBot, scopeKey));
 
         if (!Governor_CanSend(bot->GetGUID(), scopeKey, directAddress))
         {
@@ -1741,7 +1887,27 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
             continue;
         }
 
-        std::string prompt = GenerateBotPrompt(bot, msg, player);
+        // Tell the bot whether it is being spoken to, overhearing someone
+        // else's exchange, or hearing something said to the room.
+        std::string replyHint;
+        if (g_ContextEnable)
+        {
+            if (directAddress)
+                replyHint = g_ContextHintAddressed;
+            else if (addressee.guid)
+                replyHint = SafeFormat(g_ContextHintBystander,
+                                       fmt::arg("addressee", addressee.name),
+                                       fmt::arg("pass_token", g_ContextPassToken));
+            else
+                replyHint = SafeFormat(g_ContextHintOpen,
+                                       fmt::arg("pass_token", g_ContextPassToken));
+
+            if (replyHint == "[Format Error]")
+                replyHint.clear();
+        }
+
+        std::string prompt = GenerateBotPrompt(bot, msg, player, sourceLocal, contextChannel,
+                                               contextSeq, replyHint);
         if (prompt.empty())
             continue;
 
@@ -1900,8 +2066,10 @@ static bool IsBotEligibleForChatChannelLocal(Player* bot, Player* player, ChatCh
     }
 }
 
-std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player)
-{  
+std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player,
+                              ChatChannelSourceLocal source, const std::string& channelName,
+                              uint64_t contextExcludeSeq, const std::string& replyHint)
+{
     if (!bot || !player) {
         return "";
     }
@@ -1957,6 +2125,13 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     std::string chatHistory         = GetBotHistoryPrompt(botGuid, playerGuid, playerMessage);
     std::string sentimentInfo       = GetSentimentPromptAddition(bot, player);
 
+    // What everyone in this channel said lately, not only this bot's own past
+    // exchanges with this person. When it has lines, the per-pair history
+    // would mostly repeat them, so it is dropped.
+    std::string channelHistory = Context_BuildTranscript(bot, source, channelName, contextExcludeSeq);
+    if (!channelHistory.empty() && g_ContextSuppressPairHistory)
+        chatHistory.clear();
+
     // Retrieve RAG information if enabled
     std::string ragInfo;
     if (g_EnableRAG && g_RAGSystem) {
@@ -2009,8 +2184,19 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         fmt::arg("player_message", playerMessage),
         fmt::arg("extra_info", extraInfo),
         fmt::arg("chat_history", chatHistory),
-        fmt::arg("sentiment_info", sentimentInfo)
+        fmt::arg("sentiment_info", sentimentInfo),
+        fmt::arg("channel_history", channelHistory),
+        fmt::arg("reply_hint", replyHint),
+        fmt::arg("pass_token", g_ContextPassToken)
     );
+
+    // Templates written before {channel_history} existed still get it, in
+    // front, where it reads as "here is the chat so far".
+    if (!channelHistory.empty() &&
+        g_ChatPromptTemplate.find("{channel_history}") == std::string::npos)
+    {
+        prompt = channelHistory + prompt;
+    }
 
     // Add RAG information to the prompt if available
     if (!ragInfo.empty()) {
@@ -2032,6 +2218,10 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     // Let the model gesture. The tag is parsed back out and stripped before
     // the line is spoken, so it never reaches chat as text.
     prompt += Expression_BuildGesturePrompt();
+
+    // Last, so it is the freshest instruction: is this bot being spoken to?
+    if (!replyHint.empty() && g_ChatPromptTemplate.find("{reply_hint}") == std::string::npos)
+        prompt += " " + replyHint;
 
     // Debug logging for full prompt including RAG information
     if (g_DebugEnabled && g_DebugShowFullPrompt) {
@@ -2098,4 +2288,5 @@ void OllamaChatMaintenance::OnPlayerLogout(Player* player)
     Memory_ForgetBot(guid);
     OllamaRandomChatter_ForgetBot(guid);
     Topics_ForgetBot(guid);
+    Context_ForgetPlayer(guid.GetRawValue());
 }

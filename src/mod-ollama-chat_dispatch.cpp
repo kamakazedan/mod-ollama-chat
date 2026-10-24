@@ -1,6 +1,7 @@
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_memory.h"
@@ -83,6 +84,7 @@ namespace
     std::atomic<uint64_t> g_droppedQueueFull{ 0 };
     std::atomic<uint64_t> g_droppedEmpty{ 0 };
     std::atomic<uint64_t> g_droppedGovernor{ 0 };
+    std::atomic<uint64_t> g_droppedPassed{ 0 };
     std::atomic<uint64_t> g_totalFailed{ 0 };
 
     std::mutex  g_errorMutex;
@@ -324,7 +326,8 @@ namespace
         }
     }
 
-    void Deliver(const Completion& c, const OllamaWorldSnapshot& world)
+    // By value: the line can still be trimmed here before it is spoken.
+    void Deliver(Completion c, const OllamaWorldSnapshot& world)
     {
         Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.botGuid));
         if (!bot || !bot->IsInWorld())
@@ -340,6 +343,35 @@ namespace
         // suppressions that exist to pace ambient chatter. Decided at submit
         // time in ProcessChat, where the Group was live to consult.
         const bool directAddress = c.request.directAddress;
+
+        // The prompt lets a bot that overheard someone else's exchange decline
+        // to butt in. Checked here, on the world thread, because the token is
+        // a config string that a reload can reassign.
+        if (Context_IsPassReply(c.text))
+        {
+            ++g_droppedPassed;
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} chose not to reply.",
+                         bot->GetName());
+            return;
+        }
+
+        // lol, omg and xD are fine now and then; every line is too many.
+        const std::string rationed =
+            Context_RationFillers(bot, c.request.source, c.request.channelName, c.text);
+        if (rationed.empty())
+        {
+            ++g_droppedEmpty;
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat",
+                         "[Ollama Chat] Bot {} reply was only filler words: '{}'",
+                         bot->GetName(), c.text);
+            return;
+        }
+        if (g_DebugEnabled && rationed != c.text)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} fillers rationed: '{}' -> '{}'",
+                     bot->GetName(), c.text, rationed);
+        c.text = rationed;
 
         // Repetition is checked at delivery rather than at submission, because
         // we only know what the model actually said now.
@@ -380,6 +412,12 @@ namespace
 
         Governor_RecordUtterance(botGuid, c.request.scopeKey, c.text);
         ++g_totalDelivered;
+
+        // Into the shared transcript before other bots hear it below, so the
+        // ones that answer can see what they are answering.
+        Context_RecordLine(bot, c.request.source,
+                           channel ? channel->GetName() : c.request.channelName,
+                           c.text, ContextLineKind::Bot);
 
         // This bot is now in a conversation with whoever it just answered, so
         // their next line in this scope is a turn in it rather than ambient
@@ -694,6 +732,7 @@ OllamaDispatchStats OllamaDispatch_GetStats()
     stats.totalDroppedQueueFull = g_droppedQueueFull.load();
     stats.totalDroppedEmpty     = g_droppedEmpty.load();
     stats.totalDroppedGovernor  = g_droppedGovernor.load();
+    stats.totalDroppedPassed    = g_droppedPassed.load();
     stats.totalFailed           = g_totalFailed.load();
 
     return stats;

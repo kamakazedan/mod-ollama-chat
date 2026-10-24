@@ -1344,6 +1344,149 @@ OllamaChat.Repetition.OpenerHistorySize = 8
 
 ###############################################################################
 #
+#   OLLAMA CHAT - SHARED CHAT CONTEXT
+#
+#   Each party, guild, channel and /say area keeps a short transcript of what
+#   people and bots said there, plus a few game events (level-ups, deaths,
+#   duels, guildmates coming online). Bots see it with every reply, reaction
+#   and ambient line, so they answer as part of the conversation instead of
+#   treating each line as the first thing anyone has said.
+#
+#   The transcript also decides who a message is aimed at. In chat, a line
+#   typed right after someone else's is usually an answer to them: that bot
+#   replies, and the rest are bystanders who usually stay out of it.
+#
+#   Prompt placeholders: {channel_history} and {reply_hint} in
+#   ChatPromptTemplate, {channel_history} in RandomChatterPromptTemplate and
+#   EventChatterPromptTemplate, {pass_token} in all three. A template without
+#   them gets the transcript in front and the hint at the end, so templates
+#   written for older builds keep working.
+#
+###############################################################################
+
+#    OllamaChat.Context.Enable
+#        Keep transcripts and use them in prompts and to pick who answers.
+#        Default: 1
+OllamaChat.Context.Enable = 1
+
+#    OllamaChat.Context.MaxLines
+#        Most transcript lines put in one prompt.
+#        Default: 10
+OllamaChat.Context.MaxLines = 10
+
+#    OllamaChat.Context.MaxAgeSeconds
+#        Lines older than this are left out.
+#        Default: 300
+OllamaChat.Context.MaxAgeSeconds = 300
+
+#    OllamaChat.Context.ReplyWindowSeconds
+#        A line typed within this many seconds of someone else's counts as an
+#        answer to them. After a longer pause it is said to the room.
+#        Default: 60
+OllamaChat.Context.ReplyWindowSeconds = 60
+
+#    OllamaChat.Context.BystanderChancePct
+#        When a person's line is clearly aimed at someone else, the other
+#        bots' reply chance is multiplied by this percentage.
+#        Default: 25
+OllamaChat.Context.BystanderChancePct = 25
+
+#    OllamaChat.Context.BotAddressedChance
+#        Chance (before chain decay) that a bot answers another bot whose
+#        line was a reply to it.
+#        Default: 40
+OllamaChat.Context.BotAddressedChance = 40
+
+#    OllamaChat.Context.BotReplyPerMessage
+#        1 = BotReplyChance.* is the chance that ANY bot answers a bot's line.
+#        0 = one independent roll per listening bot (the older behaviour),
+#            which makes a reply near-certain in a crowded channel.
+#        Default: 1
+OllamaChat.Context.BotReplyPerMessage = 1
+
+#    OllamaChat.Context.BotLineReplyChance.Say
+#    OllamaChat.Context.BotLineReplyChance.Party
+#    OllamaChat.Context.BotLineReplyChance.Guild
+#    OllamaChat.Context.BotLineReplyChance.Channel
+#        With BotReplyPerMessage = 1: the chance (0-100) that a bot's line in
+#        that kind of channel gets an answer from another bot. The first hop
+#        is reduced by BotConversation.ChanceDecayPct, so 50 with the default
+#        decay is about 1 in 4. BotReplyChance.* is used instead when
+#        BotReplyPerMessage = 0.
+#        Default: 50, 60, 50, 40
+OllamaChat.Context.BotLineReplyChance.Say = 50
+OllamaChat.Context.BotLineReplyChance.Party = 60
+OllamaChat.Context.BotLineReplyChance.Guild = 50
+OllamaChat.Context.BotLineReplyChance.Channel = 40
+
+#    OllamaChat.Context.BotChatWithoutRecentHuman
+#        With BotReplyPerMessage = 1: bots may answer each other whenever a
+#        real player can see the channel, not only within
+#        BotConversation.HumanWindowSeconds of one typing there
+#        (BotConversation.RequireRecentHuman is then ignored for bot lines).
+#        Default: 1
+OllamaChat.Context.BotChatWithoutRecentHuman = 1
+
+#    OllamaChat.Context.SuppressPairHistory
+#        Leave {chat_history} empty when {channel_history} already has recent
+#        lines, so one exchange is not shown twice. Whispers always keep it.
+#        Default: 1
+OllamaChat.Context.SuppressPairHistory = 1
+
+#    OllamaChat.Context.PassToken
+#        What a bot answers with to say nothing at all. Such replies are
+#        dropped quietly and counted as "passed by the bot" in .ollama status.
+#        Default: NOREPLY
+OllamaChat.Context.PassToken = NOREPLY
+
+#    OllamaChat.Context.HistoryHeader
+#        First line of a transcript. {channel} is "party chat", "guild chat",
+#        "General", "/say nearby" and so on.
+OllamaChat.Context.HistoryHeader = "Recent {channel}, oldest first (context only):"
+
+#    OllamaChat.Context.HintAddressed
+#    OllamaChat.Context.HintBystander
+#    OllamaChat.Context.HintOpen
+#        Added to a reply prompt when the line was aimed at this bot, at
+#        someone else ({addressee}), or at nobody in particular.
+#        {pass_token} is PassToken.
+OllamaChat.Context.HintAddressed = "They are talking to you, so answer them."
+OllamaChat.Context.HintBystander = "That message was most likely meant for {addressee}, not you. Usually stay out of it and reply with just {pass_token}; only chip in if a real player would, with a joke, a correction or something useful."
+OllamaChat.Context.HintOpen = "It was said to everyone, not to you in particular. Answer if you know or have something to add; if the chat above already covers it, reply with just {pass_token}."
+
+#    OllamaChat.Context.HintEvent
+#        Added to event reaction prompts.
+OllamaChat.Context.HintEvent = "If a real player in your place would not bother commenting, reply with just {pass_token}."
+
+#    OllamaChat.Context.HintAmbient
+#        Added after the transcript in an ambient prompt, only when there is
+#        recent chat to join.
+OllamaChat.Context.HintAmbient = "If that conversation is still going, you can add to it naturally instead of changing the subject."
+
+#    OllamaChat.Context.FillerWords
+#        Words that read naturally now and then and badly in every line,
+#        separated by |. A trailing * matches any word starting with it
+#        (haha* = haha, hahaha, ...). Empty turns rationing off.
+#        Default: ""
+OllamaChat.Context.FillerWords = ""
+
+#    OllamaChat.Context.MaxFillersPerLine
+#        Default: 1
+OllamaChat.Context.MaxFillersPerLine = 1
+
+#    OllamaChat.Context.FillerScopeLines
+#        A filler that appeared in this many recent lines of the channel is
+#        taken out of a new reply there, so bots do not echo each other's lol.
+#        Default: 6
+OllamaChat.Context.FillerScopeLines = 6
+
+#    OllamaChat.Context.FillerBotCooldownSeconds
+#        A bot does not use the same filler again within this many seconds.
+#        Default: 900
+OllamaChat.Context.FillerBotCooldownSeconds = 900
+
+###############################################################################
+#
 #   OLLAMA CHAT - TOPIC ENGINE
 #
 #   What bots choose to talk about. The old pool was uniform over thirteen

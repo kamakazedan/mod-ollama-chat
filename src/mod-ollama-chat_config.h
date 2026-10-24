@@ -225,6 +225,46 @@ extern uint32_t g_RepetitionWindowSeconds;
 extern uint32_t g_OpenerHistorySize;
 
 // --------------------------------------------
+// Shared chat context (mod-ollama-chat_context)
+// --------------------------------------------
+extern bool        g_ContextEnable;
+extern uint32_t    g_ContextMaxLines;
+extern uint32_t    g_ContextMaxAgeSeconds;
+// A line typed within this long after someone else's counts as an answer to them.
+extern uint32_t    g_ContextReplyWindowSeconds;
+// Other bots' reply chance, in percent of normal, when a person's line was
+// clearly aimed at someone else.
+extern uint32_t    g_ContextBystanderChancePct;
+// Chance a bot answers a bot that just replied to it (before chain decay).
+extern uint32_t    g_ContextBotAddressedChance;
+// BotReplyChance.* is the chance that ANY bot answers a bot's line, instead
+// of an independent roll per listening bot.
+extern bool        g_ContextBotReplyPerMessage;
+// With BotReplyPerMessage: the chance per bot line, by channel (replaces
+// BotReplyChance.* for bot lines, which keep their per-bot meaning otherwise).
+extern uint32_t    g_ContextBotLineReplyChance_Say;
+extern uint32_t    g_ContextBotLineReplyChance_Party;
+extern uint32_t    g_ContextBotLineReplyChance_Guild;
+extern uint32_t    g_ContextBotLineReplyChance_Channel;
+// With BotReplyPerMessage: bots may answer each other whenever a real player
+// can see the channel, not only shortly after one typed there.
+extern bool        g_ContextBotChatWithoutRecentHuman;
+// Leave {chat_history} empty when {channel_history} already has recent lines.
+extern bool        g_ContextSuppressPairHistory;
+extern std::string g_ContextPassToken;
+extern std::string g_ContextPassTokenNorm;      // lowercase, letters and digits only
+extern std::string g_ContextHistoryHeader;
+extern std::string g_ContextHintAddressed;
+extern std::string g_ContextHintBystander;
+extern std::string g_ContextHintOpen;
+extern std::string g_ContextHintEvent;
+extern std::string g_ContextHintAmbient;
+extern std::vector<std::string> g_ContextFillerWords;   // lowercase; "haha*" = prefix
+extern uint32_t    g_ContextMaxFillersPerLine;
+extern uint32_t    g_ContextFillerScopeLines;
+extern uint32_t    g_ContextFillerBotCooldownSeconds;
+
+// --------------------------------------------
 // Topic engine
 // --------------------------------------------
 extern uint32_t g_TopicWeightPeople;

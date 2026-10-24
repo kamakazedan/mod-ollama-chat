@@ -485,10 +485,11 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              (unsigned long long)dispatch.totalSubmitted,
                              (unsigned long long)dispatch.totalDelivered,
                              (unsigned long long)dispatch.totalFailed);
-    handler->PSendSysMessage("Dropped: {} queue-full, {} empty-after-cleanup, {} by governor",
+    handler->PSendSysMessage("Dropped: {} queue-full, {} empty-after-cleanup, {} by governor, {} passed by the bot",
                              (unsigned long long)dispatch.totalDroppedQueueFull,
                              (unsigned long long)dispatch.totalDroppedEmpty,
-                             (unsigned long long)dispatch.totalDroppedGovernor);
+                             (unsigned long long)dispatch.totalDroppedGovernor,
+                             (unsigned long long)dispatch.totalDroppedPassed);
 
     handler->PSendSysMessage("Governor: {} bots, {} scopes tracked, {} sends in the last minute",
                              gov.trackedBots, gov.trackedScopes, gov.sendsLastMinute);

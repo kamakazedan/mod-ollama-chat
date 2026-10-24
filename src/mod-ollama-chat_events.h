@@ -3,6 +3,7 @@
 
 #include "ScriptMgr.h"
 #include "Player.h"
+#include "mod-ollama-chat_handler.h"
 #include <string>
 
 // --------------------------------------------------------------------------
@@ -25,8 +26,11 @@ public:
     void DispatchGameEvent(Player* source, std::string type, std::string detail);
 
     // World thread only -- reads live world state.
+    // chatSource is where the reaction will be said; its recent transcript is
+    // put in front of the prompt (or at {channel_history}).
     std::string BuildPrompt(Player* bot, std::string promptTemplate, std::string eventType,
-                            std::string eventDetail, std::string actorName);
+                            std::string eventDetail, std::string actorName,
+                            ChatChannelSourceLocal chatSource = SRC_UNDEFINED_LOCAL);
 };
 
 class ChatOnKill : public PlayerScript
