@@ -67,11 +67,19 @@ namespace CrowdText
         bool ack       = false;   // "ty", "lol", "ok np" -- shouted or not
         bool openWords = false;   // "anyone", "who else", "hi all"...
         bool open      = false;   // said to everyone: open words, or any shout that is not an ack
+        bool greeting  = false;   // nothing but a greeting: "hello", "hey there", "o/"
     };
     LineTraits Classify(const std::string& cleanText,
                         const std::vector<std::vector<std::string>>& ackWords,
                         const std::vector<std::vector<std::string>>& openPhrases,
-                        const std::vector<std::string>& names = {});
+                        const std::vector<std::string>& names = {},
+                        const std::vector<std::vector<std::string>>& greetWords = {});
+
+    // Every word is a greeting word (single-word entries of `greetWords`), and
+    // at least one of them is more than "there" or "again": "hello", "hey
+    // there", "yo". Names should already be taken out.
+    bool IsGreeting(const std::vector<std::string>& words,
+                    const std::vector<std::vector<std::string>>& greetWords);
 
     // How many bots may answer one open line, given how many are listening:
     // one per `botsPerResponder` listeners, at least 1, at most `maxResponders`.
@@ -87,10 +95,13 @@ namespace CrowdText
 
 enum class CrowdLineKind : uint8_t
 {
-    Aimed,      // named, or the transcript says who it answers
-    Open,       // said to everyone: "anyone around?", or shouted
-    Ambient,    // said to nobody in particular
-    BotLine     // a bot's line that another bot answers
+    Aimed,         // named, or the transcript says who it answers
+    Open,          // said to everyone: "anyone around?", or shouted
+    Ambient,       // said to nobody in particular
+    BotLine,       // a bot's line that another bot answers
+    Greeting,      // "hello" to the room: a few hellos back
+    Conversation,  // one turn of a running conversation (mod-ollama-chat_conversation)
+    Command        // the acknowledgement of a party instruction (mod-ollama-chat_partycmd)
 };
 
 struct CrowdSlot
@@ -102,6 +113,7 @@ struct CrowdSlot
     uint64_t    answerGuid = 0;       // replyBack: the bot being answered
     std::string answerText;           // replyBack: what it said
     uint64_t    answerSeq  = 0;       // replyBack: its transcript line
+    std::string hint;                 // when set, the prompt hint for this voice, as written
 };
 
 struct CrowdPlan
@@ -139,7 +151,18 @@ struct CrowdPlan
     std::vector<std::string> answeredBy;
     std::vector<uint64_t>    answeredGuids;
     uint32_t                 replyBacks = 0;
+
+    // Set on a conversation turn or a command acknowledgement: its line starts
+    // no answer-backs and no crowd of its own -- for a conversation, the
+    // conversation decides who speaks next.
+    uint64_t conversationId = 0;
+    bool     closed         = false;
 };
+
+// The key one running plan is stored under: party, raid and guild chat are one
+// conversation each; a channel and a /say area are one per faction, since the
+// two sides never see each other's lines there.
+std::string Crowd_KeyFor(const std::string& scopeKey, ChatChannelSourceLocal source, uint32_t teamId);
 
 // Run `plan`, replacing whatever plan was running under its key (scopeKey
 // when key is empty). The first slot fires at once, or after `firstDelayMs`.
@@ -179,6 +202,15 @@ bool     Crowd_IsPlayful(const std::string& personalityKey);
 // plan then moves straight on to the next slot. World thread.
 bool Crowd_FireSlot(CrowdPlan& plan, size_t index);
 
+class Player;
+
+// Implemented in mod-ollama-chat_handler.cpp: `count` more voices from `pool`
+// that sound like different people -- a different personality each where
+// possible, playful and straight styles taking turns, and nobody who has only
+// just spoken. `fixed` are already taken. World thread.
+std::vector<Player*> Crowd_PickVoices(const std::vector<Player*>& pool,
+                                      const std::vector<Player*>& fixed, uint32_t count);
+
 struct CrowdStats
 {
     uint64_t plansStarted = 0;
@@ -186,6 +218,7 @@ struct CrowdStats
     uint64_t slotsLanded  = 0;
     uint64_t slotsSkipped = 0;   // bot gone, out of range or rate-limited at fire time
     uint64_t slotsDropped = 0;   // fired, but nothing was said (pass, filter, error)
+    uint64_t slotsLate    = 0;   // landed after its slot had timed out (counted as landed)
     uint64_t replyBacks   = 0;
     uint32_t active       = 0;
 };

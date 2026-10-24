@@ -1,5 +1,6 @@
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_dispatch.h"
@@ -183,6 +184,25 @@ namespace
             { "duck", TEXT_EMOTE_DUCK },           { "bounce", TEXT_EMOTE_BOUNCE },
             { "fidget", TEXT_EMOTE_FIDGET },       { "twiddle", TEXT_EMOTE_TWIDDLE },
             { "mutter", TEXT_EMOTE_MUTTER },
+
+            // Silly. What a goofball does walking past someone: the joke is
+            // the line the game prints ("Jelboll brushes up against you and
+            // farts loudly."), so text-only emotes are fine here.
+            { "fart", TEXT_EMOTE_FART },           { "rasp", TEXT_EMOTE_RASP },
+            { "raspberry", TEXT_EMOTE_RASP },      { "chicken", TEXT_EMOTE_CHICKEN },
+            { "tickle", TEXT_EMOTE_TICKLE },       { "poke", TEXT_EMOTE_POKE },
+            { "bonk", TEXT_EMOTE_BONK },           { "burp", TEXT_EMOTE_BURP },
+            { "belch", TEXT_EMOTE_BURP },          { "train", TEXT_EMOTE_TRAIN },
+            { "violin", TEXT_EMOTE_VIOLIN },       { "flop", TEXT_EMOTE_FLOP },
+            { "moo", TEXT_EMOTE_MOO },             { "shimmy", TEXT_EMOTE_SHIMMY },
+            { "drool", TEXT_EMOTE_DROOL },         { "nosepick", TEXT_EMOTE_NOSEPICK },
+            { "pounce", TEXT_EMOTE_POUNCE },       { "squeal", TEXT_EMOTE_SQUEAL },
+            { "smack", TEXT_EMOTE_SMACK },         { "pinch", TEXT_EMOTE_PINCH },
+            { "snap", TEXT_EMOTE_SNAP },           { "hiss", TEXT_EMOTE_HISS },
+            { "ruffle", TEXT_EMOTE_RUFFLE },       { "chug", TEXT_EMOTE_CHUG },
+            { "purr", TEXT_EMOTE_PURR },           { "bark", TEXT_EMOTE_BARK },
+            { "hug", TEXT_EMOTE_HUG },             { "charm", TEXT_EMOTE_CHARM },
+            { "moon", TEXT_EMOTE_MOON },
         };
         return table;
     }
@@ -267,7 +287,9 @@ namespace
             if (!bot || !bot->IsInWorld())
                 return true;
 
-            Player* target = ObjectAccessor::FindConnectedPlayer(_targetGuid);
+            // Any unit on the bot's map: a player, or someone's pet or
+            // companion ("Avede pets Whiskers.").
+            Unit* target = _targetGuid.IsEmpty() ? nullptr : ObjectAccessor::GetUnit(*bot, _targetGuid);
             const bool targetUsable = target && target->IsInWorld() &&
                                       target->GetMapId() == bot->GetMapId();
 
@@ -327,7 +349,26 @@ namespace
     }
 }
 
-std::string Expression_BuildGesturePrompt()
+namespace
+{
+    // The emote style of this bot's personality (OllamaChat.Emote.Style.<KEY>),
+    // or the default style.
+    const std::vector<uint32_t>& StyleOf(Player* bot)
+    {
+        if (bot && !g_EmoteStyles.empty())
+        {
+            std::string key = GetBotPersonality(bot);
+            for (char& c : key)
+                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            auto it = g_EmoteStyles.find(key);
+            if (it != g_EmoteStyles.end() && !it->second.empty())
+                return it->second;
+        }
+        return g_EmoteStyleDefault;
+    }
+}
+
+std::string Expression_BuildGesturePrompt(Player* bot)
 {
     if (!g_EnableBotEmotes || g_GestureChance <= 0)
         return "";
@@ -338,6 +379,25 @@ std::string Expression_BuildGesturePrompt()
     // urand is inclusive at both ends, so this is 1..100 against the chance.
     if (static_cast<int>(urand(1, 100)) > g_GestureChance)
         return "";
+
+    std::vector<std::string> names;
+
+    // Two from the bot's own style first, so a goofball's examples include a
+    // fart and a pet lover's a pat, then the rest from the general moods.
+    if (bot)
+    {
+        std::vector<uint32_t> style = StyleOf(bot);
+        for (size_t i = style.size(); i-- > 1; )
+            std::swap(style[i], style[urand(0, static_cast<uint32>(i))]);
+        for (uint32_t id : style)
+        {
+            if (names.size() >= 2)
+                break;
+            const std::string name = LookupTextEmoteName(id);
+            if (!name.empty() && std::find(names.begin(), names.end(), name) == names.end())
+                names.push_back(name);
+        }
+    }
 
     const auto& samples = GestureSamples();
 
@@ -350,19 +410,22 @@ std::string Expression_BuildGesturePrompt()
     for (size_t i = order.size(); i-- > 1; )
         std::swap(order[i], order[urand(0, static_cast<uint32>(i))]);
 
-    const size_t take = std::min<size_t>(4, order.size());
-
-    std::string tags;
-    for (size_t i = 0; i < take; ++i)
+    for (size_t i = 0; i < order.size() && names.size() < 4; ++i)
     {
         const auto& bucket = samples[order[i]];
-        const char* name   = bucket[urand(0, static_cast<uint32>(bucket.size() - 1))];
+        const std::string name = bucket[urand(0, static_cast<uint32>(bucket.size() - 1))];
+        if (std::find(names.begin(), names.end(), name) == names.end())
+            names.push_back(name);
+    }
 
+    std::string tags;
+    for (size_t i = 0; i < names.size(); ++i)
+    {
         if (!tags.empty())
-            tags += (i + 1 == take) ? " or " : ", ";
+            tags += (i + 1 == names.size()) ? " or " : ", ";
 
         tags += "[emote:";
-        tags += name;
+        tags += names[i];
         tags += "]";
     }
 
@@ -370,13 +433,54 @@ std::string Expression_BuildGesturePrompt()
            " when one genuinely fits -- any common emote name works. Omit it otherwise.";
 }
 
+uint32_t Expression_PickStyleEmote(Player* bot, bool petNearby, bool* outPetEmote)
+{
+    if (outPetEmote)
+        *outPetEmote = false;
+
+    const std::vector<uint32_t>& style = StyleOf(bot);
+    if (style.empty())
+        return 0;
+
+    std::vector<uint32_t> forPet, forPerson;
+    for (uint32_t id : style)
+        (g_EmotePetEmotes.count(id) ? forPet : forPerson).push_back(id);
+
+    // A pet to fuss over is hard to resist for a style that has pet emotes.
+    if (petNearby && !forPet.empty() && (forPerson.empty() || urand(0, 99) < 60))
+    {
+        if (outPetEmote)
+            *outPetEmote = true;
+        return forPet[urand(0, static_cast<uint32>(forPet.size() - 1))];
+    }
+
+    // Petting a stranger who has no pet would be odd.
+    if (forPerson.empty())
+        return 0;
+    return forPerson[urand(0, static_cast<uint32>(forPerson.size() - 1))];
+}
+
 uint32_t LookupTextEmoteId(const std::string& name)
 {
+    const auto& table = EmoteNameTable();
+
+    // The name as written first: "rolleyes" is a name in its own right, and
+    // trimming its 's' as if it were "waves" would lose it.
+    std::string exact;
+    for (char c : name)
+        if (std::isalpha(static_cast<unsigned char>(c)))
+            exact.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    if (!exact.empty())
+    {
+        auto it = table.find(exact);
+        if (it != table.end())
+            return it->second;
+    }
+
     const std::string key = NormalizeEmoteWord(name);
     if (key.empty())
         return 0;
 
-    const auto& table = EmoteNameTable();
     auto it = table.find(key);
     return it == table.end() ? 0u : it->second;
 }

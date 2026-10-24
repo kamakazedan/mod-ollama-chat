@@ -33,6 +33,11 @@ public:
                             ChatChannelSourceLocal chatSource = SRC_UNDEFINED_LOCAL);
 };
 
+// A congratulation from OllamaChat.Events.CongratsLines for `name` ("gz",
+// "grats Kami"), skipping any this bot or this place has said too recently.
+// Empty when every one of them would repeat. World thread.
+std::string Events_PickCongrats(Player* bot, const std::string& scopeKey, const std::string& name);
+
 class ChatOnKill : public PlayerScript
 {
 public:

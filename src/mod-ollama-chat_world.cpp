@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_world.h"
+#include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_dispatch.h"
 
 #include "AreaDefines.h"
@@ -27,6 +28,27 @@ bool OllamaIsBotPlayer(Player* player)
 
     PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(player);
     return ai && ai->IsBotAI();
+}
+
+bool OllamaIsSocialHub(Player* player)
+{
+    if (!g_CityEnable || !player || !player->IsInWorld())
+        return false;
+
+    Map* map = player->GetMap();
+    if (!map || map->Instanceable())
+        return false;
+
+    // Set by the game while a character stands in a capital (AREA_FLAG_CAPITAL)
+    // and is not flagged hostile there.
+    if (player->HasRestFlag(REST_FLAG_IN_CITY))
+        return true;
+
+    if (g_CityIncludeInns && player->HasRestFlag(REST_FLAG_IN_TAVERN))
+        return true;
+
+    return !g_CityExtraIds.empty() &&
+           (g_CityExtraIds.count(player->GetZoneId()) != 0 || g_CityExtraIds.count(player->GetAreaId()) != 0);
 }
 
 std::string OllamaContinentName(Player* player)

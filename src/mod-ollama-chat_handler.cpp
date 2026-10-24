@@ -45,6 +45,9 @@
 #include "mod-ollama-chat_random.h"
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_crowd.h"
+#include "mod-ollama-chat_conversation.h"
+#include "mod-ollama-chat_partycmd.h"
+#include "mod-ollama-chat_presence.h"
 #include <iomanip>
 #include <unordered_set>
 #include "SpellMgr.h"
@@ -82,7 +85,7 @@ static void HandleCrowdBotLine(Player* bot, const std::string& msg,
 // Position of botName inside msg as a whole word, or npos. Case-insensitive.
 // Hoisted out of ProcessChat because being named is also what makes a message
 // direct address, which the governor needs to know.
-static size_t OllamaFindBotNameMention(const std::string& msg, const std::string& botName)
+size_t OllamaFindBotNameMention(const std::string& msg, const std::string& botName)
 {
     if (botName.empty() || msg.size() < botName.size())
         return std::string::npos;
@@ -1154,6 +1157,59 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
     }
 
 
+    PlayerbotAI* senderAI = PlayerbotsMgr::instance().GetPlayerbotAI(player);
+    bool senderIsBot = (senderAI && senderAI->IsBotAI());
+
+    // --- conversation governor -------------------------------------------
+    // One key per conversation space so cooldowns, rate limits and repetition
+    // history are tracked per channel rather than globally.
+    //
+    // Party and raid chat keys on the group, not the zone. Keying it on the
+    // zone made two unrelated parties standing in Elwynn share one cooldown,
+    // one rate limit and one repetition history -- and made a party reset all
+    // three every time it walked over a zone border.
+    uint32_t scopeGroupOrZone = player->GetZoneId();
+    if (sourceLocal == SRC_PARTY_LOCAL || sourceLocal == SRC_RAID_LOCAL)
+    {
+        if (Group* senderGroup = player->GetGroup())
+            scopeGroupOrZone = senderGroup->GetGUID().GetCounter();
+    }
+
+    const std::string scopeKey = Governor_MakeScopeKey(
+        ChatChannelSourceLocalStr[sourceLocal],
+        channel ? channel->GetChannelId() : 0,
+        channel ? channel->GetName() : std::string(),
+        (sourceLocal == SRC_GUILD_LOCAL || sourceLocal == SRC_OFFICER_LOCAL)
+            ? player->GetGuildId() : 0,
+        scopeGroupOrZone);
+
+    const std::string contextChannel = channel ? channel->GetName() : std::string();
+
+    // --- party instructions -----------------------------------------------
+    // "ready", "mb", "wait": in a dungeon with a dungeon-clear tank these
+    // steer the run, and the tank answers -- nobody else. Looked at before the
+    // blacklist ("ready", "wait" and "drink" are playerbots commands too) and
+    // before DisableForParty, which is about chatter, not about the run.
+    uint64_t humanSeq = 0;   // the person's line, once it is in the transcript
+    if (!senderIsBot)
+    {
+        const PartyCmdLine partyLine = PartyCmd_Classify(player, msg, sourceLocal);
+
+        // "dc on", "dc pause": mod-dungeon-clear answers those itself.
+        if (partyLine == PartyCmdLine::DcCommand)
+            return;
+
+        if (partyLine == PartyCmdLine::Instruction)
+        {
+            Governor_NoteHumanMessage(scopeKey);
+            humanSeq = Context_RecordLine(player, sourceLocal, contextChannel, msg, ContextLineKind::Human);
+            if (PartyCmd_HandleHumanLine(player, msg, sourceLocal, scopeKey, humanSeq))
+                return;
+            // Nothing to steer after all ("ready" with the run already going):
+            // an ordinary line from here on.
+        }
+    }
+
     auto startsWithWord = [](const std::string& text, const std::string& word) {
         if (text.size() < word.size()) return false;
         if (text.compare(0, word.size(), word) != 0) return false;
@@ -1210,32 +1266,6 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         }
         return;
     }
-             
-    PlayerbotAI* senderAI = PlayerbotsMgr::instance().GetPlayerbotAI(player);
-    bool senderIsBot = (senderAI && senderAI->IsBotAI());
-
-    // --- conversation governor -------------------------------------------
-    // One key per conversation space so cooldowns, rate limits and repetition
-    // history are tracked per channel rather than globally.
-    //
-    // Party and raid chat keys on the group, not the zone. Keying it on the
-    // zone made two unrelated parties standing in Elwynn share one cooldown,
-    // one rate limit and one repetition history -- and made a party reset all
-    // three every time it walked over a zone border.
-    uint32_t scopeGroupOrZone = player->GetZoneId();
-    if (sourceLocal == SRC_PARTY_LOCAL || sourceLocal == SRC_RAID_LOCAL)
-    {
-        if (Group* senderGroup = player->GetGroup())
-            scopeGroupOrZone = senderGroup->GetGUID().GetCounter();
-    }
-
-    const std::string scopeKey = Governor_MakeScopeKey(
-        ChatChannelSourceLocalStr[sourceLocal],
-        channel ? channel->GetChannelId() : 0,
-        channel ? channel->GetName() : std::string(),
-        (sourceLocal == SRC_GUILD_LOCAL || sourceLocal == SRC_OFFICER_LOCAL)
-            ? player->GetGuildId() : 0,
-        scopeGroupOrZone);
 
     if (!senderIsBot)
     {
@@ -1276,10 +1306,10 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
     // A person's line goes into the transcript now; a bot's line was recorded
     // when it was delivered, just before it was handed here. Either way, find
     // it, then work out who it was most likely aimed at.
-    const std::string contextChannel = channel ? channel->GetName() : std::string();
-    const uint64_t contextSeq = senderIsBot
-        ? Context_LatestLineFrom(player, sourceLocal, contextChannel)
-        : Context_RecordLine(player, sourceLocal, contextChannel, msg, ContextLineKind::Human);
+    const uint64_t contextSeq = senderIsBot ? Context_LatestLineFrom(player, sourceLocal, contextChannel)
+                              : humanSeq    ? humanSeq
+                                            : Context_RecordLine(player, sourceLocal, contextChannel, msg,
+                                                                 ContextLineKind::Human);
 
     const ContextAddressee addressee = (sourceLocal == SRC_WHISPER_LOCAL)
         ? ContextAddressee{}
@@ -1289,6 +1319,14 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         LOG_INFO("module.ollamachat",
                  "[Ollama Chat] {}'s line looks like a reply to {}.",
                  player->GetName(), addressee.name);
+
+    if (!senderIsBot && sourceLocal != SRC_WHISPER_LOCAL)
+    {
+        // A conversation running here hears the person too. (Bot lines are
+        // noted when they are delivered.)
+        Conversation_NoteLine(Crowd_KeyFor(scopeKey, sourceLocal, uint32(player->GetTeamId())),
+                              player, false, msg, contextSeq, 0, addressee.guid);
+    }
 
     // One pass over the online players, reused by every eligibility test
     // below. These questions used to be answered by a fresh full walk per
@@ -2318,10 +2356,13 @@ namespace
     {
         switch (kind)
         {
-            case CrowdLineKind::Aimed:   return "aimed";
-            case CrowdLineKind::Open:    return "open call";
-            case CrowdLineKind::Ambient: return "to the room";
-            case CrowdLineKind::BotLine: return "bot line";
+            case CrowdLineKind::Aimed:        return "aimed";
+            case CrowdLineKind::Open:         return "open call";
+            case CrowdLineKind::Ambient:      return "to the room";
+            case CrowdLineKind::BotLine:      return "bot line";
+            case CrowdLineKind::Greeting:     return "greeting";
+            case CrowdLineKind::Conversation: return "conversation";
+            case CrowdLineKind::Command:      return "instruction";
         }
         return "?";
     }
@@ -2331,15 +2372,7 @@ namespace
     // the two sides never see each other's lines there.
     std::string CrowdKeyFor(const std::string& scopeKey, ChatChannelSourceLocal source, Player* speaker)
     {
-        switch (source)
-        {
-            case SRC_GENERAL_LOCAL:
-            case SRC_SAY_LOCAL:
-            case SRC_YELL_LOCAL:
-                return scopeKey + "|t" + std::to_string(uint32(speaker->GetTeamId()));
-            default:
-                return scopeKey;
-        }
+        return Crowd_KeyFor(scopeKey, source, uint32(speaker->GetTeamId()));
     }
 
     // Names a line might be addressed to, so "ty Lahu" still reads as a thank-you.
@@ -2388,14 +2421,20 @@ static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
     // is for the whole room to hear.
     const CrowdText::LineTraits traits =
         CrowdText::Classify(Context_CleanText(msg), g_CrowdAckWords, g_CrowdOpenCallPhrases,
-                            NamesOf(candidates, addressee.name));
+                            NamesOf(candidates, addressee.name), g_CrowdGreetingWords);
     const bool shouted   = traits.shouted;
     const bool ack       = traits.ack;
     const bool openWords = traits.openWords;
     const bool open      = traits.open;
+    const bool greeting  = traits.greeting;
 
     const uint32_t listeners = static_cast<uint32_t>(pool.size());
     const uint32_t cap = CrowdText::Capacity(listeners, g_CrowdBotsPerResponder, g_CrowdMaxResponders);
+
+    // A city or an inn: people are there to talk, so more of them answer.
+    const bool hub = (source == SRC_GENERAL_LOCAL || source == SRC_SAY_LOCAL || source == SRC_YELL_LOCAL) &&
+                     OllamaIsSocialHub(player);
+    const uint32_t half = std::max<uint32_t>(1, (cap + 1) / 2);
 
     // Who it is aimed at. Names first -- and a named bot that cannot answer
     // right now (in combat, or the roll) does not hand its line to whoever
@@ -2479,11 +2518,18 @@ static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
     {
         total = urand(1, cap);
     }
+    else if (greeting && PlayerReplyChanceFor(source) > 0)
+    {
+        // "hello" to the room: a few hellos back -- more in a busy city. (A
+        // channel whose reply chance is set to 0 stays quiet for hellos too.)
+        kind  = CrowdLineKind::Greeting;
+        total = urand(1, hub ? cap : half);
+    }
     else
     {
         if (urand(0, 99) >= PlayerReplyChanceFor(source))
             return;
-        total = urand(1, std::max<uint32_t>(1, (cap + 1) / 2));
+        total = urand(1, (hub && g_CrowdFullCrowdInCities) ? cap : half);
     }
 
     std::vector<Player*> extras;
@@ -2492,6 +2538,9 @@ static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
 
     if (fixed.empty() && extras.empty())
         return;
+
+    std::vector<Player*> voices = fixed;
+    voices.insert(voices.end(), extras.begin(), extras.end());
 
     CrowdPlan plan = NewPlan(player, msg, source, channel, scopeKey, seq);
     plan.kind       = kind;
@@ -2522,7 +2571,13 @@ static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
                  player->GetName(), ChatChannelSourceLocalStr[source], CrowdKindName(kind),
                  shouted ? ", shouted" : "", listeners, cap, CrowdNames(plan));
 
+    const std::string key = plan.key;
     Crowd_Start(std::move(plan));
+
+    // The chat may carry on after the crowd: those who answered join any
+    // conversation running here, and a line to the room may start one.
+    Conversation_OnPlayerCrowd(player, msg, seq, source, channel, scopeKey, key, voices,
+                               hub, kind != CrowdLineKind::Aimed);
 }
 
 static void HandleCrowdBotLine(Player* bot, const std::string& msg,
@@ -2545,8 +2600,11 @@ static void HandleCrowdBotLine(Player* bot, const std::string& msg,
     // lines start nothing at all -- that is what keeps a chain from escaping.
     if (crowdPlanId != 0)
     {
+        // A conversation turn or a command acknowledgement starts nothing of
+        // its own: the conversation decides who speaks next.
         CrowdPlan* plan = Crowd_FindById(crowdPlanId);
-        if (!plan || plan->replyBacks >= g_CrowdMaxReplyBacks)
+        if (!plan || plan->closed || plan->conversationId != 0 ||
+            plan->replyBacks >= g_CrowdMaxReplyBacks)
             return;
 
         // "ty Lahu" from a bot does not need an answer back.
@@ -2622,9 +2680,12 @@ static void HandleCrowdBotLine(Player* bot, const std::string& msg,
     }
 
     // An ambient line: random chatter, or anything else a bot said on its own.
-    // If a conversation is already going on here, it does not start another.
+    // If a crowd or a conversation is already going on here, it does not
+    // start another (a running conversation has already taken the line in).
+    // A /say conversation is only the people in earshot of it: a line across
+    // the zone may still get its answer.
     const std::string key = CrowdKeyFor(scopeKey, source, bot);
-    if (Crowd_Find(key))
+    if (Crowd_Find(key) || Conversation_IsActiveNear(key, bot))
         return;
 
     const std::vector<Player*> pool = CrowdPool(bot, source, candidates);
@@ -2643,7 +2704,14 @@ static void HandleCrowdBotLine(Player* bot, const std::string& msg,
             aimed = FindInPool(pool, addressee.guid);
     }
 
-    uint32_t chance = Governor_ApplyChainDecay(BotLineReplyChanceFor(source), hops);
+    // Cities and inns talk more: a line there is likelier to get an answer.
+    const bool hub = (source == SRC_GENERAL_LOCAL || source == SRC_SAY_LOCAL || source == SRC_YELL_LOCAL) &&
+                     OllamaIsSocialHub(bot);
+    uint32_t base = BotLineReplyChanceFor(source);
+    if (hub)
+        base = std::min<uint32_t>(100, base + g_CityBotLineReplyBonus);
+
+    uint32_t chance = Governor_ApplyChainDecay(base, hops);
     if (aimed)
         chance = std::max(chance, Governor_ApplyChainDecay(g_ContextBotAddressedChance, hops));
     if (urand(0, 99) >= chance)
@@ -2695,6 +2763,17 @@ static void HandleCrowdBotLine(Player* bot, const std::string& msg,
     const uint32_t lo = std::min(g_CrowdGapMinMs, g_CrowdGapMaxMs);
     const uint32_t hi = std::max(g_CrowdGapMinMs, g_CrowdGapMaxMs);
     Crowd_Start(std::move(plan), lo == hi ? lo : urand(lo, hi));
+
+    // Two bots talking may become a conversation others can join.
+    std::vector<Player*> voices = fixed;
+    voices.insert(voices.end(), extras.begin(), extras.end());
+    Conversation_OnBotLineCrowd(bot, msg, seq, source, channel, scopeKey, key, voices, hub);
+}
+
+std::vector<Player*> Crowd_PickVoices(const std::vector<Player*>& pool,
+                                      const std::vector<Player*>& fixed, uint32_t count)
+{
+    return PickCrowdVoices(pool, fixed, count);
 }
 
 bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
@@ -2808,20 +2887,22 @@ bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
     };
 
     std::string hint;
-    if (slot.replyBack)
+    if (!slot.hint.empty())
+        hint = slot.hint;                           // a conversation turn or an instruction, written for this voice
+    else if (slot.replyBack)
         hint = hintFrom(g_CrowdHintReplyBack);
     else if (slot.addressed)
         hint = g_ContextHintAddressed;
     else if (followUp)
         hint = hintFrom(g_CrowdHintFollowUp);
-    else if (plan.kind == CrowdLineKind::Open)
+    else if (plan.kind == CrowdLineKind::Open || plan.kind == CrowdLineKind::Greeting)
         hint = hintFrom(g_CrowdHintOpenCall);
     else if (plan.kind == CrowdLineKind::Aimed && !plan.aimedAt.empty())
         hint = hintFrom(g_ContextHintBystander);   // meant for someone else, who has not answered
     else
         hint = hintFrom(g_ContextHintOpen);
 
-    if (plan.shouted && !slot.replyBack)
+    if (plan.shouted && !slot.replyBack && slot.hint.empty())
     {
         const std::string shout = hintFrom(g_CrowdHintShout);
         if (!shout.empty())
@@ -3019,7 +3100,12 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
 
     // Let the model gesture. The tag is parsed back out and stripped before
     // the line is spoken, so it never reaches chat as text.
-    prompt += Expression_BuildGesturePrompt();
+    prompt += Expression_BuildGesturePrompt(bot);
+
+    // In a dungeon party, "mb" is a mana break, not "my bad".
+    const std::string glossary = PartyCmd_GlossaryFor(bot, source);
+    if (!glossary.empty())
+        prompt += " " + glossary;
 
     // Last, so it is the freshest instruction: is this bot being spoken to?
     if (!replyHint.empty() && g_ChatPromptTemplate.find("{reply_hint}") == std::string::npos)
@@ -3091,4 +3177,5 @@ void OllamaChatMaintenance::OnPlayerLogout(Player* player)
     OllamaRandomChatter_ForgetBot(guid);
     Topics_ForgetBot(guid);
     Context_ForgetPlayer(guid.GetRawValue());
+    Conversation_ForgetPlayer(guid.GetRawValue());
 }

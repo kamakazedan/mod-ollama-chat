@@ -45,7 +45,18 @@ uint32_t ExtractEmoteTag(std::string& response);
 // Returns "" when emotes are off, or when the GestureChance roll says this
 // particular line goes without one -- so callers append it unconditionally and
 // the "should there be a gesture at all" decision lives in exactly one place.
-std::string Expression_BuildGesturePrompt();
+//
+// With `bot`, two of the four examples come from its personality's emote style
+// (OllamaChat.Emote.Style.<KEY>), so a prankster is shown a fart and a pet
+// lover a pat. World thread (reads the bot's personality).
+std::string Expression_BuildGesturePrompt(Player* bot = nullptr);
+
+// One emote from `bot`'s personality style for a moment with no chat line:
+// walking past someone. With `petNearby`, a style that has pet emotes
+// (OllamaChat.Emote.PetEmotes) will usually pick one, and *outPetEmote says
+// so -- aim it at the pet. Without a pet, pet emotes are never picked. 0 when
+// the style has nothing suitable. World thread.
+uint32_t Expression_PickStyleEmote(Player* bot, bool petNearby, bool* outPetEmote);
 
 // Resolve an emote name ("wave", "waves", "waving") to TEXT_EMOTE_*. 0 if unknown.
 uint32_t LookupTextEmoteId(const std::string& name);

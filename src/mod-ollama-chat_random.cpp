@@ -1,8 +1,10 @@
 #include "mod-ollama-chat_random.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
+#include "mod-ollama-chat_conversation.h"
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
+#include "mod-ollama-chat_presence.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_handler.h"
 #include "mod-ollama-chat_personality.h"
@@ -14,8 +16,11 @@
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat-utilities.h"
 
+#include "CellImpl.h"
 #include "Channel.h"
 #include "ChannelMgr.h"
+#include "GridNotifiers.h"
+#include "GridNotifiersImpl.h"
 #include "Group.h"
 #include "Guild.h"
 #include "Log.h"
@@ -29,7 +34,9 @@
 
 #include <fmt/core.h>
 
+#include <algorithm>
 #include <ctime>
+#include <list>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -113,6 +120,14 @@ namespace
                 if (!world.RealPlayerInChannel(ch))
                     return;
 
+                // A conversation is going on in there: an unrelated line
+                // dropped into the middle of it only muddles it.
+                const std::string scope = Governor_MakeScopeKey(
+                    ChatChannelSourceLocalStr[SRC_GENERAL_LOCAL], ch->GetChannelId(), ch->GetName(), 0,
+                    bot->GetZoneId());
+                if (Conversation_IsActive(Crowd_KeyFor(scope, SRC_GENERAL_LOCAL, uint32(bot->GetTeamId()))))
+                    return;
+
                 options.push_back({ SRC_GENERAL_LOCAL, ch->GetName(), ch->GetChannelId() });
             };
 
@@ -132,9 +147,12 @@ namespace
         return true;
     }
 
+    // `opener`: the line opens a conversation about something specific, so it
+    // gets no random statement-or-question nudge on top.
     std::string BuildRandomChatterPrompt(Player* bot, const std::string& environmentInfo,
                                          ChatChannelSourceLocal source,
-                                         const std::string& channelName)
+                                         const std::string& channelName,
+                                         bool opener = false)
     {
         PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
         if (!botAI || !botAI->GetChatHelper())
@@ -188,8 +206,8 @@ namespace
             Roleplay_UseRoleplayVariations() ? g_RoleplayQuestionVariations
                                              : g_RandomChatterQuestionVariations;
 
-        const bool haveStatements = !statements.empty();
-        const bool haveQuestions  = !questions.empty();
+        const bool haveStatements = !opener && !statements.empty();
+        const bool haveQuestions  = !opener && !questions.empty();
 
         if (haveStatements && haveQuestions)
         {
@@ -208,9 +226,48 @@ namespace
 
         prompt += Memory_BuildPromptSection(bot, nullptr);
         prompt += Roleplay_BuildVoicePrompt(bot);
-        prompt += Expression_BuildGesturePrompt();
+        prompt += Expression_BuildGesturePrompt(bot);
 
         return prompt;
+    }
+
+    // A bot standing within /say range of `bot`, near enough a real player to
+    // be heard, for a conversation to start with. nullptr when there is none.
+    Player* PickSayPartner(Player* bot, const OllamaWorldSnapshot& world)
+    {
+        std::list<Player*> found;
+        Acore::AnyPlayerInObjectRangeCheck check(bot, g_SayDistance, true, true);
+        Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(bot, found, check);
+        Cell::VisitObjects(bot, searcher, g_SayDistance);
+
+        std::vector<Player*> partners;
+        for (Player* p : found)
+        {
+            if (!p || p == bot || !p->IsInWorld() || !OllamaIsBotPlayer(p))
+                continue;
+            if (p->GetTeamId() != bot->GetTeamId() || (g_DisableRepliesInCombat && p->IsInCombat()))
+                continue;
+            if (!world.RealPlayerWithin(p, g_SayDistance))
+                continue;
+            partners.push_back(p);
+        }
+        if (partners.empty())
+            return nullptr;
+        return partners[PickIndex(partners.size())];
+    }
+
+    // A premise with its placeholders filled in for this bot.
+    std::string FormatPremise(const std::string& premise, Player* bot)
+    {
+        PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
+        AreaTableEntry const* zone = ai ? ai->GetCurrentZone() : nullptr;
+        const bool alliance = bot->GetTeamId() == TEAM_ALLIANCE;
+
+        std::string out = SafeFormat(premise,
+                                     fmt::arg("zone", zone ? PlayerbotAI::GetLocalizedAreaName(zone) : "town"),
+                                     fmt::arg("faction", alliance ? "the Alliance" : "the Horde"),
+                                     fmt::arg("other_faction", alliance ? "the Horde" : "the Alliance"));
+        return out == "[Format Error]" ? premise : out;
     }
 }
 
@@ -237,6 +294,12 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
     // After delivery, so a crowd sees the line that just landed and can send
     // its next voice in the same tick the pause runs out.
     Crowd_Update();
+
+    // After the crowds: a conversation waits for any crowd in its place.
+    Conversation_Update();
+
+    // Bots noticing the real players walking past them.
+    Presence_Update(diff);
 
     static uint32 maintenanceTimer = 0;
     if (maintenanceTimer <= diff)
@@ -353,7 +416,13 @@ void OllamaBotRandomChatter::HandleRandomChatter()
             g_nextRandomChatTime[rawGuid] = now + urand(g_MinRandomInterval, g_MaxRandomInterval);
         };
 
-        if (urand(0, 99) >= g_RandomChatterBotCommentChance)
+        // People come to a city to talk: bots there speak up more often.
+        const bool hub = OllamaIsSocialHub(bot);
+        uint32_t commentChance = g_RandomChatterBotCommentChance;
+        if (hub)
+            commentChance = std::min<uint32_t>(100, commentChance * g_CityChatterMultiplier);
+
+        if (urand(0, 99) >= commentChance)
         {
             reschedule();
             continue;
@@ -402,16 +471,69 @@ void OllamaBotRandomChatter::HandleRandomChatter()
             continue;
         }
 
-        std::string prompt = BuildRandomChatterPrompt(bot, topic.text, source, channelName);
+        // In a city, the line sometimes opens a conversation about something
+        // players argue about, instead of a remark about the surroundings.
+        std::string environment = topic.text;
+        bool opener = false;
+        uint64_t openerTarget = 0;
+        std::string openerKey;
+        if (hub && !g_ConversationPremises.empty() && g_CityConversationStartChance > 0 &&
+            Conversation_PlaceAllowed(source, channelId) &&
+            urand(0, 99) < g_CityConversationStartChance)
+        {
+            const std::string key = Crowd_KeyFor(scopeKey, source, uint32(bot->GetTeamId()));
+            if (Conversation_CanOpen(key))
+            {
+                std::vector<Player*> partners;
+                Player* partner = nullptr;
+                if (source == SRC_SAY_LOCAL)
+                {
+                    partner = PickSayPartner(bot, world);
+                    if (partner)
+                        partners.push_back(partner);
+                }
+
+                // /say needs someone to talk to; a channel finds its people
+                // once the opening line is out.
+                if (source != SRC_SAY_LOCAL || partner)
+                {
+                    const std::string premise =
+                        FormatPremise(g_ConversationPremises[PickIndex(g_ConversationPremises.size())], bot);
+                    const std::string& templ = (source == SRC_SAY_LOCAL) ? g_ConversationHintStartSay
+                                                                         : g_ConversationHintStartChannel;
+                    const std::string where = (source == SRC_SAY_LOCAL) ? std::string("/say")
+                        : (channelId == uint32(ChatChannelId::TRADE) ? std::string("Trade chat")
+                                                                     : std::string("General chat"));
+                    const std::string start = SafeFormat(templ,
+                                                         fmt::arg("premise", premise),
+                                                         fmt::arg("where", where),
+                                                         fmt::arg("partner", partner ? partner->GetName() : std::string()));
+                    if (start != "[Format Error]" && !start.empty() &&
+                        Conversation_BeginWithOpener(bot, source, channelName, channelId, scopeKey, key,
+                                                     premise, partners))
+                    {
+                        environment = start;
+                        opener = true;
+                        openerKey = key;
+                        if (partner)
+                            openerTarget = partner->GetGUID().GetRawValue();   // faces them as it speaks
+                    }
+                }
+            }
+        }
+
+        std::string prompt = BuildRandomChatterPrompt(bot, environment, source, channelName, opener);
         if (prompt.empty())
         {
+            if (opener)
+                Conversation_OpenerLost(openerKey, rawGuid);
             reschedule();
             continue;
         }
 
         OllamaChatRequest request;
         request.botGuid     = rawGuid;
-        request.targetGuid  = 0;
+        request.targetGuid  = openerTarget;
         request.source      = source;
         request.channelName = channelName;
         request.channelId   = channelId;
@@ -421,9 +543,12 @@ void OllamaBotRandomChatter::HandleRandomChatter()
         request.botName     = bot->GetName();
         request.kind        = OllamaRequestKind::RandomChatter;
         request.triggerBotReplies = true;
+        request.openerKey   = openerKey;
 
         if (OllamaDispatch_Submit(std::move(request)))
             Topics_NoteUsed(bot->GetGUID(), topic.key);
+        else if (opener)
+            Conversation_OpenerLost(openerKey, rawGuid);   // the queue is full: free the place again
 
         reschedule();
     }

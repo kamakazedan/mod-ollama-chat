@@ -26,6 +26,9 @@ extern const char* ChatChannelSourceLocalStr[];
 std::string rtrim(const std::string& s);
 ChatChannelSourceLocal GetChannelSourceLocal(uint32_t type);
 
+// Position of botName inside msg as a whole word, or npos. Case-insensitive.
+size_t OllamaFindBotNameMention(const std::string& msg, const std::string& botName);
+
 // Called after a bot has spoken so other bots can hear it.
 //
 // chainDepth is how many bot->bot hops led here; a message from a real player

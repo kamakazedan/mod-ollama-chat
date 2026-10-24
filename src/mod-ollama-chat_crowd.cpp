@@ -163,10 +163,37 @@ namespace CrowdText
         return letters >= 5 && upper * 10 >= letters * 8;
     }
 
+    bool IsGreeting(const std::vector<std::string>& words,
+                    const std::vector<std::vector<std::string>>& greetWords)
+    {
+        if (words.empty() || greetWords.empty())
+            return false;
+
+        bool real = false;   // more than "there" / "again"
+        for (const std::string& word : words)
+        {
+            bool known = false;
+            for (const auto& entry : greetWords)
+            {
+                if (entry.size() == 1 && WordMatches(entry.front(), word))
+                {
+                    known = true;
+                    break;
+                }
+            }
+            if (!known)
+                return false;
+            if (word != "there" && word != "again")
+                real = true;
+        }
+        return real;
+    }
+
     LineTraits Classify(const std::string& cleanText,
                         const std::vector<std::vector<std::string>>& ackWords,
                         const std::vector<std::vector<std::string>>& openPhrases,
-                        const std::vector<std::string>& names)
+                        const std::vector<std::string>& names,
+                        const std::vector<std::vector<std::string>>& greetWords)
     {
         // Names say who a line is for, not what kind of line it is:
         // "ty Lahu" is a thank-you, "THANKS LAHU" too.
@@ -197,6 +224,7 @@ namespace CrowdText
         t.ack       = !onlyCallWords && IsAcknowledgement(words, ackWords);
         t.openWords = !t.ack && ContainsPhrase(words, openPhrases);
         t.open      = !t.ack && (t.openWords || t.shouted);
+        t.greeting  = !t.ack && IsGreeting(words, greetWords);
         return t;
     }
 
@@ -252,6 +280,16 @@ namespace
     // Workers report failed generations here; Crowd_Update drains it.
     std::mutex g_failMutex;
     std::vector<std::pair<uint64_t, uint32_t>> g_failures;
+
+    // Slots given up on after SlotTimeoutSeconds, by plan and slot. Counted as
+    // "said nothing" at the time; if the line turns up after all, the count is
+    // moved to "spoke" -- it did appear in chat.
+    std::unordered_map<uint64_t, Clock::time_point> g_timedOut;
+
+    uint64_t SlotKey(uint64_t planId, uint32_t slot)
+    {
+        return (planId << 12) ^ uint64_t(slot & 0xFFF);
+    }
 
     uint32_t RandomMs(uint32_t lo, uint32_t hi)
     {
@@ -326,6 +364,19 @@ uint64_t Crowd_NextPlanId()
     return g_nextPlanId++;
 }
 
+std::string Crowd_KeyFor(const std::string& scopeKey, ChatChannelSourceLocal source, uint32_t teamId)
+{
+    switch (source)
+    {
+        case SRC_GENERAL_LOCAL:
+        case SRC_SAY_LOCAL:
+        case SRC_YELL_LOCAL:
+            return scopeKey + "|t" + std::to_string(teamId);
+        default:
+            return scopeKey;
+    }
+}
+
 bool Crowd_IsPlayful(const std::string& personalityKey)
 {
     if (personalityKey.empty() || g_CrowdPlayfulPersonalities.empty())
@@ -387,6 +438,25 @@ CrowdPlan* Crowd_FindById(uint64_t planId)
 void Crowd_OnSlotFinished(uint64_t planId, uint32_t slot, bool landed,
                           uint64_t botGuid, const std::string& botName)
 {
+    // A slot that timed out was counted as "said nothing". If its line made it
+    // into chat after all, count it where it belongs -- even when the plan is
+    // over by now.
+    if (planId != 0 && !g_timedOut.empty())
+    {
+        auto late = g_timedOut.find(SlotKey(planId, slot));
+        if (late != g_timedOut.end())
+        {
+            g_timedOut.erase(late);
+            if (landed)
+            {
+                if (g_stats.slotsDropped > 0)
+                    --g_stats.slotsDropped;
+                ++g_stats.slotsLanded;
+                ++g_stats.slotsLate;
+            }
+        }
+    }
+
     CrowdPlan* plan = FindById(planId);
     if (!plan)
         return;   // superseded by a newer line, or over
@@ -424,10 +494,22 @@ void Crowd_Update()
         failures.swap(g_failures);
     }
 
+    const auto now = Clock::now();
+
+    // Forget timed-out slots whose line never turned up.
+    if (!g_timedOut.empty())
+    {
+        for (auto it = g_timedOut.begin(); it != g_timedOut.end(); )
+        {
+            if (now - it->second > std::chrono::minutes(10))
+                it = g_timedOut.erase(it);
+            else
+                ++it;
+        }
+    }
+
     if (g_plans.empty())
         return;
-
-    const auto now = Clock::now();
 
     for (const auto& [planId, slot] : failures)
     {
@@ -450,9 +532,14 @@ void Crowd_Update()
         }
 
         // A generation that never reported back (lost to a reload, a crash in
-        // the HTTP client...) must not stall the rest of the crowd.
+        // the HTTP client, a model still loading...) must not stall the rest
+        // of the crowd.
         if (plan.inFlight && now - plan.inFlightSince > slotTimeout)
+        {
+            if (g_timedOut.size() < 4096)
+                g_timedOut[SlotKey(plan.id, static_cast<uint32_t>(plan.inFlightSlot))] = now;
             Finish(plan, false, 0, std::string(), now);
+        }
 
         if (!plan.inFlight && plan.next < plan.slots.size() && now >= plan.nextFireAt)
             FireNext(plan, now);
@@ -469,6 +556,7 @@ void Crowd_Update()
 void Crowd_Reset()
 {
     g_plans.clear();
+    g_timedOut.clear();
     std::lock_guard<std::mutex> lock(g_failMutex);
     g_failures.clear();
 }

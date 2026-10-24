@@ -69,6 +69,12 @@ std::string OllamaContinentName(Player* player);
 // it.
 bool OllamaGroupHasRealPlayer(Player* who);
 
+// A place people come to talk: a capital city (the game's own "resting in a
+// city" flag), a zone or area listed in OllamaChat.City.ExtraZoneOrAreaIds
+// (Shattrath and Dalaran by default), or -- with City.IncludeInns -- an inn.
+// Never an instance. False when OllamaChat.City.Enable is off.
+bool OllamaIsSocialHub(Player* player);
+
 struct OllamaWorldSnapshot
 {
     std::vector<Player*>        realPlayers;            // non-bot, in world

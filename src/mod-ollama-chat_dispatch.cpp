@@ -2,7 +2,10 @@
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
+#include "mod-ollama-chat_conversation.h"
 #include "mod-ollama-chat_crowd.h"
+#include "mod-ollama-chat_events.h"
+#include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_memory.h"
@@ -65,6 +68,7 @@ namespace
         std::string       text;
         uint32_t          emoteId = 0;
         Clock::time_point deliverAt;
+        bool              failed = false;   // nothing to say: only the world thread's bookkeeping runs
     };
 
     // --- shared state -----------------------------------------------------
@@ -98,16 +102,55 @@ namespace
         g_lastError = what;
     }
 
+    // A conversation's opening line that came to nothing still has to reach
+    // the world thread, which frees the place the conversation was holding
+    // for it. (A crowd voice reports through Crowd_ReportWorkerFailure.)
+    void ReportOpenerFailure(const OllamaChatRequest& request)
+    {
+        if (request.openerKey.empty())
+            return;
+        Completion completion;
+        completion.request   = request;
+        completion.failed    = true;
+        completion.deliverAt = Clock::now();
+        std::lock_guard<std::mutex> lock(g_doneMutex);
+        g_done.push_back(std::move(completion));
+    }
+
     // --- worker -----------------------------------------------------------
 
     void RunChatTask(const Task& task)
     {
+        // A canned line ("gz") needs no generation, only the same delivery.
+        if (!task.request.fixedText.empty())
+        {
+            Completion completion;
+            completion.request = task.request;
+            completion.text    = task.request.fixedText;
+
+            uint32_t delayMs = task.request.extraDelayMs;
+            if (g_EnableTypingSimulation)
+            {
+                uint32_t typing = g_TypingSimulationBaseDelay +
+                                  static_cast<uint32_t>(completion.text.length()) * g_TypingSimulationDelayPerChar;
+                if (g_TypingSimulationMaxDelay > 0 && typing > g_TypingSimulationMaxDelay)
+                    typing = g_TypingSimulationMaxDelay;
+                delayMs += typing;
+            }
+            completion.deliverAt = Clock::now() + std::chrono::milliseconds(delayMs);
+
+            std::lock_guard<std::mutex> lock(g_doneMutex);
+            g_done.push_back(std::move(completion));
+            return;
+        }
+
         OllamaApiResult api = QueryOllama(task.request.prompt, task.request.kind);
 
         if (!api.ok)
         {
             RecordError(api.error);
             Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
+            ReportOpenerFailure(task.request);
             return;
         }
 
@@ -136,6 +179,7 @@ namespace
                          "[Ollama Chat] Bot {} produced nothing usable after cleanup.",
                          task.request.botName);
             Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
+            ReportOpenerFailure(task.request);
             return;
         }
 
@@ -144,13 +188,14 @@ namespace
         completion.text    = std::move(text);
         completion.emoteId = emoteId;
 
-        uint32_t delayMs = 0;
+        uint32_t delayMs = task.request.extraDelayMs;
         if (g_EnableTypingSimulation)
         {
-            delayMs = g_TypingSimulationBaseDelay +
-                      static_cast<uint32_t>(completion.text.length()) * g_TypingSimulationDelayPerChar;
-            if (g_TypingSimulationMaxDelay > 0 && delayMs > g_TypingSimulationMaxDelay)
-                delayMs = g_TypingSimulationMaxDelay;
+            uint32_t typing = g_TypingSimulationBaseDelay +
+                              static_cast<uint32_t>(completion.text.length()) * g_TypingSimulationDelayPerChar;
+            if (g_TypingSimulationMaxDelay > 0 && typing > g_TypingSimulationMaxDelay)
+                typing = g_TypingSimulationMaxDelay;
+            delayMs += typing;
         }
 
         // A delay, not a sleep. The old code held a whole thread hostage here.
@@ -212,14 +257,20 @@ namespace
                 RecordError(e.what());
                 LOG_ERROR("module.ollamachat", "[Ollama Chat] Worker exception: {}", e.what());
                 if (task.type == TaskType::ChatReply)
+                {
                     Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
+                    ReportOpenerFailure(task.request);
+                }
             }
             catch (...)
             {
                 RecordError("unknown exception");
                 LOG_ERROR("module.ollamachat", "[Ollama Chat] Unknown worker exception.");
                 if (task.type == TaskType::ChatReply)
+                {
                     Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
+                    ReportOpenerFailure(task.request);
+                }
             }
 
             --g_inFlight;
@@ -358,10 +409,30 @@ namespace
         }
     };
 
+    // Likewise for a conversation's opening line: if it does not go out, the
+    // conversation waiting for it lets the place go at once.
+    struct OpenerReport
+    {
+        std::string key;
+        uint64_t    botGuid = 0;
+        bool        done    = false;
+
+        ~OpenerReport()
+        {
+            if (!key.empty() && !done)
+                Conversation_OpenerLost(key, botGuid);
+        }
+    };
+
     // By value: the line can still be trimmed here before it is spoken.
     void Deliver(Completion c, const OllamaWorldSnapshot& world)
     {
-        CrowdSlotReport crowdReport{ c.request.crowdPlanId, c.request.crowdSlot };
+        // A worker failure has already told the crowd; only the opener needs
+        // to hear about it here.
+        CrowdSlotReport crowdReport{ c.failed ? 0 : c.request.crowdPlanId, c.request.crowdSlot };
+        OpenerReport    openerReport{ c.request.openerKey, c.request.botGuid };
+        if (c.failed)
+            return;
 
         Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.botGuid));
         if (!bot || !bot->IsInWorld())
@@ -407,6 +478,41 @@ namespace
                      bot->GetName(), c.text, rationed);
         c.text = rationed;
 
+        // Players do not offer help like a help desk ("How can I help you?").
+        if (!g_ResponseAssistantPhrases.empty())
+        {
+            const std::string plain = TextRules::StripAssistantSpeak(c.text, g_ResponseAssistantPhrases);
+            if (plain.empty())
+            {
+                ++g_droppedEmpty;
+                if (g_DebugEnabled)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} reply was only assistant talk: '{}'",
+                             bot->GetName(), c.text);
+                return;
+            }
+            if (g_DebugEnabled && plain != c.text)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} assistant talk removed: '{}' -> '{}'",
+                         bot->GetName(), c.text, plain);
+            c.text = plain;
+        }
+
+        // Only the player who levelled says ding.
+        if (c.request.noSelfDing && TextRules::IsSelfDing(c.text))
+        {
+            // (A plain "gz" would break character in roleplay mode: dropped.)
+            const std::string gz = g_RoleplayEnable ? std::string()
+                                 : Events_PickCongrats(bot, c.request.scopeKey, c.request.congratsName);
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} said '{}' for someone else's ding; {}.",
+                         bot->GetName(), c.text, gz.empty() ? "dropped" : "'" + gz + "' instead");
+            if (gz.empty())
+            {
+                ++g_droppedEmpty;
+                return;
+            }
+            c.text = gz;
+        }
+
         // Repetition is checked at delivery rather than at submission, because
         // we only know what the model actually said now.
         //
@@ -426,8 +532,11 @@ namespace
 
         // A crowd voice is paced by its crowd -- but only while that crowd is
         // still running. A late line from one that has ended or been replaced
-        // gets the ordinary cooldowns like any other line.
-        const bool paced = c.request.crowdPlanId && Crowd_FindById(c.request.crowdPlanId);
+        // gets the ordinary cooldowns like any other line. A conversation's
+        // opening line is paced by the conversation (one per place, and
+        // Conversation.CooldownSeconds between them).
+        const bool paced = (c.request.crowdPlanId && Crowd_FindById(c.request.crowdPlanId)) ||
+                           !c.request.openerKey.empty();
         const bool allowed = paced
             ? Governor_TryConsumePaced(botGuid, c.request.scopeKey, directAddress)
             : Governor_TryConsumeSend(botGuid, c.request.scopeKey, directAddress);
@@ -451,14 +560,21 @@ namespace
             return;
         }
 
+        openerReport.done = true;   // it is out: the conversation hears it below
         Governor_RecordUtterance(botGuid, c.request.scopeKey, c.text);
         ++g_totalDelivered;
 
         // Into the shared transcript before other bots hear it below, so the
         // ones that answer can see what they are answering.
-        Context_RecordLine(bot, c.request.source,
-                           channel ? channel->GetName() : c.request.channelName,
-                           c.text, ContextLineKind::Bot);
+        const uint64_t seq = Context_RecordLine(bot, c.request.source,
+                                                channel ? channel->GetName() : c.request.channelName,
+                                                c.text, ContextLineKind::Bot);
+
+        // ...and a conversation running here hears it too, before anyone
+        // reacts to it below.
+        if (c.request.source == SRC_GENERAL_LOCAL || c.request.source == SRC_SAY_LOCAL)
+            Conversation_NoteLine(Crowd_KeyFor(c.request.scopeKey, c.request.source, uint32(bot->GetTeamId())),
+                                  bot, true, c.text, seq, c.request.crowdPlanId, 0);
 
         // This bot is now in a conversation with whoever it just answered, so
         // their next line in this scope is a turn in it rather than ambient
@@ -569,7 +685,7 @@ void OllamaDispatch_Stop()
 
 bool OllamaDispatch_Submit(OllamaChatRequest request)
 {
-    if (request.prompt.empty() || request.botGuid == 0)
+    if ((request.prompt.empty() && request.fixedText.empty()) || request.botGuid == 0)
         return false;
 
     Task task;

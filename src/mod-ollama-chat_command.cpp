@@ -4,9 +4,12 @@
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_capability.h"
+#include "mod-ollama-chat_conversation.h"
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_governor.h"
+#include "mod-ollama-chat_partycmd.h"
+#include "mod-ollama-chat_presence.h"
 #include "mod-ollama-chat_response.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat-utilities.h"
@@ -499,15 +502,49 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              gov.blockedChainDepth, gov.blockedNoAudience);
 
     const CrowdStats crowd = Crowd_GetStats();
-    handler->PSendSysMessage("Crowds: {} ({} running, {} started) - {} voices asked, {} spoke, "
+    handler->PSendSysMessage("Crowds: {} ({} running, {} started) - {} voices asked, {} spoke ({} late), "
                              "{} said nothing, {} skipped, {} answer-backs",
                              (g_CrowdEnable && g_ContextEnable) ? "on" : "off", crowd.active,
                              (unsigned long long)crowd.plansStarted,
                              (unsigned long long)crowd.slotsFired,
                              (unsigned long long)crowd.slotsLanded,
+                             (unsigned long long)crowd.slotsLate,
                              (unsigned long long)crowd.slotsDropped,
                              (unsigned long long)crowd.slotsSkipped,
                              (unsigned long long)crowd.replyBacks);
+
+    const ConversationStats conv = Conversation_GetStats();
+    handler->PSendSysMessage("Conversations: {} ({} running) - {} started ({} by players, {} by bots), "
+                             "{} turns, {} lines, {} joined, {} wound down, {} fizzled",
+                             (g_ConversationEnable && g_CrowdEnable && g_ContextEnable) ? "on" : "off",
+                             conv.active,
+                             (unsigned long long)conv.started,
+                             (unsigned long long)conv.byPlayers,
+                             (unsigned long long)conv.byBots,
+                             (unsigned long long)conv.turns,
+                             (unsigned long long)conv.lines,
+                             (unsigned long long)conv.joins,
+                             (unsigned long long)conv.woundDown,
+                             (unsigned long long)conv.fizzled);
+
+    const PresenceStats presence = Presence_GetStats();
+    handler->PSendSysMessage("Cities: {} (chatter x{})   Presence: {} - {} gestures ({} at pets), {} remarks",
+                             g_CityEnable ? "on" : "off", g_CityChatterMultiplier,
+                             g_PresenceEnable ? "on" : "off",
+                             (unsigned long long)presence.emotes,
+                             (unsigned long long)presence.petEmotes,
+                             (unsigned long long)presence.remarks);
+
+    const PartyCmdStats party = PartyCmd_GetStats();
+    handler->PSendSysMessage("Party instructions: {} (dungeon clear {}) - {} started, {} paused, {} resumed, "
+                             "{} waited for players, {} refused",
+                             g_PartyCmdEnable ? "on" : "off",
+                             PartyCmd_Available() ? "found" : "not in this build",
+                             (unsigned long long)party.started,
+                             (unsigned long long)party.paused,
+                             (unsigned long long)party.resumed,
+                             (unsigned long long)party.waiting,
+                             (unsigned long long)party.refused);
 
     handler->PSendSysMessage("Roleplay: {} (strictness {})   Emote reactions: {}",
                              g_RoleplayEnable ? "on" : "off",

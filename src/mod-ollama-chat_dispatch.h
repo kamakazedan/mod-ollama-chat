@@ -91,6 +91,26 @@ struct OllamaChatRequest
     // per-scope cooldowns -- paces it.
     uint64_t crowdPlanId = 0;
     uint32_t crowdSlot   = 0;
+
+    // A line typed without the model ("gz"): the worker skips generation and
+    // the line goes through the same delivery as any other. `prompt` may be
+    // empty when this is set.
+    std::string fixedText;
+
+    // Extra pause before delivery, on top of the typing delay: the moment it
+    // takes someone to react at all.
+    uint32_t extraDelayMs = 0;
+
+    // A reaction to someone ELSE's level-up or achievement: a reply that
+    // announces a ding of its own is swapped for a congratulation for
+    // `congratsName`.
+    bool        noSelfDing = false;
+    std::string congratsName;
+
+    // Set when this line opens a conversation (Conversation_BeginWithOpener):
+    // the conversation's key. The conversation paces it, and if the line does
+    // not go out for any reason the place is freed at once.
+    std::string openerKey;
 };
 
 // Submit a request. Returns false when the queue is at MaxQueueDepth, in which

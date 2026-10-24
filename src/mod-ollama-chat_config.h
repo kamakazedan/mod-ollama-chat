@@ -12,6 +12,7 @@
 #include <mutex>
 #include <ctime>
 #include "ScriptMgr.h"  // Ensure WorldScript is defined
+#include "mod-ollama-chat_textrules.h"
 
 // --------------------------------------------
 // Distance/Range Configuration
@@ -299,6 +300,89 @@ extern std::string g_CrowdHintOpenCall;
 extern std::string g_CrowdHintFollowUp;
 extern std::string g_CrowdHintReplyBack;
 extern std::string g_CrowdHintShout;
+// A line that is only a greeting ("hello", "hey there") is said to the room.
+extern std::vector<std::vector<std::string>> g_CrowdGreetingWords;
+// Busy social hubs: a line to nobody in particular may get up to all of the
+// responders, not half.
+extern bool        g_CrowdFullCrowdInCities;
+
+// --------------------------------------------
+// Natural chat v4
+// --------------------------------------------
+// Level-ups and other events (mod-ollama-chat_events)
+extern std::string g_EventChatterSelfPromptTemplate;   // when it happened to the bot itself
+extern std::vector<std::string> g_EventCongratsLines;  // "gz|grats {name}|..."
+extern uint32_t    g_EventCongratsCannedChance;        // % of congratulations typed without the LLM
+
+// Reply cleanup
+extern std::vector<std::vector<std::string>> g_ResponseAssistantPhrases;
+
+// Emote styles: personality key (uppercase) -> TEXT_EMOTE ids, repeats weight them.
+extern std::unordered_map<std::string, std::vector<uint32_t>> g_EmoteStyles;
+extern std::vector<uint32_t>      g_EmoteStyleDefault;
+extern std::unordered_set<uint32_t> g_EmotePetEmotes;   // aimed at a pet or companion when there is one
+
+// Presence: bots noticing real players walking by (mod-ollama-chat_presence)
+extern bool        g_PresenceEnable;
+extern float       g_PresenceRange;
+extern uint32_t    g_PresencePlayerIntervalMin;    // seconds between moments near one player
+extern uint32_t    g_PresencePlayerIntervalMax;
+extern uint32_t    g_PresenceBotCooldownSeconds;
+extern uint32_t    g_PresencePairCooldownSeconds;
+extern uint32_t    g_PresenceChance;
+extern uint32_t    g_PresenceSayChance;
+extern bool        g_PresenceCityOnly;
+extern std::string g_PresencePromptTemplate;
+
+// Cities and other social hubs
+extern bool        g_CityEnable;
+extern std::unordered_set<uint32_t> g_CityExtraIds;    // zone or area ids besides the capitals
+extern bool        g_CityIncludeInns;
+extern uint32_t    g_CityChatterMultiplier;
+extern uint32_t    g_CityConversationStartChance;
+extern uint32_t    g_CityBotLineReplyBonus;
+extern uint32_t    g_CityConversationBoost;
+
+// Conversations (mod-ollama-chat_conversation)
+extern bool        g_ConversationEnable;
+extern uint32_t    g_ConversationMinMinutes;
+extern uint32_t    g_ConversationMaxMinutes;
+extern uint32_t    g_ConversationGapMinSeconds;
+extern uint32_t    g_ConversationGapMaxSeconds;
+extern uint32_t    g_ConversationLullChance;
+extern uint32_t    g_ConversationLullMinSeconds;
+extern uint32_t    g_ConversationLullMaxSeconds;
+extern uint32_t    g_ConversationMaxActive;
+extern uint32_t    g_ConversationMaxParticipants;
+extern uint32_t    g_ConversationJoinChance;
+extern uint32_t    g_ConversationFromPlayerChance;
+extern uint32_t    g_ConversationFromBotLineChance;
+extern uint32_t    g_ConversationCooldownSeconds;
+extern uint32_t    g_ConversationMaxMisses;
+extern uint32_t    g_ConversationObserveChance;
+extern bool        g_ConversationAllowTrade;
+extern bool        g_ConversationAllowSay;
+extern std::vector<std::string> g_ConversationPremises;
+extern std::string g_ConversationHintTurn;
+extern std::string g_ConversationHintJoin;
+extern std::string g_ConversationHintWindDown;
+extern std::string g_ConversationHintStartChannel;
+extern std::string g_ConversationHintStartSay;
+extern std::string g_ConversationHintObserve;
+
+// Party instructions for mod-dungeon-clear (mod-ollama-chat_partycmd)
+extern bool        g_PartyCmdEnable;
+extern TextRules::PartyRules g_PartyCmdRules;
+extern float       g_PartyCmdMaxDistance;
+extern std::string g_PartyCmdHintStart;
+extern std::string g_PartyCmdHintPause;
+extern std::string g_PartyCmdHintResume;
+extern std::string g_PartyCmdHintWaiting;
+extern std::string g_PartyDungeonGlossary;
+
+// Read OllamaChat.Emote.Style.<KEY> for every personality loaded from the
+// database. Called from the config load, after the personality templates.
+void LoadEmoteStyles();
 
 // --------------------------------------------
 // Topic engine

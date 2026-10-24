@@ -10,6 +10,7 @@
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_sentiment.h"
+#include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat-utilities.h"
 
@@ -32,6 +33,8 @@
 #include "PlayerbotMgr.h"
 
 #include <fmt/core.h>
+#include <algorithm>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -173,6 +176,42 @@ namespace
             return bot->GetGroup()->GetGUID().GetCounter();
         return bot->GetZoneId();
     }
+
+    // Events that get a "gz" from everyone else.
+    bool IsCongratulationEvent(const std::string& type)
+    {
+        auto is = [&type](const std::string& configured) { return !configured.empty() && type == configured; };
+        return is(g_EventTypeLeveledUp) || is(g_GuildEventTypeLevelUp) ||
+               is(g_EventTypeAchievement) || is(g_GuildEventTypeGuildAchievement);
+    }
+
+    // Level-ups and achievements fire on map threads: one generator each.
+    std::mt19937& CongratsRng()
+    {
+        static thread_local std::mt19937 rng{ std::random_device{}() };
+        return rng;
+    }
+}
+
+std::string Events_PickCongrats(Player* bot, const std::string& scopeKey, const std::string& name)
+{
+    if (!bot || g_EventCongratsLines.empty())
+        return "";
+
+    std::vector<std::string> lines = g_EventCongratsLines;
+    std::shuffle(lines.begin(), lines.end(), CongratsRng());
+
+    for (const std::string& raw : lines)
+    {
+        const std::string line = TextRules::FormatCannedLine(raw, name, CongratsRng());
+        if (line.empty())
+            continue;
+        // Two bots typing "gz" is normal; the same bot typing it twice in a
+        // row, or the channel filling with identical lines, is not.
+        if (!Governor_IsRepetitive(bot->GetGUID(), scopeKey, line))
+            return line;
+    }
+    return "";
 }
 
 // --------------------------------------------------------------------------
@@ -316,14 +355,11 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
             source_ == SRC_GUILD_LOCAL ? bot->GetGuildId() : 0,
             ScopeGroupOrZone(bot, source_));
 
-        if (!Governor_CanSend(bot->GetGUID(), scopeKey))
-            continue;
+        // Someone else levelled up or earned something: that is a "gz", and
+        // never a "ding" -- only the one who levelled says that.
+        const bool congrats = bot != source && IsCongratulationEvent(type);
 
-        // Built here, on the world thread. The old code built the whole prompt
-        // inside the worker, reading area, zone, spec and guild off-thread.
-        std::string prompt = BuildPrompt(bot, g_EventChatterPromptTemplate, type, detail,
-                                         source->GetName(), source_);
-        if (prompt.empty())
+        if (!Governor_CanSend(bot->GetGUID(), scopeKey, congrats))
             continue;
 
         OllamaChatRequest request;
@@ -332,9 +368,36 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
         request.source      = source_;
         request.chainDepth  = 0;
         request.scopeKey    = scopeKey;
-        request.prompt      = std::move(prompt);
         request.botName     = bot->GetName();
         request.kind        = OllamaRequestKind::EventChatter;
+        request.noSelfDing  = congrats;
+        request.congratsName = source->GetName();
+        // Several people typing "gz" at once is exactly what happens, so the
+        // pacing cooldowns that would keep all but the first quiet do not
+        // apply (the event cooldown and the per-minute ceilings still do).
+        request.directAddress = congrats;
+
+        // Most gz are typed without a thought; some get the model's personality.
+        // Not in roleplay mode, where every line has to stay in character.
+        if (congrats && !g_RoleplayEnable && g_EventCongratsCannedChance > 0 &&
+            urand(1, 100) <= g_EventCongratsCannedChance)
+        {
+            request.fixedText = Events_PickCongrats(bot, scopeKey, source->GetName());
+            request.extraDelayMs = urand(600, 3500);   // the moment it takes to notice
+        }
+
+        if (request.fixedText.empty())
+        {
+            // Built here, on the world thread. The old code built the whole
+            // prompt inside the worker, reading area, zone, spec and guild
+            // off-thread.
+            const std::string& templ = (bot == source && !g_EventChatterSelfPromptTemplate.empty())
+                                           ? g_EventChatterSelfPromptTemplate
+                                           : g_EventChatterPromptTemplate;
+            request.prompt = BuildPrompt(bot, templ, type, detail, source->GetName(), source_);
+            if (request.prompt.empty())
+                continue;
+        }
         // Reactions to an event ("gz", "rip", "wb") are not conversation
         // starters. Several bots can already react to the event itself (up to
         // EventChatterMaxBotsPerPlayer); bots answering each other's "gz" is
@@ -407,7 +470,7 @@ std::string OllamaBotEventChatter::BuildPrompt(Player* bot, std::string promptTe
 
     prompt += Memory_BuildPromptSection(bot, nullptr);
     prompt += Roleplay_BuildVoicePrompt(bot);
-    prompt += Expression_BuildGesturePrompt();
+    prompt += Expression_BuildGesturePrompt(bot);
 
     if (g_ContextEnable && !g_ContextHintEvent.empty())
     {
