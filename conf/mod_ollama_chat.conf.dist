@@ -642,10 +642,10 @@ OllamaChat.ChatPromptTemplate = "You're a WoW player familiar with 3.3.5 version
 # OllamaChat.ChatExtraInfoTemplate
 #   Description: The context/details string about the bot and player, injected into the chat prompt as the last parameter.
 #   Placeholders (named): {bot_race} {bot_gender} {bot_role} {bot_faction} {bot_guild} {bot_group_status} {bot_gold} {player_race} {player_gender} {player_role} {player_faction} {player_guild} {player_group_status} {player_gold} {player_distance} {bot_area} {bot_zone} {bot_map}
-#   {bot_role} is the bot's spec and class ("holy priest"); {player_role} is only the other player's class,
-#   because nobody can see someone else's talents. {player_gold} is not something another player could
-#   know either: leave it out unless you want bots to know it.
-OllamaChat.ChatExtraInfoTemplate = "Your Info: {bot_race} {bot_gender}, Spec: {bot_role}, Faction: {bot_faction}, Guild: {bot_guild}, Group: {bot_group_status}, Gold: {bot_gold}. Player Info: {player_race} {player_gender}, Class: {player_role}, Faction: {player_faction}, Guild: {player_guild}, Group: {player_group_status}, Distance: {player_distance} yards. Location: {bot_area}, Zone: {bot_zone}, Map: {bot_map}. Only respond to the new message. No commentary, no meta-talk, no prefix—just the reply."
+#   {bot_role} and {player_role} are spec and class ("holy priest"): a player can guess that from someone's
+#   gear. {player_gold} is not something another player could know: leave it out unless you want bots to
+#   know it.
+OllamaChat.ChatExtraInfoTemplate = "Your Info: {bot_race} {bot_gender}, Spec: {bot_role}, Faction: {bot_faction}, Guild: {bot_guild}, Group: {bot_group_status}, Gold: {bot_gold}. Player Info: {player_race} {player_gender}, Spec: {player_role}, Faction: {player_faction}, Guild: {player_guild}, Group: {player_group_status}, Distance: {player_distance} yards. Location: {bot_area}, Zone: {bot_zone}, Map: {bot_map}. Only respond to the new message. No commentary, no meta-talk, no prefix—just the reply."
 
 # --------------------------------------------
 # ENVIRONMENTAL/CONTEXTUAL TEMPLATES
@@ -2132,12 +2132,7 @@ OllamaChat.Party.RunStateText = "About this dungeon run: {tank} leads it, {progr
 #                it never offers to tank or heal. Classes with more than one
 #                role also say which one the bot plays right now;
 #     knowledge  what anyone can see of another player (KnowledgeText), so
-#                nobody comments on your talents, gold or bags.
-#
-#   Bots also no longer see another player's spec: {player_role} is just
-#   their class now (see ChatExtraInfoTemplate). A real player cannot see
-#   your talents without inspecting you, so a bot that knew them read as
-#   reading your character sheet.
+#                nobody comments on your unspent talents, gold or bags.
 #
 #   Conversation premises can carry a level tag (see
 #   Conversation.Premises), so Ulduar comes up between level 80s.
@@ -2177,7 +2172,7 @@ OllamaChat.Outlook.ClassRoles = 1
 
 #    OllamaChat.Outlook.KnowledgeText
 #        What a bot can know about other players. Empty disables.
-OllamaChat.Outlook.KnowledgeText = "You know other players only by what anyone could see of them: their name, level, race, class and guild, and what they say in chat."
+OllamaChat.Outlook.KnowledgeText = "You know other players only by what anyone could see of them: their name, level, race, class, spec and guild, and what they say in chat."
 
 ###############################################################################
 #

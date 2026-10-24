@@ -475,7 +475,7 @@ short list of tell-tale phrases (`Outlook.LevelPhrases`: "[40+] repair bill",
 "[70+] heroic") is a backstop for when the model slips.
 It is also told which roles its class can fill -- a mage never offers to heal
 -- and that it knows other players only by what anyone could see of them:
-their name, level, race, class and guild. Bots no longer see your spec.
+their name, level, race, class, spec and guild.
 
 Conversation premises can carry a level tag (`[80] getting into Ulduar runs`,
 `[10-29] the elite around here that keeps killing people`), so a city

@@ -3008,9 +3008,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     uint32_t playerLevel            = player->GetLevel();
     std::string playerClass         = botAI->GetChatHelper()->FormatClass(player->getClass());
     std::string playerRace          = botAI->GetChatHelper()->FormatRace(player->getRace());
-    // Their class, not their spec: nobody can see another player's talents
-    // without asking, and a bot that knows them reads as reading your sheet.
-    std::string playerRole          = playerClass;
+    // Their spec as well as their class: anyone can guess it from the gear
+    // they wear and the spells they cast.
+    std::string playerRole          = CleanRoleForPrompt(ChatHelper::FormatClass(player, AiFactory::GetPlayerSpecTab(player)));
     uint8_t playerGenderByte        = player->getGender();
     std::string playerGender        = (playerGenderByte == 0 ? "Male" : "Female");
     std::string playerFaction       = (player->GetTeamId() == TEAM_ALLIANCE ? "Alliance" : "Horde");

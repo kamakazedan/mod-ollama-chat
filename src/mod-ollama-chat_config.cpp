@@ -942,8 +942,8 @@ static void LoadNaturalChatV5Settings()
     g_OutlookLevelBands    = sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.LevelBands", kDefaultLevelBands);
     g_OutlookClassRoles    = sConfigMgr->GetOption<bool>("OllamaChat.Outlook.ClassRoles", true);
     g_OutlookKnowledgeText = sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.KnowledgeText",
-        "You know other players only by what anyone could see of them: their name, level, race, class and "
-        "guild, and what they say in chat.");
+        "You know other players only by what anyone could see of them: their name, level, race, class, spec "
+        "and guild, and what they say in chat.");
     g_OutlookLevelPhrases = TextRules::ParseLevelPhrases(sConfigMgr->GetOption<std::string>(
         "OllamaChat.Outlook.LevelPhrases",
         "[40+] repair bill|[40+] repair bills|[40+] repair costs|[70+] heroic|[70+] heroics|[70+] naxx|"
