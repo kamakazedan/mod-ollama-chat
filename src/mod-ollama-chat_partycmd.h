@@ -59,9 +59,19 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
                               ChatChannelSourceLocal source, const std::string& scopeKey,
                               uint64_t seq);
 
+// The tank's answer to an instruction went out: remember it for its group, so
+// the next answer can be told not to copy it (PartyCommands.RecentAcks).
+void PartyCmd_NoteAck(Player* bot, const std::string& line);
+
 // The group-chat glossary for a bot answering in party or raid chat inside a
 // dungeon or raid (OllamaChat.Party.DungeonGlossary); empty elsewhere.
 std::string PartyCmd_GlossaryFor(Player* bot, ChatChannelSourceLocal source);
+
+// Inside a dungeon-clear run, for a bot answering in party or raid chat: who
+// leads, how many bosses are down, which is next and what the group is doing
+// right now (OllamaChat.Party.RunStateText), so it can answer "which boss is
+// next?" or "what are we waiting for?". Empty outside a run.
+std::string PartyCmd_RunStateFor(Player* bot, ChatChannelSourceLocal source);
 
 struct PartyCmdStats
 {

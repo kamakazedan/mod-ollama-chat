@@ -10,6 +10,7 @@
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_memory.h"
+#include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat-utilities.h"
@@ -299,6 +300,25 @@ std::string g_PartyCmdHintPause;
 std::string g_PartyCmdHintResume;
 std::string g_PartyCmdHintWaiting;
 std::string g_PartyDungeonGlossary;
+uint32_t    g_PartyCmdRecentAcks           = 4;
+std::string g_PartyRunStateText;
+std::string g_PartyCmdRecentAcksText;
+
+bool        g_OutlookEnable                = true;
+std::string g_OutlookLevelBands;
+bool        g_OutlookClassRoles            = true;
+std::string g_OutlookKnowledgeText;
+std::vector<TextRules::LevelPhrase> g_OutlookLevelPhrases;
+
+bool        g_LinksEnable                  = true;
+uint32_t    g_LinksMaxPerLine              = 2;
+uint32_t    g_LinksRememberMinutes         = 60;
+bool        g_LinksUseGameData             = true;
+std::string g_LinksPromptHint;
+
+std::vector<std::vector<std::string>> g_ResponseOverusedPhrases;
+uint32_t    g_ResponseOverusedCooldownSeconds = 1200;
+std::vector<std::vector<std::string>> g_ResponseOffEraPhrases;
 
 // --------------------------------------------
 // Topic engine
@@ -795,21 +815,25 @@ static void LoadNaturalChatV4Settings()
     g_ConversationObserveChance     = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.ObserveChance", 30));
     g_ConversationAllowTrade        = sConfigMgr->GetOption<bool>("OllamaChat.Conversation.AllowTrade", true);
     g_ConversationAllowSay          = sConfigMgr->GetOption<bool>("OllamaChat.Conversation.AllowSay", true);
+    // A "[70+]" or "[10-39]" in front: only bots of those levels bring it up.
     g_ConversationPremises = ReadPipeList("OllamaChat.Conversation.Premises",
         "which class is the most overpowered right now|whether death knights ruined everything now that every "
-        "other player is one|the best tank class for heroics|whether ret paladins need a nerf|the worst wipe you "
-        "ever had in a dungeon|a ninja looter who rolled need on everything in a pug|whether vanilla was better "
-        "than Wrath|Wintergrasp and who keeps winning it|the best profession for making gold|whether epic flying "
-        "is worth the gold|the coolest looking mount in the game|the funniest hunter pet name you have seen|"
-        "whether Arthas was always evil|whether Illidan was right all along|the hardest boss in Naxxramas|"
-        "getting into Ulduar runs without much gear|what everyone is farming right now|the most pointless "
-        "achievement|where Mankrik's wife could be|the best place to level from 70 to 80|how expensive the "
-        "auction house has got|the old raid you miss most|guild drama|would you rather fight one huge murloc or a "
-        "hundred tiny ones|the cutest companion pet|whether the Lich King fight will be any good|people who stand "
-        "in fire|what you do on long flight paths|a name for a new alt|fishing: relaxing or the most boring thing "
-        "in the game|the Argent Tournament dailies|whether gnomes or goblins make better engineers|whether "
-        "{other_faction} is winning more battlegrounds lately|a heroic you want a group for|the best food and "
-        "drink in {zone}");
+        "other player is one|[70+] the best tank class for heroics|whether ret paladins need a nerf|[15+] the "
+        "worst wipe you ever had in a dungeon|[15+] a ninja looter who rolled need on everything in a pug|"
+        "whether vanilla was better than Wrath|[75+] Wintergrasp and who keeps winning it|the best profession "
+        "for making gold|[60+] whether epic flying is worth the gold|the coolest looking mount in the game|the "
+        "funniest hunter pet name you have seen|whether Arthas was always evil|whether Illidan was right all "
+        "along|[80] the hardest boss in Naxxramas|[80] getting into Ulduar runs without much gear|what everyone "
+        "is farming right now|the most pointless achievement|where Mankrik's wife could be|[68+] the best place "
+        "to level from 70 to 80|how expensive the auction house has got|[60+] the old raid you miss most|guild "
+        "drama|would you rather fight one huge murloc or a hundred tiny ones|the cutest companion pet|[75+] "
+        "whether the Lich King fight will be any good|[15+] people who stand in fire|what you do on long flight "
+        "paths|a name for a new alt|fishing: relaxing or the most boring thing in the game|[77+] the Argent "
+        "Tournament dailies|whether gnomes or goblins make better engineers|[10+] whether {other_faction} is "
+        "winning more battlegrounds lately|[80] a heroic you want a group for|the best food and drink in {zone}|"
+        "[1-19] which starting zone is the best|[10-29] the elite around here that keeps killing people|[15-39] "
+        "the first dungeon you ever ran|[20-59] the most annoying levelling zone|[58-69] how crowded Hellfire "
+        "Peninsula gets");
     g_ConversationHintTurn = sConfigMgr->GetOption<std::string>("OllamaChat.Conversation.HintTurn",
         "You are chatting in {where} with {others} (see the chat above){about}. Carry it on as yourself "
         "with one short line: answer the last line, agree or disagree, joke, ask something back, or "
@@ -836,7 +860,7 @@ static void LoadNaturalChatV4Settings()
     g_PartyCmdMaxDistance = sConfigMgr->GetOption<float>("OllamaChat.PartyCommands.MaxDistance", 100.0f);
     g_PartyCmdRules.start = TextRules::ParseCommandPhrases(sConfigMgr->GetOption<std::string>(
         "OllamaChat.PartyCommands.StartPhrases",
-        "=r|=go|=k go|=ok go|=begin|=start|=continue|=resume|=back|ready|rdy|go go|gogo*|lets go|"
+        "=r|=begin|=start|=continue|=resume|=back|ready|rdy|gogo*|lets go|"
         "lets start|lets begin|lets do this|lets do it|lets roll|lets move|lets continue|"
         "lets carry on|carry on|im back|i am back|back now|good to go|start the run"));
     g_PartyCmdRules.pause = TextRules::ParseCommandPhrases(sConfigMgr->GetOption<std::string>(
@@ -863,16 +887,25 @@ static void LoadNaturalChatV4Settings()
         "in 5*|in 6*|in 7*|in 8*|in 9*"));
     g_PartyCmdRules.maxWords = sConfigMgr->GetOption<uint32_t>("OllamaChat.PartyCommands.MaxWords", 10);
     g_PartyCmdHintStart = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.HintStart",
-        "{player_name} is ready, and you are the tank leading this dungeon run, so you start pulling now. Tell "
-        "the group in a few words, the way a tank would.");
+        "{player_name} is ready, so you lead the group on through the dungeon. Tell them in two to six words, "
+        "in your own chat style: someone serious just says they are moving, a joker shouts something silly, "
+        "and anything in between is fine. Only talk about a fight if one is actually in front of you.{recent_acks}");
     g_PartyCmdHintPause = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.HintPause",
         "{player_name} asked the group to stop for {reason}, and you have stopped the run. Tell them in a few "
-        "words that you will wait and they should say when they are ready.");
+        "words, in your own chat style, that you will wait and they should say when they are ready.{recent_acks}");
     g_PartyCmdHintResume = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.HintResume",
-        "{player_name} is ready again, so the run carries on and you lead the way. Say so in a couple of words.");
+        "{player_name} is ready again, so the run carries on and you lead the way. Say so in a few words, in "
+        "your own chat style.{recent_acks}");
     g_PartyCmdHintWaiting = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.HintWaiting",
         "{player_name} wants to start, but not everyone is here yet: still waiting for {missing}. Tell them in "
-        "a few words that you will start as soon as everyone is here.");
+        "a few words that you will start as soon as everyone is here.{recent_acks}");
+    g_PartyCmdRecentAcks = std::min<uint32_t>(10, sConfigMgr->GetOption<uint32_t>("OllamaChat.PartyCommands.RecentAcks", 4));
+    g_PartyCmdRecentAcksText = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.RecentAcksText",
+        " You already said {lines} in this group, so use different words this time.");
+    g_PartyRunStateText = sConfigMgr->GetOption<std::string>("OllamaChat.Party.RunStateText",
+        "About this dungeon run: {tank} leads it, {progress}, the next boss is {next}, and right now the group "
+        "is {state}. Only bring this up when someone asks what is going on, what the plan is or which boss is "
+        "next.");
     g_PartyDungeonGlossary = sConfigMgr->GetOption<std::string>("OllamaChat.Party.DungeonGlossary",
         "In group chat here: mb means mana break (they need to drink, so wait for them), oom means out of mana, "
         "r or rdy means ready, brb means be right back, inc means enemies incoming, cc means crowd control, and "
@@ -885,6 +918,68 @@ static void LoadNaturalChatV4Settings()
              g_ConversationMinMinutes, g_ConversationMaxMinutes, g_ConversationMaxActive,
              g_ConversationPremises.size(), g_CityEnable ? "on" : "off", g_CityChatterMultiplier,
              g_PresenceEnable ? "on" : "off", g_PartyCmdEnable ? "on" : "off");
+}
+
+// What a player of each level is up to, in broad strokes. Kept short and
+// general on purpose: whatever is most concrete in a prompt is what the model
+// talks about, and this is here to keep a bot to its own stage of the game,
+// not to hand every level 15 the same three dungeon names.
+static const char* const kDefaultLevelBands =
+    "1-9: Your character is only level {level}, brand new and still in its starting area, so you talk like "
+    "someone just starting out.|"
+    "10-19: Your character is level {level}: early days, questing in the first big zones and trying the "
+    "first dungeons.|"
+    "20-39: Your character is level {level}, partway through levelling in the old world.|"
+    "40-57: Your character is level {level}, well into the old world, with Outland still ahead.|"
+    "58-69: Your character is level {level}, levelling in Outland, with Northrend still ahead.|"
+    "70-79: Your character is level {level}, levelling in Northrend.|"
+    "80: Your character is level 80, the level cap: heroics, raids, gear and gold fill your days.";
+
+static void LoadNaturalChatV5Settings()
+{
+    // --- level and class ----------------------------------------------------
+    g_OutlookEnable        = sConfigMgr->GetOption<bool>("OllamaChat.Outlook.Enable", true);
+    g_OutlookLevelBands    = sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.LevelBands", kDefaultLevelBands);
+    g_OutlookClassRoles    = sConfigMgr->GetOption<bool>("OllamaChat.Outlook.ClassRoles", true);
+    g_OutlookKnowledgeText = sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.KnowledgeText",
+        "You know other players only by what anyone could see of them: their name, level, race, class and "
+        "guild, and what they say in chat.");
+    g_OutlookLevelPhrases = TextRules::ParseLevelPhrases(sConfigMgr->GetOption<std::string>(
+        "OllamaChat.Outlook.LevelPhrases",
+        "[40+] repair bill|[40+] repair bills|[40+] repair costs|[70+] heroic|[70+] heroics|[70+] naxx|"
+        "[70+] naxxramas|[75+] ulduar|[75+] icc|[75+] icecrown citadel|[75+] wintergrasp|[60+] gear score|"
+        "[60+] gearscore|[80] emblems|[80] emblem of|[60+] epic flying"));
+    Outlook_Load();
+
+    // --- links --------------------------------------------------------------
+    g_LinksEnable          = sConfigMgr->GetOption<bool>("OllamaChat.Links.Enable", true);
+    g_LinksMaxPerLine      = std::min<uint32_t>(5, sConfigMgr->GetOption<uint32_t>("OllamaChat.Links.MaxPerLine", 2));
+    g_LinksRememberMinutes = sConfigMgr->GetOption<uint32_t>("OllamaChat.Links.RememberMinutes", 60);
+    g_LinksUseGameData     = sConfigMgr->GetOption<bool>("OllamaChat.Links.UseGameData", true);
+    g_LinksPromptHint      = sConfigMgr->GetOption<std::string>("OllamaChat.Links.PromptHint",
+        "When you name a particular item or quest, write its exact name in square brackets, the way players "
+        "link them in chat.");
+
+    // --- stock phrases ------------------------------------------------------
+    g_ResponseOverusedPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(
+        "OllamaChat.Response.OverusedPhrases",
+        "taking forever|takes forever|take forever|took forever|so slow|too slow|such a grind|what a grind|"
+        "so boring|so bored|im bored|getting bored|repair bill|repair bills|nothing to do"));
+    g_ResponseOverusedCooldownSeconds =
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.Response.OverusedCooldownSeconds", 1200);
+    g_ResponseOffEraPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(
+        "OllamaChat.Response.OffEraPhrases",
+        "mythic|keystone|transmog*|xmog|world quest|world quests|dragonriding|dragonflying|skyriding|"
+        "timewalking|torghast|azerite|shadowlands|dragonflight|pandaria|warlords of draenor|battle for azeroth|"
+        "war within|my garrison|class hall|artifact weapon|covenant ability"));
+
+    LOG_INFO("module.ollamachat",
+             "[Ollama Chat] Level outlook: {} ({} bands, {} level phrases, class roles {}). Links: {} (up to {} "
+             "a line). Stock phrases: {} on a {} s cooldown, {} off-era.",
+             g_OutlookEnable ? "on" : "off", Outlook_BandCount(), g_OutlookLevelPhrases.size(),
+             g_OutlookClassRoles ? "on" : "off",
+             g_LinksEnable ? "on" : "off", g_LinksMaxPerLine, g_ResponseOverusedPhrases.size(),
+             g_ResponseOverusedCooldownSeconds, g_ResponseOffEraPhrases.size());
 }
 
 void LoadEmoteStyles()
@@ -1321,6 +1416,7 @@ void LoadOllamaChatConfig()
              g_CrowdChimeInChance, g_CrowdGapMinMs, g_CrowdGapMaxMs, g_CrowdPlayfulPersonalities.size());
 
     LoadNaturalChatV4Settings();
+    LoadNaturalChatV5Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

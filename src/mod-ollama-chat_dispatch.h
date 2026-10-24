@@ -111,6 +111,10 @@ struct OllamaChatRequest
     // the conversation's key. The conversation paces it, and if the line does
     // not go out for any reason the place is freed at once.
     std::string openerKey;
+
+    // The tank answering a party instruction ("r", "mb"): once it is out, the
+    // group remembers it, so the next answer is not a copy of this one.
+    bool partyAck = false;
 };
 
 // Submit a request. Returns false when the queue is at MaxQueueDepth, in which
@@ -155,6 +159,7 @@ struct OllamaDispatchStats
     uint64_t totalDroppedEmpty;
     uint64_t totalDroppedGovernor;
     uint64_t totalDroppedPassed;      // the bot chose not to reply (pass token)
+    uint64_t totalDroppedPhrase;      // a stock phrase said lately, or one Wrath never had
     uint64_t totalFailed;
     std::string lastError;
 };

@@ -466,6 +466,37 @@ Note that `OllamaChat.Snapshot.IncludeSpells` now defaults to **0**. Listing
 every off-cooldown spell a bot knew put dozens of lines of the most quotable
 text in the prompt, which is why bots talked about their spellbook so much.
 
+## Level, Class and What Bots Know
+
+Every bot is told, in a sentence or two, what a player of its level does
+(`OllamaChat.Outlook.LevelBands`): a level 6 is new and talks like it, a level
+64 is levelling in Outland, and only a level 80 lives on heroics and raids. A
+short list of tell-tale phrases (`Outlook.LevelPhrases`: "[40+] repair bill",
+"[70+] heroic") is a backstop for when the model slips.
+It is also told which roles its class can fill -- a mage never offers to heal
+-- and that it knows other players only by what anyone could see of them:
+their name, level, race, class and guild. Bots no longer see your spec.
+
+Conversation premises can carry a level tag (`[80] getting into Ulduar runs`,
+`[10-29] the elite around here that keeps killing people`), so a city
+argument about Ulduar starts between level 80s.
+
+## Item and Quest Links
+
+Bots are asked to put exact item and quest names in square brackets, and each
+`[Name]` becomes a real chat link when the line is said: the link a player
+posted lately if there is one, else a quest in the bot's log or an item it
+carries, else the item and quest tables (nearest the bot's level, and its
+faction for quests). Unknown names just lose their brackets. See
+`OllamaChat.Links.*`.
+
+## Stock Phrases
+
+A phrase on `OllamaChat.Response.OverusedPhrases` ("taking forever", "such a
+grind") may be said once per `OverusedCooldownSeconds` across the whole realm;
+a line that would repeat it sooner is dropped. Things that never existed in
+Wrath (`OffEraPhrases`: keystones, transmog, world quests) are never said.
+
 ## Memory and Relationships
 
 Conversation history is a sliding window. Once a line falls out of it the bot

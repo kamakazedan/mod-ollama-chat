@@ -7,6 +7,8 @@
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_handler.h"
 #include "mod-ollama-chat_memory.h"
+#include "mod-ollama-chat_links.h"
+#include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_sentiment.h"
@@ -470,6 +472,8 @@ std::string OllamaBotEventChatter::BuildPrompt(Player* bot, std::string promptTe
 
     prompt += Memory_BuildPromptSection(bot, nullptr);
     prompt += Roleplay_BuildVoicePrompt(bot);
+    prompt += Outlook_ForBot(bot);
+    prompt += Links_PromptHint();   // "gz on the [Ashbringer]" links it
     prompt += Expression_BuildGesturePrompt(bot);
 
     if (g_ContextEnable && !g_ContextHintEvent.empty())

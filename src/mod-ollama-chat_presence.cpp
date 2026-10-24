@@ -4,6 +4,7 @@
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_handler.h"
+#include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_world.h"
@@ -131,6 +132,7 @@ namespace
 
         // The gesture has just been made; the line comes without another.
         prompt += Roleplay_BuildVoicePrompt(bot);
+        prompt += Outlook_ForBot(bot);   // includes what a passer-by can actually see
 
         OllamaChatRequest request;
         request.botGuid           = bot->GetGUID().GetRawValue();

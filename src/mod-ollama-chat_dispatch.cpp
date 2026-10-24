@@ -8,7 +8,10 @@
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_governor.h"
+#include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_memory.h"
+#include "mod-ollama-chat_partycmd.h"
+#include "mod-ollama-chat_phrases.h"
 #include "mod-ollama-chat_response.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_sentiment.h"
@@ -90,6 +93,7 @@ namespace
     std::atomic<uint64_t> g_droppedEmpty{ 0 };
     std::atomic<uint64_t> g_droppedGovernor{ 0 };
     std::atomic<uint64_t> g_droppedPassed{ 0 };
+    std::atomic<uint64_t> g_droppedPhrase{ 0 };
     std::atomic<uint64_t> g_totalFailed{ 0 };
 
     std::mutex  g_errorMutex;
@@ -449,6 +453,15 @@ namespace
         // time in ProcessChat, where the Group was live to consult.
         const bool directAddress = c.request.directAddress;
 
+        // The model never writes real chat markup; whatever looks like it is
+        // noise, and a stray '|' would be read by the client. Taken out first,
+        // so every check below reads words, and the only links that go out are
+        // the ones Links_Resolve makes.
+        c.text = TextRules::StripChatMarkup(c.text);
+
+        // What they said, as they saw it: a link in it is its "[Name]".
+        const std::string origin = TextRules::StripChatMarkup(c.request.originMessage);
+
         // The prompt lets a bot that overheard someone else's exchange decline
         // to butt in. Checked here, on the world thread, because the token is
         // a config string that a reload can reassign.
@@ -513,6 +526,26 @@ namespace
             c.text = gz;
         }
 
+        // Wrath has no keystones, a level 6 has no repair bills, and nobody
+        // needs to hear "this is taking forever" from a different bot every
+        // few minutes.
+        {
+            std::string which;
+            const PhraseCheck verdict = Phrases_Check(c.text, origin, directAddress, bot->GetLevel(), which);
+            if (verdict != PhraseCheck::Ok)
+            {
+                ++g_droppedPhrase;
+                if (g_DebugEnabled)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} reply dropped, {} '{}': '{}'",
+                             bot->GetName(),
+                             verdict == PhraseCheck::OffEra   ? "not in Wrath:"
+                           : verdict == PhraseCheck::OffLevel ? "not at its level:"
+                                                              : "said lately:",
+                             which, c.text);
+                return;
+            }
+        }
+
         // Repetition is checked at delivery rather than at submission, because
         // we only know what the model actually said now.
         //
@@ -550,6 +583,13 @@ namespace
             return;
         }
 
+        // "[Linen Cloth]" becomes a real item link. Last, so every check above
+        // saw words rather than markup; `plain` is the line as a reader sees
+        // it, for the transcript, the history and the bots that hear it.
+        const LinkedLine line = Links_Resolve(bot, c.text);
+        c.text = line.text;
+        const std::string& plain = line.plain;
+
         Channel* channel = nullptr;
         if (!RouteMessage(bot, botAI, c, world, channel))
         {
@@ -561,20 +601,24 @@ namespace
         }
 
         openerReport.done = true;   // it is out: the conversation hears it below
-        Governor_RecordUtterance(botGuid, c.request.scopeKey, c.text);
+        Links_NoteSent(line);
+        Governor_RecordUtterance(botGuid, c.request.scopeKey, plain);
+        Phrases_NoteSaid(plain);
+        if (c.request.partyAck)
+            PartyCmd_NoteAck(bot, plain);
         ++g_totalDelivered;
 
         // Into the shared transcript before other bots hear it below, so the
         // ones that answer can see what they are answering.
         const uint64_t seq = Context_RecordLine(bot, c.request.source,
                                                 channel ? channel->GetName() : c.request.channelName,
-                                                c.text, ContextLineKind::Bot);
+                                                plain, ContextLineKind::Bot);
 
         // ...and a conversation running here hears it too, before anyone
         // reacts to it below.
         if (c.request.source == SRC_GENERAL_LOCAL || c.request.source == SRC_SAY_LOCAL)
             Conversation_NoteLine(Crowd_KeyFor(c.request.scopeKey, c.request.source, uint32(bot->GetTeamId())),
-                                  bot, true, c.text, seq, c.request.crowdPlanId, 0);
+                                  bot, true, plain, seq, c.request.crowdPlanId, 0);
 
         // This bot is now in a conversation with whoever it just answered, so
         // their next line in this scope is a turn in it rather than ambient
@@ -595,23 +639,18 @@ namespace
 
         if (c.request.recordHistory && c.request.targetGuid)
         {
-            AppendBotConversation(c.request.botGuid, c.request.targetGuid,
-                                  c.request.originMessage, c.text);
+            AppendBotConversation(c.request.botGuid, c.request.targetGuid, origin, plain);
 
             // Counts name mentions and, past a threshold, queues a
             // condensation or relationship revision. World thread.
             Player* target = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.targetGuid));
             Memory_NoteExchange(c.request.botGuid, c.request.targetGuid,
                                 target ? target->GetName() : std::string(),
-                                c.request.originMessage, c.text);
+                                origin, plain);
         }
 
-        if (c.request.updateSentiment && c.request.targetGuid &&
-            !c.request.originMessage.empty())
-        {
-            OllamaDispatch_SubmitSentiment(c.request.botGuid, c.request.targetGuid,
-                                           c.request.originMessage);
-        }
+        if (c.request.updateSentiment && c.request.targetGuid && !origin.empty())
+            OllamaDispatch_SubmitSentiment(c.request.botGuid, c.request.targetGuid, origin);
 
         if (g_DebugEnabled)
             LOG_INFO("module.ollamachat", "[Ollama Chat] {} ({}, depth {}): {}",
@@ -627,7 +666,7 @@ namespace
         if (c.request.triggerBotReplies &&
             c.request.source != SRC_WHISPER_LOCAL)
         {
-            ProcessBotChatMessage(bot, c.text, c.request.source, channel,
+            ProcessBotChatMessage(bot, plain, c.request.source, channel,
                                   static_cast<uint8_t>(c.request.chainDepth + 1),
                                   c.request.crowdPlanId);
         }
@@ -895,6 +934,7 @@ OllamaDispatchStats OllamaDispatch_GetStats()
     stats.totalDroppedEmpty     = g_droppedEmpty.load();
     stats.totalDroppedGovernor  = g_droppedGovernor.load();
     stats.totalDroppedPassed    = g_droppedPassed.load();
+    stats.totalDroppedPhrase    = g_droppedPhrase.load();
     stats.totalFailed           = g_totalFailed.load();
 
     return stats;

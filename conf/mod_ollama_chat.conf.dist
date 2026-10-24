@@ -426,7 +426,7 @@ OllamaChat.RandomChatterPromptTemplate = "You are a World of Warcraft player. Na
 #                Leave empty to disable variations and use only the base template.
 #   Example:     "Talk about the weather or environment.|Comment on your current task or goal.|Make an observation about nearby creatures or players."
 #   Default:     (see below for Wrath-era appropriate variations)
-OllamaChat.RandomChatterPromptVariations = "Complain about something typical WoW players complain about.|Make a casual observation about leveling or grinding.|Share your opinion on Horde vs Alliance.|Comment on how tough or easy the zone feels.|Make a joke or sarcastic remark about WoW.|Mention something about the Lich King expansion.|Talk about wanting better gear or loot.|Comment on flying mounts or Northrend travel.|Complain about repair costs or gold.|Make an observation about your class in general.|Comment on dungeon finder or group content.|Talk about daily quests or reputation grinds.|Mention Death Knights being OP or annoying.|Share your thoughts on arena or battlegrounds.|Complain about nerfed abilities or changes.|Talk about needing to farm materials or gold.|Comment on the cold weather in Northrend.|Mention wanting to raid or do heroics.|Talk about achievements being too grindy.|Make a casual remark about quest objectives."
+OllamaChat.RandomChatterPromptVariations = "Keep it to three or four words.|Make it a mild complaint.|Make it a dry, low-key joke.|Make it a passing thought, all lowercase, no punctuation.|Sound relaxed, like you are enjoying yourself.|Make it a plain observation.|Use one bit of common chat shorthand if it fits.|Make it slightly sarcastic.|Sound mildly pleased, not excited.|Make it a half-finished thought, like something typed on the move.|Give a quick opinion.|Connect it to something practical at your level, like a quest, xp, gold, bag space or a drop.|Mention something you are looking forward to.|Say something friendly about the place or the people around."
 
 # OllamaChat.RandomChatterQuestionVariations
 #   Description: Pipe-separated (|) list of prompt instructions telling the LLM to generate questions that will stimulate OTHER bots or players to respond.
@@ -437,7 +437,7 @@ OllamaChat.RandomChatterPromptVariations = "Complain about something typical WoW
 #                Leave empty to disable question variations and only use statement variations.
 #   Example:     "Ask about dungeon preferences.|Ask if anyone wants to PvP.|Ask about raid progression."
 #   Default:     (see below for engaging Wrath-era question prompts designed to stimulate bot-to-bot and player-to-bot conversations)
-OllamaChat.RandomChatterQuestionVariations = "Ask if others think this zone is difficult.|Ask about favorite dungeons.|Ask about Icecrown Citadel progression.|Ask about daily quest frustrations.|Ask about Naxxramas difficulty compared to original.|Ask what spec people are running.|Ask about Death Knight popularity.|Ask about upcoming Death Knight nerfs.|Ask about gold-making strategies in WoW.|Ask if anyone is farming badges.|Ask about excitement for Ulduar.|Ask if dual spec was worth the cost.|Ask about opinions on the old talent trees.|Ask about favorite raid bosses.|Ask if flying mounts ruined world PvP.|Ask who's doing arena this season.|Ask about arena ratings.|Ask about Wintergrasp balance.|Ask about Oculus dungeon opinions.|Ask which professions make the most gold.|Ask about old-world flying possibilities.|Ask about reputation mount farming.|Ask which heroic dungeon is hardest.|Ask if emblems are too easy to get."
+OllamaChat.RandomChatterQuestionVariations = "Make it a short question to whoever is around.|Ask for a quick tip about it.|Ask if anyone else has noticed it.|Ask a practical question about it, like where, how or how long.|Ask it casually, all lowercase, no greeting.|Ask something you would genuinely want to know about it."
 
 # --------------------------------------------
 # EVENT CHATTER SYSTEM
@@ -642,7 +642,10 @@ OllamaChat.ChatPromptTemplate = "You're a WoW player familiar with 3.3.5 version
 # OllamaChat.ChatExtraInfoTemplate
 #   Description: The context/details string about the bot and player, injected into the chat prompt as the last parameter.
 #   Placeholders (named): {bot_race} {bot_gender} {bot_role} {bot_faction} {bot_guild} {bot_group_status} {bot_gold} {player_race} {player_gender} {player_role} {player_faction} {player_guild} {player_group_status} {player_gold} {player_distance} {bot_area} {bot_zone} {bot_map}
-OllamaChat.ChatExtraInfoTemplate = "Your Info: {bot_race} {bot_gender}, Spec: {bot_role}, Faction: {bot_faction}, Guild: {bot_guild}, Group: {bot_group_status}, Gold: {bot_gold}. Player Info: {player_race} {player_gender}, Spec: {player_role}, Faction: {player_faction}, Guild: {player_guild}, Group: {player_group_status}, Gold: {player_gold}, Distance: {player_distance} yards. Location: {bot_area}, Zone: {bot_zone}, Map: {bot_map}. Only respond to the new message. No commentary, no meta-talk, no prefix—just the reply."
+#   {bot_role} is the bot's spec and class ("holy priest"); {player_role} is only the other player's class,
+#   because nobody can see someone else's talents. {player_gold} is not something another player could
+#   know either: leave it out unless you want bots to know it.
+OllamaChat.ChatExtraInfoTemplate = "Your Info: {bot_race} {bot_gender}, Spec: {bot_role}, Faction: {bot_faction}, Guild: {bot_guild}, Group: {bot_group_status}, Gold: {bot_gold}. Player Info: {player_race} {player_gender}, Class: {player_role}, Faction: {player_faction}, Guild: {player_guild}, Group: {player_group_status}, Distance: {player_distance} yards. Location: {bot_area}, Zone: {bot_zone}, Map: {bot_map}. Only respond to the new message. No commentary, no meta-talk, no prefix—just the reply."
 
 # --------------------------------------------
 # ENVIRONMENTAL/CONTEXTUAL TEMPLATES
@@ -1230,6 +1233,26 @@ OllamaChat.StripDecorativeUnicode = 1
 #        separated by |, matched on whole words. Empty disables.
 OllamaChat.Response.AssistantPhrases = "how can i help|how may i help|how can i assist|how may i assist|how can i be of|what can i do for you|what can i help you with|anything i can help you with|anything i can do for you|need help with something|need help with anything|let me know if you need anything|happy to help|glad to help|here to help|at your service|is there anything else|what brings you"
 
+#    OllamaChat.Response.OverusedPhrases
+#    OllamaChat.Response.OverusedCooldownSeconds
+#        Every model has favourite lines. Once any bot has said one of these,
+#        no bot says it again anywhere on the realm for the cooldown: a line
+#        that would is dropped. Lines owed to someone who spoke to the bot
+#        directly are exempt, so a question always gets its answer, and so is
+#        a phrase the line being answered used itself. Phrases separated by
+#        |, matched on whole words. Empty, or a cooldown of 0, disables.
+#        Default: (below), 1200 (20 minutes)
+OllamaChat.Response.OverusedPhrases = "taking forever|takes forever|take forever|took forever|so slow|too slow|such a grind|what a grind|so boring|so bored|im bored|getting bored|repair bill|repair bills|nothing to do"
+OllamaChat.Response.OverusedCooldownSeconds = 1200
+
+#    OllamaChat.Response.OffEraPhrases
+#        Things that do not exist in Wrath of the Lich King. A line with one
+#        of these is never said, unless it is answering a line that used the
+#        same words ("can you transmog?" -> "no transmog in wrath lol").
+#        Matched like the lists above, punctuation ignored, so "mythic+"
+#        counts as "mythic". Empty disables.
+OllamaChat.Response.OffEraPhrases = "mythic|keystone|transmog*|xmog|world quest|world quests|dragonriding|dragonflying|skyriding|timewalking|torghast|azerite|shadowlands|dragonflight|pandaria|warlords of draenor|battle for azeroth|war within|my garrison|class hall|artifact weapon|covenant ability"
+
 ###############################################################################
 #
 #   OLLAMA CHAT - CONVERSATION GOVERNOR
@@ -1771,8 +1794,11 @@ OllamaChat.Conversation.AllowSay = 1
 
 #    OllamaChat.Conversation.Premises
 #        What a bot in a city brings up to open a conversation, separated by
-#        |. Placeholders: {zone}, {faction}, {other_faction}.
-OllamaChat.Conversation.Premises = "which class is the most overpowered right now|whether death knights ruined everything now that every other player is one|the best tank class for heroics|whether ret paladins need a nerf|the worst wipe you ever had in a dungeon|a ninja looter who rolled need on everything in a pug|whether vanilla was better than Wrath|Wintergrasp and who keeps winning it|the best profession for making gold|whether epic flying is worth the gold|the coolest looking mount in the game|the funniest hunter pet name you have seen|whether Arthas was always evil|whether Illidan was right all along|the hardest boss in Naxxramas|getting into Ulduar runs without much gear|what everyone is farming right now|the most pointless achievement|where Mankrik's wife could be|the best place to level from 70 to 80|how expensive the auction house has got|the old raid you miss most|guild drama|would you rather fight one huge murloc or a hundred tiny ones|the cutest companion pet|whether the Lich King fight will be any good|people who stand in fire|what you do on long flight paths|a name for a new alt|fishing: relaxing or the most boring thing in the game|the Argent Tournament dailies|whether gnomes or goblins make better engineers|whether {other_faction} is winning more battlegrounds lately|a heroic you want a group for|the best food and drink in {zone}"
+#        |. Placeholders: {zone}, {faction}, {other_faction}. A level tag in
+#        front -- "[80] ...", "[70+] ...", "[10-29] ..." -- means only bots
+#        of those levels bring it up (Outlook.Enable = 1); the tag is never
+#        shown to the model. No tag: any level.
+OllamaChat.Conversation.Premises = "which class is the most overpowered right now|whether death knights ruined everything now that every other player is one|[70+] the best tank class for heroics|whether ret paladins need a nerf|[15+] the worst wipe you ever had in a dungeon|[15+] a ninja looter who rolled need on everything in a pug|whether vanilla was better than Wrath|[75+] Wintergrasp and who keeps winning it|the best profession for making gold|[60+] whether epic flying is worth the gold|the coolest looking mount in the game|the funniest hunter pet name you have seen|whether Arthas was always evil|whether Illidan was right all along|[80] the hardest boss in Naxxramas|[80] getting into Ulduar runs without much gear|what everyone is farming right now|the most pointless achievement|where Mankrik's wife could be|[68+] the best place to level from 70 to 80|how expensive the auction house has got|[60+] the old raid you miss most|guild drama|would you rather fight one huge murloc or a hundred tiny ones|the cutest companion pet|[75+] whether the Lich King fight will be any good|[15+] people who stand in fire|what you do on long flight paths|a name for a new alt|fishing: relaxing or the most boring thing in the game|[77+] the Argent Tournament dailies|whether gnomes or goblins make better engineers|[10+] whether {other_faction} is winning more battlegrounds lately|[80] a heroic you want a group for|the best food and drink in {zone}|[1-19] which starting zone is the best|[10-29] the elite around here that keeps killing people|[15-39] the first dungeon you ever ran|[20-59] the most annoying levelling zone|[58-69] how crowded Hellfire Peninsula gets"
 
 #    OllamaChat.Conversation.HintTurn
 #    OllamaChat.Conversation.HintJoin
@@ -1984,6 +2010,18 @@ OllamaChat.Emote.PetEmotes = "pet|pat|cuddle|love|purr|hug"
 #   These lines are looked at before BlacklistCommands and DisableForParty:
 #   "ready" and "wait" stay on the blacklist for ordinary chat.
 #
+#   Dungeon clear needs a bot tank to lead. With a real player tanking there
+#   is no run to steer: these lines are ordinary chat, the bots simply follow
+#   whoever leads and fight what they pull (playerbots' own "drink",
+#   "attack" and "summon" still work).
+#
+#   Party chat also reaches playerbots, which reads its own commands from it
+#   whatever this module does. A bare "go" is one of them -- every bot walks
+#   to the nearest creature -- so it is not a start phrase here; "ready" makes
+#   each bot whisper its food and potions, and with
+#   Playerbots.EnableAutoTradeOnItemMention = 1 a line with "back" or "food"
+#   in it opens trade windows (set it to 0 in playerbots.conf).
+#
 #   Only works when mod-dungeon-clear is part of the same build;
 #   .ollama status says whether it was found.
 #
@@ -2002,8 +2040,10 @@ OllamaChat.PartyCommands.Enable = 1
 #    OllamaChat.PartyCommands.PausePhrases
 #    OllamaChat.PartyCommands.CancelPhrases
 #        Start or resume; pause; and lines that only look like a pause
-#        ("dont stop").
-OllamaChat.PartyCommands.StartPhrases = "=r|=go|=k go|=ok go|=begin|=start|=continue|=resume|=back|ready|rdy|go go|gogo*|lets go|lets start|lets begin|lets do this|lets do it|lets roll|lets move|lets continue|lets carry on|carry on|im back|i am back|back now|good to go|start the run"
+#        ("dont stop"). Do not add a bare "go": it is a playerbots command
+#        ("go" sends every bot to your target), so typing it in a dungeon
+#        drags the whole group onto whatever you have selected.
+OllamaChat.PartyCommands.StartPhrases = "=r|=begin|=start|=continue|=resume|=back|ready|rdy|gogo*|lets go|lets start|lets begin|lets do this|lets do it|lets roll|lets move|lets continue|lets carry on|carry on|im back|i am back|back now|good to go|start the run"
 OllamaChat.PartyCommands.PausePhrases = "mb|mana break|manabreak|need mana|need to drink|need a drink|need drink|drinking|=drink|oom|no mana|low mana|low on mana|out of mana|outta mana|wait|w8|=w|hold on|hold up|holdup|hang on|stop|pause|=sec|one sec|1 sec|a sec|one min|1 min|a min|brb|=afk|need a break|need a sec|gimme a sec|give me a sec|bio break|=bio|lets rest|need to rest|=rest|dont pull|stop pulling"
 OllamaChat.PartyCommands.CancelPhrases = "dont stop|do not stop|dont wait|do not wait|no need to wait|no need to stop|dont need to wait|keep going|no break|dont need a break|no need"
 
@@ -2041,19 +2081,151 @@ OllamaChat.PartyCommands.MaxDistance = 100
 #    OllamaChat.PartyCommands.HintPause
 #    OllamaChat.PartyCommands.HintResume
 #    OllamaChat.PartyCommands.HintWaiting
-#        What the tank is told when it answers. Placeholders:
-#        {player_name}, {player_message}, {reason} (HintPause: "a mana
-#        break (mb means mana break: they need to drink)", "a short break",
-#        "a moment"), {missing} (HintWaiting: who is not there yet).
-OllamaChat.PartyCommands.HintStart = "{player_name} is ready, and you are the tank leading this dungeon run, so you start pulling now. Tell the group in a few words, the way a tank would."
-OllamaChat.PartyCommands.HintPause = "{player_name} asked the group to stop for {reason}, and you have stopped the run. Tell them in a few words that you will wait and they should say when they are ready."
-OllamaChat.PartyCommands.HintResume = "{player_name} is ready again, so the run carries on and you lead the way. Say so in a couple of words."
-OllamaChat.PartyCommands.HintWaiting = "{player_name} wants to start, but not everyone is here yet: still waiting for {missing}. Tell them in a few words that you will start as soon as everyone is here."
+#        What the tank is told when it answers. It answers in its own chat
+#        style -- "ok moving" from a serious one, something daft from a
+#        joker -- and is shown its last few answers in this group so it does
+#        not say the same thing every time. Placeholders: {player_name},
+#        {player_message}, {reason} (HintPause: "a mana break (mb means mana
+#        break: they need to drink)", "a short break", "a moment"),
+#        {missing} (HintWaiting: who is not there yet), {recent_acks}
+#        (RecentAcksText, or nothing; added at the end if left out).
+OllamaChat.PartyCommands.HintStart = "{player_name} is ready, so you lead the group on through the dungeon. Tell them in two to six words, in your own chat style: someone serious just says they are moving, a joker shouts something silly, and anything in between is fine. Only talk about a fight if one is actually in front of you.{recent_acks}"
+OllamaChat.PartyCommands.HintPause = "{player_name} asked the group to stop for {reason}, and you have stopped the run. Tell them in a few words, in your own chat style, that you will wait and they should say when they are ready.{recent_acks}"
+OllamaChat.PartyCommands.HintResume = "{player_name} is ready again, so the run carries on and you lead the way. Say so in a few words, in your own chat style.{recent_acks}"
+OllamaChat.PartyCommands.HintWaiting = "{player_name} wants to start, but not everyone is here yet: still waiting for {missing}. Tell them in a few words that you will start as soon as everyone is here.{recent_acks}"
+
+#    OllamaChat.PartyCommands.RecentAcks
+#    OllamaChat.PartyCommands.RecentAcksText
+#        How many of the tank's answers each group remembers, and how they
+#        are shown to it ({lines}: "pulling now", "lets go"). 0 disables.
+#        Default: 4, (below)
+OllamaChat.PartyCommands.RecentAcks = 4
+OllamaChat.PartyCommands.RecentAcksText = " You already said {lines} in this group, so use different words this time."
 
 #    OllamaChat.Party.DungeonGlossary
 #        Added to every party and raid chat prompt inside a dungeon or raid,
 #        so "mb" reads as a mana break and not "my bad". Empty disables.
 OllamaChat.Party.DungeonGlossary = "In group chat here: mb means mana break (they need to drink, so wait for them), oom means out of mana, r or rdy means ready, brb means be right back, inc means enemies incoming, cc means crowd control, and pull means start the fight."
+
+#    OllamaChat.Party.RunStateText
+#        Added to party and raid chat prompts while a dungeon-clear run is on,
+#        so a bot asked "which boss is next?" or "what are we waiting for?"
+#        can answer. Placeholders: {tank} (who leads the run), {progress}
+#        ("2 of 5 bosses are down"), {killed}, {left}, {total}, {next}
+#        (the next boss), {state} ("resting or waiting for someone (waiting
+#        on Brelac, out of range)", "fighting trash", "paused"...). Empty
+#        disables.
+OllamaChat.Party.RunStateText = "About this dungeon run: {tank} leads it, {progress}, the next boss is {next}, and right now the group is {state}. Only bring this up when someone asks what is going on, what the plan is or which boss is next."
+
+###############################################################################
+#
+#   OLLAMA CHAT - LEVEL, CLASS AND WHAT BOTS KNOW
+#
+#   The system prompt makes every bot a player who has "played for years",
+#   so on its own a level 6 gnome complains about repair bills and a mage
+#   offers to heal. Each prompt gets up to three short sentences about the
+#   bot itself:
+#
+#     level      what fills a player's days at its level (LevelBands):
+#                first quests at 6, Outland at 64, heroics and raids at 80;
+#     class      which roles its class can fill: a mage only does damage, so
+#                it never offers to tank or heal. Classes with more than one
+#                role also say which one the bot plays right now;
+#     knowledge  what anyone can see of another player (KnowledgeText), so
+#                nobody comments on your talents, gold or bags.
+#
+#   Bots also no longer see another player's spec: {player_role} is just
+#   their class now (see ChatExtraInfoTemplate). A real player cannot see
+#   your talents without inspecting you, so a bot that knew them read as
+#   reading your character sheet.
+#
+#   Conversation premises can carry a level tag (see
+#   Conversation.Premises), so Ulduar comes up between level 80s.
+#
+###############################################################################
+
+#    OllamaChat.Outlook.Enable
+#        Default: 1
+OllamaChat.Outlook.Enable = 1
+
+#    OllamaChat.Outlook.LevelBands
+#        One sentence per level range, separated by |: "1-9: text",
+#        "60-69: text", "80: text" or "80+: text". The first range that holds
+#        the bot's level is used; a level no range holds gets nothing.
+#        Placeholder: {level}. Keep these about the bot's own stage of the
+#        game: where it quests, what it runs, what it is working toward.
+OllamaChat.Outlook.LevelBands = "1-9: Your character is only level {level}, brand new and still in its starting area, so you talk like someone just starting out.|10-19: Your character is level {level}: early days, questing in the first big zones and trying the first dungeons.|20-39: Your character is level {level}, partway through levelling in the old world.|40-57: Your character is level {level}, well into the old world, with Outland still ahead.|58-69: Your character is level {level}, levelling in Outland, with Northrend still ahead.|70-79: Your character is level {level}, levelling in Northrend.|80: Your character is level 80, the level cap: heroics, raids, gear and gold fill your days."
+
+#    OllamaChat.Outlook.LevelPhrases
+#        A backstop for when the model slips: things only players of some
+#        levels say, as "[40+] repair bill" or "[70-80] heroic", separated by
+#        |. A line from a bot outside that range is not said. A phrase may be
+#        listed for more than one range. Lines answering someone who spoke to
+#        the bot directly are exempt, and so is a phrase the line being
+#        answered used itself ("anyone for naxx?" -> "naxx? im only 12 lol").
+#        Matched on whole words; a trailing * matches any word starting with
+#        the rest. Empty disables.
+OllamaChat.Outlook.LevelPhrases = "[40+] repair bill|[40+] repair bills|[40+] repair costs|[70+] heroic|[70+] heroics|[70+] naxx|[70+] naxxramas|[75+] ulduar|[75+] icc|[75+] icecrown citadel|[75+] wintergrasp|[60+] gear score|[60+] gearscore|[80] emblems|[80] emblem of|[60+] epic flying"
+
+#    OllamaChat.Outlook.ClassRoles
+#        Tell each bot which roles its class can fill (warrior and death
+#        knight: tank or damage; priest and shaman: heal or damage; paladin
+#        and druid: all three; the rest: damage only) and which one it is
+#        set up for now.
+#        Default: 1
+OllamaChat.Outlook.ClassRoles = 1
+
+#    OllamaChat.Outlook.KnowledgeText
+#        What a bot can know about other players. Empty disables.
+OllamaChat.Outlook.KnowledgeText = "You know other players only by what anyone could see of them: their name, level, race, class and guild, and what they say in chat."
+
+###############################################################################
+#
+#   OLLAMA CHAT - ITEM AND QUEST LINKS
+#
+#   Players link what they talk about. A model cannot write a link (it is
+#   client markup with an id in it), so bots are asked to put an exact item
+#   or quest name in square brackets, and each "[Name]" becomes a real link
+#   when the line is said, from the first of:
+#
+#     1. a link someone posted in chat lately -- the exact one, random
+#        suffix and all -- so a bot answering about it links the same thing;
+#     2. a quest in the bot's quest log, or an item it carries;
+#     3. the item and quest tables (UseGameData), picking the entry nearest
+#        the bot's level, and for quests one its faction can take.
+#
+#   A name nothing matches just loses its brackets: a made-up "[Sword of
+#   Doom]" reads as Sword of Doom. A line never grows past what the client
+#   accepts (255 bytes); a link that would not fit stays as text.
+#   .ollama status shows how many names were linked and how many were not.
+#
+###############################################################################
+
+#    OllamaChat.Links.Enable
+#        Default: 1
+OllamaChat.Links.Enable = 1
+
+#    OllamaChat.Links.MaxPerLine
+#        At most this many links in one line; the rest stay as text.
+#        Default: 2 (0-5)
+OllamaChat.Links.MaxPerLine = 2
+
+#    OllamaChat.Links.RememberMinutes
+#        How long a link someone posted stays the one bots use for that name.
+#        0 keeps them until the server restarts (up to 400).
+#        Default: 60
+OllamaChat.Links.RememberMinutes = 60
+
+#    OllamaChat.Links.UseGameData
+#        Look names up in the item and quest tables when nobody posted them
+#        and the bot does not have them. The first lookup builds a name index
+#        (well under a second, once per restart).
+#        Default: 1
+OllamaChat.Links.UseGameData = 1
+
+#    OllamaChat.Links.PromptHint
+#        What bots are told, at the end of chat, chatter and event prompts.
+OllamaChat.Links.PromptHint = "When you name a particular item or quest, write its exact name in square brackets, the way players link them in chat."
 
 ###############################################################################
 #

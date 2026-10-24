@@ -379,6 +379,35 @@ extern std::string g_PartyCmdHintPause;
 extern std::string g_PartyCmdHintResume;
 extern std::string g_PartyCmdHintWaiting;
 extern std::string g_PartyDungeonGlossary;
+// The tank's last few acknowledgements in a group, so the next one is not a
+// copy: how many to keep, and the sentence that shows them ({lines}).
+extern uint32_t    g_PartyCmdRecentAcks;
+// Inside a dungeon-clear run: the run's state, for bots asked about it.
+extern std::string g_PartyRunStateText;
+extern std::string g_PartyCmdRecentAcksText;
+
+// --------------------------------------------
+// Natural chat v5
+// --------------------------------------------
+// What a bot would know and talk about at its level, and which roles its
+// class can fill (mod-ollama-chat_outlook). World thread only.
+extern bool        g_OutlookEnable;
+extern std::string g_OutlookLevelBands;     // "1-9: ...|10-19: ...|80: ..."
+extern bool        g_OutlookClassRoles;
+extern std::string g_OutlookKnowledgeText;  // what a bot can know about other players
+extern std::vector<TextRules::LevelPhrase> g_OutlookLevelPhrases;   // "[40+] repair bill"
+
+// Item and quest links in bot lines (mod-ollama-chat_links). World thread only.
+extern bool        g_LinksEnable;
+extern uint32_t    g_LinksMaxPerLine;
+extern uint32_t    g_LinksRememberMinutes;  // links seen in chat stay reusable this long
+extern bool        g_LinksUseGameData;      // look names up in the item and quest tables
+extern std::string g_LinksPromptHint;
+
+// Stock phrases (mod-ollama-chat_phrases). World thread only.
+extern std::vector<std::vector<std::string>> g_ResponseOverusedPhrases;
+extern uint32_t    g_ResponseOverusedCooldownSeconds;
+extern std::vector<std::vector<std::string>> g_ResponseOffEraPhrases;
 
 // Read OllamaChat.Emote.Style.<KEY> for every personality loaded from the
 // database. Called from the config load, after the personality templates.

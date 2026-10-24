@@ -1,6 +1,7 @@
 #ifndef MOD_OLLAMA_CHAT_TEXTRULES_H
 #define MOD_OLLAMA_CHAT_TEXTRULES_H
 
+#include <cstddef>
 #include <cstdint>
 #include <random>
 #include <string>
@@ -82,6 +83,90 @@ namespace TextRules
     // A line starting "dc" or "dungeon clear": one of mod-dungeon-clear's own
     // chat commands ("dc on", "dc pause").
     bool IsDungeonClearCommand(const std::string& cleanText);
+
+    // ---- level outlook ----------------------------------------------------
+
+    // One entry of OllamaChat.Outlook.LevelBands: "10-19: text", "80+: text"
+    // or "80: text".
+    struct LevelBand
+    {
+        uint32_t    lo = 0;
+        uint32_t    hi = 0;
+        std::string text;
+    };
+    std::vector<LevelBand> ParseLevelBands(const std::string& raw);
+
+    // The first band that holds `level`; nullptr when none does.
+    const LevelBand* FindLevelBand(const std::vector<LevelBand>& bands, uint32_t level);
+
+    // "10-19", "80+", "80" -> [lo, hi]. False when it is not a range.
+    bool ParseLevelRange(const std::string& raw, uint32_t& lo, uint32_t& hi);
+
+    // A premise may start with a level tag, "[70+]" or "[10-39]". Strips it
+    // and says whether `level` fits; a premise without one fits everyone.
+    bool PremiseFits(std::string& premise, uint32_t level);
+
+    // A phrase only players of some levels say: "[40+] repair bill",
+    // "[70+] heroic". Entries without a level tag are skipped.
+    struct LevelPhrase
+    {
+        uint32_t lo = 0;
+        uint32_t hi = 0;
+        std::vector<std::string> words;
+    };
+    std::vector<LevelPhrase> ParseLevelPhrases(const std::string& raw);
+
+    // The first phrase in `text` that a player of `level` would not say;
+    // nullptr when there is none. A phrase listed for several ranges is fine
+    // in any of them, and one that `exempt` (the line being answered) also
+    // has is fine at any level: answering "heroics?" with "im only 20" is.
+    const LevelPhrase* FindOffLevelPhrase(const std::string& text, const std::vector<LevelPhrase>& phrases,
+                                          uint32_t level, const std::string& exempt = std::string());
+
+    // ---- stock phrases -----------------------------------------------------
+
+    // Which entries of `phrases` (from CrowdText::ParsePhrases) appear in
+    // `text`, by index -- leaving out any that `exempt` (the line being
+    // answered) has too, so "no transmog in wrath lol" can answer "can you
+    // transmog?".
+    std::vector<size_t> FindPhraseIndexes(const std::string& text,
+                                          const std::vector<std::vector<std::string>>& phrases,
+                                          const std::string& exempt = std::string());
+
+    // "taking forever": the words of a phrase joined by single spaces.
+    std::string PhraseKey(const std::vector<std::string>& phrase);
+
+    // ---- chat links ---------------------------------------------------------
+
+    // A link as the client sends it:
+    //   |cff1eff00|Hitem:2589:0:0:0:0:0:0:0:0|h[Linen Cloth]|h|r
+    // `type` is what follows |H ("item", "quest", "spell"...), `name` the text
+    // between the brackets, `markup` the whole link, colour and |r included.
+    struct ChatLink
+    {
+        std::string type;
+        std::string name;
+        std::string markup;
+    };
+    std::vector<ChatLink> ExtractChatLinks(const std::string& message);
+
+    // What a reader sees: every link becomes its "[Name]", colour codes and
+    // textures go, and no '|' is left that the client could read as markup.
+    // Spacing is kept as it was.
+    std::string StripChatMarkup(const std::string& text);
+
+    // Every "[Name]" in plain text: `begin`/`end` cover the brackets, `name` is
+    // what is inside, trimmed. Empty, nested or over-long ones are skipped.
+    struct BracketName
+    {
+        size_t      begin = 0;
+        size_t      end   = 0;   // one past ']'
+        std::string name;
+    };
+    std::vector<BracketName> FindBracketNames(const std::string& text);
+
+    // Lowercase, inner runs of spaces folded: the key names are matched on.
+    std::string NameKey(const std::string& name);
 
     // ---- picking ----------------------------------------------------------
 

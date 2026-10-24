@@ -355,6 +355,375 @@ namespace TextRules
         return PartyIntent::None;
     }
 
+    // ---- level outlook ----------------------------------------------------
+
+    bool ParseLevelRange(const std::string& raw, uint32_t& lo, uint32_t& hi)
+    {
+        const std::string r = Trim(raw);
+        size_t i = 0;
+        auto number = [&](uint32_t& out) -> bool
+        {
+            const size_t from = i;
+            uint64_t v = 0;
+            while (i < r.size() && std::isdigit(static_cast<unsigned char>(r[i])))
+            {
+                v = v * 10 + static_cast<uint64_t>(r[i] - '0');
+                if (v > 1000)
+                    return false;
+                ++i;
+            }
+            out = static_cast<uint32_t>(v);
+            return i > from;
+        };
+        auto skipSpace = [&]()
+        {
+            while (i < r.size() && std::isspace(static_cast<unsigned char>(r[i])))
+                ++i;
+        };
+
+        uint32_t a = 0;
+        if (!number(a))
+            return false;
+        skipSpace();
+        if (i == r.size())
+        {
+            lo = hi = a;
+            return true;
+        }
+        if (r[i] == '+')
+        {
+            ++i;
+            skipSpace();
+            if (i != r.size())
+                return false;
+            lo = a;
+            hi = 1000;
+            return true;
+        }
+        if (r[i] != '-')
+            return false;
+        ++i;
+        skipSpace();
+        uint32_t b = 0;
+        if (!number(b))
+            return false;
+        skipSpace();
+        if (i != r.size() || b < a)
+            return false;
+        lo = a;
+        hi = b;
+        return true;
+    }
+
+    std::vector<LevelBand> ParseLevelBands(const std::string& raw)
+    {
+        std::vector<LevelBand> out;
+        size_t start = 0;
+        while (start <= raw.size())
+        {
+            size_t bar = raw.find('|', start);
+            if (bar == std::string::npos)
+                bar = raw.size();
+            const std::string entry = raw.substr(start, bar - start);
+            start = bar + 1;
+
+            const size_t colon = entry.find(':');
+            if (colon == std::string::npos)
+                continue;
+            LevelBand band;
+            if (!ParseLevelRange(entry.substr(0, colon), band.lo, band.hi))
+                continue;
+            band.text = Trim(entry.substr(colon + 1));
+            if (!band.text.empty())
+                out.push_back(std::move(band));
+        }
+        return out;
+    }
+
+    const LevelBand* FindLevelBand(const std::vector<LevelBand>& bands, uint32_t level)
+    {
+        for (const LevelBand& band : bands)
+            if (level >= band.lo && level <= band.hi)
+                return &band;
+        return nullptr;
+    }
+
+    bool PremiseFits(std::string& premise, uint32_t level)
+    {
+        const std::string p = Trim(premise);
+        if (p.empty() || p[0] != '[')
+            return true;
+
+        const size_t close = p.find(']');
+        if (close == std::string::npos)
+            return true;
+
+        uint32_t lo = 0, hi = 0;
+        if (!ParseLevelRange(p.substr(1, close - 1), lo, hi))
+            return true;   // "[something]" that is not a level tag: part of the premise
+
+        premise = Trim(p.substr(close + 1));
+        return level >= lo && level <= hi;
+    }
+
+    std::vector<LevelPhrase> ParseLevelPhrases(const std::string& raw)
+    {
+        std::vector<LevelPhrase> out;
+        size_t start = 0;
+        while (start <= raw.size())
+        {
+            size_t bar = raw.find('|', start);
+            if (bar == std::string::npos)
+                bar = raw.size();
+            const std::string entry = Trim(raw.substr(start, bar - start));
+            start = bar + 1;
+
+            const size_t close = entry.find(']');
+            if (entry.empty() || entry[0] != '[' || close == std::string::npos)
+                continue;
+            LevelPhrase phrase;
+            if (!ParseLevelRange(entry.substr(1, close - 1), phrase.lo, phrase.hi))
+                continue;
+            // As every other phrase list: lowercase words, '*' at the end of
+            // one matching any word that starts with the rest.
+            std::vector<std::vector<std::string>> parsed = CrowdText::ParsePhrases(entry.substr(close + 1));
+            if (parsed.empty() || parsed.front().empty())
+                continue;
+            phrase.words = std::move(parsed.front());
+            out.push_back(std::move(phrase));
+        }
+        return out;
+    }
+
+    const LevelPhrase* FindOffLevelPhrase(const std::string& text, const std::vector<LevelPhrase>& phrases,
+                                          uint32_t level, const std::string& exempt)
+    {
+        if (phrases.empty() || text.empty())
+            return nullptr;
+        const std::vector<std::string> words = CrowdText::Words(text);
+        const std::vector<std::string> echo  = CrowdText::Words(exempt);
+        for (const LevelPhrase& p : phrases)
+        {
+            if (level >= p.lo && level <= p.hi)
+                continue;
+            if (!CrowdText::ContainsPhrase(words, { p.words }) || CrowdText::ContainsPhrase(echo, { p.words }))
+                continue;
+            // The same phrase may be listed for more than one range: any of
+            // them allowing this level is enough.
+            bool allowed = false;
+            for (const LevelPhrase& q : phrases)
+                if (q.words == p.words && level >= q.lo && level <= q.hi)
+                    allowed = true;
+            if (!allowed)
+                return &p;
+        }
+        return nullptr;
+    }
+
+    // ---- stock phrases -----------------------------------------------------
+
+    std::vector<size_t> FindPhraseIndexes(const std::string& text,
+                                          const std::vector<std::vector<std::string>>& phrases,
+                                          const std::string& exempt)
+    {
+        std::vector<size_t> found;
+        if (phrases.empty() || text.empty())
+            return found;
+        const std::vector<std::string> words = CrowdText::Words(text);
+        const std::vector<std::string> echo  = CrowdText::Words(exempt);
+        for (size_t i = 0; i < phrases.size(); ++i)
+            if (!phrases[i].empty() && CrowdText::ContainsPhrase(words, { phrases[i] }) &&
+                !CrowdText::ContainsPhrase(echo, { phrases[i] }))
+                found.push_back(i);
+        return found;
+    }
+
+    std::string PhraseKey(const std::vector<std::string>& phrase)
+    {
+        std::string key;
+        for (const std::string& w : phrase)
+        {
+            if (!key.empty())
+                key += ' ';
+            key += w;
+        }
+        return key;
+    }
+
+    // ---- chat links ---------------------------------------------------------
+
+    std::vector<ChatLink> ExtractChatLinks(const std::string& message)
+    {
+        std::vector<ChatLink> out;
+        const size_t npos = std::string::npos;
+        size_t colourAt = npos;   // where a |cAARRGGBB right in front of the next |H began
+        for (size_t i = 0; i < message.size(); )
+        {
+            if (message[i] != '|' || i + 1 >= message.size())
+            {
+                ++i;
+                colourAt = npos;
+                continue;
+            }
+
+            const char code = message[i + 1];
+            if (code == '|')
+            {
+                i += 2;                // "||" is a pipe someone typed, not markup
+                colourAt = npos;
+                continue;
+            }
+            if (code == 'c' || code == 'C')
+            {
+                size_t hex = 0;
+                while (hex < 8 && i + 2 + hex < message.size() &&
+                       std::isxdigit(static_cast<unsigned char>(message[i + 2 + hex])))
+                    ++hex;
+                colourAt = (hex == 8) ? i : npos;
+                i += 2 + hex;
+                continue;
+            }
+            if (code != 'H')
+            {
+                i += 2;
+                colourAt = npos;
+                continue;
+            }
+
+            // |Htype:data|h[Name]|h, with no '|' in the data or the name.
+            const size_t dataEnd = message.find('|', i + 2);
+            if (dataEnd == npos || message.compare(dataEnd, 3, "|h[") != 0)
+            {
+                i += 2;
+                colourAt = npos;
+                continue;
+            }
+            const size_t nameEnd = message.find('|', dataEnd + 3);
+            if (nameEnd == npos || nameEnd < dataEnd + 5 || message[nameEnd - 1] != ']' ||
+                message.compare(nameEnd, 2, "|h") != 0)
+            {
+                i = dataEnd;           // carry on from the bad part
+                colourAt = npos;
+                continue;
+            }
+
+            ChatLink link;
+            const std::string tag = message.substr(i + 2, dataEnd - i - 2);
+            link.type = tag.substr(0, tag.find(':'));
+            link.name = message.substr(dataEnd + 3, nameEnd - 1 - (dataEnd + 3));
+
+            const size_t begin = (colourAt != npos && colourAt + 10 == i) ? colourAt : i;
+            size_t end = nameEnd + 2;
+            if (message.compare(end, 2, "|r") == 0)
+                end += 2;
+            link.markup = message.substr(begin, end - begin);
+
+            if (!link.type.empty() && !link.name.empty())
+                out.push_back(std::move(link));
+            i = end;
+            colourAt = npos;
+        }
+        return out;
+    }
+
+    std::string StripChatMarkup(const std::string& text)
+    {
+        std::string out;
+        out.reserve(text.size());
+        for (size_t i = 0; i < text.size(); )
+        {
+            const char ch = text[i];
+            if (ch != '|')
+            {
+                out += ch;
+                ++i;
+                continue;
+            }
+            if (i + 1 >= text.size())
+            {
+                ++i;   // a lone '|' at the end
+                continue;
+            }
+
+            const char code = text[i + 1];
+            if (code == 'c' || code == 'C')
+            {
+                i += 2;
+                for (size_t n = 0; n < 8 && i < text.size() &&
+                                   std::isxdigit(static_cast<unsigned char>(text[i])); ++n)
+                    ++i;
+                continue;
+            }
+            if (code == 'H')
+            {
+                // |Htype:data|h -- the tag and its data go; the "[Name]" after
+                // it is ordinary text, and its closing |h goes below.
+                const size_t h = text.find("|h", i + 2);
+                i = (h == std::string::npos) ? text.size() : h + 2;
+                continue;
+            }
+            if (code == 'T')
+            {
+                const size_t t = text.find("|t", i + 2);
+                i = (t == std::string::npos) ? text.size() : t + 2;
+                continue;
+            }
+            // |r, |h, |t, |n and "||" show nothing; any other '|' goes on its
+            // own, so the character after it stays. No '|' is ever kept.
+            i += (code == 'r' || code == 'h' || code == 't' || code == 'n' || code == '|') ? 2 : 1;
+        }
+        return out;
+    }
+
+    std::vector<BracketName> FindBracketNames(const std::string& text)
+    {
+        std::vector<BracketName> out;
+        for (size_t at = 0; (at = text.find('[', at)) != std::string::npos; )
+        {
+            const size_t close = text.find(']', at + 1);
+            if (close == std::string::npos)
+                break;
+            const size_t nested = text.find('[', at + 1);
+            if (nested != std::string::npos && nested < close)
+            {
+                at = nested;           // "[[Name]]" or "[a [b]": start again from the inner one
+                continue;
+            }
+
+            const std::string inner = Trim(text.substr(at + 1, close - at - 1));
+            bool letter = false;
+            for (char c : inner)
+                if (std::isalpha(static_cast<unsigned char>(c)))
+                    letter = true;
+            if (letter && inner.size() <= 80)
+                out.push_back({ at, close + 1, inner });
+            at = close + 1;
+        }
+        return out;
+    }
+
+    std::string NameKey(const std::string& name)
+    {
+        std::string key;
+        key.reserve(name.size());
+        bool space = false;
+        for (char c : name)
+        {
+            if (std::isspace(static_cast<unsigned char>(c)))
+            {
+                space = !key.empty();
+                continue;
+            }
+            if (space)
+            {
+                key += ' ';
+                space = false;
+            }
+            key += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        return key;
+    }
+
     std::string FormatCannedLine(const std::string& line, const std::string& name, std::mt19937& rng)
     {
         static const std::string token = "{name}";

@@ -8,7 +8,10 @@
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_governor.h"
+#include "mod-ollama-chat_links.h"
+#include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_partycmd.h"
+#include "mod-ollama-chat_phrases.h"
 #include "mod-ollama-chat_presence.h"
 #include "mod-ollama-chat_response.h"
 #include "mod-ollama-chat_roleplay.h"
@@ -489,11 +492,13 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              (unsigned long long)dispatch.totalSubmitted,
                              (unsigned long long)dispatch.totalDelivered,
                              (unsigned long long)dispatch.totalFailed);
-    handler->PSendSysMessage("Dropped: {} queue-full, {} empty-after-cleanup, {} by governor, {} passed by the bot",
+    handler->PSendSysMessage("Dropped: {} queue-full, {} empty-after-cleanup, {} by governor, {} passed by the bot, "
+                             "{} stock or off-era phrases",
                              (unsigned long long)dispatch.totalDroppedQueueFull,
                              (unsigned long long)dispatch.totalDroppedEmpty,
                              (unsigned long long)dispatch.totalDroppedGovernor,
-                             (unsigned long long)dispatch.totalDroppedPassed);
+                             (unsigned long long)dispatch.totalDroppedPassed,
+                             (unsigned long long)dispatch.totalDroppedPhrase);
 
     handler->PSendSysMessage("Governor: {} bots, {} scopes tracked, {} sends in the last minute",
                              gov.trackedBots, gov.trackedScopes, gov.sendsLastMinute);
@@ -545,6 +550,21 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              (unsigned long long)party.resumed,
                              (unsigned long long)party.waiting,
                              (unsigned long long)party.refused);
+
+    const LinksStats   links   = Links_GetStats();
+    const PhrasesStats phrases = Phrases_GetStats();
+    handler->PSendSysMessage("Level outlook: {} ({} bands)   Links: {} - {} linked, {} not found, {} remembered{}",
+                             g_OutlookEnable ? "on" : "off", Outlook_BandCount(),
+                             g_LinksEnable ? "on" : "off",
+                             (unsigned long long)links.linked,
+                             (unsigned long long)links.unresolved,
+                             links.remembered, links.indexed ? ", names indexed" : "");
+    handler->PSendSysMessage("Stock phrases: {} dropped as said lately, {} as not in Wrath, {} as not at the "
+                             "bot's level, {} cooling down",
+                             (unsigned long long)phrases.droppedOverused,
+                             (unsigned long long)phrases.droppedOffEra,
+                             (unsigned long long)phrases.droppedOffLevel,
+                             phrases.coolingDown);
 
     handler->PSendSysMessage("Roleplay: {} (strictness {})   Emote reactions: {}",
                              g_RoleplayEnable ? "on" : "off",

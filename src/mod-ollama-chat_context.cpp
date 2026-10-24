@@ -137,11 +137,18 @@ namespace
         {
             const char ch = in[i];
 
-            if (ch == '|' && i + 1 < in.size())
+            if (ch == '|')
             {
+                if (i + 1 >= in.size())
+                {
+                    ++i;   // a lone '|' at the end
+                    continue;
+                }
                 const char code = in[i + 1];
 
-                if (code == '|') { out += '|'; i += 2; continue; }
+                // "||" is a pipe someone typed. Dropped, not unescaped: a bare
+                // "|H" in the transcript would read as the start of a link.
+                if (code == '|') { i += 2; continue; }
 
                 if (code == 'c')
                 {
@@ -160,11 +167,14 @@ namespace
                     continue;
                 }
 
-                if (code == 'r' || code == 'h' || code == 't')
+                if (code == 'r' || code == 'h' || code == 't' || code == 'n')
                 {
                     i += 2;
                     continue;
                 }
+
+                ++i;   // any other '|' on its own; the character after it stays
+                continue;
             }
 
             const bool space = (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n');

@@ -47,6 +47,9 @@
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_conversation.h"
 #include "mod-ollama-chat_partycmd.h"
+#include "mod-ollama-chat_links.h"
+#include "mod-ollama-chat_outlook.h"
+#include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_presence.h"
 #include <iomanip>
 #include <unordered_set>
@@ -1159,6 +1162,10 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
 
     PlayerbotAI* senderAI = PlayerbotsMgr::instance().GetPlayerbotAI(player);
     bool senderIsBot = (senderAI && senderAI->IsBotAI());
+
+    // An item or quest someone links can be linked back the same way.
+    if (!senderIsBot)
+        Links_NoteMessage(msg);
 
     // --- conversation governor -------------------------------------------
     // One key per conversation space so cooldowns, rate limits and repetition
@@ -2938,6 +2945,7 @@ bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
     request.updateSentiment   = toPerson && slot.addressed && g_EnableSentimentTracking;
     request.crowdPlanId       = plan.id;
     request.crowdSlot         = static_cast<uint32_t>(index);
+    request.partyAck          = (plan.kind == CrowdLineKind::Command);
 
     if (!OllamaDispatch_Submit(std::move(request)))
         return false;
@@ -2969,6 +2977,10 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         return "";
     }
 
+    // What they typed, as it reads on screen: a link becomes its "[Name]".
+    // The model never sees client markup, so it never echoes broken markup.
+    playerMessage = TextRules::StripChatMarkup(playerMessage);
+
     AreaTableEntry const* botCurrentArea = botAI->GetCurrentArea();
     AreaTableEntry const* botCurrentZone = botAI->GetCurrentZone();
 
@@ -2996,7 +3008,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     uint32_t playerLevel            = player->GetLevel();
     std::string playerClass         = botAI->GetChatHelper()->FormatClass(player->getClass());
     std::string playerRace          = botAI->GetChatHelper()->FormatRace(player->getRace());
-    std::string playerRole          = CleanRoleForPrompt(ChatHelper::FormatClass(player, AiFactory::GetPlayerSpecTab(player)));
+    // Their class, not their spec: nobody can see another player's talents
+    // without asking, and a bot that knows them reads as reading your sheet.
+    std::string playerRole          = playerClass;
     uint8_t playerGenderByte        = player->getGender();
     std::string playerGender        = (playerGenderByte == 0 ? "Male" : "Female");
     std::string playerFaction       = (player->GetTeamId() == TEAM_ALLIANCE ? "Alliance" : "Horde");
@@ -3005,7 +3019,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     uint32_t playerGold             = player->GetMoney() / 10000;
     float playerDistance            = player->IsInWorld() && bot->IsInWorld() ? player->GetDistance(bot) : -1.0f;
 
-    std::string chatHistory         = GetBotHistoryPrompt(botGuid, playerGuid, playerMessage);
+    std::string chatHistory         = TextRules::StripChatMarkup(GetBotHistoryPrompt(botGuid, playerGuid, playerMessage));
     std::string sentimentInfo       = GetSentimentPromptAddition(bot, player);
 
     // What everyone in this channel said lately, not only this bot's own past
@@ -3098,6 +3112,11 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     // Race and class as a voice rather than as a stat line.
     prompt += Roleplay_BuildVoicePrompt(bot);
 
+    // What a player of this level talks about, which roles this class can
+    // fill, and what anyone can know about someone else.
+    prompt += Outlook_ForBot(bot);
+    prompt += Links_PromptHint();
+
     // Let the model gesture. The tag is parsed back out and stripped before
     // the line is spoken, so it never reaches chat as text.
     prompt += Expression_BuildGesturePrompt(bot);
@@ -3106,6 +3125,12 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     const std::string glossary = PartyCmd_GlossaryFor(bot, source);
     if (!glossary.empty())
         prompt += " " + glossary;
+
+    // ...and in a dungeon-clear run, the bots know what the run is doing, so
+    // "which boss is next?" gets a real answer.
+    const std::string runState = PartyCmd_RunStateFor(bot, source);
+    if (!runState.empty())
+        prompt += " " + runState;
 
     // Last, so it is the freshest instruction: is this bot being spoken to?
     if (!replyHint.empty() && g_ChatPromptTemplate.find("{reply_hint}") == std::string::npos)

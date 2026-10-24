@@ -11,6 +11,9 @@
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_sentiment.h"
 #include "mod-ollama-chat_memory.h"
+#include "mod-ollama-chat_links.h"
+#include "mod-ollama-chat_outlook.h"
+#include "mod-ollama-chat_phrases.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_expression.h"
@@ -226,6 +229,8 @@ namespace
 
         prompt += Memory_BuildPromptSection(bot, nullptr);
         prompt += Roleplay_BuildVoicePrompt(bot);
+        prompt += Outlook_ForBot(bot);
+        prompt += Links_PromptHint();
         prompt += Expression_BuildGesturePrompt(bot);
 
         return prompt;
@@ -308,6 +313,8 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
         Governor_Update();
         Topics_Update();
         Context_Update();
+        Links_Update();
+        Phrases_Update();
     }
     else
     {
@@ -493,12 +500,14 @@ void OllamaBotRandomChatter::HandleRandomChatter()
                         partners.push_back(partner);
                 }
 
-                // /say needs someone to talk to; a channel finds its people
-                // once the opening line is out.
-                if (source != SRC_SAY_LOCAL || partner)
+                // Only a premise this bot's level fits: no Ulduar from a
+                // level 12 ("[80] getting into Ulduar runs"). /say needs
+                // someone to talk to; a channel finds its people once the
+                // opening line is out.
+                const std::string picked = Outlook_PickPremise(g_ConversationPremises, bot->GetLevel());
+                if (!picked.empty() && (source != SRC_SAY_LOCAL || partner))
                 {
-                    const std::string premise =
-                        FormatPremise(g_ConversationPremises[PickIndex(g_ConversationPremises.size())], bot);
+                    const std::string premise = FormatPremise(picked, bot);
                     const std::string& templ = (source == SRC_SAY_LOCAL) ? g_ConversationHintStartSay
                                                                          : g_ConversationHintStartChannel;
                     const std::string where = (source == SRC_SAY_LOCAL) ? std::string("/say")
