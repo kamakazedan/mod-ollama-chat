@@ -16,6 +16,7 @@
 #include "mod-ollama-chat_response.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat-utilities.h"
+#include "mod-ollama-chat_conjure.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
 #include <thread>
@@ -550,6 +551,18 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              (unsigned long long)party.resumed,
                              (unsigned long long)party.waiting,
                              (unsigned long long)party.refused);
+
+    const ConjureStats conjure = Conjure_GetStats();
+    handler->PSendSysMessage("Conjured food and water: {} - {} asked, {} trades offered, {} traded, {} waited "
+                             "first, {} refused, {} lapsed, {} pending",
+                             g_ConjureEnable ? "on" : "off",
+                             (unsigned long long)conjure.asked,
+                             (unsigned long long)conjure.offered,
+                             (unsigned long long)conjure.completed,
+                             (unsigned long long)conjure.waited,
+                             (unsigned long long)conjure.refused,
+                             (unsigned long long)conjure.lapsed,
+                             conjure.pending);
 
     const LinksStats   links   = Links_GetStats();
     const PhrasesStats phrases = Phrases_GetStats();

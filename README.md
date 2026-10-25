@@ -497,6 +497,31 @@ grind") may be said once per `OverusedCooldownSeconds` across the whole realm;
 a line that would repeat it sooner is dropped. Things that never existed in
 Wrath (`OffEraPhrases`: keystones, transmog, world quests) are never said.
 
+## Food and Water from Mages
+
+Ask a mage bot in your group for water the way you would ask a person --
+"water pls", "mage can i get food", "anyone got water?", "Frostiq please can
+you give me mana pots" -- and it conjures the best food or water you can use
+at your level and opens a trade with it already in, its side accepted. Your
+accept finishes it, and it never asks for gold. It answers in its own chat
+style.
+
+When it can't, it says why (not a mage, not learned it yet, bags full); when
+it only can't yet (a fight on, out of mana, too far apart to trade) it says it
+will, and does as soon as it can. A trade window you already opened with it
+gets filled instead. "need mana", "oom" and "mb" stay mana breaks, a bare
+"pots" needs a real ask ("pls send me pots", since "pot now" is a raid call),
+and playerbots' own commands ("t water", "use water") are left to playerbots.
+See `OllamaChat.Conjure.*`.
+
+## Per-Style Nudges and Longer Replies
+
+Any chat style can have `OllamaChat.Personality.Nudge.<KEY>`
+(`"90|instruction|otherwise"`: an extra instruction on that share of its
+replies) and `OllamaChat.Personality.MaxReplyLength.<KEY>` (a longer reply
+limit, for a style that explains things). A personality prompt alone tends to
+get all or nothing from a small model; a nudge rolls for each reply.
+
 ## Memory and Relationships
 
 Conversation history is a sliding window. Once a line falls out of it the bot

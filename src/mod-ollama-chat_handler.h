@@ -62,6 +62,12 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
                               const std::string& replyHint = std::string());
 std::string BuildEmoteReactionPrompt(Player* bot, Player* player, uint32_t textEmote);
 
+// The reply length this bot's chat style allows
+// (OllamaChat.Personality.MaxReplyLength.<KEY>), or 0 for MaxReplyLength. For
+// OllamaChatRequest::maxReplyLength, next to a GenerateBotPrompt prompt, which
+// is what tells the bot it may write more. World thread only.
+uint32_t OllamaMaxReplyLengthFor(Player* bot);
+
 // Bounded, distance-sorted snapshot helpers used by the prompt builders and
 // the topic engine.
 std::string GenerateBotGameStateSnapshot(Player* bot);

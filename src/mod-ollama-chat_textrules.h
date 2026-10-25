@@ -84,6 +84,71 @@ namespace TextRules
     // chat commands ("dc on", "dc pause").
     bool IsDungeonClearCommand(const std::string& cleanText);
 
+    // ---- conjured food and water ---------------------------------------------
+
+    enum ConjureKinds : uint8_t
+    {
+        CONJURE_NONE  = 0,
+        CONJURE_DRINK = 1,   // water, mana, "pots"
+        CONJURE_FOOD  = 2,   // food, bread
+    };
+
+    struct ConjureRules
+    {
+        std::vector<std::vector<std::string>> drink;      // "water", "mana pot*", "refreshment*"
+        std::vector<std::vector<std::string>> food;       // "food", "bread"
+        std::vector<std::vector<std::string>> pots;       // "pots": a raid call too ("pot now"), so asked outright
+        std::vector<std::vector<std::string>> loose;      // "mana", "drink": only from a bot or mage spoken to
+        std::vector<std::vector<std::string>> notMage;    // "health pot*", "food buff": not a mage's to give
+        std::vector<std::vector<std::string>> asks;       // "give", "send", "can i have": asking for something
+        std::vector<std::vector<std::string>> polite;     // "pls", "can you": asking nicely, for anything
+        std::vector<std::vector<std::string>> needs;      // "need", "out of": an ask right before the item
+        std::vector<std::vector<std::string>> mage;       // "mage", "mages"
+        std::vector<std::vector<std::string>> negations;  // "dont", "no", "not"
+        std::vector<std::vector<std::string>> haves;      // "i have", "im good": not asking
+        std::vector<std::vector<std::string>> thanks;     // "ty", "thanks"
+        std::vector<std::vector<std::string>> questions;  // "where", "how": asking about, not for
+        std::vector<std::vector<std::string>> commands;   // first word: "t", "use", "buy": playerbots' or a vendor's
+        uint32_t maxWords = 16;
+    };
+
+    struct ConjureAsk
+    {
+        uint8_t  kinds  = CONJURE_NONE;   // CONJURE_DRINK | CONJURE_FOOD
+        uint32_t stacks = 0;              // "2 stacks" -> 2; 0 when not said
+        uint32_t count  = 0;              // "40 water" -> 40; 0 when not said
+        bool     mage   = false;          // "mage" up front or at the end: "mage water pls"
+    };
+
+    // Is this a line asking for conjured food or water? People ask the way
+    // they do in any group: "water pls", "mage can i get food", "anyone got
+    // water?", "need water", "pls send me pots", "Frostiq please can you give
+    // me mana pots".
+    //
+    //   * a real item ("water", "food", "mana pots") needs one of: an ask or a
+    //     please ("give", "can i have", "pls"), a need right before it ("need
+    //     water", "out of food"), "mage" up front or at the end, a line of
+    //     nothing but the item ("water?", "more water"), or -- when a bot is
+    //     named or whispered -- a question mark;
+    //   * "pots" alone is a raid call as often as an ask ("pot now", "pot
+    //     pls"), so it needs a real ask ("send me pots"), or "mage" or a name
+    //     with a please or a question;
+    //   * a loose word ("mana", "drink") counts only when a bot or "mage" is
+    //     addressed and it is asked for: "mage mana pls", "Frostiq mana?" --
+    //     never "need mana" or "need a drink", which are mana breaks;
+    //   * not when it is negated before the item ("dont need water"), had ("i
+    //     have water", "im good"), a thank-you ("ty for the water"), a question
+    //     about rather than for it ("where do i buy water"), or not a mage's
+    //     ("health pots", "food buff", "water walking").
+    //
+    // A line whose first words are a command (playerbots' "t water", "use
+    // water", "b water", or "buy water") is never matched: playerbots acts on
+    // those itself. `names` are words to leave out first (the bots in the
+    // group), and `named` says one of them was named, or the line was
+    // whispered to one.
+    ConjureAsk MatchConjureAsk(const std::string& cleanText, const ConjureRules& rules,
+                               bool named, const std::vector<std::string>& names = {});
+
     // ---- level outlook ----------------------------------------------------
 
     // One entry of OllamaChat.Outlook.LevelBands: "10-19: text", "80+: text"

@@ -47,6 +47,7 @@
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_conversation.h"
 #include "mod-ollama-chat_partycmd.h"
+#include "mod-ollama-chat_conjure.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_textrules.h"
@@ -1206,15 +1207,25 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         if (partyLine == PartyCmdLine::DcCommand)
             return;
 
+        bool handled = false;
         if (partyLine == PartyCmdLine::Instruction)
         {
             Governor_NoteHumanMessage(scopeKey);
             humanSeq = Context_RecordLine(player, sourceLocal, contextChannel, msg, ContextLineKind::Human);
-            if (PartyCmd_HandleHumanLine(player, msg, sourceLocal, scopeKey, humanSeq))
-                return;
-            // Nothing to steer after all ("ready" with the run already going):
-            // an ordinary line from here on.
+            handled = PartyCmd_HandleHumanLine(player, msg, sourceLocal, scopeKey, humanSeq);
+            // Not handled: nothing to steer after all ("ready" with the run
+            // already going), so an ordinary line from here on.
         }
+
+        // "mage water pls": a mage in the group conjures it and trades it over,
+        // for free. After the instructions, so "mb, water pls" both pauses the
+        // run and gets the water -- the mage answers after the tank. Before the
+        // blacklist too, since "trade" starts a line people use to ask.
+        if (Conjure_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq))
+            handled = true;
+
+        if (handled)
+            return;
     }
 
     auto startsWithWord = [](const std::string& text, const std::string& word) {
@@ -2017,6 +2028,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         request.triggerBotReplies = (sourceLocal != SRC_WHISPER_LOCAL);
         request.recordHistory     = !senderIsBot;
         request.updateSentiment   = !senderIsBot && g_EnableSentimentTracking;
+        request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
 
         if (!OllamaDispatch_Submit(std::move(request)) && g_DebugEnabled)
         {
@@ -2370,6 +2382,7 @@ namespace
             case CrowdLineKind::Greeting:     return "greeting";
             case CrowdLineKind::Conversation: return "conversation";
             case CrowdLineKind::Command:      return "instruction";
+            case CrowdLineKind::Favor:        return "favour";
         }
         return "?";
     }
@@ -2945,7 +2958,10 @@ bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
     request.updateSentiment   = toPerson && slot.addressed && g_EnableSentimentTracking;
     request.crowdPlanId       = plan.id;
     request.crowdSlot         = static_cast<uint32_t>(index);
-    request.partyAck          = (plan.kind == CrowdLineKind::Command);
+    // The tank's answer is slot 0; a mage answering "mb, water pls" after it
+    // (mod-ollama-chat_conjure) is not an instruction ack.
+    request.partyAck          = (plan.kind == CrowdLineKind::Command && index == 0);
+    request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
 
     if (!OllamaDispatch_Submit(std::move(request)))
         return false;
@@ -2955,6 +2971,54 @@ bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
                  index + 1, plan.slots.size(), bot->GetName(), speakerName,
                  slot.replyBack ? " (answering back)" : (followUp ? " (after others)" : ""));
     return true;
+}
+
+// Personality keys are matched upper-case, the way the per-style settings
+// are stored.
+static std::string OllamaUpperKey(const std::string& key)
+{
+    std::string upper;
+    upper.reserve(key.size());
+    for (char c : key)
+        upper += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return upper;
+}
+
+uint32_t OllamaMaxReplyLengthFor(Player* bot)
+{
+    if (!bot || g_PersonalityMaxReplyLength.empty())
+        return 0;
+    const auto it = g_PersonalityMaxReplyLength.find(OllamaUpperKey(GetBotPersonality(bot)));
+    return it == g_PersonalityMaxReplyLength.end() ? 0 : it->second;
+}
+
+// What a chat style is told on top of its personality, for one reply. A nudge
+// rolls each time, so "90|quote a film" is a film quote nine replies in ten
+// and, with an "otherwise" part, something plainly different on the tenth.
+static std::string OllamaPersonalityNote(const std::string& personality)
+{
+    if (g_PersonalityNudges.empty() && g_PersonalityMaxReplyLength.empty())
+        return {};
+    const std::string key = OllamaUpperKey(personality);
+
+    std::string out;
+    const auto nudge = g_PersonalityNudges.find(key);
+    if (nudge != g_PersonalityNudges.end())
+    {
+        const PersonalityNudge& n = nudge->second;
+        out = (n.percent > 0 && urand(1, 100) <= n.percent) ? n.yes : n.no;
+    }
+
+    // Only when it really is longer than everyone else's limit.
+    const auto longer = g_PersonalityMaxReplyLength.find(key);
+    if (longer != g_PersonalityMaxReplyLength.end() && longer->second > g_MaxReplyLength &&
+        !g_PersonalityLongReplyNote.empty())
+    {
+        const std::string note = SafeFormat(g_PersonalityLongReplyNote, fmt::arg("words", longer->second / 6));
+        if (note != "[Format Error]")
+            out += (out.empty() ? "" : " ") + note;
+    }
+    return out;
 }
 
 std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player,
@@ -3131,6 +3195,13 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     const std::string runState = PartyCmd_RunStateFor(bot, source);
     if (!runState.empty())
         prompt += " " + runState;
+
+    // What this chat style is told on top of its personality, this time: a
+    // nudge on some share of its replies (Personality.Nudge.<KEY>), or that it
+    // may write more than one short line (Personality.MaxReplyLength.<KEY>).
+    const std::string styleNote = OllamaPersonalityNote(personality);
+    if (!styleNote.empty())
+        prompt += " " + styleNote;
 
     // Last, so it is the freshest instruction: is this bot being spoken to?
     if (!replyHint.empty() && g_ChatPromptTemplate.find("{reply_hint}") == std::string::npos)

@@ -18,6 +18,7 @@
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat-utilities.h"
+#include "mod-ollama-chat_conjure.h"
 
 #include "CellImpl.h"
 #include "Channel.h"
@@ -299,6 +300,9 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
     // After delivery, so a crowd sees the line that just landed and can send
     // its next voice in the same tick the pause runs out.
     Crowd_Update();
+
+    // Mages handing over the food and water they were asked for.
+    Conjure_Update();
 
     // After the crowds: a conversation waits for any crowd in its place.
     Conversation_Update();

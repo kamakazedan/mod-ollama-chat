@@ -159,7 +159,8 @@ namespace
         }
 
         uint32_t emoteId = 0;
-        std::string text = ProcessLlmResponse(api.text, task.request.botName, &emoteId);
+        std::string text = ProcessLlmResponse(api.text, task.request.botName, &emoteId,
+                                              task.request.maxReplyLength);
 
         // Roleplay mode rejects lines carrying out-of-world vocabulary rather
         // than mangling the sentence around the offending word.

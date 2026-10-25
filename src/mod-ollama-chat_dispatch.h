@@ -115,6 +115,11 @@ struct OllamaChatRequest
     // The tank answering a party instruction ("r", "mb"): once it is out, the
     // group remembers it, so the next answer is not a copy of this one.
     bool partyAck = false;
+
+    // A longer limit than MaxReplyLength for this bot's chat style
+    // (OllamaChat.Personality.MaxReplyLength.<KEY>); 0 for the usual one.
+    // Resolved on the world thread at submit time, like everything above.
+    uint32_t maxReplyLength = 0;
 };
 
 // Submit a request. Returns false when the queue is at MaxQueueDepth, in which

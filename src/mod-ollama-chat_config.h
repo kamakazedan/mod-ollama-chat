@@ -409,9 +409,44 @@ extern std::vector<std::vector<std::string>> g_ResponseOverusedPhrases;
 extern uint32_t    g_ResponseOverusedCooldownSeconds;
 extern std::vector<std::vector<std::string>> g_ResponseOffEraPhrases;
 
+// --------------------------------------------
+// Natural chat v6
+// --------------------------------------------
+// Conjured food and water on request (mod-ollama-chat_conjure). World thread
+// only.
+extern bool        g_ConjureEnable;
+extern TextRules::ConjureRules g_ConjureRules;
+extern uint32_t    g_ConjureStacks;          // stacks given when they don't say how many
+extern uint32_t    g_ConjureMaxStacks;       // the most one ask gets
+extern bool        g_ConjureUseMana;         // conjuring costs the mage its mana
+extern uint32_t    g_ConjureWaitSeconds;     // how long an ask waits for a fight, mana or range
+extern uint32_t    g_ConjureTradeSeconds;    // how long an offered trade stays open
+extern std::string g_ConjureHintGive;
+extern std::string g_ConjureHintWait;
+extern std::string g_ConjureHintCant;
+extern std::string g_ConjureHintNotMage;
+extern std::string g_ConjureHintAlready;
+extern std::string g_ConjureHintNotGrouped;
+
+// Per chat style: OllamaChat.Personality.<setting>.<KEY>, keyed here by the
+// upper-case personality key. World thread only.
+struct PersonalityNudge
+{
+    uint32_t    percent = 0;   // share of replies that get `yes`
+    std::string yes;           // the instruction, on that share
+    std::string no;            // on the rest; may be empty
+};
+extern std::unordered_map<std::string, PersonalityNudge> g_PersonalityNudges;
+extern std::unordered_map<std::string, uint32_t>         g_PersonalityMaxReplyLength;
+extern std::string g_PersonalityLongReplyNote;   // what a style with a longer limit is told
+
 // Read OllamaChat.Emote.Style.<KEY> for every personality loaded from the
 // database. Called from the config load, after the personality templates.
 void LoadEmoteStyles();
+
+// Read OllamaChat.Personality.Nudge.<KEY> and .MaxReplyLength.<KEY> for every
+// personality loaded from the database. Called right after LoadEmoteStyles.
+void LoadPersonalityExtras();
 
 // --------------------------------------------
 // Topic engine

@@ -5,6 +5,7 @@
 #include "mod-ollama-chat_command.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_rag.h"
+#include "mod-ollama-chat_conjure.h"
 #include "Log.h"
 
 void Addmod_ollama_chatScripts()
@@ -35,4 +36,7 @@ void Addmod_ollama_chatScripts()
     new ChatOnEmote();
 
     new OllamaChatConfigCommand();
+
+    // Mages filling the trade window they offered as soon as it opens.
+    new OllamaChatConjureScript();
 }

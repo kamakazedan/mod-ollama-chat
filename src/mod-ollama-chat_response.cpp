@@ -372,7 +372,8 @@ std::string ClampReplyLength(const std::string& text, uint32_t maxLen)
 
 std::string ProcessLlmResponse(const std::string& raw,
                                const std::string& botName,
-                               uint32_t* outEmoteId)
+                               uint32_t* outEmoteId,
+                               uint32_t maxLen)
 {
     if (outEmoteId)
         *outEmoteId = 0;
@@ -411,7 +412,7 @@ std::string ProcessLlmResponse(const std::string& raw,
     // that were not on the outside before.
     s = UnwrapQuotedReply(s);
     s = CollapseWhitespace(s);
-    s = ClampReplyLength(s, g_MaxReplyLength);
+    s = ClampReplyLength(s, std::max(maxLen, g_MaxReplyLength));
 
     return Trim(s);
 }

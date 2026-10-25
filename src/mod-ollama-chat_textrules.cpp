@@ -198,6 +198,80 @@ namespace
         return false;
     }
 
+    // Every place `phrases` matches in `words`, as [start, end).
+    std::vector<std::pair<size_t, size_t>> Occurrences(const std::vector<std::string>& words,
+                                                       const std::vector<std::vector<std::string>>& phrases)
+    {
+        std::vector<std::pair<size_t, size_t>> out;
+        for (const std::vector<std::string>& p : phrases)
+        {
+            if (p.empty())
+                continue;
+            for (size_t i = 0; i + p.size() <= words.size(); ++i)
+                if (MatchesAt(words, i, p))
+                    out.emplace_back(i, i + p.size());
+        }
+        std::sort(out.begin(), out.end());
+        return out;
+    }
+
+    // "2", "two", "a", "couple" -> 2 and so on; 0 when it is not a number.
+    uint32_t NumberWord(const std::string& w)
+    {
+        if (!w.empty() && w.size() <= 3 &&
+            std::all_of(w.begin(), w.end(), [](unsigned char c) { return std::isdigit(c) != 0; }))
+            return static_cast<uint32_t>(std::stoul(w));
+        static const std::pair<const char*, uint32_t> words[] = {
+            { "a", 1 }, { "an", 1 }, { "one", 1 }, { "two", 2 }, { "couple", 2 }, { "pair", 2 },
+            { "three", 3 }, { "few", 3 }, { "four", 4 }, { "five", 5 }, { "six", 6 }
+        };
+        for (const auto& [name, n] : words)
+            if (w == name)
+                return n;
+        return 0;
+    }
+
+    // Words that can sit between a need and the item: "need some water",
+    // "out of the good water", "need 2 stacks of water".
+    bool IsNeedFiller(const std::string& w)
+    {
+        static const char* const words[] = {
+            "some", "sum", "more", "moar", "a", "an", "any", "new", "fresh", "few", "couple", "of",
+            "the", "ur", "your", "stack", "stacks", "bit", "lil", "little", "proper", "decent", "good"
+        };
+        for (const char* x : words)
+            if (w == x)
+                return true;
+        return NumberWord(w) != 0;
+    }
+
+    // "u got", "u have": "u" meaning "you", not playerbots' "use".
+    bool IsYouVerb(const std::string& w)
+    {
+        static const char* const words[] = {
+            "got", "have", "has", "need", "needs", "want", "wanna", "can", "could", "still", "there", "mind",
+            "gonna", "able"
+        };
+        for (const char* x : words)
+            if (w == x)
+                return true;
+        return false;
+    }
+
+    // Words a line of nothing but the item can have besides it: "more water",
+    // "water for me", "2 stacks of water".
+    bool IsBareFiller(const std::string& w)
+    {
+        static const char* const words[] = {
+            "more", "moar", "some", "sum", "any", "again", "too", "also", "the", "a", "me", "us", "for",
+            "of", "stack", "stacks", "ur", "your", "fresh", "new", "x2", "x3", "plz", "pls", "please"
+        };
+        for (const char* x : words)
+            if (w == x)
+                return true;
+        return NumberWord(w) != 0;
+    }
+
     // "you oom", "anyone need mana", "are you ready". "you guys wait" and "u
     // all ready" are said to the group, not asked.
     bool StartsWithOpener(const std::vector<std::string>& words,
@@ -353,6 +427,196 @@ namespace TextRules
             return PartyIntent::Start;
 
         return PartyIntent::None;
+    }
+
+    // ---- conjured food and water ---------------------------------------------
+
+    ConjureAsk MatchConjureAsk(const std::string& cleanText, const ConjureRules& rules,
+                               bool named, const std::vector<std::string>& names)
+    {
+        static constexpr size_t npos = std::string::npos;
+        const ConjureAsk none;
+
+        // "t water", "use water", "b water": playerbots' own commands, which
+        // it acts on itself; "buy water" is vendor talk.
+        const std::vector<std::string> all = CrowdText::Words(cleanText);
+        if (all.empty())
+            return none;
+        for (const std::vector<std::string>& c : rules.commands)
+        {
+            if (!MatchesAt(all, 0, c))
+                continue;
+            // ...except "u" for "you": "u got any food", "u have water?".
+            if (c.size() == 1 && c[0] == "u" && all.size() > 1 && IsYouVerb(all[1]))
+                continue;
+            return none;
+        }
+
+        // The bots' names are not part of what is asked for.
+        std::vector<std::string> nameWords;
+        for (const std::string& n : names)
+            for (std::string& w : CrowdText::Words(n))
+                nameWords.push_back(std::move(w));
+        std::vector<std::string> words;
+        for (const std::string& w : all)
+            if (std::find(nameWords.begin(), nameWords.end(), w) == nameWords.end())
+                words.push_back(w);
+        if (words.empty() || (rules.maxWords > 0 && words.size() > rules.maxWords))
+            return none;
+
+        // What they want, leaving out what a mage cannot make: "health pots"
+        // are not "pots", and "food buff" is not food.
+        std::vector<bool> blocked(words.size(), false);
+        for (const auto& [b, e] : Occurrences(words, rules.notMage))
+            for (size_t i = b; i < e; ++i)
+                blocked[i] = true;
+        std::vector<bool> itemWord(words.size(), false);
+        auto firstFree = [&](const std::vector<std::vector<std::string>>& phrases) -> size_t
+        {
+            size_t first = npos;
+            for (const auto& [b, e] : Occurrences(words, phrases))
+            {
+                bool clear = true;
+                for (size_t i = b; i < e; ++i)
+                    clear = clear && !blocked[i];
+                if (!clear)
+                    continue;
+                for (size_t i = b; i < e; ++i)
+                    itemWord[i] = true;
+                first = std::min(first, b);
+            }
+            return first;
+        };
+        const size_t drinkAt = firstFree(rules.drink);
+        const size_t foodAt  = firstFree(rules.food);
+        const size_t potAt   = firstFree(rules.pots);
+        const size_t looseAt = firstFree(rules.loose);
+        const bool strong = drinkAt != npos || foodAt != npos;
+        if (!strong && potAt == npos && looseAt == npos)
+            return none;
+        const size_t firstItem = std::min({ drinkAt, foodAt, potAt, looseAt });
+
+        // Asking for something, and asking nicely. Their words are not "had"
+        // words: the "i have" inside "can i have".
+        std::vector<bool> asked(words.size(), false);
+        bool asks = false, polite = false;
+        for (const auto& [b, e] : Occurrences(words, rules.asks))
+        {
+            asks = true;
+            for (size_t i = b; i < e; ++i)
+                asked[i] = true;
+        }
+        for (const auto& [b, e] : Occurrences(words, rules.polite))
+        {
+            polite = true;
+            for (size_t i = b; i < e; ++i)
+                asked[i] = true;
+        }
+
+        // Had, not wanted: "i have water", "im good on food".
+        for (const auto& [b, e] : Occurrences(words, rules.haves))
+        {
+            bool insideAsk = true;
+            for (size_t i = b; i < e; ++i)
+                insideAsk = insideAsk && asked[i];
+            if (!insideAsk)
+                return none;
+        }
+
+        // Negated before the item: "dont need water", "no food pls". A "no" up
+        // front is only an interjection when the item does not follow it at
+        // once: "no worries, can i get water" asks, "no water" does not.
+        for (const auto& [b, e] : Occurrences(words, rules.negations))
+        {
+            if (b >= firstItem)
+                continue;
+            if (b == 0 && IsInterjection(words[0]) && e != firstItem)
+                continue;
+            return none;
+        }
+
+        const bool question = cleanText.find('?') != std::string::npos;
+
+        // A thank-you, or a question about it rather than for it.
+        if (!asks && !polite && (CrowdText::ContainsPhrase(words, rules.thanks) ||
+                                 CrowdText::ContainsPhrase(words, rules.questions)))
+            return none;
+
+        // A need right before a real item: "need water", "out of food", "need
+        // some water". Never "need mana" or "need a drink": those are mana
+        // breaks, and the run's tank answers them.
+        bool needs = false;
+        if (strong)
+        {
+            for (const auto& [b, e] : Occurrences(words, rules.needs))
+            {
+                (void)b;
+                size_t i = e;
+                for (int skipped = 0; i < words.size() && skipped < 3 && i != drinkAt && i != foodAt &&
+                                      IsNeedFiller(words[i]); ++skipped)
+                    ++i;
+                if (i == drinkAt || i == foodAt)
+                {
+                    needs = true;
+                    break;
+                }
+            }
+        }
+
+        // "mage water pls", "hey mage, food?", "water mage": the mage is spoken
+        // to, not just mentioned.
+        bool mage = false;
+        std::vector<bool> mageWord(words.size(), false);
+        for (const auto& [b, e] : Occurrences(words, rules.mage))
+        {
+            for (size_t i = b; i < e; ++i)
+                mageWord[i] = true;
+            const bool leadIn = b == 1 && (words[0] == "hey" || words[0] == "yo" || words[0] == "oi" ||
+                                           words[0] == "hi" || words[0] == "ok" || words[0] == "okay" ||
+                                           words[0] == "pls" || words[0] == "plz" || words[0] == "please");
+            if (b == 0 || leadIn || e == words.size())
+                mage = true;
+        }
+
+        // "water", "water?", "more water", "water for me": nothing but the
+        // item. "drinks on me" and "pot now" are something else.
+        bool bare = words.size() <= 4;
+        for (size_t i = 0; bare && i < words.size(); ++i)
+            bare = itemWord[i] || mageWord[i] || asked[i] || IsBareFiller(words[i]);
+
+        const bool ask = asks || polite;
+        bool ok = false;
+        if (strong)
+            ok = ask || needs || mage || bare || (named && question);
+        else if (potAt != npos)
+            ok = asks || ((named || mage) && (polite || question));
+        else
+            ok = (named || mage) && (ask || question);
+        if (!ok)
+            return none;
+
+        ConjureAsk out;
+        if (drinkAt != npos || potAt != npos || looseAt != npos)
+            out.kinds |= CONJURE_DRINK;
+        if (foodAt != npos)
+            out.kinds |= CONJURE_FOOD;
+        out.mage = mage;
+
+        // "2 stacks of water", "a stack"; or "40 water".
+        for (size_t i = 1; i < words.size(); ++i)
+        {
+            if (words[i] != "stack" && words[i] != "stacks" && words[i] != "stax")
+                continue;
+            if (const uint32_t n = NumberWord(words[i - 1]))
+            {
+                out.stacks = n;
+                break;
+            }
+        }
+        if (!out.stacks && firstItem != npos && firstItem > 0)
+            if (const uint32_t n = NumberWord(words[firstItem - 1]); n > 1)
+                out.count = n;
+        return out;
     }
 
     // ---- level outlook ----------------------------------------------------

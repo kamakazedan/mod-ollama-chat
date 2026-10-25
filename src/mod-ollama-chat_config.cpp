@@ -320,6 +320,24 @@ std::vector<std::vector<std::string>> g_ResponseOverusedPhrases;
 uint32_t    g_ResponseOverusedCooldownSeconds = 1200;
 std::vector<std::vector<std::string>> g_ResponseOffEraPhrases;
 
+bool        g_ConjureEnable                = true;
+TextRules::ConjureRules g_ConjureRules;
+uint32_t    g_ConjureStacks                = 1;
+uint32_t    g_ConjureMaxStacks             = 3;
+bool        g_ConjureUseMana               = true;
+uint32_t    g_ConjureWaitSeconds           = 90;
+uint32_t    g_ConjureTradeSeconds          = 60;
+std::string g_ConjureHintGive;
+std::string g_ConjureHintWait;
+std::string g_ConjureHintCant;
+std::string g_ConjureHintNotMage;
+std::string g_ConjureHintAlready;
+std::string g_ConjureHintNotGrouped;
+
+std::unordered_map<std::string, PersonalityNudge> g_PersonalityNudges;
+std::unordered_map<std::string, uint32_t>         g_PersonalityMaxReplyLength;
+std::string g_PersonalityLongReplyNote;
+
 // --------------------------------------------
 // Topic engine
 // --------------------------------------------
@@ -982,6 +1000,158 @@ static void LoadNaturalChatV5Settings()
              g_ResponseOverusedCooldownSeconds, g_ResponseOffEraPhrases.size());
 }
 
+static void LoadNaturalChatV6Settings()
+{
+    // --- conjured food and water ---------------------------------------------
+    auto phrases = [](const char* key, const char* def)
+    {
+        return CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(key, def));
+    };
+
+    g_ConjureEnable = sConfigMgr->GetOption<bool>("OllamaChat.Conjure.Enable", true);
+    g_ConjureRules.drink = phrases("OllamaChat.Conjure.DrinkWords",
+        "water|waters|watter|wata|watah|watr|wotah|h2o|drinks|refreshment*|strudel*|biscuit*|mana pie*|"
+        "mana bun*|mana cake*|mana pot*|mana potion*|mana gem*");
+    g_ConjureRules.food = phrases("OllamaChat.Conjure.FoodWords",
+        "food|foods|fud|bread|breads|muffin*|croissant*|cinnamon roll*|sweet roll*|grub|snacks");
+    g_ConjureRules.pots = phrases("OllamaChat.Conjure.PotWords", "pot|pots|potion*");
+    g_ConjureRules.loose = phrases("OllamaChat.Conjure.LooseWords", "mana|drink");
+    g_ConjureRules.notMage = phrases("OllamaChat.Conjure.NotMageWords",
+        "health pot*|healing pot*|hp pot*|health potion*|healing potion*|healthstone*|health stone*|"
+        "potion of*|speed pot*|haste pot*|rage pot*|indestructible pot*|wild magic pot*|food buff*|buff food|"
+        "feast*|water walk*|waterwalk*|water breath*|water elemental*|water shield*");
+    g_ConjureRules.asks = phrases("OllamaChat.Conjure.AskWords",
+        "give|giv|gib|gief|gimme|gimmie|gimmi|send|trade|hand|spare|share|conjure|conj|toss|throw|drop me|"
+        "pass me|hook me up|hook us up|make me|make us|make some|make more|can i have|can i get|can i grab|"
+        "could i have|could i get|could i grab|may i have|may i get|do you have|do u have|you have|u have|"
+        "ya have|you got|u got|ya got|got any|got some|have any|any spare|anyone have|anyone got|anybody have|"
+        "anybody got|any1 have|any1 got");
+    g_ConjureRules.polite = phrases("OllamaChat.Conjure.PoliteWords",
+        "pls|plz|please|pleas|plox|plis|pl0x|ples|plx|can you|can u|could you|could u|would you|would u|"
+        "will you|will u|how about");
+    g_ConjureRules.needs = phrases("OllamaChat.Conjure.NeedWords",
+        "need|needs|neeed|nid|want|wanna|could use|out of|outta|low on|ran out of|run out of|running low on|"
+        "all out of");
+    g_ConjureRules.mage = phrases("OllamaChat.Conjure.MageWords", "mage|mages|magey|wizard");
+    g_ConjureRules.negations = phrases("OllamaChat.Conjure.NegationWords",
+        "not|dont|didnt|doesnt|no|nope|nah|never|without|aint|isnt|arent|havent|wont");
+    g_ConjureRules.haves = phrases("OllamaChat.Conjure.HaveWords",
+        "i have|i got|ive got|i still have|still have|already have|already got|got plenty|have plenty|"
+        "plenty of|im good|im fine|im set|all good|enough");
+    g_ConjureRules.thanks = phrases("OllamaChat.Conjure.ThanksWords",
+        "ty|thx|thnx|thanks|thank you|thank u|tyvm|tysm|tyty|cheers|appreciate*");
+    g_ConjureRules.questions = phrases("OllamaChat.Conjure.QuestionWords",
+        "what|where|why|when|which|how|whats|wheres|whys|hows");
+    g_ConjureRules.commands = phrases("OllamaChat.Conjure.CommandWords",
+        "t|nt|u|use|s|b|e|c|ue|de|q|r|ll|ss|co|nc|destroy|drop|equip|share|sell|buy|vendor|items|inv|inventory|"
+        "loot|cast|castnc|drink|roll|mail|sendmail|craft|bank|gb|gbank");
+    g_ConjureRules.maxWords = sConfigMgr->GetOption<uint32_t>("OllamaChat.Conjure.MaxWords", 16);
+
+    g_ConjureStacks      = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Conjure.Stacks", 1), 1, 6);
+    g_ConjureMaxStacks   = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Conjure.MaxStacks", 3),
+                                                g_ConjureStacks, 6);
+    g_ConjureUseMana     = sConfigMgr->GetOption<bool>("OllamaChat.Conjure.UseMana", true);
+    g_ConjureWaitSeconds = std::max<uint32_t>(10, sConfigMgr->GetOption<uint32_t>("OllamaChat.Conjure.WaitSeconds", 90));
+    g_ConjureTradeSeconds = std::max<uint32_t>(10, sConfigMgr->GetOption<uint32_t>("OllamaChat.Conjure.TradeSeconds", 60));
+
+    g_ConjureHintGive = sConfigMgr->GetOption<std::string>("OllamaChat.Conjure.HintGive",
+        "{player_name} asked you for {request}. You are a mage, so you have conjured {gift} and are opening a "
+        "trade to give it to them, free. Tell them in a few words, in your own chat style. Never ask for gold "
+        "or anything in return.");
+    g_ConjureHintWait = sConfigMgr->GetOption<std::string>("OllamaChat.Conjure.HintWait",
+        "{player_name} asked you for {request}. You will conjure {gift} and trade it to them, free, {when}. "
+        "Tell them so in a few words, in your own chat style. Never ask for gold or anything in return.");
+    g_ConjureHintCant = sConfigMgr->GetOption<std::string>("OllamaChat.Conjure.HintCant",
+        "{player_name} asked you for {request}, but you can't give them any: {reason}. Tell them why in a few "
+        "words, in your own chat style.");
+    g_ConjureHintNotMage = sConfigMgr->GetOption<std::string>("OllamaChat.Conjure.HintNotMage",
+        "{player_name} asked you for {request}, but you are a {class}, not a mage, so you can't conjure "
+        "it.{mage} Tell them in a few words, in your own chat style.");
+    g_ConjureHintAlready = sConfigMgr->GetOption<std::string>("OllamaChat.Conjure.HintAlready",
+        "{player_name} asked you for {request} again, but you have already offered them a trade with it. Tell "
+        "them in a few words to accept the trade.");
+    g_ConjureHintNotGrouped = sConfigMgr->GetOption<std::string>("OllamaChat.Conjure.HintNotGrouped",
+        "{player_name} asked you for {request}, but you only hand out conjured food and water to your own "
+        "group, and they are not in it. Tell them in a few words, in your own chat style, to invite you if "
+        "they want some.");
+
+    LOG_INFO("module.ollamachat",
+             "[Ollama Chat] Conjured food and water on request: {} ({} stack(s), up to {}, mana {}, waits {} s, "
+             "trades open {} s).",
+             g_ConjureEnable ? "on" : "off", g_ConjureStacks, g_ConjureMaxStacks,
+             g_ConjureUseMana ? "used" : "free", g_ConjureWaitSeconds, g_ConjureTradeSeconds);
+}
+
+void LoadPersonalityExtras()
+{
+    g_PersonalityNudges.clear();
+    g_PersonalityMaxReplyLength.clear();
+    g_PersonalityLongReplyNote = sConfigMgr->GetOption<std::string>("OllamaChat.Personality.LongReplyNote",
+        "You can write more than most players do: when you explain how to do something, use two or three short "
+        "sentences, up to about {words} words, clear and to the point. Still one chat line, no lists or "
+        "headings.");
+
+    std::string bad;
+    for (const std::string& key : g_PersonalityKeys)
+    {
+        std::string upper;
+        for (char c : key)
+            upper += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+
+        // "<percent>|<instruction>" or "<percent>|<instruction>|<otherwise>"
+        const std::string nudge = sConfigMgr->GetOption<std::string>("OllamaChat.Personality.Nudge." + key, "", false);
+        if (!nudge.empty())
+        {
+            std::vector<std::string> parts;
+            size_t start = 0;
+            for (int i = 0; i < 2; ++i)
+            {
+                const size_t bar = nudge.find('|', start);
+                if (bar == std::string::npos)
+                    break;
+                parts.push_back(nudge.substr(start, bar - start));
+                start = bar + 1;
+            }
+            parts.push_back(nudge.substr(start));
+
+            auto trim = [](std::string s)
+            {
+                const size_t b = s.find_first_not_of(" \t");
+                const size_t e = s.find_last_not_of(" \t");
+                return b == std::string::npos ? std::string() : s.substr(b, e - b + 1);
+            };
+            const std::string pct = trim(parts[0]);
+            const bool number = !pct.empty() && pct.size() <= 3 &&
+                std::all_of(pct.begin(), pct.end(), [](unsigned char c) { return std::isdigit(c) != 0; });
+            if (parts.size() >= 2 && number && !trim(parts[1]).empty())
+            {
+                PersonalityNudge n;
+                n.percent = std::min<uint32_t>(100, static_cast<uint32_t>(std::stoul(pct)));
+                n.yes     = trim(parts[1]);
+                n.no      = parts.size() > 2 ? trim(parts[2]) : std::string();
+                g_PersonalityNudges[upper] = std::move(n);
+            }
+            else
+            {
+                bad += (bad.empty() ? "" : ", ") + ("Nudge." + key);
+            }
+        }
+
+        // One chat line holds about 255 characters.
+        const uint32_t length = sConfigMgr->GetOption<uint32_t>("OllamaChat.Personality.MaxReplyLength." + key, 0, false);
+        if (length > 0)
+            g_PersonalityMaxReplyLength[upper] = std::min<uint32_t>(length, 250);
+    }
+
+    if (!bad.empty())
+        LOG_WARN("module.ollamachat",
+                 "[Ollama Chat] Ignored OllamaChat.Personality settings that are not \"<percent>|<instruction>\": {}",
+                 bad);
+    if (!g_PersonalityNudges.empty() || !g_PersonalityMaxReplyLength.empty())
+        LOG_INFO("module.ollamachat", "[Ollama Chat] Chat styles with a nudge: {}, with a longer reply limit: {}.",
+                 g_PersonalityNudges.size(), g_PersonalityMaxReplyLength.size());
+}
+
 void LoadEmoteStyles()
 {
     g_EmoteStyles.clear();
@@ -1363,7 +1533,7 @@ void LoadOllamaChatConfig()
         "guys|everyone|everybody|yall|folks";
     static const char* kDefaultPlayful =
         "NAT_JOKER|NAT_TROLL|NAT_CONTRARIAN|NAT_REACTOR|NAT_HYPE|NAT_BANTER|NAT_DEADPAN|"
-        "NAT_EXCITABLE|NAT_GRUMBLER|NAT_PRANKSTER|NAT_GOSSIP|NAT_PVPER";
+        "NAT_EXCITABLE|NAT_GRUMBLER|NAT_PRANKSTER|NAT_GOSSIP|NAT_PVPER|NAT_BINGER|NAT_BUTTERFLY";
 
     g_CrowdEnable              = sConfigMgr->GetOption<bool>("OllamaChat.Crowd.Enable", true);
     g_CrowdMaxResponders       = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.MaxResponders", 5), 1, 10);
@@ -1417,6 +1587,7 @@ void LoadOllamaChatConfig()
 
     LoadNaturalChatV4Settings();
     LoadNaturalChatV5Settings();
+    LoadNaturalChatV6Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);
@@ -1526,6 +1697,7 @@ void LoadOllamaChatConfig()
 
     LoadPersonalityTemplatesFromDB();
     LoadEmoteStyles();
+    LoadPersonalityExtras();
 
     // Loads the environment random chatter message templates for each type.
     // Each config option is a pipe-separated list of string templates,

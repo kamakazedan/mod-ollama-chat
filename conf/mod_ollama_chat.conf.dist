@@ -1650,7 +1650,7 @@ OllamaChat.Crowd.AckWords = "ty|thx|thnx|thanks|thank|tyvm|tysm|you|u|all|ok|oka
 #    OllamaChat.Crowd.PlayfulPersonalities
 #        Personality keys that count as playful when a crowd mixes voices;
 #        every other personality counts as straight. Separated by |.
-OllamaChat.Crowd.PlayfulPersonalities = "NAT_JOKER|NAT_TROLL|NAT_CONTRARIAN|NAT_REACTOR|NAT_HYPE|NAT_BANTER|NAT_DEADPAN|NAT_EXCITABLE|NAT_GRUMBLER|NAT_PRANKSTER|NAT_GOSSIP|NAT_PVPER"
+OllamaChat.Crowd.PlayfulPersonalities = "NAT_JOKER|NAT_TROLL|NAT_CONTRARIAN|NAT_REACTOR|NAT_HYPE|NAT_BANTER|NAT_DEADPAN|NAT_EXCITABLE|NAT_GRUMBLER|NAT_PRANKSTER|NAT_GOSSIP|NAT_PVPER|NAT_BINGER|NAT_BUTTERFLY"
 
 #    OllamaChat.Crowd.HintOpenCall
 #    OllamaChat.Crowd.HintFollowUp
@@ -1978,11 +1978,50 @@ OllamaChat.Emote.Style.NAT_ROLEPLAYER = "bow|bow|salute|curtsey|hail|greet|toast
 OllamaChat.Emote.Style.NAT_CHILL = "wave|smile|yawn|dance|shrug|nod|chug|whistle"
 OllamaChat.Emote.Style.NAT_GOLDMAKER = "smirk|gloat|shifty|nod|point|golfclap"
 OllamaChat.Emote.Style.NAT_RAIDER = "ready|flex|facepalm|point|golfclap|salute|sigh"
+OllamaChat.Emote.Style.NAT_BINGER = "salute|bow|point|gasp|laugh|cheer|victory|roar|wave|wink|applaud"
+OllamaChat.Emote.Style.NAT_BUTTERFLY = "wave|wave|hug|wink|flirt|kiss|dance|cheer|giggle|bounce|highfive|shimmy|charm"
+OllamaChat.Emote.Style.NAT_EXPERT = "point|point|nod|ponder|facepalm|sigh|eyebrow|golfclap|ready|salute"
 
 #    OllamaChat.Emote.PetEmotes
 #        Emotes aimed at a player's pet or companion when they have one
 #        nearby; without a pet these are never picked for a passer-by.
 OllamaChat.Emote.PetEmotes = "pet|pat|cuddle|love|purr|hug"
+
+###############################################################################
+#
+#   OLLAMA CHAT - PER STYLE NUDGES AND LONGER REPLIES
+#
+#   Two more settings any personality key can have, the same way as its
+#   emote style above:
+#
+#   OllamaChat.Personality.Nudge.<KEY>
+#       An extra instruction on a share of that style's replies, so a style
+#       that should do something most of the time -- not every time -- does.
+#       A personality prompt alone ("nearly always quote a film") tends to
+#       get all or nothing from a small model; this rolls for each reply.
+#       "<percent>|<instruction>", or "<percent>|<instruction>|<otherwise>"
+#       for something different on the rest. Only replies to someone get it,
+#       not ambient chatter.
+#
+#   OllamaChat.Personality.MaxReplyLength.<KEY>
+#       A longer reply limit for that style, in characters, instead of
+#       MaxReplyLength, for its replies to someone, and the style is told it
+#       may write more (LongReplyNote below). It only ever lengthens: at or
+#       below MaxReplyLength it does nothing. 250 is about the most one chat
+#       line holds, and the most allowed.
+#
+###############################################################################
+
+#    OllamaChat.Personality.LongReplyNote
+#        What a style with its own MaxReplyLength is told on each reply.
+#        {words}: about how many words that length holds.
+OllamaChat.Personality.LongReplyNote = "You can write more than most players do: when you explain how to do something, use two or three short sentences, up to about {words} words, clear and to the point. Still one chat line, no lists or headings."
+
+# The film and TV binger quotes nine replies in ten, and on the tenth just answers.
+OllamaChat.Personality.Nudge.NAT_BINGER = "90|This time, answer with a famous funny line from a film or TV show that fits what was said, bent to the moment if need be, and maybe say where it is from.|This time, no film or TV quote: just answer like anyone would."
+
+# The veteran who has played since launch explains things properly.
+OllamaChat.Personality.MaxReplyLength.NAT_EXPERT = 250
 
 ###############################################################################
 #
@@ -2116,6 +2155,174 @@ OllamaChat.Party.DungeonGlossary = "In group chat here: mb means mana break (the
 #        on Brelac, out of range)", "fighting trash", "paused"...). Empty
 #        disables.
 OllamaChat.Party.RunStateText = "About this dungeon run: {tank} leads it, {progress}, the next boss is {next}, and right now the group is {state}. Only bring this up when someone asks what is going on, what the plan is or which boss is next."
+
+###############################################################################
+#
+#   OLLAMA CHAT - CONJURED FOOD AND WATER
+#
+#   A real player in a group with a mage bot asks for water the way people
+#   do, and the mage conjures it and trades it to them, free:
+#
+#       "water pls", "water?", "mage can i get food", "anyone got water?",
+#       "need water", "Frostiq please can you give me mana pots",
+#       "food and water pls", "2 stacks of water pls"
+#
+#   The mage opens a trade with them, puts the food or water in and accepts
+#   its side, so their accept finishes it. It never asks for gold:
+#   playerbots' own pricing ("I want 20c for this") does not get a say. It
+#   answers in its own chat style, told what is happening by the hints below.
+#
+#   It conjures the best food or water the asker can use at their level,
+#   a stack unless they say how many, and uses something it already carries
+#   when it has enough. Conjure Refreshment is food and water at once.
+#
+#   When it can't, it says why: it is not a mage (and who is), it has not
+#   learned to conjure that yet, somebody's bags are full, it is dead. When
+#   it only can't yet -- a fight is on, it is out of mana, they are too far
+#   apart to trade, one of them is trading already -- it says it will, and
+#   does as soon as it can, for up to WaitSeconds.
+#
+#   Who answers: the bot the line names, or whispers; otherwise the group's
+#   nearest mage. In /say only a mage close enough to hear it. A mage named
+#   or whispered by someone outside its group says to invite it: playerbots
+#   cancels trades with anyone outside the group.
+#
+#   What counts as asking:
+#     * a real item ("water", "food", "mana pots") with an ask or a please
+#       ("give", "can i have", "pls"), a need right before it ("need water",
+#       "out of food"), "mage" up front or at the end, a line of nothing but
+#       the item ("water?", "more water"), or a question to a named bot;
+#     * "pots" on its own is a raid call as often as an ask ("pot now", "pot
+#       pls"), so it needs a real ask ("pls send me pots") or "mage" or a
+#       name with a please or a question;
+#     * a loose word ("mana", "drink") only when a bot or "mage" is spoken
+#       to and asked: "mage mana pls". Never "need mana", "need a drink",
+#       "oom" or "mb": those are mana breaks, for the run's tank;
+#     * not a negation before the item ("dont need water"), something had
+#       ("i have water", "im good"), a thank-you, a question about it ("where
+#       do i buy water"), or something that is not a mage's ("health pots",
+#       "healthstone", "food buff", "water walking").
+#   Lines that start with a command are left alone: playerbots' own ("t
+#   water", "use water", "b water") and vendor talk ("buy water"); so are
+#   lines with an item link while Playerbots.EnableAutoTradeOnItemMention
+#   is on.
+#
+#   With EnableAutoTradeOnItemMention = 1, playerbots also reads "food" and
+#   "potion" anywhere in a line as an item request, and every bot that hears
+#   it tries to open a trade with its master. The mage's trade comes first,
+#   but when nobody is offering one (no mage, or it has to wait) some other
+#   bot opens an empty trade window. Set it to 0 in playerbots.conf.
+#
+#   Word lists are separated by |, matched lowercase with punctuation and
+#   apostrophes dropped; a trailing * matches any word starting with it.
+#
+###############################################################################
+
+#    OllamaChat.Conjure.Enable
+#        Default: 1
+OllamaChat.Conjure.Enable = 1
+
+#    OllamaChat.Conjure.DrinkWords
+#    OllamaChat.Conjure.FoodWords
+#    OllamaChat.Conjure.PotWords
+#    OllamaChat.Conjure.LooseWords
+#        What they might ask for. Drink and food words are enough with any
+#        ask; pot words need a real ask (AskWords, not just a please), or a
+#        bot or "mage" spoken to; loose words only when a bot or "mage" is
+#        spoken to and asked. Mana gems cannot be traded, so "mana gem" gets
+#        water too, as do pots.
+OllamaChat.Conjure.DrinkWords = "water|waters|watter|wata|watah|watr|wotah|h2o|drinks|refreshment*|strudel*|biscuit*|mana pie*|mana bun*|mana cake*|mana pot*|mana potion*|mana gem*"
+OllamaChat.Conjure.FoodWords = "food|foods|fud|bread|breads|muffin*|croissant*|cinnamon roll*|sweet roll*|grub|snacks"
+OllamaChat.Conjure.PotWords = "pot|pots|potion*"
+OllamaChat.Conjure.LooseWords = "mana|drink"
+
+#    OllamaChat.Conjure.NotMageWords
+#        Not a mage's to give, so not the words above: "health pots" is not
+#        "pots", "food buff" is not food and "water walking" is not water.
+OllamaChat.Conjure.NotMageWords = "health pot*|healing pot*|hp pot*|health potion*|healing potion*|healthstone*|health stone*|potion of*|speed pot*|haste pot*|rage pot*|indestructible pot*|wild magic pot*|food buff*|buff food|feast*|water walk*|waterwalk*|water breath*|water elemental*|water shield*"
+
+#    OllamaChat.Conjure.AskWords
+#    OllamaChat.Conjure.PoliteWords
+#    OllamaChat.Conjure.NeedWords
+#    OllamaChat.Conjure.MageWords
+#        Asking for something; asking nicely; needing, which counts only right
+#        before a drink or food word ("need water", "out of some food"); and
+#        the mage, which counts first or last in the line ("mage water pls",
+#        "water pls mage").
+OllamaChat.Conjure.AskWords = "give|giv|gib|gief|gimme|gimmie|gimmi|send|trade|hand|spare|share|conjure|conj|toss|throw|drop me|pass me|hook me up|hook us up|make me|make us|make some|make more|can i have|can i get|can i grab|could i have|could i get|could i grab|may i have|may i get|do you have|do u have|you have|u have|ya have|you got|u got|ya got|got any|got some|have any|any spare|anyone have|anyone got|anybody have|anybody got|any1 have|any1 got"
+OllamaChat.Conjure.PoliteWords = "pls|plz|please|pleas|plox|plis|pl0x|ples|plx|can you|can u|could you|could u|would you|would u|will you|will u|how about"
+OllamaChat.Conjure.NeedWords = "need|needs|neeed|nid|want|wanna|could use|out of|outta|low on|ran out of|run out of|running low on|all out of"
+OllamaChat.Conjure.MageWords = "mage|mages|magey|wizard"
+
+#    OllamaChat.Conjure.NegationWords
+#    OllamaChat.Conjure.HaveWords
+#    OllamaChat.Conjure.ThanksWords
+#    OllamaChat.Conjure.QuestionWords
+#        Not asking: a negation before the item ("dont need water"; a "no" up
+#        front is fine unless the item follows it at once), having it ("i have
+#        water", but not the "i have" in "can i have"), a thank-you, or a
+#        question about it -- the last two only without an ask word.
+OllamaChat.Conjure.NegationWords = "not|dont|didnt|doesnt|no|nope|nah|never|without|aint|isnt|arent|havent|wont"
+OllamaChat.Conjure.HaveWords = "i have|i got|ive got|i still have|still have|already have|already got|got plenty|have plenty|plenty of|im good|im fine|im set|all good|enough"
+OllamaChat.Conjure.ThanksWords = "ty|thx|thnx|thanks|thank you|thank u|tyvm|tysm|tyty|cheers|appreciate*"
+OllamaChat.Conjure.QuestionWords = "what|where|why|when|which|how|whats|wheres|whys|hows"
+
+#    OllamaChat.Conjure.CommandWords
+#        A line starting with one of these is never an ask: playerbots acts on
+#        its own commands itself ("t water" trades, "use water" drinks, "b
+#        water" buys), and "buy water" is vendor talk. "u" followed by got,
+#        have, need and the like is "you", and still counts.
+OllamaChat.Conjure.CommandWords = "t|nt|u|use|s|b|e|c|ue|de|q|r|ll|ss|co|nc|destroy|drop|equip|share|sell|buy|vendor|items|inv|inventory|loot|cast|castnc|drink|roll|mail|sendmail|craft|bank|gb|gbank"
+
+#    OllamaChat.Conjure.MaxWords
+#        Longer lines are conversation, not asks.
+#        Default: 16
+OllamaChat.Conjure.MaxWords = 16
+
+#    OllamaChat.Conjure.Stacks
+#    OllamaChat.Conjure.MaxStacks
+#        Stacks given when they don't say ("water pls"), and the most one ask
+#        gets ("5 stacks of water"). A trade holds six.
+#        Default: 1, 3
+OllamaChat.Conjure.Stacks = 1
+OllamaChat.Conjure.MaxStacks = 3
+
+#    OllamaChat.Conjure.UseMana
+#        1: conjuring costs the mage the spell's mana, and an out-of-mana mage
+#        waits until it has it. 0: it conjures for nothing.
+#        Default: 1
+OllamaChat.Conjure.UseMana = 1
+
+#    OllamaChat.Conjure.WaitSeconds
+#    OllamaChat.Conjure.TradeSeconds
+#        How long an ask waits for a fight to end, for mana or for them to come
+#        closer (at least 10); and how long a trade the mage offered stays
+#        open before it cancels it (at least 10).
+#        Default: 90, 60
+OllamaChat.Conjure.WaitSeconds = 90
+OllamaChat.Conjure.TradeSeconds = 60
+
+#    OllamaChat.Conjure.HintGive
+#    OllamaChat.Conjure.HintWait
+#    OllamaChat.Conjure.HintCant
+#    OllamaChat.Conjure.HintNotMage
+#    OllamaChat.Conjure.HintAlready
+#    OllamaChat.Conjure.HintNotGrouped
+#        What the bot is told when it answers: it is giving it; it will once it
+#        can; it can't; it is not a mage; it already offered a trade (asked
+#        again); they are not in its group. Placeholders: {player_name},
+#        {request} ("conjured water", "conjured food and water"), {gift}
+#        ("a stack of Conjured Mana Strudel"), {when} ("as soon as this fight
+#        is over", "once you have the mana for it, ..."), {reason} ("your bags
+#        are full", "you have not learned to conjure food yet"), {class} and
+#        {mage} (HintNotMage: " Frostiq is the mage in your group." or " There
+#        is no mage in your group.").
+OllamaChat.Conjure.HintGive = "{player_name} asked you for {request}. You are a mage, so you have conjured {gift} and are opening a trade to give it to them, free. Tell them in a few words, in your own chat style. Never ask for gold or anything in return."
+OllamaChat.Conjure.HintWait = "{player_name} asked you for {request}. You will conjure {gift} and trade it to them, free, {when}. Tell them so in a few words, in your own chat style. Never ask for gold or anything in return."
+OllamaChat.Conjure.HintCant = "{player_name} asked you for {request}, but you can't give them any: {reason}. Tell them why in a few words, in your own chat style."
+OllamaChat.Conjure.HintNotMage = "{player_name} asked you for {request}, but you are a {class}, not a mage, so you can't conjure it.{mage} Tell them in a few words, in your own chat style."
+OllamaChat.Conjure.HintAlready = "{player_name} asked you for {request} again, but you have already offered them a trade with it. Tell them in a few words to accept the trade."
+OllamaChat.Conjure.HintNotGrouped = "{player_name} asked you for {request}, but you only hand out conjured food and water to your own group, and they are not in it. Tell them in a few words, in your own chat style, to invite you if they want some."
 
 ###############################################################################
 #

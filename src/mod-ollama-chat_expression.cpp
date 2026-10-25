@@ -202,7 +202,8 @@ namespace
             { "ruffle", TEXT_EMOTE_RUFFLE },       { "chug", TEXT_EMOTE_CHUG },
             { "purr", TEXT_EMOTE_PURR },           { "bark", TEXT_EMOTE_BARK },
             { "hug", TEXT_EMOTE_HUG },             { "charm", TEXT_EMOTE_CHARM },
-            { "moon", TEXT_EMOTE_MOON },
+            { "moon", TEXT_EMOTE_MOON },           { "kiss", TEXT_EMOTE_KISS },
+            { "flirt", TEXT_EMOTE_FLIRT },
         };
         return table;
     }
