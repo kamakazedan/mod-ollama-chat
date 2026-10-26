@@ -572,9 +572,10 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              (unsigned long long)links.linked,
                              (unsigned long long)links.unresolved,
                              links.remembered, links.indexed ? ", names indexed" : "");
-    handler->PSendSysMessage("Stock phrases: {} dropped as said lately, {} as not in Wrath, {} as not at the "
-                             "bot's level, {} cooling down",
+    handler->PSendSysMessage("Stock phrases: {} dropped as said lately, {} as a hobby horse said lately, {} as "
+                             "not in Wrath, {} as not at the bot's level, {} cooling down",
                              (unsigned long long)phrases.droppedOverused,
+                             (unsigned long long)phrases.droppedRare,
                              (unsigned long long)phrases.droppedOffEra,
                              (unsigned long long)phrases.droppedOffLevel,
                              phrases.coolingDown);

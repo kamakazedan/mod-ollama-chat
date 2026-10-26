@@ -444,6 +444,27 @@ extern std::string g_PersonalityLongReplyNote;   // what a style with a longer l
 // database. Called from the config load, after the personality templates.
 void LoadEmoteStyles();
 
+// --------------------------------------------
+// Natural chat v7
+// --------------------------------------------
+// Replies. World thread only.
+extern std::vector<std::vector<std::string>> g_ResponseDropVocatives;   // "kid", where it addresses someone
+extern std::vector<std::vector<std::string>> g_ResponseRarePhrases;     // once per cooldown, even said to someone
+extern uint32_t    g_ResponseRareCooldownSeconds;
+
+// A line that is only thanks ("ty", "cheers mate"). World thread only.
+extern std::vector<std::vector<std::string>> g_CrowdThanksWords;
+extern uint32_t    g_CrowdThanksReplyChance;
+
+// What a dead bot is told about itself. World thread only.
+extern std::string g_StateDeadText;    // dead, not released yet
+extern std::string g_StateGhostText;   // released, running back
+
+// Orders in plain words: "stay back", "come trade me" (mod-ollama-chat_orders).
+// World thread only.
+extern bool        g_OrdersEnable;
+extern TextRules::BotCommandRules g_OrdersRules;
+
 // Read OllamaChat.Personality.Nudge.<KEY> and .MaxReplyLength.<KEY> for every
 // personality loaded from the database. Called right after LoadEmoteStyles.
 void LoadPersonalityExtras();

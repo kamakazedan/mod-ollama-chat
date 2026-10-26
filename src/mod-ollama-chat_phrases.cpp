@@ -10,10 +10,12 @@ namespace
 {
     // By TextRules::PhraseKey, so a reload that reorders the list keeps them.
     std::unordered_map<std::string, time_t> g_lastSaid;
+    std::unordered_map<std::string, time_t> g_lastRare;
 
     uint64_t g_offEra   = 0;
     uint64_t g_offLevel = 0;
     uint64_t g_overused = 0;
+    uint64_t g_rare     = 0;
 }
 
 PhraseCheck Phrases_Check(const std::string& text, const std::string& answering, bool directAddress,
@@ -29,6 +31,22 @@ PhraseCheck Phrases_Check(const std::string& text, const std::string& answering,
         which = TextRules::PhraseKey(g_ResponseOffEraPhrases[offEra.front()]);
         ++g_offEra;
         return PhraseCheck::OffEra;
+    }
+
+    if (g_ResponseRareCooldownSeconds > 0)
+    {
+        const time_t now = time(nullptr);
+        for (size_t i : TextRules::FindPhraseIndexes(text, g_ResponseRarePhrases, answering))
+        {
+            const std::string key = TextRules::PhraseKey(g_ResponseRarePhrases[i]);
+            auto it = g_lastRare.find(key);
+            if (it != g_lastRare.end() && now - it->second < static_cast<time_t>(g_ResponseRareCooldownSeconds))
+            {
+                which = key;
+                ++g_rare;
+                return PhraseCheck::Rare;
+            }
+        }
     }
 
     if (directAddress)
@@ -63,18 +81,24 @@ PhraseCheck Phrases_Check(const std::string& text, const std::string& answering,
 
 void Phrases_NoteSaid(const std::string& text)
 {
-    if (g_ResponseOverusedCooldownSeconds == 0)
-        return;
     const time_t now = time(nullptr);
-    for (size_t i : TextRules::FindPhraseIndexes(text, g_ResponseOverusedPhrases))
-        g_lastSaid[TextRules::PhraseKey(g_ResponseOverusedPhrases[i])] = now;
+    if (g_ResponseOverusedCooldownSeconds > 0)
+        for (size_t i : TextRules::FindPhraseIndexes(text, g_ResponseOverusedPhrases))
+            g_lastSaid[TextRules::PhraseKey(g_ResponseOverusedPhrases[i])] = now;
+    if (g_ResponseRareCooldownSeconds > 0)
+        for (size_t i : TextRules::FindPhraseIndexes(text, g_ResponseRarePhrases))
+            g_lastRare[TextRules::PhraseKey(g_ResponseRarePhrases[i])] = now;
 }
 
 void Phrases_Update()
 {
-    const time_t cutoff = time(nullptr) - static_cast<time_t>(g_ResponseOverusedCooldownSeconds);
+    const time_t now = time(nullptr);
+    const time_t cutoff = now - static_cast<time_t>(g_ResponseOverusedCooldownSeconds);
     for (auto it = g_lastSaid.begin(); it != g_lastSaid.end(); )
         it = (it->second < cutoff) ? g_lastSaid.erase(it) : std::next(it);
+    const time_t rareCutoff = now - static_cast<time_t>(g_ResponseRareCooldownSeconds);
+    for (auto it = g_lastRare.begin(); it != g_lastRare.end(); )
+        it = (it->second < rareCutoff) ? g_lastRare.erase(it) : std::next(it);
 }
 
 PhrasesStats Phrases_GetStats()
@@ -83,6 +107,7 @@ PhrasesStats Phrases_GetStats()
     s.droppedOffEra   = g_offEra;
     s.droppedOffLevel = g_offLevel;
     s.droppedOverused = g_overused;
-    s.coolingDown     = static_cast<uint32_t>(g_lastSaid.size());
+    s.droppedRare     = g_rare;
+    s.coolingDown     = static_cast<uint32_t>(g_lastSaid.size() + g_lastRare.size());
     return s;
 }

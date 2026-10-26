@@ -102,7 +102,8 @@ enum class CrowdLineKind : uint8_t
     Greeting,      // "hello" to the room: a few hellos back
     Conversation,  // one turn of a running conversation (mod-ollama-chat_conversation)
     Command,       // the acknowledgement of a party instruction (mod-ollama-chat_partycmd)
-    Favor          // a bot answering a request it is acting on: food and water (mod-ollama-chat_conjure)
+    Favor,         // a bot answering a request it is acting on: food and water (mod-ollama-chat_conjure)
+    Order          // a bot answering an order in plain words: "stay back" (mod-ollama-chat_orders)
 };
 
 struct CrowdSlot

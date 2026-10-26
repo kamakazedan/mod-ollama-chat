@@ -34,6 +34,17 @@ namespace TextRules
     std::string StripAssistantSpeak(const std::string& text,
                                     const std::vector<std::vector<std::string>>& phrases);
 
+    // ---- calling someone "kid" -------------------------------------------
+
+    // Drop a word from `vocatives` (one-word entries, e.g. "kid") wherever it
+    // addresses someone: ending a sentence ("just cave mobs kid", "nice try,
+    // kid."), before a comma ("listen kid, ..."), or opening the line ("kid
+    // you need ..."). Not where it is what is talked about: "the kid", "a kid",
+    // "my kid", "two kids", "that kid is ...". Returns what is left, tidied;
+    // empty when the line was only that word.
+    std::string StripVocatives(const std::string& text,
+                               const std::vector<std::vector<std::string>>& vocatives);
+
     // ---- party commands --------------------------------------------------
 
     // A phrase from a command list. "=r" in the config matches only a line
@@ -148,6 +159,68 @@ namespace TextRules
     // whispered to one.
     ConjureAsk MatchConjureAsk(const std::string& cleanText, const ConjureRules& rules,
                                bool named, const std::vector<std::string>& names = {});
+
+    // ---- telling bots what to do ---------------------------------------------
+
+    enum class BotIntent : uint8_t
+    {
+        None,
+        Stay,      // "stay here", "wait here", "stay back", "dont move"
+        Follow,    // "follow me", "come with me", "come here", "on me"
+        Attack,    // "attack my target", "kill that", "get him"
+        Flee,      // "run away", "flee", "retreat", "fall back"
+        Revive,    // to the dead: "release", "respawn", "run back", "res"
+        Trade,     // "trade me", "come trade me", "open a trade"
+        Hearth,    // "hearth", "use your hearthstone", "hs out"
+        Unstuck,   // "you're stuck", "use unstuck"
+        Buff,      // "buff us", "buffs pls", "rebuff"
+        Pull,      // "pull", "go ahead and pull"
+        Leave,     // "leave the group", "you can leave now"
+        Count
+    };
+
+    const char* BotIntentName(BotIntent intent);
+
+    struct BotCommandRules
+    {
+        // Indexed by BotIntent; [None] is unused. "=run" matches only a line
+        // (or a clause of one) that is exactly "run".
+        std::vector<CommandPhrase> phrases[static_cast<size_t>(BotIntent::Count)];
+        std::vector<std::vector<std::string>> fillers;       // "pls", "now", "here", "a sec": go with anything
+        std::vector<std::vector<std::string>> polite;        // "can you", "could you": an instruction even asked
+        std::vector<std::vector<std::string>> everyone;      // "everyone", "guys", "all": to every bot
+        std::vector<std::vector<std::string>> negations;     // "dont", "no need to": not an instruction
+        std::vector<std::vector<std::string>> questions;     // "why", "should", "are": asking, not telling
+        std::vector<std::vector<std::string>> conditions;    // "if", "unless", "once": not now
+        std::vector<std::vector<std::string>> separators;    // "and", "while", "so": split a line into clauses
+        uint32_t maxWords = 14;
+        uint32_t maxStray = 1;      // words in the clause that are none of the above
+    };
+
+    struct BotCommand
+    {
+        BotIntent intent   = BotIntent::None;
+        bool      everyone = false;   // said to every bot: "everyone stay here"
+        bool      polite   = false;   // "can you ...", "pls"
+    };
+
+    // Is this line telling the bots to do something? People say it the way
+    // they would to anyone: "stay back", "wait here", "everyone come with me",
+    // "Joanni can you come trade me", "you're stuck, use unstuck", "stay here
+    // while i grab the quest".
+    //
+    // The line is split into clauses (at punctuation and at words like "and",
+    // "while", "so"). A clause is an instruction when it is one of the phrases
+    // above and little else: names (`names`, left out first), fillers, "can
+    // you", "everyone", and at most maxStray other words. So "stay here while
+    // i loot" stays, and "we should stay here and fight" does not.
+    //
+    // Not an instruction: one asked rather than told ("should we wait here?",
+    // "why are you staying"), negated outside the phrase ("dont stay here",
+    // "no need to wait here"), conditional ("if it runs, kill it"), or a line
+    // whose clauses tell the bots two different things.
+    BotCommand MatchBotCommand(const std::string& cleanText, const BotCommandRules& rules,
+                               const std::vector<std::string>& names = {});
 
     // ---- level outlook ----------------------------------------------------
 

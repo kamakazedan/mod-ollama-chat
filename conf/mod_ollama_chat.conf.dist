@@ -1253,6 +1253,36 @@ OllamaChat.Response.OverusedCooldownSeconds = 1200
 #        counts as "mythic". Empty disables.
 OllamaChat.Response.OffEraPhrases = "mythic|keystone|transmog*|xmog|world quest|world quests|dragonriding|dragonflying|skyriding|timewalking|torghast|azerite|shadowlands|dragonflight|pandaria|warlords of draenor|battle for azeroth|war within|my garrison|class hall|artifact weapon|covenant ability"
 
+#    OllamaChat.Response.RarePhrases
+#    OllamaChat.Response.RareCooldownSeconds
+#        A chat style's hobby horse: once any bot has said one of these, no bot
+#        says it again anywhere on the realm for the cooldown -- even in a line
+#        owed to someone, which OverusedPhrases lets through. Otherwise a
+#        nostalgic bot answers everything, "respawn" included, with the same
+#        memory of 40-man raids. A phrase the line being answered used itself
+#        is still fine. Phrases separated by |, matched on whole words. Empty,
+#        or a cooldown of 0, disables.
+#        Default: (below), 3600 (an hour)
+OllamaChat.Response.RarePhrases = "40 man|40man|forty man|40 mans|old school|back in vanilla|back in the day|the old days|old days|good old days|vanilla days|miss vanilla|miss the old|used to be better|way more epic back"
+OllamaChat.Response.RareCooldownSeconds = 3600
+
+#    OllamaChat.Response.DropVocatives
+#        Words people get called that nobody here says: "just some cave mobs
+#        kid" goes out as "just some cave mobs". Only where the word addresses
+#        someone -- ending a sentence, before a comma, or opening the line --
+#        never where it is what is talked about ("the kid in Stormwind", "my
+#        kid"). A reply that was nothing else is dropped. Single words,
+#        separated by |. Empty disables.
+#        Default: "kid|kiddo"
+OllamaChat.Response.DropVocatives = "kid|kiddo"
+
+#    OllamaChat.State.Dead
+#    OllamaChat.State.Ghost
+#        Added to a dead bot's prompt, so what it says fits: lying where it
+#        fell, or released and running back as a ghost. Empty leaves it out.
+OllamaChat.State.Dead = "Right now you are dead: you died and are lying where you fell."
+OllamaChat.State.Ghost = "Right now you are dead: you released your spirit and are running back to your body as a ghost."
+
 ###############################################################################
 #
 #   OLLAMA CHAT - CONVERSATION GOVERNOR
@@ -1600,10 +1630,22 @@ OllamaChat.Crowd.ChimeInChance = 40
 OllamaChat.Crowd.ChimeInMax = 2
 
 #    OllamaChat.Crowd.AckReplyChance
-#        A line that is only thanks, a laugh or a yes/no ("ty", "lol", "ok np"):
-#        the chance the bot it was meant for answers at all. Nobody else does.
+#        A line that is only a laugh or a yes/no ("lol", "ok np"): the chance
+#        the bot it was meant for answers at all. Nobody else does.
 #        Default: 50
 OllamaChat.Crowd.AckReplyChance = 50
+
+#    OllamaChat.Crowd.ThanksWords
+#    OllamaChat.Crowd.ThanksReplyChance
+#        A line that is only thanks ("ty", "thanks", "cheers mate", "thank you
+#        Zonin"), whispered or not: the chance anyone answers it. A
+#        congratulation answered with "ty" is finished, so by default nobody
+#        does. A thank-you that asks something as well ("ty, need a group
+#        later?") is an ordinary line. Words separated by |; a trailing *
+#        matches any word starting with it.
+#        Default: (below), 0
+OllamaChat.Crowd.ThanksWords = "ty|thx|thnx|thanks|thank|tyvm|tysm|tyty|ta|cheers|appreciate*|appreciated"
+OllamaChat.Crowd.ThanksReplyChance = 0
 
 #    OllamaChat.Crowd.ReplyGapMinMs
 #    OllamaChat.Crowd.ReplyGapMaxMs
@@ -1645,7 +1687,7 @@ OllamaChat.Crowd.OpenCallPhrases = "anyone|anybody|any1|ne1|anyone else|anybody 
 #        A line made only of these words is an acknowledgement (see
 #        AckReplyChance). Single words, separated by |; a trailing * matches
 #        any word starting with it.
-OllamaChat.Crowd.AckWords = "ty|thx|thnx|thanks|thank|tyvm|tysm|you|u|all|ok|okay|okey|k|kk|np|yw|lol*|lool*|lmao*|lmfao*|rofl*|haha*|hehe*|xd*|gg|wp|brb|afk|bbl|bye|cya|nice|cool|yes|yeah|ya|yep|yup|no|nah|nope|ah|oh|hmm*|same|true|rip|oof|gz|grats|gratz|grz|man|mate|bro|dude|guys|everyone|everybody|yall|folks"
+OllamaChat.Crowd.AckWords = "ty|thx|thnx|thanks|thank|tyvm|tysm|you|u|all|ok|okay|okey|k|kk|np|yw|lol*|lool*|lmao*|lmfao*|rofl*|haha*|hehe*|xd*|gg|wp|brb|afk|bbl|bye|cya|nice|cool|yes|yeah|ya|yep|yup|no|nah|nope|ah|oh|hmm*|same|true|rip|oof|gz|grats|gratz|grz|man|mate|bro|dude|guys|everyone|everybody|yall|folks|cheers|ta|tyty|m8|lads|lad|appreciate*|appreciated"
 
 #    OllamaChat.Crowd.PlayfulPersonalities
 #        Personality keys that count as playful when a crowd mixes voices;
@@ -1798,7 +1840,7 @@ OllamaChat.Conversation.AllowSay = 1
 #        front -- "[80] ...", "[70+] ...", "[10-29] ..." -- means only bots
 #        of those levels bring it up (Outlook.Enable = 1); the tag is never
 #        shown to the model. No tag: any level.
-OllamaChat.Conversation.Premises = "which class is the most overpowered right now|whether death knights ruined everything now that every other player is one|[70+] the best tank class for heroics|whether ret paladins need a nerf|[15+] the worst wipe you ever had in a dungeon|[15+] a ninja looter who rolled need on everything in a pug|whether vanilla was better than Wrath|[75+] Wintergrasp and who keeps winning it|the best profession for making gold|[60+] whether epic flying is worth the gold|the coolest looking mount in the game|the funniest hunter pet name you have seen|whether Arthas was always evil|whether Illidan was right all along|[80] the hardest boss in Naxxramas|[80] getting into Ulduar runs without much gear|what everyone is farming right now|the most pointless achievement|where Mankrik's wife could be|[68+] the best place to level from 70 to 80|how expensive the auction house has got|[60+] the old raid you miss most|guild drama|would you rather fight one huge murloc or a hundred tiny ones|the cutest companion pet|[75+] whether the Lich King fight will be any good|[15+] people who stand in fire|what you do on long flight paths|a name for a new alt|fishing: relaxing or the most boring thing in the game|[77+] the Argent Tournament dailies|whether gnomes or goblins make better engineers|[10+] whether {other_faction} is winning more battlegrounds lately|[80] a heroic you want a group for|the best food and drink in {zone}|[1-19] which starting zone is the best|[10-29] the elite around here that keeps killing people|[15-39] the first dungeon you ever ran|[20-59] the most annoying levelling zone|[58-69] how crowded Hellfire Peninsula gets"
+OllamaChat.Conversation.Premises = "which class is the most overpowered right now|whether death knights ruined everything now that every other player is one|[70+] the best tank class for heroics|whether ret paladins need a nerf|[15+] the worst wipe you ever had in a dungeon|[15+] a ninja looter who rolled need on everything in a pug|[75+] Wintergrasp and who keeps winning it|the best profession for making gold|[60+] whether epic flying is worth the gold|the coolest looking mount in the game|the funniest hunter pet name you have seen|whether Arthas was always evil|whether Illidan was right all along|[80] the hardest boss in Naxxramas|[80] getting into Ulduar runs without much gear|what everyone is farming right now|the most pointless achievement|where Mankrik's wife could be|[68+] the best place to level from 70 to 80|how expensive the auction house has got|guild drama|would you rather fight one huge murloc or a hundred tiny ones|the cutest companion pet|[75+] whether the Lich King fight will be any good|[15+] people who stand in fire|what you do on long flight paths|a name for a new alt|fishing: relaxing or the most boring thing in the game|[77+] the Argent Tournament dailies|whether gnomes or goblins make better engineers|[10+] whether {other_faction} is winning more battlegrounds lately|[80] a heroic you want a group for|the best food and drink in {zone}|[1-19] which starting zone is the best|[10-29] the elite around here that keeps killing people|[15-39] the first dungeon you ever ran|[20-59] the most annoying levelling zone|[58-69] how crowded Hellfire Peninsula gets"
 
 #    OllamaChat.Conversation.HintTurn
 #    OllamaChat.Conversation.HintJoin

@@ -510,6 +510,24 @@ namespace
             c.text = plain;
         }
 
+        // "just some cave mobs kid": nobody here calls anyone kid.
+        if (!g_ResponseDropVocatives.empty())
+        {
+            const std::string kept = TextRules::StripVocatives(c.text, g_ResponseDropVocatives);
+            if (kept.empty())
+            {
+                ++g_droppedEmpty;
+                if (g_DebugEnabled)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} reply was only a form of address: '{}'",
+                             bot->GetName(), c.text);
+                return;
+            }
+            if (g_DebugEnabled && kept != c.text)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} form of address dropped: '{}' -> '{}'",
+                         bot->GetName(), c.text, kept);
+            c.text = kept;
+        }
+
         // Only the player who levelled says ding.
         if (c.request.noSelfDing && TextRules::IsSelfDing(c.text))
         {
@@ -541,6 +559,7 @@ namespace
                              bot->GetName(),
                              verdict == PhraseCheck::OffEra   ? "not in Wrath:"
                            : verdict == PhraseCheck::OffLevel ? "not at its level:"
+                           : verdict == PhraseCheck::Rare     ? "hobby horse said lately:"
                                                               : "said lately:",
                              which, c.text);
                 return;

@@ -86,6 +86,21 @@ static void HandleCrowdBotLine(Player* bot, const std::string& msg,
                                const std::vector<Player*>& candidates,
                                uint8_t chainDepth, uint64_t crowdPlanId);
 
+// Does the line thank someone ("ty", "cheers", "thank you")?
+static bool OllamaHasThanksWord(const std::string& msg)
+{
+    return !g_CrowdThanksWords.empty() &&
+           CrowdText::ContainsPhrase(CrowdText::Words(Context_CleanText(msg)), g_CrowdThanksWords);
+}
+
+// Is it nothing but thanks ("ty", "cheers mate", "thanks Zonin")? `names`
+// are left out, so naming who is thanked does not change that.
+static bool OllamaIsThanksOnly(const std::string& msg, const std::vector<std::string>& names)
+{
+    return OllamaHasThanksWord(msg) &&
+           CrowdText::Classify(Context_CleanText(msg), g_CrowdAckWords, g_CrowdOpenCallPhrases, names).ack;
+}
+
 // Position of botName inside msg as a whole word, or npos. Case-insensitive.
 // Hoisted out of ProcessChat because being named is also what makes a message
 // direct address, which the governor needs to know.
@@ -1614,6 +1629,16 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
                 notEligibleCount, ChatChannelSourceLocalStr[sourceLocal]);
     }
 
+    // A whispered thank-you on its own needs no answer: it is said and done.
+    if (!senderIsBot && sourceLocal == SRC_WHISPER_LOCAL && receiver &&
+        OllamaIsThanksOnly(msg, { receiver->GetName() }) && urand(0, 99) >= g_CrowdThanksReplyChance)
+    {
+        if (g_DebugEnabled)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] {} only said thanks to {}; no reply.",
+                     player->GetName(), receiver->GetName());
+        return;
+    }
+
     // Crowd replies: the line gets a planned set of answers, typed one after
     // another by different bots, instead of an independent roll per listening
     // bot capped at MaxBotsToPick. Whispers keep the path below: a whisper
@@ -2383,6 +2408,7 @@ namespace
             case CrowdLineKind::Conversation: return "conversation";
             case CrowdLineKind::Command:      return "instruction";
             case CrowdLineKind::Favor:        return "favour";
+            case CrowdLineKind::Order:        return "order";
         }
         return "?";
     }
@@ -2509,8 +2535,10 @@ static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
     if (ack)
     {
         // At most the bot it was aimed at, and often nobody: "ty" is not a
-        // conversation starter.
-        if (fixed.empty() || urand(0, 99) >= g_CrowdAckReplyChance)
+        // conversation starter. A thank-you gets nobody at all
+        // (Crowd.ThanksReplyChance): "grats" -> "ty" is finished.
+        const uint32_t chance = OllamaHasThanksWord(msg) ? g_CrowdThanksReplyChance : g_CrowdAckReplyChance;
+        if (fixed.empty() || urand(0, 99) >= chance)
             return;
         fixed.resize(1);
         kind  = CrowdLineKind::Aimed;
@@ -3195,6 +3223,14 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     const std::string runState = PartyCmd_RunStateFor(bot, source);
     if (!runState.empty())
         prompt += " " + runState;
+
+    // A dead bot knows it is dead, so "respawn ffs" is about it.
+    if (bot->isDead())
+    {
+        const std::string& state = bot->HasPlayerFlag(PLAYER_FLAGS_GHOST) ? g_StateGhostText : g_StateDeadText;
+        if (!state.empty())
+            prompt += " " + state;
+    }
 
     // What this chat style is told on top of its personality, this time: a
     // nudge on some share of its replies (Personality.Nudge.<KEY>), or that it

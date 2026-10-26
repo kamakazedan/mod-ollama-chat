@@ -495,7 +495,14 @@ faction for quests). Unknown names just lose their brackets. See
 A phrase on `OllamaChat.Response.OverusedPhrases` ("taking forever", "such a
 grind") may be said once per `OverusedCooldownSeconds` across the whole realm;
 a line that would repeat it sooner is dropped. Things that never existed in
-Wrath (`OffEraPhrases`: keystones, transmog, world quests) are never said.
+Wrath (`OffEraPhrases`: keystones, transmog, world quests) are never said. A
+chat style's hobby horse (`RarePhrases`: "40 man", "back in vanilla") gets
+through once an hour, even in a reply owed to someone.
+
+`DropVocatives` takes "kid" out wherever it addresses someone ("just cave mobs
+kid" goes out as "just cave mobs"), and a thank-you on its own ("ty", "cheers
+mate") gets no reply unless it asks something too (`Crowd.ThanksReplyChance`).
+A dead bot is told it is dead, so what it says fits.
 
 ## Food and Water from Mages
 

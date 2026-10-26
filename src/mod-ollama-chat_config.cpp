@@ -338,6 +338,16 @@ std::unordered_map<std::string, PersonalityNudge> g_PersonalityNudges;
 std::unordered_map<std::string, uint32_t>         g_PersonalityMaxReplyLength;
 std::string g_PersonalityLongReplyNote;
 
+std::vector<std::vector<std::string>> g_ResponseDropVocatives;
+std::vector<std::vector<std::string>> g_ResponseRarePhrases;
+uint32_t    g_ResponseRareCooldownSeconds  = 3600;
+std::vector<std::vector<std::string>> g_CrowdThanksWords;
+uint32_t    g_CrowdThanksReplyChance       = 0;
+std::string g_StateDeadText;
+std::string g_StateGhostText;
+bool        g_OrdersEnable                 = true;
+TextRules::BotCommandRules g_OrdersRules;
+
 // --------------------------------------------
 // Topic engine
 // --------------------------------------------
@@ -838,13 +848,12 @@ static void LoadNaturalChatV4Settings()
         "which class is the most overpowered right now|whether death knights ruined everything now that every "
         "other player is one|[70+] the best tank class for heroics|whether ret paladins need a nerf|[15+] the "
         "worst wipe you ever had in a dungeon|[15+] a ninja looter who rolled need on everything in a pug|"
-        "whether vanilla was better than Wrath|[75+] Wintergrasp and who keeps winning it|the best profession "
+        "[75+] Wintergrasp and who keeps winning it|the best profession "
         "for making gold|[60+] whether epic flying is worth the gold|the coolest looking mount in the game|the "
         "funniest hunter pet name you have seen|whether Arthas was always evil|whether Illidan was right all "
         "along|[80] the hardest boss in Naxxramas|[80] getting into Ulduar runs without much gear|what everyone "
         "is farming right now|the most pointless achievement|where Mankrik's wife could be|[68+] the best place "
-        "to level from 70 to 80|how expensive the auction house has got|[60+] the old raid you miss most|guild "
-        "drama|would you rather fight one huge murloc or a hundred tiny ones|the cutest companion pet|[75+] "
+        "to level from 70 to 80|how expensive the auction house has got|guild drama|would you rather fight one huge murloc or a hundred tiny ones|the cutest companion pet|[75+] "
         "whether the Lich King fight will be any good|[15+] people who stand in fire|what you do on long flight "
         "paths|a name for a new alt|fishing: relaxing or the most boring thing in the game|[77+] the Argent "
         "Tournament dailies|whether gnomes or goblins make better engineers|[10+] whether {other_faction} is "
@@ -1080,6 +1089,115 @@ static void LoadNaturalChatV6Settings()
              "trades open {} s).",
              g_ConjureEnable ? "on" : "off", g_ConjureStacks, g_ConjureMaxStacks,
              g_ConjureUseMana ? "used" : "free", g_ConjureWaitSeconds, g_ConjureTradeSeconds);
+}
+
+static void LoadNaturalChatV7Settings()
+{
+    auto phrases = [](const char* key, const char* def)
+    {
+        return CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(key, def));
+    };
+
+    // --- replies --------------------------------------------------------------
+    g_ResponseDropVocatives = phrases("OllamaChat.Response.DropVocatives", "kid|kiddo");
+    g_ResponseRarePhrases = phrases("OllamaChat.Response.RarePhrases",
+        "40 man|40man|forty man|40 mans|old school|back in vanilla|back in the day|the old days|old days|"
+        "good old days|vanilla days|miss vanilla|miss the old|used to be better|way more epic back");
+    g_ResponseRareCooldownSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Response.RareCooldownSeconds", 3600);
+
+    // --- thanks -----------------------------------------------------------------
+    g_CrowdThanksWords = phrases("OllamaChat.Crowd.ThanksWords",
+        "ty|thx|thnx|thanks|thank|tyvm|tysm|tyty|ta|cheers|appreciate*|appreciated");
+    g_CrowdThanksReplyChance = std::min<uint32_t>(100,
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.ThanksReplyChance", 0));
+
+    // --- a dead bot knows it is dead -------------------------------------------------
+    g_StateDeadText = sConfigMgr->GetOption<std::string>("OllamaChat.State.Dead",
+        "Right now you are dead: you died and are lying where you fell.");
+    g_StateGhostText = sConfigMgr->GetOption<std::string>("OllamaChat.State.Ghost",
+        "Right now you are dead: you released your spirit and are running back to your body as a ghost.");
+
+    // --- orders in plain words ---------------------------------------------------
+    auto orders = [](const char* key, const char* def)
+    {
+        return TextRules::ParseCommandPhrases(sConfigMgr->GetOption<std::string>(key, def));
+    };
+    using TextRules::BotIntent;
+    auto slot = [](BotIntent i) -> std::vector<TextRules::CommandPhrase>&
+    {
+        return g_OrdersRules.phrases[static_cast<size_t>(i)];
+    };
+
+    g_OrdersEnable = sConfigMgr->GetOption<bool>("OllamaChat.Orders.Enable", true);
+    slot(BotIntent::Stay) = orders("OllamaChat.Orders.Stay",
+        "=stay|=hold|stay here|stay there|stay back|stay put|stay behind|stay where you are|stay where u are|"
+        "stay right there|stay right here|wait here|wait there|wait right here|wait right there|wait back|"
+        "wait for me|wait for me here|wait for me there|hold here|hold there|hold position|hold your position|hold up here|"
+        "stand here|stand there|stand still|stand back|dont move|do not move|stop following|quit following|"
+        "hang back|camp here|park here|park up");
+    slot(BotIntent::Follow) = orders("OllamaChat.Orders.Follow",
+        "=follow|follow me|follow us|come with me|come with us|come w me|=with me|=on me|come here|"
+        "come over here|=over here|get over here|come back|come back here|come to me|regroup|regroup on me|"
+        "=this way|move out|lets move|keep up|catch up|follow again|start following|you can follow|"
+        "come along|tag along|stick with me|stay with me|stay close|stay close to me");
+    slot(BotIntent::Attack) = orders("OllamaChat.Orders.Attack",
+        "attack|attack my target|attack that|attack it|attack him|attack her|attack them|attack this|kill it|"
+        "kill that|kill him|kill her|kill them|kill this|kill my target|get him|get her|"
+        "focus my target|focus that|focus it|focus him|focus her|assist me|dps that|dps it|nuke it|nuke that|"
+        "burn it|burn that|take it down|take that down");
+    slot(BotIntent::Flee) = orders("OllamaChat.Orders.Flee",
+        "=run|=run run|run away|flee|retreat|fall back|get out|get out of there|get out of here|back off|abort|leg it|"
+        "scatter");
+    slot(BotIntent::Revive) = orders("OllamaChat.Orders.Revive",
+        "release|=res|=rez|res up|rez up|respawn|=spawn|run back|run back here|corpse run|get up|get back up|"
+        "come back to life|=revive|revive yourself|resurrect|back to your body|go get your body|"
+        "get your corpse");
+    slot(BotIntent::Trade) = orders("OllamaChat.Orders.Trade",
+        "=trade|trade me|come trade me|come trade|open trade|open a trade|lets trade|trade with me|"
+        "come and trade|come and trade me|come over and trade");
+    slot(BotIntent::Hearth) = orders("OllamaChat.Orders.Hearth",
+        "hearth|hearth out|hearth home|hearth back|use your hearth|use your hearthstone|use your hs|use hearth|"
+        "use hearthstone|=hs|hs out|hs home|hearthstone out");
+    slot(BotIntent::Unstuck) = orders("OllamaChat.Orders.Unstuck",
+        "unstuck|use unstuck|use the unstuck|get unstuck|unstuck yourself|youre stuck|ur stuck|you are stuck|"
+        "youre stuck in|ur stuck in|you are stuck in|youre stuck on|ur stuck on|stuck again");
+    slot(BotIntent::Buff) = orders("OllamaChat.Orders.Buff",
+        "=buff|=buffs|buff me|buff us|rebuff|need buffs|buff up|buff everyone|buff the group|"
+        "can i get a buff|can i get buffs");
+    slot(BotIntent::Pull) = orders("OllamaChat.Orders.Pull",
+        "=pull|pull it|pull that|pull them|you can pull|pull when ready|start pulling|tank pull|pull the next|"
+        "pull next");
+    slot(BotIntent::Leave) = orders("OllamaChat.Orders.Leave",
+        "leave the group|leave group|leave the party|leave party|you can leave|you can leave now|drop group|"
+        "drop party");
+    g_OrdersRules.fillers = phrases("OllamaChat.Orders.Fillers",
+        "pls|plz|please|pleas|plox|now|right now|here|there|then|again|quick|quickly|asap|for now|for a sec|"
+        "a sec|for a second|a second|a moment|for a moment|a minute|for a minute|a bit|for a bit|ok|okay|k|kk|"
+        "alright|right|yeah|yes|you|u|ya|ye|mate|m8|buddy|man|dude|bro|hun|hon|thanks|ty|cheers|too|"
+        "as well|also|just|real quick|rq|lol|go|ahead|go ahead|the|a");
+    g_OrdersRules.polite = phrases("OllamaChat.Orders.Polite",
+        "can you|can u|could you|could u|would you|would u|will you|will u|can ya|could ya|pls|plz|please|"
+        "do you mind|would you mind|mind|wanna");
+    g_OrdersRules.everyone = phrases("OllamaChat.Orders.Everyone",
+        "everyone|everybody|every1|evry1|all|yall|you all|u all|guys|you guys|u guys|team|group|lads|people|"
+        "ppl|folks|party|squad");
+    g_OrdersRules.negations = phrases("OllamaChat.Orders.Negations",
+        "dont|do not|didnt|doesnt|never|no need to|no need|not|stop|quit|nah|nope");
+    g_OrdersRules.questions = phrases("OllamaChat.Orders.Questions",
+        "why|where|what|when|how|who|whos|whats|wheres|hows|whys|should|shall|are|is|do|does|did|was|were|"
+        "have|has|wonder");
+    g_OrdersRules.conditions = phrases("OllamaChat.Orders.Conditions",
+        "if|unless|whenever|once|incase|in case");
+    g_OrdersRules.separators = phrases("OllamaChat.Orders.Separators",
+        "and|while|whilst|till|until|then|but|so|cause|cuz|coz|because|bc|or");
+    g_OrdersRules.maxWords = sConfigMgr->GetOption<uint32_t>("OllamaChat.Orders.MaxWords", 14);
+    g_OrdersRules.maxStray = sConfigMgr->GetOption<uint32_t>("OllamaChat.Orders.MaxStray", 1);
+
+    LOG_INFO("module.ollamachat",
+             "[Ollama Chat] Replies: {} word(s) dropped as forms of address, {} rare phrase(s) once per {} s; "
+             "thank-yous answered {}% of the time.",
+             g_ResponseDropVocatives.size(), g_ResponseRarePhrases.size(), g_ResponseRareCooldownSeconds,
+             g_CrowdThanksReplyChance);
 }
 
 void LoadPersonalityExtras()
@@ -1530,7 +1648,7 @@ void LoadOllamaChatConfig()
         "ty|thx|thnx|thanks|thank|tyvm|tysm|you|u|all|ok|okay|okey|k|kk|np|yw|lol*|lool*|lmao*|"
         "lmfao*|rofl*|haha*|hehe*|xd*|gg|wp|brb|afk|bbl|bye|cya|nice|cool|yes|yeah|ya|yep|"
         "yup|no|nah|nope|ah|oh|hmm*|same|true|rip|oof|gz|grats|gratz|grz|man|mate|bro|dude|"
-        "guys|everyone|everybody|yall|folks";
+        "guys|everyone|everybody|yall|folks|cheers|ta|tyty|m8|lads|lad|appreciate*|appreciated";
     static const char* kDefaultPlayful =
         "NAT_JOKER|NAT_TROLL|NAT_CONTRARIAN|NAT_REACTOR|NAT_HYPE|NAT_BANTER|NAT_DEADPAN|"
         "NAT_EXCITABLE|NAT_GRUMBLER|NAT_PRANKSTER|NAT_GOSSIP|NAT_PVPER|NAT_BINGER|NAT_BUTTERFLY";
@@ -1588,6 +1706,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV4Settings();
     LoadNaturalChatV5Settings();
     LoadNaturalChatV6Settings();
+    LoadNaturalChatV7Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);
