@@ -400,8 +400,10 @@ namespace
                     WatchFlee(p.bot, p.player);
 
                 // Playerbots' own reading of the line may come after ours yet
-                // (a bot busy casting): look again, and put it right again.
-                if (known && p.checks > 0)
+                // (a bot busy casting): look again, and put it right again --
+                // not in a dungeon-clear run, whose healer may be on a stay of
+                // the run's own by then.
+                if (known && p.checks > 0 && !Revive_RunDecides(bot))
                 {
                     Pending again = p;
                     again.recheck = true;
@@ -852,7 +854,7 @@ void Orders_Update(uint32_t /*diff*/)
             {
                 // Not carried out yet (that is the bot's next AI tick), or over:
                 // told to follow, stay or fight since, which took it off.
-                if (it->second.passive || now - it->second.since > std::chrono::seconds(10))
+                if (it->second.passive || now - it->second.since > std::chrono::seconds(30))
                     it = g_flees.erase(it);
                 else
                     ++it;
