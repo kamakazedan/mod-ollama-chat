@@ -98,7 +98,10 @@ namespace
                 ++g_stats.assigned;
             }
         }
-        if (g_MarksAddCcStrategy && HasCcStrategy(cls) && !ai->HasStrategy("cc", BOT_STATE_COMBAT))
+        // Never for a tank: a bear dropping out of form to hibernate something
+        // is why playerbots leaves crowd control off for them.
+        if (g_MarksAddCcStrategy && HasCcStrategy(cls) && !PlayerbotAI::IsTank(bot) &&
+            !ai->HasStrategy("cc", BOT_STATE_COMBAT))
             ai->ChangeStrategy("+cc", BOT_STATE_COMBAT);
     }
 

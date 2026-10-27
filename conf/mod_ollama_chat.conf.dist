@@ -2734,7 +2734,8 @@ OllamaChat.Marks.ClassIcons = "mage:moon, rogue:star, priest:circle, warlock:dia
 
 #    OllamaChat.Marks.AddCcStrategy
 #        Turn playerbots' crowd-control strategy on for those classes when a
-#        bot lacks it.
+#        bot lacks it -- never for a tank, which would drop out of bear form
+#        to do it.
 #        Default: 1
 OllamaChat.Marks.AddCcStrategy = 1
 
