@@ -126,7 +126,8 @@ namespace
     // How many of the dungeon's bosses are down, and how many the run still
     // means to kill (not the ones it skips). The run's own values: LazyGet only
     // computes one that never has been, and mod-dungeon-clear refreshes them
-    // itself while the run is on.
+    // itself while the run is on. A list from the last dungeon this bot was in
+    // is worked out again, once, for the copy it is in now.
     void BossCounts(Player* owner, AiObjectContext* ctx, uint32_t& killed, uint32_t& left)
     {
         killed = left = 0;
@@ -135,6 +136,15 @@ namespace
         auto* value = ctx->GetValue<std::vector<DungeonBossInfo>>(DcKey::DungeonBosses);
         if (!value)
             return;
+        static std::unordered_map<uint64_t, uint32_t> listFor;   // bot -> instance its list is for
+        if (listFor.size() > 5000)
+            listFor.clear();
+        uint32_t& instance = listFor[owner->GetGUID().GetRawValue()];
+        if (instance != owner->GetInstanceId())
+        {
+            value->Reset();
+            instance = owner->GetInstanceId();
+        }
         InstanceScript const* inst = owner->GetInstanceScript();
         const uint32_t mask = inst ? inst->GetCompletedEncounterMask() : 0u;
         static const std::unordered_set<uint32> noneSkipped;

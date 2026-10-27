@@ -1193,7 +1193,7 @@ static void LoadNaturalChatV7Settings()
         "use hearthstone|=hs|hs out|hs home|hearthstone out");
     slot(BotIntent::Unstuck) = orders("OllamaChat.Orders.Unstuck",
         "unstuck|use unstuck|use the unstuck|get unstuck|unstuck yourself|youre stuck|ur stuck|you are stuck|"
-        "youre stuck in|ur stuck in|you are stuck in|youre stuck on|ur stuck on|stuck again");
+        "youre stuck in|ur stuck in|you are stuck in|youre stuck on|ur stuck on");
     slot(BotIntent::Buff) = orders("OllamaChat.Orders.Buff",
         "=buff|=buffs|buff me|buff us|rebuff|need buffs|buff up|buff everyone|buff the group|"
         "can i get a buff|can i get buffs");
@@ -1223,6 +1223,8 @@ static void LoadNaturalChatV7Settings()
         "if|unless|whenever|once|incase|in case");
     g_OrdersRules.separators = phrases("OllamaChat.Orders.Separators",
         "and|while|whilst|till|until|then|but|so|cause|cuz|coz|because|bc|or");
+    g_OrdersRules.subjects = phrases("OllamaChat.Orders.Subjects",
+        "i|im|ill|ive|id|imma|ima|gonna|gotta|we|weve|wed|he|hes|she|shes|they|theyre|theyll|theyve");
     g_OrdersRules.maxWords = sConfigMgr->GetOption<uint32_t>("OllamaChat.Orders.MaxWords", 14);
     g_OrdersRules.maxStray = sConfigMgr->GetOption<uint32_t>("OllamaChat.Orders.MaxStray", 1);
 

@@ -634,7 +634,14 @@ namespace TextRules
                     ++stray;
             }
             if (!pauseOutside && stray <= rules.resumeMaxStray)
+            {
+                // "im ready now", "good to go": a start as well, and a start
+                // carries on a paused run too, where a resume alone would be
+                // no use to a run that has not begun.
+                if (MatchesAny(words, rules.start) && !CrowdText::ContainsPhrase(words, rules.negations))
+                    return PartyIntent::Start;
                 return PartyIntent::Resume;
+            }
         }
 
         if (pause && !MatchesAny(words, rules.cancel) && !NegatedOutside(words, covered, rules.negations))
@@ -1052,6 +1059,13 @@ namespace TextRules
             // negation inside the phrase is the instruction ("dont move"); a
             // "no" up front is emphasis ("no, stay here").
             if (NegatedOutside(words, bestCov, rules.negations))
+                continue;
+
+            // Who does it, when it is not the bots: the speaker ("ill wait
+            // here", "gonna hearth") or someone else ("they attack"). Asking
+            // for buffs or a trade is still asking ("i need buffs", "can i get
+            // a buff").
+            if (best != BotIntent::Buff && best != BotIntent::Trade && outside(rules.subjects))
                 continue;
 
             uint32_t stray = 0;

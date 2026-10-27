@@ -569,12 +569,14 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              conjure.pending);
 
     const OrdersStats orders = Orders_GetStats();
-    handler->PSendSysMessage("Orders: {} - {} given, {} commands sent, {} playerbots had already, {} could not, "
-                             "{} trades offered, {} unstuck, {} playerbots commands left alone",
+    handler->PSendSysMessage("Orders: {} - {} given, {} commands sent, {} playerbots had already, {} put right "
+                             "after playerbots read them otherwise, {} could not, {} trades offered, {} unstuck, "
+                             "{} playerbots commands left alone",
                              g_OrdersEnable ? "on" : "off",
                              (unsigned long long)orders.orders,
                              (unsigned long long)orders.sent,
                              (unsigned long long)orders.already,
+                             (unsigned long long)orders.redone,
                              (unsigned long long)orders.refused,
                              (unsigned long long)orders.trades,
                              (unsigned long long)orders.unstuck,

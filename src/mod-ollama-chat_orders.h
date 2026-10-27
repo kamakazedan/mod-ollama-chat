@@ -64,6 +64,7 @@ struct OrdersStats
     uint64_t orders  = 0;   // lines that were orders
     uint64_t sent    = 0;   // commands sent to bots
     uint64_t already = 0;   // playerbots was carrying it out already
+    uint64_t redone  = 0;   // sent again: playerbots' own reading of the line came after ours
     uint64_t refused = 0;   // could not: dead, nothing targeted, no hearthstone, ...
     uint64_t trades  = 0;   // trade windows offered
     uint64_t unstuck = 0;

@@ -23,10 +23,11 @@
 // it (OllamaChat.Marks.SapStar).
 //
 // While someone in the group is marking (a mark changed in the last few
-// minutes that this did not make), the skull moves on by itself: to the cross
-// when the skull dies, else to the nearest mob still fighting the group that
+// minutes that this did not make), the skull moves on by itself when its mob
+// dies: to the cross, else to the nearest mob still fighting the group that
 // nobody marked to control (OllamaChat.Marks.AutoSkull), so the bots finish
-// the loose mobs before breaking anything that is controlled.
+// the loose mobs before breaking anything that is controlled. Only ever onto
+// a mob in the fight already: a cross on the next pack waits for its skull.
 //
 // World thread only.
 // --------------------------------------------------------------------------

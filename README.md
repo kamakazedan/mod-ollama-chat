@@ -541,10 +541,12 @@ whisper, and the one it was for does it and says so in its own words:
 | "Joanni leave the group" | leave |
 
 Name a bot ("Zonin stay", "Frostiq and Zonin wait here") to order only that
-one; otherwise every bot that takes orders from you does it. Questions,
-negations and conditions are not orders ("should we wait here?", "dont stay
-here", "if it runs, kill it"), and neither is talk that only mentions one ("we
-should stay here and fight"). Nothing is ever summoned. See
+one; otherwise every bot that takes orders from you does it. Hearth needs a
+name, a whisper or "everyone". Questions, negations and conditions are not
+orders ("should we wait here?", "dont stay here", "if it runs, kill it"), and
+neither is talk that only mentions one ("we should stay here and fight") or
+is about you or someone else ("ill wait here", "gonna hearth"). Nothing is
+ever summoned. See
 `OllamaChat.Orders.*`. When a dungeon-clear run starts or carries on, any bot
 still told to stay comes along.
 
@@ -559,8 +561,8 @@ A bot that dies with nobody alive in the group who can resurrect it releases
 by itself, runs back and gets up -- from a dungeon, the ghost runs from the
 graveyard to the entrance and walks in. With a priest, paladin, shaman or
 druid standing, it waits for the rez. Not in battlegrounds, and not while a
-dungeon-clear run is deciding how to bring its party back. See
-`OllamaChat.Revive.*`.
+dungeon-clear run is deciding how to bring its party back ("res" in a run is
+left to the run too). See `OllamaChat.Revive.*`.
 
 ## Raid Marks
 
@@ -568,8 +570,9 @@ Skull is the kill target and starts the fight; cross is next and becomes the
 skull when the skull dies. Each crowd-control class controls its own mark --
 moon polymorph, diamond banish or fear, triangle hibernate or roots, square
 freezing trap, circle shackle -- and a rogue saps the star before the pull.
-While someone is marking, the skull moves on to the next loose mob by itself.
-See `OllamaChat.Marks.*`.
+While someone is marking, the skull moves on by itself when its mob dies, to
+the cross or the next loose mob, but only onto a mob already in the fight: a
+cross on the next pack waits for its own skull. See `OllamaChat.Marks.*`.
 
 ## Stock Lines, Greetings and the Finish
 
@@ -578,7 +581,8 @@ defaults", "I don't know this dungeon, lead the way!") are muted
 (`OllamaChat.Mute.Patterns`). A bot tank leading a dungeon-clear group says
 to let it know when everyone is ready as the group comes in, and says so when
 every boss is down (`OllamaChat.Party.Greet*`, `Party.Done*`). After a mana
-break, "ok im done", "full" or "done drinking" resumes the run.
+break, "ok im done", "full" or "done drinking" resumes the run; "im ready
+now" starts one too.
 
 ## Per-Style Nudges and Longer Replies
 

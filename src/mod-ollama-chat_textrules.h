@@ -103,7 +103,8 @@ namespace TextRules
     //     unless negated ("not done") or not yet ("almost done"). Only the
     //     caller knows whether the run is paused, which is the only time it
     //     means anything. A pause word inside it ("drinking") is part of it;
-    //     one outside it ("done, wait") makes the line a pause.
+    //     one outside it ("done, wait") makes the line a pause. One that is a
+    //     start too ("im ready now", "good to go") is a start.
     // A pause wins over a start. Lines starting "dc" or "dungeon clear" are left
     // to mod-dungeon-clear.
     PartyIntent MatchPartyIntent(const std::string& cleanText, const PartyRules& rules);
@@ -210,6 +211,7 @@ namespace TextRules
         std::vector<std::vector<std::string>> questions;     // "why", "should", "are": asking, not telling
         std::vector<std::vector<std::string>> conditions;    // "if", "unless", "once": not now
         std::vector<std::vector<std::string>> separators;    // "and", "while", "so": split a line into clauses
+        std::vector<std::vector<std::string>> subjects;      // "ill", "gonna", "they": someone else does it
         uint32_t maxWords = 14;
         uint32_t maxStray = 1;      // words in the clause that are none of the above
     };
@@ -234,8 +236,10 @@ namespace TextRules
     //
     // Not an instruction: one asked rather than told ("should we wait here?",
     // "why are you staying"), negated outside the phrase ("dont stay here",
-    // "no need to wait here"), conditional ("if it runs, kill it"), or a line
-    // whose clauses tell the bots two different things.
+    // "no need to wait here"), conditional ("if it runs, kill it"), the
+    // speaker's own plan or someone else's doing ("ill wait here", "gonna
+    // hearth", "they attack"; asking for buffs or a trade is still asking: "i
+    // need buffs"), or a line whose clauses tell the bots two different things.
     BotCommand MatchBotCommand(const std::string& cleanText, const BotCommandRules& rules,
                                const std::vector<std::string>& names = {});
 

@@ -27,6 +27,12 @@
 
 void Revive_Update(uint32_t diff);
 
+class Player;
+
+// A mod-dungeon-clear run owns this bot's group, so the run decides how its
+// dead come back: nothing else releases them.
+bool Revive_RunDecides(Player* bot);
+
 struct ReviveStats
 {
     uint64_t released = 0;   // told to release, nobody could rez them

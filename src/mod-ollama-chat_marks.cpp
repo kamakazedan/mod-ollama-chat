@@ -8,6 +8,7 @@
 #include "Map.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
+#include "Pet.h"
 #include "Player.h"
 #include "SharedDefines.h"
 #include "SpellInfo.h"
@@ -45,6 +46,7 @@ namespace
         bool              known = false;
         Clock::time_point marking{};    // last change somebody else made
         Clock::time_point lastSeen{};
+        ObjectGuid        liveSkull;    // the skull's mob, last time it was alive
     };
     std::unordered_map<uint32_t, GroupMarks> g_groups;   // by the group's guid counter
 
@@ -118,6 +120,25 @@ namespace
         for (uint8 i = 0; i <= ICON_LAST_CC; ++i)
             if (m.icons[i] == guid)
                 return true;
+        return false;
+    }
+
+    // Is this mob in a fight with someone in the group (or their pet)?
+    bool FightingGroup(Unit* mob, Group* group, Player* ref)
+    {
+        if (!mob->IsInCombat())
+            return false;
+        for (GroupReference* r = group->GetFirstMember(); r; r = r->next())
+        {
+            Player* member = r->GetSource();
+            if (!member || !member->IsInWorld() || member->GetMap() != ref->GetMap())
+                continue;
+            if (mob->IsEngagedBy(member))
+                return true;
+            if (Pet* pet = member->GetPet())
+                if (mob->IsEngagedBy(pet))
+                    return true;
+        }
         return false;
     }
 
@@ -306,10 +327,26 @@ namespace
         if (g_MarksSapStar && !newStar.IsEmpty())
             StartSap(ref, group, newStar, now);
 
-        // The skull moves on while somebody is marking.
-        if (!marking || !ref->IsAlive() || LiveMark(ref, m.icons[ICON_SKULL]))
+        // The skull moves on when its mob dies, while somebody is marking: to
+        // the cross, else to the nearest loose mob -- each only when it is in
+        // the fight already. A cross on the next pack is "that one next", not
+        // "pull it": nothing starts a fight but somebody putting the skull on.
+        if (Unit* skull = LiveMark(ref, m.icons[ICON_SKULL]))
+        {
+            m.liveSkull = skull->GetGUID();
             return;
+        }
+        if (m.liveSkull.IsEmpty())
+            return;
+        Unit* was = ObjectAccessor::GetUnit(*ref, m.liveSkull);
+        const bool died = !was || !was->IsAlive();
+        m.liveSkull.Clear();
+        if (!died || !marking || !ref->IsAlive())
+            return;   // taken off a living mob: theirs to put somewhere
+
         Unit* next = LiveMark(ref, m.icons[ICON_CROSS]);
+        if (next && !FightingGroup(next, group, ref))
+            next = nullptr;
         if (next)
             ++g_stats.moved;
         else if (g_MarksAutoSkull)

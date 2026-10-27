@@ -291,6 +291,11 @@ void Revive_Update(uint32_t diff)
         g_rezCache.clear();
 }
 
+bool Revive_RunDecides(Player* bot)
+{
+    return bot && InDungeonClearRun(bot);
+}
+
 ReviveStats Revive_GetStats()
 {
     return g_stats;

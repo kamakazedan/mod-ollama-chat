@@ -4,6 +4,7 @@
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_governor.h"
+#include "mod-ollama-chat_revive.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
@@ -45,6 +46,13 @@ namespace
 
     // A little inside TRADE_DISTANCE, as for the conjured food and water.
     constexpr float kTradeRange = TRADE_DISTANCE - 1.5f;
+
+    // When playerbots reads a line as another command of its own ("stay close"
+    // is its "stay"), it carries that out in the bot's own AI tick, which comes
+    // round every few hundred milliseconds, later while it casts. Ours goes
+    // this long after, and is looked at again as often after that.
+    constexpr auto kAfterTheirs = std::chrono::milliseconds(1200);
+    constexpr uint8_t kRechecks = 2;
 
     OrdersStats g_stats;
     uint64_t    g_tick = 0;
@@ -247,11 +255,14 @@ namespace
 
     struct Pending
     {
-        uint64_t    bot    = 0;
-        uint64_t    player = 0;
-        BotIntent   intent = BotIntent::None;
-        std::string command;
-        uint64_t    tick   = 0;    // queued in this tick; carried out in a later one
+        uint64_t          bot     = 0;
+        uint64_t          player  = 0;
+        BotIntent         intent  = BotIntent::None;
+        std::string       command;
+        uint64_t          tick    = 0;      // queued in this tick; carried out in a later one
+        Clock::time_point due{};            // and not before this
+        uint8_t           checks  = 0;      // times to look again afterwards
+        bool              recheck = false;  // a look: sent again only when the bot is not doing it
     };
     std::vector<Pending> g_pending;
 
@@ -265,10 +276,49 @@ namespace
 
     struct FleeWatch
     {
-        uint64_t          player = 0;
-        Clock::time_point quietSince{};   // both out of combat since; zero while fighting
+        uint64_t          player  = 0;
+        Clock::time_point since{};          // when they were told
+        Clock::time_point quietSince{};     // both out of combat since; zero while fighting
+        bool              passive = false;  // seen keeping out of fights: the flee has been carried out
     };
     std::unordered_map<uint64_t, FleeWatch> g_flees;
+
+    void WatchFlee(uint64_t bot, uint64_t player)
+    {
+        g_flees[bot] = FleeWatch{ player, Clock::now(), {}, false };
+    }
+
+    // Back to fighting: what playerbots' "flee" put on (keep out of fights, and
+    // follow even in one), taken off again.
+    void EndFlee(PlayerbotAI* ai)
+    {
+        if (ai->HasStrategy("passive", BOT_STATE_NON_COMBAT))
+            ai->ChangeStrategy("-passive", BOT_STATE_NON_COMBAT);
+        if (ai->HasStrategy("passive", BOT_STATE_COMBAT))
+            ai->ChangeStrategy("-passive", BOT_STATE_COMBAT);
+        if (ai->HasStrategy("follow", BOT_STATE_COMBAT))
+            ai->ChangeStrategy("-follow", BOT_STATE_COMBAT);
+    }
+
+    // Is the bot doing it? Only for the orders playerbots' own reading of a
+    // line can undo: a stay and a follow are each other's opposite. `known` is
+    // false for the rest, which are never looked at again.
+    bool Holds(PlayerbotAI* ai, BotIntent intent, bool& known)
+    {
+        known = true;
+        switch (intent)
+        {
+            case BotIntent::Stay:
+                return ai->HasStrategy("stay", BOT_STATE_NON_COMBAT);
+            case BotIntent::Follow:
+                return !ai->HasStrategy("stay", BOT_STATE_NON_COMBAT) && ai->HasStrategy("follow", BOT_STATE_NON_COMBAT);
+            case BotIntent::Flee:
+                return ai->HasStrategy("passive", BOT_STATE_COMBAT);
+            default:
+                known = false;
+                return true;
+        }
+    }
 
     void SendCommand(PlayerbotAI* ai, Player* player, const std::string& command)
     {
@@ -336,13 +386,32 @@ namespace
                     ++g_stats.unstuck;
                 break;
             default:
-                if (!p.command.empty())
-                    SendCommand(ai, player, p.command);
-                if (p.intent == BotIntent::Flee)
-                    g_flees[p.bot] = FleeWatch{ p.player, {} };
-                else if (p.intent == BotIntent::Follow || p.intent == BotIntent::Attack)
-                    g_flees.erase(p.bot);
+            {
+                bool known = false;
+                const bool holds = Holds(ai, p.intent, known);
+                if (!p.recheck || (known && !holds))
+                {
+                    if (!p.command.empty())
+                        SendCommand(ai, player, p.command);
+                    if (p.recheck)
+                        ++g_stats.redone;
+                }
+                if (p.intent == BotIntent::Flee && !p.recheck)
+                    WatchFlee(p.bot, p.player);
+
+                // Playerbots' own reading of the line may come after ours yet
+                // (a bot busy casting): look again, and put it right again.
+                if (known && p.checks > 0)
+                {
+                    Pending again = p;
+                    again.recheck = true;
+                    again.checks  = uint8_t(p.checks - 1);
+                    again.tick    = g_tick;
+                    again.due     = Clock::now() + kAfterTheirs;
+                    g_pending.push_back(std::move(again));
+                }
                 break;
+            }
         }
     }
 
@@ -511,12 +580,21 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
     if (intent == BotIntent::Revive)
     {
         // Only the dead can release: "release the hounds" to a living group is
-        // just chat.
+        // just chat. In a dungeon-clear run the run decides how its dead come
+        // back, and "res" there is as often "heal, res him" as an order.
         for (Player* b : audience.bots)
-            if (b->isDead())
+            if (b->isDead() && !Revive_RunDecides(b))
                 bots.push_back(b);
         if (bots.empty())
             return raw;
+    }
+    else if (intent == BotIntent::Hearth && !audience.named && !order.everyone)
+    {
+        // "hearth", "hs out" said to nobody in particular is as often the
+        // speaker's own plan ("brb hearth") as an order, and an order to hearth
+        // takes every bot out of wherever the group is: by name, whisper or
+        // "everyone" only.
+        return raw;
     }
     else if (OneBotOrder(intent) && !audience.named && audience.bots.size() > 1 &&
              !(intent == BotIntent::Leave && order.everyone))
@@ -616,12 +694,31 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
         g_stats.already += able.size();
     }
 
-    // Carry it out, a tick from now: after playerbots has run its own reading
-    // of the same line, so ours is the one that stands.
+    // A new order for these bots replaces whatever is still to come from an
+    // earlier one: a correction, a flee being waited out -- which ends, so
+    // "run!" and then "attack my target" has them fight again.
+    for (Player* b : able)
+    {
+        const uint64_t guid = b->GetGUID().GetRawValue();
+        g_pending.erase(std::remove_if(g_pending.begin(), g_pending.end(),
+                                       [guid](const Pending& p) { return p.bot == guid; }),
+                        g_pending.end());
+        if (intent != BotIntent::Flee && g_flees.erase(guid))
+            if (PlayerbotAI* ai = AiOf(b))
+                EndFlee(ai);
+    }
+
+    // Carry it out a tick from now -- or, when playerbots read the line as
+    // another command of its own, once that has been carried out -- so ours
+    // is the one that stands.
     for (Player* b : able)
     {
         if (raw)
-            break;
+        {
+            if (intent == BotIntent::Flee)
+                WatchFlee(b->GetGUID().GetRawValue(), player->GetGUID().GetRawValue());
+            continue;
+        }
         PlayerbotAI* ai = AiOf(b);
         if (!ai)
             continue;
@@ -630,9 +727,12 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
         if (intent == BotIntent::Revive && b->HasPlayerFlag(PLAYER_FLAGS_GHOST))
             continue;           // released already, on the way back
 
-        if (!cmd.empty() && OwnCommand(ai, msg) == cmd)
+        const std::string theirs = cmd.empty() ? std::string() : OwnCommand(ai, msg);
+        if (!cmd.empty() && theirs == cmd)
         {
             ++g_stats.already;   // "stay here": playerbots' "stay" is this order
+            if (intent == BotIntent::Flee)
+                WatchFlee(b->GetGUID().GetRawValue(), player->GetGUID().GetRawValue());
             continue;
         }
 
@@ -642,6 +742,11 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
         p.intent  = intent;
         p.command = cmd;
         p.tick    = g_tick;
+        if (!theirs.empty())
+        {
+            p.due    = Clock::now() + kAfterTheirs;
+            p.checks = kRechecks;
+        }
         g_pending.push_back(std::move(p));
     }
 
@@ -673,17 +778,17 @@ void Orders_Update(uint32_t /*diff*/)
 {
     ++g_tick;
 
+    const Clock::time_point now = Clock::now();
+
     if (!g_pending.empty())
     {
         std::vector<Pending> due, later;
         for (Pending& p : g_pending)
-            (p.tick < g_tick ? due : later).push_back(std::move(p));
+            (p.tick < g_tick && now >= p.due ? due : later).push_back(std::move(p));
         g_pending.swap(later);
         for (const Pending& p : due)
             Carry(p);
     }
-
-    const Clock::time_point now = Clock::now();
 
     // Bots walking over to trade.
     for (auto it = g_tradeWalks.begin(); it != g_tradeWalks.end();)
@@ -703,10 +808,25 @@ void Orders_Update(uint32_t /*diff*/)
                     ++g_stats.trades;
                 done = true;
             }
-            else if (!it->second.following)
+            else if (ai->GetMaster() == player)
             {
-                SendCommand(ai, player, "follow");
-                it->second.following = true;
+                if (!it->second.following)
+                {
+                    SendCommand(ai, player, "follow");
+                    it->second.following = true;
+                }
+            }
+            else
+            {
+                // Its group leader, not its master: playerbots' follow would
+                // take it to its master instead. Walked over here, with its
+                // own AI held off meanwhile.
+                ai->SetNextCheckDelay(1000);
+                if (!it->second.following || !bot->isMoving())
+                {
+                    bot->GetMotionMaster()->MoveFollow(player, 2.0f, bot->GetFollowAngle());
+                    it->second.following = true;
+                }
             }
         }
         it = done ? g_tradeWalks.erase(it) : std::next(it);
@@ -723,11 +843,22 @@ void Orders_Update(uint32_t /*diff*/)
             Player* bot = Find(it->first);
             Player* player = Find(it->second.player);
             PlayerbotAI* ai = AiOf(bot);
-            if (!bot || !player || !ai || !ai->HasStrategy("passive", BOT_STATE_COMBAT))
+            if (!bot || !player || !ai)
             {
                 it = g_flees.erase(it);
                 continue;
             }
+            if (!ai->HasStrategy("passive", BOT_STATE_COMBAT))
+            {
+                // Not carried out yet (that is the bot's next AI tick), or over:
+                // told to follow, stay or fight since, which took it off.
+                if (it->second.passive || now - it->second.since > std::chrono::seconds(10))
+                    it = g_flees.erase(it);
+                else
+                    ++it;
+                continue;
+            }
+            it->second.passive = true;
             if (bot->IsInCombat() || player->IsInCombat() || !bot->IsAlive())
             {
                 it->second.quietSince = {};
@@ -738,7 +869,7 @@ void Orders_Update(uint32_t /*diff*/)
                 it->second.quietSince = now;
             if (now - it->second.quietSince >= std::chrono::seconds(g_OrdersFleeRecoverSeconds))
             {
-                SendCommand(ai, player, "follow");
+                EndFlee(ai);
                 it = g_flees.erase(it);
                 continue;
             }
