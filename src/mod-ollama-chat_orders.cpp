@@ -271,6 +271,7 @@ namespace
         uint64_t          player = 0;
         Clock::time_point until;
         bool              following = false;
+        Clock::time_point nextMove{};   // walking it over ourselves: when to send it on again
     };
     std::unordered_map<uint64_t, TradeWalk> g_tradeWalks;
 
@@ -387,6 +388,11 @@ namespace
                 break;
             default:
             {
+                // A dungeon-clear run that has started since leaves its party's
+                // stays and follows to the run: its healer may be on a stay of
+                // the run's own by now.
+                if (p.recheck && Revive_RunDecides(bot))
+                    break;
                 bool known = false;
                 const bool holds = Holds(ai, p.intent, known);
                 if (!p.recheck || (known && !holds))
@@ -400,9 +406,7 @@ namespace
                     WatchFlee(p.bot, p.player);
 
                 // Playerbots' own reading of the line may come after ours yet
-                // (a bot busy casting): look again, and put it right again --
-                // not in a dungeon-clear run, whose healer may be on a stay of
-                // the run's own by then.
+                // (a bot busy casting): look again, and put it right again.
                 if (known && p.checks > 0 && !Revive_RunDecides(bot))
                 {
                     Pending again = p;
@@ -571,6 +575,13 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
     const TextRules::BotCommand order = TextRules::MatchBotCommand(Context_CleanText(said), g_OrdersRules, names);
     if (order.intent == BotIntent::None)
     {
+        // "flee to the door" is no order here, but it is playerbots' own
+        // "flee" all the same: waited out too, or those bots keep out of
+        // fights for good.
+        for (Player* b : audience.bots)
+            if (PlayerbotAI* ai = AiOf(b))
+                if ((raw ? ParsedCommand(ai, said) : OwnCommand(ai, said)) == CommandFor(BotIntent::Flee))
+                    WatchFlee(b->GetGUID().GetRawValue(), player->GetGUID().GetRawValue());
         if (raw)
             ++g_stats.raw;
         return raw;
@@ -705,9 +716,18 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
         g_pending.erase(std::remove_if(g_pending.begin(), g_pending.end(),
                                        [guid](const Pending& p) { return p.bot == guid; }),
                         g_pending.end());
-        if (intent != BotIntent::Flee && g_flees.erase(guid))
-            if (PlayerbotAI* ai = AiOf(b))
-                EndFlee(ai);
+        if (intent != BotIntent::Flee)
+        {
+            auto watch = g_flees.find(guid);
+            if (watch != g_flees.end())
+            {
+                // Only what the flee put on: one not carried out yet put nothing on.
+                if (watch->second.passive)
+                    if (PlayerbotAI* ai = AiOf(b))
+                        EndFlee(ai);
+                g_flees.erase(watch);
+            }
+        }
     }
 
     // Carry it out a tick from now -- or, when playerbots read the line as
@@ -799,7 +819,7 @@ void Orders_Update(uint32_t /*diff*/)
         Player* player = Find(it->second.player);
         PlayerbotAI* ai = AiOf(bot);
         bool done = !bot || !player || !ai || now >= it->second.until || !bot->IsAlive() || !player->IsAlive() ||
-                    !bot->IsInWorld() || !player->IsInWorld() || bot->GetMapId() != player->GetMapId();
+                    !bot->IsInWorld() || !player->IsInWorld() || bot->GetMap() != player->GetMap();
         if (!done && !bot->IsInCombat() && !player->IsInCombat())
         {
             if (bot->GetTrader() == player)
@@ -824,10 +844,11 @@ void Orders_Update(uint32_t /*diff*/)
                 // take it to its master instead. Walked over here, with its
                 // own AI held off meanwhile.
                 ai->SetNextCheckDelay(1000);
-                if (!it->second.following || !bot->isMoving())
+                if (now >= it->second.nextMove && (!it->second.following || !bot->isMoving()))
                 {
                     bot->GetMotionMaster()->MoveFollow(player, 2.0f, bot->GetFollowAngle());
                     it->second.following = true;
+                    it->second.nextMove  = now + std::chrono::seconds(1);
                 }
             }
         }
@@ -845,8 +866,16 @@ void Orders_Update(uint32_t /*diff*/)
             Player* bot = Find(it->first);
             Player* player = Find(it->second.player);
             PlayerbotAI* ai = AiOf(bot);
-            if (!bot || !player || !ai)
+            if (!bot || !ai)
             {
+                it = g_flees.erase(it);
+                continue;
+            }
+            if (!player)
+            {
+                // Whoever said to run has gone: the bot fights again.
+                if (it->second.passive && ai->HasStrategy("passive", BOT_STATE_COMBAT))
+                    EndFlee(ai);
                 it = g_flees.erase(it);
                 continue;
             }
@@ -861,7 +890,7 @@ void Orders_Update(uint32_t /*diff*/)
                 continue;
             }
             it->second.passive = true;
-            if (bot->IsInCombat() || player->IsInCombat() || !bot->IsAlive())
+            if (bot->IsInCombat() || (player->IsInWorld() && player->IsInCombat()) || !bot->IsAlive())
             {
                 it->second.quietSince = {};
                 ++it;
@@ -880,26 +909,27 @@ void Orders_Update(uint32_t /*diff*/)
     }
 }
 
-void Orders_ReleaseStays(Player* player)
+void Orders_ReleaseStays(Player* player, bool (*held)(Player* bot))
 {
     Group* group = player ? player->GetGroup() : nullptr;
-    if (!group)
+    if (!group || !player->IsInWorld())
         return;
 
-    // Every bot in the group, whoever told it to stay: an order from here, a
-    // playerbots "stay" read from the same line that paused the run ("stay
-    // here"), or a stay from an addon. The run takes the whole group along, and
-    // a pause has already let go of dungeon-clear's own pins (it aborts the
-    // pull), so any stay left is one that would hold a bot back. Changed in
-    // place rather than as a command, so nobody's "Following" comes back and a
-    // bot of another player's is let go as well.
+    // Every bot in the group here with them, whoever told it to stay: an order
+    // from here, a playerbots "stay" read from the same line that paused the
+    // run ("stay here"), or a stay from an addon. The run takes the whole group
+    // along, so any stay left would hold a bot back -- except one the run put
+    // on itself (`held`: a healer pinned at camp for a pull), which it takes
+    // off when the pull is done. Changed in place rather than as a command, so
+    // nobody's "Following" comes back and a bot of another player's is let go
+    // as well. A bot parked somewhere else cannot hold the run back: left be.
     for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
     {
         Player* bot = ref->GetSource();
-        if (!bot || !bot->IsInWorld())
+        if (!bot || !bot->IsInWorld() || bot->GetMap() != player->GetMap())
             continue;
         PlayerbotAI* ai = AiOf(bot);
-        if (!ai)
+        if (!ai || (held && held(bot)))
             continue;
 
         bool released = false;

@@ -2558,8 +2558,9 @@ OllamaChat.Orders.Separators = "and|while|whilst|till|until|then|but|so|cause|cu
 #        Who does it, when it is not the bots: you ("ill wait here", "gonna
 #        hearth") or someone else ("they attack"). One of these outside the
 #        order's own words makes the line talk, not an order. Asking for buffs
-#        or a trade is still asking ("i need buffs", "can i get a buff").
-OllamaChat.Orders.Subjects = "i|im|ill|ive|id|imma|ima|gonna|gotta|we|weve|wed|he|hes|she|shes|they|theyre|theyll|theyve"
+#        or a trade is still asking ("i need buffs", "can i get a buff"), and
+#        "we" takes the bots in ("we wait here").
+OllamaChat.Orders.Subjects = "i|im|ill|ive|id|imma|ima|gonna|gotta|he|hes|she|shes|they|theyre|theyll|theyve"
 
 #    OllamaChat.Orders.MaxWords
 #    OllamaChat.Orders.MaxStray

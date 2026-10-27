@@ -614,25 +614,29 @@ namespace TextRules
         const std::vector<bool> covered = Coverage(words, rules.pause, pause);
 
         // "ok im done", "done drinking": what someone says once they have
-        // had their break. The "drinking" in it is no pause.
+        // had their break. The "drinking" in it is no pause -- unless the break
+        // is not over ("almost done drinking", "not done drinking").
         bool resume = false;
         const std::vector<bool> resumed = Coverage(words, rules.resume, resume);
-        if (resume && (rules.resumeMaxWords == 0 || words.size() <= rules.resumeMaxWords) &&
-            !NegatedOutside(words, resumed, rules.negations) &&
-            !CrowdText::ContainsPhrase(words, rules.notYet))
+        const bool resumeCounts = resume && !NegatedOutside(words, resumed, rules.negations) &&
+                                  !CrowdText::ContainsPhrase(words, rules.notYet);
+        bool pauseOutside = false;
+        for (size_t i = 0; i < words.size(); ++i)
+            pauseOutside = pauseOutside || (covered[i] && !(resumeCounts && resumed[i]));
+
+        if (resumeCounts && (rules.resumeMaxWords == 0 || words.size() <= rules.resumeMaxWords))
         {
+            // "done drinking, lets go": the start in it is no stray word.
             std::vector<bool> filler(words.size(), false);
             for (const auto& [b, e] : Occurrences(words, rules.resumeFillers))
                 for (size_t i = b; i < e; ++i)
                     filler[i] = true;
-            bool pauseOutside = false;
+            bool startAny = false;
+            const std::vector<bool> started = Coverage(words, rules.start, startAny);
             uint32_t stray = 0;
             for (size_t i = 0; i < words.size(); ++i)
-            {
-                pauseOutside = pauseOutside || (covered[i] && !resumed[i]);
-                if (!resumed[i] && !filler[i])
+                if (!resumed[i] && !filler[i] && !started[i])
                     ++stray;
-            }
             if (!pauseOutside && stray <= rules.resumeMaxStray)
             {
                 // "im ready now", "good to go": a start as well, and a start
@@ -644,7 +648,8 @@ namespace TextRules
             }
         }
 
-        if (pause && !MatchesAny(words, rules.cancel) && !NegatedOutside(words, covered, rules.negations))
+        if (pause && pauseOutside && !MatchesAny(words, rules.cancel) &&
+            !NegatedOutside(words, covered, rules.negations))
             return PartyIntent::Pause;
 
         if (MatchesAny(words, rules.start) &&

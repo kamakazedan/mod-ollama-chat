@@ -38,6 +38,9 @@
 #if __has_include("DcLeaderSignal.h") && __has_include("DcModuleEnable.h")
 #include "DcLeaderSignal.h"
 #include "DcModuleEnable.h"
+#if __has_include("DcFollowerLifecycle.h")
+#include "DcFollowerLifecycle.h"   // HoldsWithStay, where this mod-dungeon-clear has it
+#endif
 #define OLLAMA_CHAT_DUNGEON_CLEAR 1
 #else
 #define OLLAMA_CHAT_DUNGEON_CLEAR 0
@@ -283,20 +286,47 @@ namespace
         Crowd_Start(std::move(plan), 0);
     }
 
+    // Groups whose staying bots are still to be taken along: the run started
+    // while dungeon clear held the party at camp (below). The run watch does it.
+    std::unordered_set<uint32_t> g_unstayLater;
+
+#if defined(DC_FOLLOWER_LIFECYCLE_HOLDS_WITH_STAY)
+    // A healer dungeon clear holds at camp for a pull: its stay is the run's.
+    bool HeldByRun(Player* bot)
+    {
+        return DcFollowerLifecycle::HoldsWithStay(bot->GetGUID());
+    }
+#endif
+
     // The run is moving again: bots told to stay go along with it
-    // (Orders_ReleaseStays). Not while dungeon clear holds the party at camp
-    // for a pull, since a healer's stay is then its own pin, which it takes off
-    // when the pull is over; the run watch tries again after that.
+    // (Orders_ReleaseStays), all but a healer dungeon clear holds at camp with
+    // a stay of its own, which it takes off when the pull is done. A
+    // mod-dungeon-clear that cannot say which bots those are gets none of it
+    // while it holds the party at camp; the run watch tries again after.
     bool ReleaseStaysWhenFree(Player* player)
     {
         if (!g_PartyCmdEnable && !g_OrdersEnable)
             return true;
+#if defined(DC_FOLLOWER_LIFECYCLE_HOLDS_WITH_STAY)
+        Orders_ReleaseStays(player, &HeldByRun);
+#else
         uint32 phase = 0;
         Position camp;
-        if (DcLeaderSignal::GetLeaderPullInfo(player, phase, camp) && DcLeaderSignal::IsPullPhaseHolding(phase))
+        bool passive = false;
+        if ((DcLeaderSignal::GetLeaderPullInfo(player, phase, camp) && DcLeaderSignal::IsPullPhaseHolding(phase)) ||
+            (DcLeaderSignal::GetLeaderCampHold(player, camp, passive) && passive))
             return false;
         Orders_ReleaseStays(player);
+#endif
         return true;
+    }
+
+    // From a line here: now, or by the run watch once it can be.
+    void ReleaseStaysFor(Player* player)
+    {
+        if (!ReleaseStaysWhenFree(player))
+            if (Group* group = player->GetGroup())
+                g_unstayLater.insert(group->GetGUID().GetCounter());
     }
 #endif
 }
@@ -424,7 +454,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
             return false;
         }
         ++g_stats.resumed;
-        ReleaseStaysWhenFree(player);
+        ReleaseStaysFor(player);
         Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Resumed, std::string());
     }
     else
@@ -436,7 +466,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
             return false;
         }
         ++g_stats.started;
-        ReleaseStaysWhenFree(player);
+        ReleaseStaysFor(player);
         Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Started, std::string());
     }
 
@@ -677,6 +707,8 @@ void PartyCmd_Update(uint32_t diff)
         // a line here (which took them along already), "dc on", the addon, a
         // door it was waiting at. Whoever is still on a stay goes along.
         const bool moving = owner && !DcLeaderSignal::IsInPausedDungeonClearRun(player);
+        if (g_unstayLater.erase(key))
+            w.unstay = unstayWanted;
         if (moving && !w.moving)
             w.unstay = unstayWanted;
         w.moving = moving;

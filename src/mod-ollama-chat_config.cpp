@@ -1224,7 +1224,7 @@ static void LoadNaturalChatV7Settings()
     g_OrdersRules.separators = phrases("OllamaChat.Orders.Separators",
         "and|while|whilst|till|until|then|but|so|cause|cuz|coz|because|bc|or");
     g_OrdersRules.subjects = phrases("OllamaChat.Orders.Subjects",
-        "i|im|ill|ive|id|imma|ima|gonna|gotta|we|weve|wed|he|hes|she|shes|they|theyre|theyll|theyve");
+        "i|im|ill|ive|id|imma|ima|gonna|gotta|he|hes|she|shes|they|theyre|theyll|theyve");
     g_OrdersRules.maxWords = sConfigMgr->GetOption<uint32_t>("OllamaChat.Orders.MaxWords", 14);
     g_OrdersRules.maxStray = sConfigMgr->GetOption<uint32_t>("OllamaChat.Orders.MaxStray", 1);
 

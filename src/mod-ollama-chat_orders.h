@@ -50,10 +50,11 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
 void Orders_Update(uint32_t diff);
 
 // A dungeon-clear run in this player's group just started or carried on
-// (mod-ollama-chat_partycmd): bots told to stay here follow again. Playerbots'
+// (mod-ollama-chat_partycmd): bots here told to stay follow again. Playerbots'
 // stay walks a bot back to where it was told to wait, which would hold it
-// against the tank leading the run.
-void Orders_ReleaseStays(Player* player);
+// against the tank leading the run. `held`, when given, names the bots the run
+// holds with a stay of its own, which are left to it.
+void Orders_ReleaseStays(Player* player, bool (*held)(Player* bot) = nullptr);
 
 // For a bot's prompt: what it was told to do and is still doing ("you are
 // waiting where you were told to"), or empty. OllamaChat.State.Staying.
