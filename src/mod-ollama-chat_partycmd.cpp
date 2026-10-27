@@ -272,6 +272,22 @@ namespace
 
         Crowd_Start(std::move(plan), 0);
     }
+
+    // The run is moving again: bots told to stay go along with it
+    // (Orders_ReleaseStays). Not while dungeon clear holds the party at camp
+    // for a pull, since a healer's stay is then its own pin, which it takes off
+    // when the pull is over; the run watch tries again after that.
+    bool ReleaseStaysWhenFree(Player* player)
+    {
+        if (!g_PartyCmdEnable && !g_OrdersEnable)
+            return true;
+        uint32 phase = 0;
+        Position camp;
+        if (DcLeaderSignal::GetLeaderPullInfo(player, phase, camp) && DcLeaderSignal::IsPullPhaseHolding(phase))
+            return false;
+        Orders_ReleaseStays(player);
+        return true;
+    }
 #endif
 }
 
@@ -398,7 +414,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
             return false;
         }
         ++g_stats.resumed;
-        Orders_ReleaseStays(player);
+        ReleaseStaysWhenFree(player);
         Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Resumed, std::string());
     }
     else
@@ -410,7 +426,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
             return false;
         }
         ++g_stats.started;
-        Orders_ReleaseStays(player);
+        ReleaseStaysWhenFree(player);
         Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Started, std::string());
     }
 
@@ -536,6 +552,8 @@ namespace
         bool                   greeted   = false;
         bool                   sawRun    = false;
         bool                   announced = false;
+        bool                   moving    = false;   // run under way and not paused
+        bool                   unstay    = false;   // staying bots still to take along
     };
     std::unordered_map<uint32_t, RunWatch> g_watches;   // by the group's guid counter
 
@@ -601,7 +619,10 @@ void PartyCmd_Update(uint32_t diff)
     if (timer < 2000)
         return;
     timer = 0;
-    if ((!g_PartyGreetEnable && !g_PartyDoneEnable) || !DcModule::IsEnabled())
+    if (!DcModule::IsEnabled())
+        return;
+    const bool unstayWanted = g_PartyCmdEnable || g_OrdersEnable;
+    if (!g_PartyGreetEnable && !g_PartyDoneEnable && !unstayWanted)
         return;
 
     const WatchClock::time_point now = WatchClock::now();
@@ -641,6 +662,18 @@ void PartyCmd_Update(uint32_t diff)
         w.lastSeen = now;
         if (owner)
             w.sawRun = true;
+
+        // The run has just got going, however it was started or carried on:
+        // a line here (which took them along already), "dc on", the addon, a
+        // door it was waiting at. Whoever is still on a stay goes along.
+        const bool moving = owner && !DcLeaderSignal::IsInPausedDungeonClearRun(player);
+        if (moving && !w.moving)
+            w.unstay = unstayWanted;
+        w.moving = moving;
+        if (!moving)
+            w.unstay = false;
+        else if (w.unstay && ReleaseStaysWhenFree(player))
+            w.unstay = false;
 
         // "let me know when you're ready": once, when they first come in.
         if (!w.greeted)
