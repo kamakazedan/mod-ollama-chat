@@ -2,6 +2,11 @@
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_crowd.h"
+#include "mod-ollama-chat_dispatch.h"
+#include "mod-ollama-chat_governor.h"
+#include "mod-ollama-chat_orders.h"
+#include "mod-ollama-chat_personality.h"
+#include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
@@ -12,12 +17,14 @@
 #include "ObjectAccessor.h"
 #include "Player.h"
 
+#include "ChatHelper.h"
 #include "Event.h"
 #include "PlayerbotAI.h"
 #include "PlayerbotMgr.h"
 
 #include <fmt/core.h>
 
+#include <chrono>
 #include <deque>
 #include <optional>
 #include <unordered_map>
@@ -31,6 +38,9 @@
 #if __has_include("DcLeaderSignal.h") && __has_include("DcModuleEnable.h")
 #include "DcLeaderSignal.h"
 #include "DcModuleEnable.h"
+#if __has_include("DcFollowerLifecycle.h")
+#include "DcFollowerLifecycle.h"   // HoldsWithStay, where this mod-dungeon-clear has it
+#endif
 #define OLLAMA_CHAT_DUNGEON_CLEAR 1
 #else
 #define OLLAMA_CHAT_DUNGEON_CLEAR 0
@@ -85,7 +95,7 @@ namespace
     const char* StateWords(const std::string& code)
     {
         static const std::pair<const char*, const char*> table[] = {
-            { "paused",         "paused" },
+            { "paused",         "paused, waiting for someone to say they are ready to go on" },
             { "pulling",        "pulling a pack back to the group" },
             { "fighting_boss",  "fighting the boss" },
             { "fighting_trash", "fighting trash" },
@@ -114,6 +124,44 @@ namespace
         if (!detail.empty() && detail[0] >= 'A' && detail[0] <= 'Z')
             detail[0] = static_cast<char>(detail[0] - 'A' + 'a');
         return detail;
+    }
+
+    // How many of the dungeon's bosses are down, and how many the run still
+    // means to kill (not the ones it skips). The run's own values: LazyGet only
+    // computes one that never has been, and mod-dungeon-clear refreshes them
+    // itself while the run is on. A list from the last dungeon this bot was in
+    // is worked out again, once, for the copy it is in now.
+    void BossCounts(Player* owner, AiObjectContext* ctx, uint32_t& killed, uint32_t& left)
+    {
+        killed = left = 0;
+        if (!owner || !ctx)
+            return;
+        auto* value = ctx->GetValue<std::vector<DungeonBossInfo>>(DcKey::DungeonBosses);
+        if (!value)
+            return;
+        static std::unordered_map<uint64_t, uint32_t> listFor;   // bot -> instance its list is for
+        if (listFor.size() > 5000)
+            listFor.clear();
+        uint32_t& instance = listFor[owner->GetGUID().GetRawValue()];
+        if (instance != owner->GetInstanceId())
+        {
+            value->Reset();
+            instance = owner->GetInstanceId();
+        }
+        InstanceScript const* inst = owner->GetInstanceScript();
+        const uint32_t mask = inst ? inst->GetCompletedEncounterMask() : 0u;
+        static const std::unordered_set<uint32> noneSkipped;
+        auto* skippedValue = ctx->GetValue<std::unordered_set<uint32>&>(DcKey::Skipped);
+        const std::unordered_set<uint32>& skipped = skippedValue ? skippedValue->Get() : noneSkipped;
+        for (const DungeonBossInfo& b : value->LazyGet())
+        {
+            if (b.kind != DungeonAnchorKind::Boss)
+                continue;
+            if ((b.encounterIndex < 32 && (mask & (1u << b.encounterIndex))) || DcAnchorDoneByInstanceScript(b, inst))
+                ++killed;
+            else if (!b.skipByDesign && !skipped.count(b.entry))
+                ++left;
+        }
     }
 
     std::vector<std::string> SplitTabs(const std::string& s)
@@ -237,6 +285,49 @@ namespace
 
         Crowd_Start(std::move(plan), 0);
     }
+
+    // Groups whose staying bots are still to be taken along: the run started
+    // while dungeon clear held the party at camp (below). The run watch does it.
+    std::unordered_set<uint32_t> g_unstayLater;
+
+#if defined(DC_FOLLOWER_LIFECYCLE_HOLDS_WITH_STAY)
+    // A healer dungeon clear holds at camp for a pull: its stay is the run's.
+    bool HeldByRun(Player* bot)
+    {
+        return DcFollowerLifecycle::HoldsWithStay(bot->GetGUID());
+    }
+#endif
+
+    // The run is moving again: bots told to stay go along with it
+    // (Orders_ReleaseStays), all but a healer dungeon clear holds at camp with
+    // a stay of its own, which it takes off when the pull is done. A
+    // mod-dungeon-clear that cannot say which bots those are gets none of it
+    // while it holds the party at camp; the run watch tries again after.
+    bool ReleaseStaysWhenFree(Player* player)
+    {
+        if (!g_PartyCmdEnable && !g_OrdersEnable)
+            return true;
+#if defined(DC_FOLLOWER_LIFECYCLE_HOLDS_WITH_STAY)
+        Orders_ReleaseStays(player, &HeldByRun);
+#else
+        uint32 phase = 0;
+        Position camp;
+        bool passive = false;
+        if ((DcLeaderSignal::GetLeaderPullInfo(player, phase, camp) && DcLeaderSignal::IsPullPhaseHolding(phase)) ||
+            (DcLeaderSignal::GetLeaderCampHold(player, camp, passive) && passive))
+            return false;
+        Orders_ReleaseStays(player);
+#endif
+        return true;
+    }
+
+    // From a line here: now, or by the run watch once it can be.
+    void ReleaseStaysFor(Player* player)
+    {
+        if (!ReleaseStaysWhenFree(player))
+            if (Group* group = player->GetGroup())
+                g_unstayLater.insert(group->GetGUID().GetCounter());
+    }
 #endif
 }
 
@@ -269,11 +360,16 @@ PartyCmdLine PartyCmd_Classify(Player* player, const std::string& msg, ChatChann
     if (!map || !map->IsDungeon())   // dungeons and raids
         return PartyCmdLine::None;
 
-    if (TextRules::MatchPartyIntent(clean, g_PartyCmdRules) == TextRules::PartyIntent::None)
+    const TextRules::PartyIntent intent = TextRules::MatchPartyIntent(clean, g_PartyCmdRules);
+    if (intent == TextRules::PartyIntent::None)
         return PartyCmdLine::None;
 
     Player* tank = DcLeaderSignal::FindLeaderTank(player);
     if (!tank || !tank->IsInWorld())
+        return PartyCmdLine::None;
+
+    // "ok im done" only means go on when there is a break to end.
+    if (intent == TextRules::PartyIntent::Resume && !DcLeaderSignal::IsInPausedDungeonClearRun(player))
         return PartyCmdLine::None;
 
     return PartyCmdLine::Instruction;
@@ -311,6 +407,10 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
 
     const bool running = DcLeaderSignal::FindRunOwner(player) != nullptr;
     const bool paused  = running && DcLeaderSignal::IsInPausedDungeonClearRun(player);
+
+    // "ok im done", "full": the end of a break, and nothing else.
+    if (intent == TextRules::PartyIntent::Resume && !paused)
+        return false;
 
     if (intent == TextRules::PartyIntent::Pause)
     {
@@ -354,6 +454,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
             return false;
         }
         ++g_stats.resumed;
+        ReleaseStaysFor(player);
         Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Resumed, std::string());
     }
     else
@@ -365,6 +466,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
             return false;
         }
         ++g_stats.started;
+        ReleaseStaysFor(player);
         Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Started, std::string());
     }
 
@@ -429,26 +531,8 @@ std::string PartyCmd_RunStateFor(Player* bot, ChatChannelSourceLocal source)
     if (!ctx || !DcRun::Of(ctx).enabled)
         return "";
 
-    // The run's own values. LazyGet only computes one that never has been;
-    // mod-dungeon-clear refreshes them itself while the run is on.
     uint32_t killed = 0, left = 0;
-    if (auto* value = ctx->GetValue<std::vector<DungeonBossInfo>>(DcKey::DungeonBosses))
-    {
-        InstanceScript const* inst = owner->GetInstanceScript();
-        const uint32_t mask = inst ? inst->GetCompletedEncounterMask() : 0u;
-        static const std::unordered_set<uint32> noneSkipped;
-        auto* skippedValue = ctx->GetValue<std::unordered_set<uint32>&>(DcKey::Skipped);
-        const std::unordered_set<uint32>& skipped = skippedValue ? skippedValue->Get() : noneSkipped;
-        for (const DungeonBossInfo& b : value->LazyGet())
-        {
-            if (b.kind != DungeonAnchorKind::Boss)
-                continue;
-            if ((b.encounterIndex < 32 && (mask & (1u << b.encounterIndex))) || DcAnchorDoneByInstanceScript(b, inst))
-                ++killed;
-            else if (!b.skipByDesign && !skipped.count(b.entry))
-                ++left;
-        }
-    }
+    BossCounts(owner, ctx, killed, left);
 
     // STATUS \t on \t entry \t name \t stall \t skipped \t state \t detail \t ...
     // The status line is built the way mod-dungeon-clear builds it for its
@@ -490,6 +574,176 @@ std::string PartyCmd_RunStateFor(Player* bot, ChatChannelSourceLocal source)
                                                                                     : std::string("not picked yet")),
                                        fmt::arg("state", state));
     return out == "[Format Error]" ? std::string() : out;
+#endif
+}
+
+#if OLLAMA_CHAT_DC_RUN_STATE
+namespace
+{
+    using WatchClock = std::chrono::steady_clock;
+
+    // One group in one copy of a dungeon.
+    struct RunWatch
+    {
+        uint32_t               instanceId = 0;
+        WatchClock::time_point firstSeen{};
+        WatchClock::time_point lastSeen{};
+        bool                   fresh     = false;   // no boss down when they came in
+        bool                   greeted   = false;
+        bool                   sawRun    = false;
+        bool                   announced = false;
+        bool                   moving    = false;   // run under way and not paused
+        bool                   unstay    = false;   // staying bots still to take along
+    };
+    std::unordered_map<uint32_t, RunWatch> g_watches;   // by the group's guid counter
+
+    // The tank says something to the whole group without being asked, in its
+    // own chat style: OllamaChat.Party.AnnouncePrompt around `situation`.
+    bool SubmitTankLine(Player* tank, const std::string& situation)
+    {
+        if (!tank || situation.empty() || g_PartyAnnouncePrompt.empty())
+            return false;
+        Group* group = tank->GetGroup();
+        PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(tank);
+        if (!group || !ai || !ai->GetChatHelper())
+            return false;
+
+        const ChatChannelSourceLocal source = group->isRaidGroup() ? SRC_RAID_LOCAL : SRC_PARTY_LOCAL;
+        const std::string scopeKey = Governor_MakeScopeKey(ChatChannelSourceLocalStr[source], 0, std::string(), 0,
+                                                           group->GetGUID().GetCounter());
+        if (!Governor_CanSend(tank->GetGUID(), scopeKey, true))
+            return false;
+
+        Map* map = tank->GetMap();
+        const std::string personality = GetBotPersonality(tank);
+        const std::string recent = RecentAcksText(tank);
+        std::string prompt = SafeFormat(g_PartyAnnouncePrompt,
+                                        fmt::arg("bot_name", tank->GetName()),
+                                        fmt::arg("bot_level", tank->GetLevel()),
+                                        fmt::arg("bot_race", ai->GetChatHelper()->FormatRace(tank->getRace())),
+                                        fmt::arg("bot_class", ai->GetChatHelper()->FormatClass(tank->getClass())),
+                                        fmt::arg("bot_personality", GetPersonalityPromptAddition(personality)),
+                                        fmt::arg("dungeon", map ? std::string(map->GetMapName()) : std::string("the dungeon")),
+                                        fmt::arg("situation", situation),
+                                        fmt::arg("recent_acks", recent));
+        if (prompt.empty() || prompt == "[Format Error]")
+            return false;
+        if (g_PartyAnnouncePrompt.find("{recent_acks}") == std::string::npos)
+            prompt += recent;
+        prompt += Roleplay_BuildVoicePrompt(tank);
+
+        OllamaChatRequest request;
+        request.botGuid           = tank->GetGUID().GetRawValue();
+        request.source            = source;
+        request.chainDepth        = 0;
+        request.scopeKey          = scopeKey;
+        request.prompt            = std::move(prompt);
+        request.botName           = tank->GetName();
+        request.kind              = OllamaRequestKind::EventChatter;
+        request.directAddress     = true;    // nobody else is talking: no pacing cooldown
+        request.triggerBotReplies = false;
+        request.partyAck          = true;    // remembered, so the next one is worded differently
+        request.maxReplyLength    = OllamaMaxReplyLengthFor(tank);
+        return OllamaDispatch_Submit(std::move(request));
+    }
+}
+#endif
+
+void PartyCmd_Update(uint32_t diff)
+{
+#if !OLLAMA_CHAT_DC_RUN_STATE
+    (void)diff;
+#else
+    static uint32_t timer = 0;
+    timer += diff;
+    if (timer < 2000)
+        return;
+    timer = 0;
+    if (!DcModule::IsEnabled())
+        return;
+    const bool unstayWanted = g_PartyCmdEnable || g_OrdersEnable;
+    if (!g_PartyGreetEnable && !g_PartyDoneEnable && !unstayWanted)
+        return;
+
+    const WatchClock::time_point now = WatchClock::now();
+    std::unordered_set<uint32_t> looked;
+    for (auto const& entry : ObjectAccessor::GetPlayers())
+    {
+        Player* player = entry.second;
+        if (!player || !player->IsInWorld() || OllamaIsBotPlayer(player))
+            continue;
+        Group* group = player->GetGroup();
+        Map* map = player->GetMap();
+        if (!group || !map || !map->IsDungeon() || map->IsBattlegroundOrArena())
+            continue;
+        const uint32_t key = group->GetGUID().GetCounter();
+        if (!looked.insert(key).second)
+            continue;   // one look per group
+
+        // Only a bot tank greets the group and calls the finish.
+        Player* tank = DcLeaderSignal::FindLeaderTank(player);
+        if (!tank || !OllamaIsBotPlayer(tank) || tank->GetMap() != map)
+            continue;
+
+        Player* owner = DcLeaderSignal::FindRunOwner(player);
+        Player* counted = (owner && owner->GetMap() == map) ? owner : tank;
+        PlayerbotAI* countedAi = PlayerbotsMgr::instance().GetPlayerbotAI(counted);
+        uint32_t killed = 0, left = 0;
+        BossCounts(counted, countedAi ? countedAi->GetAiObjectContext() : nullptr, killed, left);
+
+        RunWatch& w = g_watches[key];
+        if (w.instanceId != map->GetInstanceId() || w.firstSeen == WatchClock::time_point{})
+        {
+            w = RunWatch{};
+            w.instanceId = map->GetInstanceId();
+            w.firstSeen  = now;
+            w.fresh      = killed == 0;
+        }
+        w.lastSeen = now;
+        if (owner)
+            w.sawRun = true;
+
+        // The run has just got going, however it was started or carried on:
+        // a line here (which took them along already), "dc on", the addon, a
+        // door it was waiting at. Whoever is still on a stay goes along.
+        const bool moving = owner && !DcLeaderSignal::IsInPausedDungeonClearRun(player);
+        if (g_unstayLater.erase(key))
+            w.unstay = unstayWanted;
+        if (moving && !w.moving)
+            w.unstay = unstayWanted;
+        w.moving = moving;
+        if (!moving)
+            w.unstay = false;
+        else if (w.unstay && ReleaseStaysWhenFree(player))
+            w.unstay = false;
+
+        // "let me know when you're ready": once, when they first come in.
+        if (!w.greeted)
+        {
+            if (owner || killed > 0)
+                w.greeted = true;   // under way already
+            else if (g_PartyGreetEnable && now - w.firstSeen >= std::chrono::seconds(g_PartyGreetDelaySeconds) &&
+                     tank->IsAlive() && !tank->IsInCombat() && !player->IsInCombat())
+            {
+                // A tank that spoke a moment ago gets a little longer, then
+                // the moment has passed.
+                if (SubmitTankLine(tank, g_PartyGreetSituation) ||
+                    now - w.firstSeen >= std::chrono::seconds(g_PartyGreetDelaySeconds + 30))
+                    w.greeted = true;
+            }
+        }
+
+        // Every boss down: the tank says they are done.
+        if (!w.announced && g_PartyDoneEnable && killed > 0 && left == 0 && (w.fresh || w.sawRun) &&
+            tank->IsAlive() && !tank->IsInCombat() && !player->IsInCombat())
+        {
+            SubmitTankLine(tank, g_PartyDoneSituation);
+            w.announced = true;
+        }
+    }
+
+    for (auto it = g_watches.begin(); it != g_watches.end();)
+        it = (now - it->second.lastSeen > std::chrono::minutes(30)) ? g_watches.erase(it) : std::next(it);
 #endif
 }
 

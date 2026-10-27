@@ -360,6 +360,165 @@ namespace TextRules
         return removed ? Trim(out) : text;
     }
 
+    std::string StripVocatives(const std::string& text,
+                               const std::vector<std::vector<std::string>>& vocatives)
+    {
+        if (text.empty() || vocatives.empty())
+            return text;
+
+        auto isVocative = [&](const std::string& w)
+        {
+            for (const std::vector<std::string>& v : vocatives)
+                if (v.size() == 1 && v[0] == w)
+                    return true;
+            return false;
+        };
+        // "the kid", "a kid", "my kid", "two kids", "poor kid": the kid is
+        // being talked about, not to.
+        auto isDeterminer = [](const std::string& w)
+        {
+            static const char* const words[] = {
+                "the", "a", "an", "my", "your", "ur", "yer", "his", "her", "their", "our", "its", "this",
+                "that", "these", "those", "some", "any", "every", "each", "no", "one", "little", "lil",
+                "young", "old", "poor", "silly", "new", "other", "another", "same", "first", "last",
+                "real", "goblin", "gnome", "orc", "human", "dwarf", "elf", "troll", "tauren"
+            };
+            for (const char* x : words)
+                if (w == x)
+                    return true;
+            return NumberWord(w) != 0 && w != "a" && w != "an";
+        };
+
+        struct Tok
+        {
+            size_t      b = 0;
+            size_t      e = 0;
+            std::string norm;
+        };
+        std::vector<Tok> toks;
+        for (size_t i = 0; i < text.size();)
+        {
+            const unsigned char c = static_cast<unsigned char>(text[i]);
+            if (!std::isalnum(c) && c != '\'')
+            {
+                ++i;
+                continue;
+            }
+            Tok t;
+            t.b = i;
+            while (i < text.size() &&
+                   (std::isalnum(static_cast<unsigned char>(text[i])) || text[i] == '\''))
+            {
+                if (text[i] != '\'')
+                    t.norm += static_cast<char>(std::tolower(static_cast<unsigned char>(text[i])));
+                ++i;
+            }
+            t.e = i;
+            if (!t.norm.empty())
+                toks.push_back(std::move(t));
+        }
+
+        auto hasAny = [](const std::string& s, const char* set)
+        {
+            return s.find_first_of(set) != std::string::npos;
+        };
+
+        // Spans of `text` to cut: the word, and the comma or space that tied it on.
+        std::vector<std::pair<size_t, size_t>> cuts;
+        for (size_t k = 0; k < toks.size(); ++k)
+        {
+            if (!isVocative(toks[k].norm))
+                continue;
+
+            const size_t prevEnd   = k > 0 ? toks[k - 1].e : 0;
+            const size_t nextBegin = k + 1 < toks.size() ? toks[k + 1].b : text.size();
+            const std::string before = text.substr(prevEnd, toks[k].b - prevEnd);
+            const std::string after  = text.substr(toks[k].e, nextBegin - toks[k].e);
+
+            const bool lineStart     = k == 0;
+            const bool sentenceStart = lineStart || hasAny(before, ".!?\n");
+            const bool commaBefore   = hasAny(before, ",;:");
+            const bool lastWord      = k + 1 == toks.size();
+            const bool sentenceEnd   = lastWord || hasAny(after, ".!?\n");
+            const bool commaAfter    = hasAny(after, ",;:");
+
+            if (!sentenceStart && !commaBefore && isDeterminer(toks[k - 1].norm))
+                continue;   // "the kid", "two kids"
+            if (!(sentenceEnd || commaAfter || sentenceStart))
+                continue;   // "that kid is ...": talked about
+            if (sentenceStart && !sentenceEnd && !commaAfter && k + 1 < toks.size() &&
+                isDeterminer(toks[k + 1].norm) && toks[k + 1].norm != "your" && toks[k + 1].norm != "ur")
+                continue;   // "kid the ..." reads oddly either way; leave it
+
+            size_t from = toks[k].b;
+            size_t to   = toks[k].e;
+            if (sentenceEnd || (!sentenceStart && !commaAfter))
+            {
+                // "... mobs kid" / "..., kid." -> "... mobs" / "...": the
+                // separator in front goes with it, the full stop stays.
+                from = prevEnd;
+                if (lineStart)
+                    from = 0;
+            }
+            else
+            {
+                // "kid, you ..." / "listen kid, you ..." -> "you ..." / "listen, you ..."
+                size_t j = to;
+                if (sentenceStart)
+                {
+                    while (j < text.size() && (text[j] == ',' || text[j] == ';' || text[j] == ':' ||
+                                               std::isspace(static_cast<unsigned char>(text[j]))))
+                        ++j;
+                    to = j;
+                }
+                else
+                {
+                    from = prevEnd;   // "listen kid, you" -> "listen, you"
+                }
+            }
+            cuts.emplace_back(from, to);
+        }
+        if (cuts.empty())
+            return text;
+
+        std::string out;
+        size_t at = 0;
+        for (const auto& [from, to] : cuts)
+        {
+            if (from < at)
+                continue;
+            out += text.substr(at, from - at);
+            at = to;
+        }
+        out += text.substr(at);
+
+        // Tidy: no doubled spaces, no space before punctuation, no comma left
+        // hanging at either end.
+        std::string tidy;
+        for (size_t i = 0; i < out.size(); ++i)
+        {
+            const char c = out[i];
+            if (c == ' ' && (tidy.empty() || tidy.back() == ' '))
+                continue;
+            if ((c == '.' || c == '!' || c == '?' || c == ',') && !tidy.empty() && tidy.back() == ' ')
+                tidy.pop_back();
+            if (c == ',' && !tidy.empty() && (tidy.back() == ',' || tidy.back() == '.' || tidy.back() == '!' ||
+                                              tidy.back() == '?'))
+                continue;
+            tidy += c;
+        }
+        tidy = Trim(tidy);
+        while (!tidy.empty() && (tidy.front() == ',' || tidy.front() == ';' || tidy.front() == ':'))
+            tidy = Trim(tidy.substr(1));
+        while (!tidy.empty() && (tidy.back() == ',' || tidy.back() == ';' || tidy.back() == ':'))
+            tidy.pop_back();
+        tidy = Trim(tidy);
+        // "Kid." leaves only the full stop: nothing was said.
+        if (std::none_of(tidy.begin(), tidy.end(), [](unsigned char c) { return std::isalnum(c) != 0; }))
+            return std::string();
+        return tidy;
+    }
+
     std::vector<CommandPhrase> ParseCommandPhrases(const std::string& raw)
     {
         std::vector<CommandPhrase> out;
@@ -395,6 +554,41 @@ namespace TextRules
                (words[0] == "dc" || (words.size() >= 2 && words[0] == "dungeon" && words[1] == "clear"));
     }
 
+    bool GlobMatch(const std::string& pattern, const std::string& text)
+    {
+        if (pattern.empty())
+            return false;
+        // Iterative, with one backtrack point for the last '*'.
+        size_t p = 0, t = 0, star = std::string::npos, mark = 0;
+        auto same = [](char a, char b)
+        {
+            return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+        };
+        while (t < text.size())
+        {
+            if (p < pattern.size() && pattern[p] == '*')
+            {
+                star = p++;
+                mark = t;
+            }
+            else if (p < pattern.size() && same(pattern[p], text[t]))
+            {
+                ++p;
+                ++t;
+            }
+            else if (star != std::string::npos)
+            {
+                p = star + 1;
+                t = ++mark;
+            }
+            else
+                return false;
+        }
+        while (p < pattern.size() && pattern[p] == '*')
+            ++p;
+        return p == pattern.size();
+    }
+
     PartyIntent MatchPartyIntent(const std::string& cleanText, const PartyRules& rules)
     {
         const std::vector<std::string> words = CrowdText::Words(cleanText);
@@ -418,7 +612,44 @@ namespace TextRules
 
         bool pause = false;
         const std::vector<bool> covered = Coverage(words, rules.pause, pause);
-        if (pause && !MatchesAny(words, rules.cancel) && !NegatedOutside(words, covered, rules.negations))
+
+        // "ok im done", "done drinking": what someone says once they have
+        // had their break. The "drinking" in it is no pause -- unless the break
+        // is not over ("almost done drinking", "not done drinking").
+        bool resume = false;
+        const std::vector<bool> resumed = Coverage(words, rules.resume, resume);
+        const bool resumeCounts = resume && !NegatedOutside(words, resumed, rules.negations) &&
+                                  !CrowdText::ContainsPhrase(words, rules.notYet);
+        bool pauseOutside = false;
+        for (size_t i = 0; i < words.size(); ++i)
+            pauseOutside = pauseOutside || (covered[i] && !(resumeCounts && resumed[i]));
+
+        if (resumeCounts && (rules.resumeMaxWords == 0 || words.size() <= rules.resumeMaxWords))
+        {
+            // "done drinking, lets go": the start in it is no stray word.
+            std::vector<bool> filler(words.size(), false);
+            for (const auto& [b, e] : Occurrences(words, rules.resumeFillers))
+                for (size_t i = b; i < e; ++i)
+                    filler[i] = true;
+            bool startAny = false;
+            const std::vector<bool> started = Coverage(words, rules.start, startAny);
+            uint32_t stray = 0;
+            for (size_t i = 0; i < words.size(); ++i)
+                if (!resumed[i] && !filler[i] && !started[i])
+                    ++stray;
+            if (!pauseOutside && stray <= rules.resumeMaxStray)
+            {
+                // "im ready now", "good to go": a start as well, and a start
+                // carries on a paused run too, where a resume alone would be
+                // no use to a run that has not begun.
+                if (MatchesAny(words, rules.start) && !CrowdText::ContainsPhrase(words, rules.negations))
+                    return PartyIntent::Start;
+                return PartyIntent::Resume;
+            }
+        }
+
+        if (pause && pauseOutside && !MatchesAny(words, rules.cancel) &&
+            !NegatedOutside(words, covered, rules.negations))
             return PartyIntent::Pause;
 
         if (MatchesAny(words, rules.start) &&
@@ -616,6 +847,248 @@ namespace TextRules
         if (!out.stacks && firstItem != npos && firstItem > 0)
             if (const uint32_t n = NumberWord(words[firstItem - 1]); n > 1)
                 out.count = n;
+        return out;
+    }
+
+    // ---- telling bots what to do ---------------------------------------------
+
+    const char* BotIntentName(BotIntent intent)
+    {
+        switch (intent)
+        {
+            case BotIntent::Stay:    return "stay";
+            case BotIntent::Follow:  return "follow";
+            case BotIntent::Attack:  return "attack";
+            case BotIntent::Flee:    return "flee";
+            case BotIntent::Revive:  return "revive";
+            case BotIntent::Trade:   return "trade";
+            case BotIntent::Hearth:  return "hearth";
+            case BotIntent::Unstuck: return "unstuck";
+            case BotIntent::Buff:    return "buff";
+            case BotIntent::Pull:    return "pull";
+            case BotIntent::Leave:   return "leave";
+            default:                 return "none";
+        }
+    }
+
+    BotCommand MatchBotCommand(const std::string& cleanText, const BotCommandRules& rules,
+                               const std::vector<std::string>& names)
+    {
+        const BotCommand none;
+
+        // Clauses: split at punctuation, each keeping whether it was asked.
+        struct Clause
+        {
+            std::vector<std::string> words;
+            bool asked = false;
+        };
+        std::vector<Clause> raw;
+        {
+            std::string cur;
+            auto flush = [&](bool asked)
+            {
+                std::vector<std::string> w = CrowdText::Words(cur);
+                if (!w.empty())
+                    raw.push_back({ std::move(w), asked });
+                else if (asked && !raw.empty())
+                    raw.back().asked = true;   // "stay here ?"
+                cur.clear();
+            };
+            for (const char c : cleanText)
+            {
+                if (c == ',' || c == ';' || c == '.' || c == '!' || c == '?' || c == ':' || c == '\n')
+                    flush(c == '?');
+                else
+                    cur += c;
+            }
+            flush(false);
+        }
+
+        // The bots' names say who it is for, not what.
+        std::vector<std::string> nameWords;
+        for (const std::string& n : names)
+            for (std::string& w : CrowdText::Words(n))
+                nameWords.push_back(std::move(w));
+
+        size_t total = 0;
+        std::vector<Clause> clauses;
+        for (Clause& c : raw)
+        {
+            std::vector<std::string> kept;
+            for (std::string& w : c.words)
+                if (std::find(nameWords.begin(), nameWords.end(), w) == nameWords.end())
+                    kept.push_back(std::move(w));
+            total += kept.size();
+
+            // ...and at "and", "while", "so": "stay here while i loot".
+            std::vector<std::string> part;
+            for (size_t i = 0; i < kept.size(); ++i)
+            {
+                bool split = false;
+                for (const std::vector<std::string>& s : rules.separators)
+                    if (s.size() == 1 && kept[i] == s[0])
+                        split = true;
+                if (split)
+                {
+                    if (!part.empty())
+                        clauses.push_back({ std::move(part), false });
+                    part.clear();
+                    continue;
+                }
+                part.push_back(kept[i]);
+            }
+            if (!part.empty())
+                clauses.push_back({ std::move(part), c.asked });
+        }
+        if (clauses.empty() || (rules.maxWords > 0 && total > rules.maxWords))
+            return none;
+
+        // Anything conditional is not for now: "if it runs, kill it".
+        for (const Clause& c : clauses)
+            if (CrowdText::ContainsPhrase(c.words, rules.conditions))
+                return none;
+
+        // Asked nicely ("pls, wait here"), anywhere in the line; said to
+        // everyone ("guys, stay here") -- outside the order's own words, since
+        // "leave the group" is not said to the group.
+        BotCommand out;
+        bool everyoneElsewhere = false;
+        for (const Clause& c : clauses)
+            out.polite = out.polite || CrowdText::ContainsPhrase(c.words, rules.polite);
+
+        for (const Clause& c : clauses)
+        {
+            const std::vector<std::string>& words = c.words;
+
+            bool polite = false, everyone = false, filler = false;
+            std::vector<bool> extra(words.size(), false);
+            auto mark = [&](const std::vector<std::vector<std::string>>& phrases, bool& any)
+            {
+                for (const auto& [b, e] : Occurrences(words, phrases))
+                {
+                    any = true;
+                    for (size_t i = b; i < e; ++i)
+                        extra[i] = true;
+                }
+            };
+            mark(rules.fillers, filler);
+            mark(rules.polite, polite);
+            mark(rules.everyone, everyone);
+
+            // What is left once fillers, "can you" and "everyone" are set
+            // aside: "=stay" matches "stay", "stay pls" and "everyone stay".
+            std::vector<size_t> coreAt;
+            std::vector<std::string> core;
+            for (size_t i = 0; i < words.size(); ++i)
+                if (!extra[i])
+                {
+                    coreAt.push_back(i);
+                    core.push_back(words[i]);
+                }
+
+            auto coverage = [&](const std::vector<CommandPhrase>& list, bool& any)
+            {
+                std::vector<bool> cov(words.size(), false);
+                any = false;
+                for (const CommandPhrase& p : list)
+                {
+                    if (p.words.empty())
+                        continue;
+                    if (p.wholeLine)
+                    {
+                        if (core.size() == p.words.size() && MatchesAt(core, 0, p.words))
+                        {
+                            any = true;
+                            for (size_t at : coreAt)
+                                cov[at] = true;
+                        }
+                        continue;
+                    }
+                    for (size_t i = 0; i + p.words.size() <= words.size(); ++i)
+                    {
+                        if (!MatchesAt(words, i, p.words))
+                            continue;
+                        any = true;
+                        for (size_t j = 0; j < p.words.size(); ++j)
+                            cov[i + j] = true;
+                    }
+                }
+                return cov;
+            };
+
+            // The intent whose phrase covers the most of the clause.
+            BotIntent best = BotIntent::None;
+            size_t bestN = 0;
+            bool tie = false;
+            std::vector<bool> bestCov;
+            for (size_t i = 1; i < static_cast<size_t>(BotIntent::Count); ++i)
+            {
+                bool any = false;
+                const std::vector<bool> cov = coverage(rules.phrases[i], any);
+                if (!any)
+                    continue;
+                const size_t n = static_cast<size_t>(std::count(cov.begin(), cov.end(), true));
+                if (n > bestN)
+                {
+                    best = static_cast<BotIntent>(i);
+                    bestN = n;
+                    bestCov = cov;
+                    tie = false;
+                }
+                else if (n == bestN)
+                    tie = true;
+            }
+            if (best == BotIntent::None || tie)
+            {
+                everyoneElsewhere = everyoneElsewhere || everyone;
+                continue;
+            }
+
+            // Is any of `phrases` here, outside the order's own words?
+            auto outside = [&](const std::vector<std::vector<std::string>>& phrases)
+            {
+                for (const auto& [b, e] : Occurrences(words, phrases))
+                    for (size_t i = b; i < e; ++i)
+                        if (!bestCov[i])
+                            return true;
+                return false;
+            };
+
+            // Asked, not told: "should we wait here?", "why are you staying".
+            // "can you stay here?" is still telling, and "pull when ready" is
+            // an order.
+            if (!polite && (c.asked || outside(rules.questions)))
+                continue;
+
+            // "dont stay here", "no need to wait here": what not to do. A
+            // negation inside the phrase is the instruction ("dont move"); a
+            // "no" up front is emphasis ("no, stay here").
+            if (NegatedOutside(words, bestCov, rules.negations))
+                continue;
+
+            // Who does it, when it is not the bots: the speaker ("ill wait
+            // here", "gonna hearth") or someone else ("they attack"). Asking
+            // for buffs or a trade is still asking ("i need buffs", "can i get
+            // a buff").
+            if (best != BotIntent::Buff && best != BotIntent::Trade && outside(rules.subjects))
+                continue;
+
+            uint32_t stray = 0;
+            for (size_t i = 0; i < words.size(); ++i)
+                if (!bestCov[i] && !extra[i] && !(i == 0 && IsInterjection(words[i])))
+                    ++stray;
+            if (stray > rules.maxStray)
+                continue;   // talk that mentions it: "we should stay here"
+
+            // Two clauses telling two different things: not sure, so nothing.
+            if (out.intent != BotIntent::None && out.intent != best)
+                return none;
+            out.intent   = best;
+            out.everyone = out.everyone || outside(rules.everyone);
+        }
+        if (out.intent == BotIntent::None)
+            return none;
+        out.everyone = out.everyone || everyoneElsewhere;
         return out;
     }
 

@@ -34,6 +34,24 @@ namespace TextRules
     std::string StripAssistantSpeak(const std::string& text,
                                     const std::vector<std::vector<std::string>>& phrases);
 
+    // ---- calling someone "kid" -------------------------------------------
+
+    // Drop a word from `vocatives` (one-word entries, e.g. "kid") wherever it
+    // addresses someone: ending a sentence ("just cave mobs kid", "nice try,
+    // kid."), before a comma ("listen kid, ..."), or opening the line ("kid
+    // you need ..."). Not where it is what is talked about: "the kid", "a kid",
+    // "my kid", "two kids", "that kid is ...". Returns what is left, tidied;
+    // empty when the line was only that word.
+    std::string StripVocatives(const std::string& text,
+                               const std::vector<std::vector<std::string>>& vocatives);
+
+    // ---- muted bot lines ----------------------------------------------------
+
+    // Does `text` match `pattern`? Case-insensitive, the whole text; '*'
+    // matches any run of characters, so "Using |c*" is "Using " followed by an
+    // item link, and "Staying" is that word alone.
+    bool GlobMatch(const std::string& pattern, const std::string& text);
+
     // ---- party commands --------------------------------------------------
 
     // A phrase from a command list. "=r" in the config matches only a line
@@ -49,19 +67,24 @@ namespace TextRules
     {
         None,
         Start,   // ready / lets go / ok carry on: start or resume
-        Pause    // mb / wait / stop / brb: hold here
+        Pause,   // mb / wait / stop / brb: hold here
+        Resume   // ok im done / full / done drinking: carry on -- only while paused
     };
 
     struct PartyRules
     {
         std::vector<CommandPhrase> start;
         std::vector<CommandPhrase> pause;
+        std::vector<CommandPhrase> resume;                 // "im done", "full": only means go on after a pause
         std::vector<CommandPhrase> cancel;                 // "dont stop", "no need to wait": not a pause
         std::vector<std::vector<std::string>> negations;   // "not ready", "i dont need mana": neither
         std::vector<std::vector<std::string>> questions;   // anywhere: "wait what", "where do we go"
         std::vector<std::vector<std::string>> openers;     // first word: "you oom", "anyone need mana"
         std::vector<std::vector<std::string>> notYet;      // block a start: "almost ready", "ready in 5"
+        std::vector<std::vector<std::string>> resumeFillers;   // "ok", "thanks", "now": go with a resume
         uint32_t maxWords = 10;
+        uint32_t resumeMaxWords = 6;                       // "ok im done" yes, a story that says "done" no
+        uint32_t resumeMaxStray = 1;                       // words that are neither: "i have done this before" no
     };
 
     // What a short party line asks for:
@@ -75,7 +98,13 @@ namespace TextRules
     //     "no" up front is emphasis ("no wait"), and a negation inside the
     //     phrase itself ("dont pull") is the instruction;
     //   * a start -- "lets go", "im back" -- unless negated ("not ready") or
-    //     not yet ("almost ready", "ready in 5").
+    //     not yet ("almost ready", "ready in 5");
+    //   * a resume -- "ok im done", "full", "done drinking" -- in a short line,
+    //     unless negated ("not done") or not yet ("almost done"). Only the
+    //     caller knows whether the run is paused, which is the only time it
+    //     means anything. A pause word inside it ("drinking") is part of it;
+    //     one outside it ("done, wait") makes the line a pause. One that is a
+    //     start too ("im ready now", "good to go") is a start.
     // A pause wins over a start. Lines starting "dc" or "dungeon clear" are left
     // to mod-dungeon-clear.
     PartyIntent MatchPartyIntent(const std::string& cleanText, const PartyRules& rules);
@@ -148,6 +177,71 @@ namespace TextRules
     // whispered to one.
     ConjureAsk MatchConjureAsk(const std::string& cleanText, const ConjureRules& rules,
                                bool named, const std::vector<std::string>& names = {});
+
+    // ---- telling bots what to do ---------------------------------------------
+
+    enum class BotIntent : uint8_t
+    {
+        None,
+        Stay,      // "stay here", "wait here", "stay back", "dont move"
+        Follow,    // "follow me", "come with me", "come here", "on me"
+        Attack,    // "attack my target", "kill that", "get him"
+        Flee,      // "run away", "flee", "retreat", "fall back"
+        Revive,    // to the dead: "release", "respawn", "run back", "res"
+        Trade,     // "trade me", "come trade me", "open a trade"
+        Hearth,    // "hearth", "use your hearthstone", "hs out"
+        Unstuck,   // "you're stuck", "use unstuck"
+        Buff,      // "buff us", "buffs pls", "rebuff"
+        Pull,      // "pull", "go ahead and pull"
+        Leave,     // "leave the group", "you can leave now"
+        Count
+    };
+
+    const char* BotIntentName(BotIntent intent);
+
+    struct BotCommandRules
+    {
+        // Indexed by BotIntent; [None] is unused. "=run" matches only a line
+        // (or a clause of one) that is exactly "run".
+        std::vector<CommandPhrase> phrases[static_cast<size_t>(BotIntent::Count)];
+        std::vector<std::vector<std::string>> fillers;       // "pls", "now", "here", "a sec": go with anything
+        std::vector<std::vector<std::string>> polite;        // "can you", "could you": an instruction even asked
+        std::vector<std::vector<std::string>> everyone;      // "everyone", "guys", "all": to every bot
+        std::vector<std::vector<std::string>> negations;     // "dont", "no need to": not an instruction
+        std::vector<std::vector<std::string>> questions;     // "why", "should", "are": asking, not telling
+        std::vector<std::vector<std::string>> conditions;    // "if", "unless", "once": not now
+        std::vector<std::vector<std::string>> separators;    // "and", "while", "so": split a line into clauses
+        std::vector<std::vector<std::string>> subjects;      // "ill", "gonna", "they": someone else does it
+        uint32_t maxWords = 14;
+        uint32_t maxStray = 1;      // words in the clause that are none of the above
+    };
+
+    struct BotCommand
+    {
+        BotIntent intent   = BotIntent::None;
+        bool      everyone = false;   // said to every bot: "everyone stay here"
+        bool      polite   = false;   // "can you ...", "pls"
+    };
+
+    // Is this line telling the bots to do something? People say it the way
+    // they would to anyone: "stay back", "wait here", "everyone come with me",
+    // "Joanni can you come trade me", "you're stuck, use unstuck", "stay here
+    // while i grab the quest".
+    //
+    // The line is split into clauses (at punctuation and at words like "and",
+    // "while", "so"). A clause is an instruction when it is one of the phrases
+    // above and little else: names (`names`, left out first), fillers, "can
+    // you", "everyone", and at most maxStray other words. So "stay here while
+    // i loot" stays, and "we should stay here and fight" does not.
+    //
+    // Not an instruction: one asked rather than told ("should we wait here?",
+    // "why are you staying"), negated outside the phrase ("dont stay here",
+    // "no need to wait here"), conditional ("if it runs, kill it"), the
+    // speaker's own plan or someone else's doing ("ill wait here", "gonna
+    // hearth", "they attack"; asking for buffs or a trade is still asking: "i
+    // need buffs"), or a line whose clauses tell the bots two different things.
+    BotCommand MatchBotCommand(const std::string& cleanText, const BotCommandRules& rules,
+                               const std::vector<std::string>& names = {});
 
     // ---- level outlook ----------------------------------------------------
 

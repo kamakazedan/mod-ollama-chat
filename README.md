@@ -495,7 +495,14 @@ faction for quests). Unknown names just lose their brackets. See
 A phrase on `OllamaChat.Response.OverusedPhrases` ("taking forever", "such a
 grind") may be said once per `OverusedCooldownSeconds` across the whole realm;
 a line that would repeat it sooner is dropped. Things that never existed in
-Wrath (`OffEraPhrases`: keystones, transmog, world quests) are never said.
+Wrath (`OffEraPhrases`: keystones, transmog, world quests) are never said. A
+chat style's hobby horse (`RarePhrases`: "40 man", "back in vanilla") gets
+through once an hour, even in a reply owed to someone.
+
+`DropVocatives` takes "kid" out wherever it addresses someone ("just cave mobs
+kid" goes out as "just cave mobs"), and a thank-you on its own ("ty", "cheers
+mate") gets no reply unless it asks something too (`Crowd.ThanksReplyChance`).
+A dead bot is told it is dead, so what it says fits.
 
 ## Food and Water from Mages
 
@@ -513,6 +520,69 @@ gets filled instead. "need mana", "oom" and "mb" stay mana breaks, a bare
 "pots" needs a real ask ("pls send me pots", since "pot now" is a raid call),
 and playerbots' own commands ("t water", "use water") are left to playerbots.
 See `OllamaChat.Conjure.*`.
+
+## Orders in Plain Words
+
+Tell the bots what to do the way you would tell anyone, in party, raid or a
+whisper, and the one it was for does it and says so in its own words:
+
+| Say | They |
+|---|---|
+| "stay back", "wait here", "hold position" | stay put ("ok, shout when you want us following") |
+| "follow me", "come with me", "on me", "get back here" | follow |
+| "attack my target", "kill that", "focus it" | attack what you have targeted |
+| "run!", "fall back", "get out of there" | break off and come back to you |
+| "release", "res", "respawn", "run back" (to a dead bot) | release and run back |
+| "Joanni come trade me", "open a trade" | walk over and offer a trade |
+| "hearth out", "use your hearthstone" | hearth home |
+| "you're stuck", "use unstuck" | the stuck tool: dungeon entrance, or the nearest graveyard |
+| "buffs pls", "rebuff" | buff the group |
+| "pull", "pull when ready" | (the tank) pull your target, or the skull |
+| "Joanni leave the group" | leave |
+
+Name a bot ("Zonin stay", "Frostiq and Zonin wait here") to order only that
+one; otherwise every bot that takes orders from you does it. Hearth needs a
+name, a whisper or "everyone". Questions, negations and conditions are not
+orders ("should we wait here?", "dont stay here", "if it runs, kill it"), and
+neither is talk that only mentions one ("we should stay here and fight") or
+is about you or someone else ("ill wait here", "gonna hearth"). Nothing is
+ever summoned. See
+`OllamaChat.Orders.*`. When a dungeon-clear run starts or carries on, any bot
+still told to stay comes along.
+
+Playerbots also reads every chat line as one of its own commands unless
+`Playerbots.CommandPrefix` is set: then "leave it" makes a bot leave and "go
+ahead" sends every bot off. Setting the prefix (`"!"`) leaves plain chat to
+chat and orders, with playerbots' commands still there as `!summon`.
+
+## Getting Back Up
+
+A bot that dies with nobody alive in the group who can resurrect it releases
+by itself, runs back and gets up -- from a dungeon, the ghost runs from the
+graveyard to the entrance and walks in. With a priest, paladin, shaman or
+druid standing, it waits for the rez. Not in battlegrounds, and not while a
+dungeon-clear run is deciding how to bring its party back ("res" in a run is
+left to the run too). See `OllamaChat.Revive.*`.
+
+## Raid Marks
+
+Skull is the kill target and starts the fight; cross is next and becomes the
+skull when the skull dies. Each crowd-control class controls its own mark --
+moon polymorph, diamond banish or fear, triangle hibernate or roots, square
+freezing trap, circle shackle -- and a rogue saps the star before the pull.
+While someone is marking, the skull moves on by itself when its mob dies, to
+the cross or the next loose mob, but only onto a mob already in the fight: a
+cross on the next pack waits for its own skull. See `OllamaChat.Marks.*`.
+
+## Stock Lines, Greetings and the Finish
+
+Stock whispers nobody needs ("Using [Hearthstone]", "AI was reset to
+defaults", "I don't know this dungeon, lead the way!") are muted
+(`OllamaChat.Mute.Patterns`). A bot tank leading a dungeon-clear group says
+to let it know when everyone is ready as the group comes in, and says so when
+every boss is down (`OllamaChat.Party.Greet*`, `Party.Done*`). After a mana
+break, "ok im done", "full" or "done drinking" resumes the run; "im ready
+now" starts one too.
 
 ## Per-Style Nudges and Longer Replies
 

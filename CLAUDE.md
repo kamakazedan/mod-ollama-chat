@@ -99,6 +99,22 @@ repetition history.
   about 1 in 101 times, so a configured chance of 0 is not "never". Use
   `urand(1, 100) > chance` and check `chance <= 0` first.
 
+## Driving playerbots from this module
+
+- Chat hooks (`CMSG_MESSAGECHAT` is world-thread) and `OnWorldUpdate` run while
+  the map threads are idle, so touching a bot's AI there is safe; nowhere else.
+- Send a bot a command with `PlayerbotAI::HandleCommand(CHAT_MSG_WHISPER,
+  sPlayerbotAIConfig.CommandPrefix + cmd, player)`: playerbots' own security
+  checks apply and it runs in the bot's next AI tick. With the prefix empty,
+  playerbots has already read the player's line as a command of its own
+  (`ExternalEventHelper::ParseChatCommand`: whole line, then shorter word
+  prefixes), so a command meant to override it is queued from the world tick,
+  after it (`mod-ollama-chat_orders.cpp`).
+- `"buff"` is playerbots' list of buff potions; class buffs are `"rebuff"`.
+  `"release"` on a living bot makes it stay. `"revive"` is the spirit healer.
+- Packet hooks (`ServerScript::CanPacketSend`) run on any thread: read only a
+  snapshot published from the world thread (`mod-ollama-chat_mute.cpp`).
+
 ## Performance traps specific to this module
 
 - Never walk `Map::GetCreatureBySpawnIdStore()` — it is every spawn on the map.
