@@ -201,14 +201,13 @@ namespace
 
     // ---- what playerbots does with the line itself ---------------------------
 
-    // The chat command playerbots runs for `text` on its own, found the way
+    // The chat command playerbots reads `text` as, found the way
     // ExternalEventHelper::ParseChatCommand finds it: the whole line, then
     // shorter and shorter word prefixes ("stay here" is its "stay"). Empty
-    // when it runs none -- always, with Playerbots.CommandPrefix set, since
-    // then a line has to start with the prefix to be a command at all.
-    std::string OwnCommand(PlayerbotAI* ai, const std::string& text)
+    // when it is none.
+    std::string ParsedCommand(PlayerbotAI* ai, const std::string& text)
     {
-        if (!ai || !sPlayerbotAIConfig.CommandPrefix.empty())
+        if (!ai)
             return {};
         AiObjectContext* ctx = ai->GetAiObjectContext();
         if (!ctx)
@@ -234,6 +233,14 @@ namespace
             i = found - 1;
         }
         return {};
+    }
+
+    // The command playerbots runs by itself for a plain chat line: none with
+    // Playerbots.CommandPrefix set, since then a line has to start with the
+    // prefix to be a command at all.
+    std::string OwnCommand(PlayerbotAI* ai, const std::string& line)
+    {
+        return sPlayerbotAIConfig.CommandPrefix.empty() ? ParsedCommand(ai, line) : std::string();
     }
 
     // ---- carrying it out -------------------------------------------------------
@@ -511,7 +518,8 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
         if (bots.empty())
             return raw;
     }
-    else if (OneBotOrder(intent) && !audience.named && audience.bots.size() > 1)
+    else if (OneBotOrder(intent) && !audience.named && audience.bots.size() > 1 &&
+             !(intent == BotIntent::Leave && order.everyone))
     {
         // "come trade me" with four bots about: the one they were talking to.
         if (!seq)
@@ -525,10 +533,6 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
                 bots.push_back(b);
         if (bots.empty())
             return raw;   // nobody in particular: ordinary chat
-    }
-    else if (intent == BotIntent::Leave && !audience.named && !order.everyone && audience.bots.size() > 1)
-    {
-        return raw;   // "leave it" is not the whole group walking out
     }
     else
     {
@@ -581,6 +585,11 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
     else if (intent == BotIntent::Pull)
         facts.target = "the mob marked with the skull";
 
+    if (raw && able.empty())
+    {
+        ++g_stats.raw;   // playerbots says why not itself
+        return true;
+    }
     if (able.empty())
     {
         ++g_stats.refused;
@@ -589,24 +598,35 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
         return true;
     }
 
+    std::string command = CommandFor(intent);
+    if (intent == BotIntent::Pull && !target)
+        command = "pull rti";   // what the skull is on
+
+    // "!stay": playerbots' own command, typed as one. It carries it out and
+    // answers itself; when that answer is a stock line muted for this one
+    // ("Staying"), the bot says it in its own words instead. Anything else
+    // typed with the prefix is left to playerbots entirely.
+    if (raw)
+    {
+        if (command.empty() || ParsedCommand(AiOf(able[0]), said) != command)
+        {
+            ++g_stats.raw;
+            return true;
+        }
+        g_stats.already += able.size();
+    }
+
     // Carry it out, a tick from now: after playerbots has run its own reading
     // of the same line, so ours is the one that stands.
-    const std::string command = CommandFor(intent);
     for (Player* b : able)
     {
+        if (raw)
+            break;
         PlayerbotAI* ai = AiOf(b);
         if (!ai)
             continue;
 
-        if (raw)
-        {
-            ++g_stats.already;   // playerbots has it: "!stay"
-            continue;
-        }
-
-        std::string cmd = command;
-        if (intent == BotIntent::Pull && !target)
-            cmd = "pull rti";   // what the skull is on
+        const std::string& cmd = command;
         if (intent == BotIntent::Revive && b->HasPlayerFlag(PLAYER_FLAGS_GHOST))
             continue;           // released already, on the way back
 

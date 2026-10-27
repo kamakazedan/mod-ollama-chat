@@ -922,8 +922,8 @@ static void LoadNaturalChatV4Settings()
     g_PartyCmdRules.resume = TextRules::ParseCommandPhrases(sConfigMgr->GetOption<std::string>(
         "OllamaChat.PartyCommands.ResumePhrases",
         "done|im done|all done|done now|finished|im finished|done drinking|finished drinking|done eating|"
-        "finished eating|full|im full|full mana|mana full|full now|topped up|topped off|good to go|=go|=go go|"
-        "ready now|lets get going|ok lets go"));
+        "finished eating|full|im full|full mana|mana full|full now|topped up|topped off|good to go|ready now|"
+        "lets get going|ok lets go"));
     g_PartyCmdRules.resumeFillers = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(
         "OllamaChat.PartyCommands.ResumeFillers",
         "ok|okay|k|kk|alright|aight|right|so|im|i am|all|now|then|lol|ty|thanks|thx|cheers|thank you|guys|lads|"

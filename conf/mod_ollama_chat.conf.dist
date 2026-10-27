@@ -2075,6 +2075,8 @@ OllamaChat.Personality.MaxReplyLength.NAT_EXPERT = 250
 #
 #       "ready", "r?", "lets go", "ok carry on"    start the clear, or resume
 #       "mb", "wait", "stop", "brb", "need mana"   pause it where it stands
+#       "stay here", "hold position"               pause it too
+#       "ok im done", "full", "done drinking"      resume -- only while paused
 #
 #   The tank answers in party ("np, drink up, say when"), and nobody else
 #   replies to that line. A start waits until every real player in the
@@ -2125,8 +2127,26 @@ OllamaChat.PartyCommands.Enable = 1
 #        ("go" sends every bot to your target), so typing it in a dungeon
 #        drags the whole group onto whatever you have selected.
 OllamaChat.PartyCommands.StartPhrases = "=r|=begin|=start|=continue|=resume|=back|ready|rdy|gogo*|lets go|lets start|lets begin|lets do this|lets do it|lets roll|lets move|lets continue|lets carry on|carry on|im back|i am back|back now|good to go|start the run"
-OllamaChat.PartyCommands.PausePhrases = "mb|mana break|manabreak|need mana|need to drink|need a drink|need drink|drinking|=drink|oom|no mana|low mana|low on mana|out of mana|outta mana|wait|w8|=w|hold on|hold up|holdup|hang on|stop|pause|=sec|one sec|1 sec|a sec|one min|1 min|a min|brb|=afk|need a break|need a sec|gimme a sec|give me a sec|bio break|=bio|lets rest|need to rest|=rest|dont pull|stop pulling"
+OllamaChat.PartyCommands.PausePhrases = "mb|mana break|manabreak|need mana|need to drink|need a drink|need drink|drinking|=drink|oom|no mana|low mana|low on mana|out of mana|outta mana|wait|w8|=w|hold on|hold up|holdup|hang on|stop|pause|=sec|one sec|1 sec|a sec|one min|1 min|a min|brb|=afk|need a break|need a sec|gimme a sec|give me a sec|bio break|=bio|lets rest|need to rest|=rest|dont pull|stop pulling|stay here|stay there|stay back|stay put|hold position|hold here|dont move"
 OllamaChat.PartyCommands.CancelPhrases = "dont stop|do not stop|dont wait|do not wait|no need to wait|no need to stop|dont need to wait|keep going|no break|dont need a break|no need"
+
+#    OllamaChat.PartyCommands.ResumePhrases
+#        What someone says once their break is over ("ok im done", "full
+#        mana", "done drinking"). Only while the run is paused, and only in a
+#        short line: they mean nothing otherwise. A pause word inside one
+#        ("drinking") is part of it. No bare "go": it is a playerbots command.
+OllamaChat.PartyCommands.ResumePhrases = "done|im done|all done|done now|finished|im finished|done drinking|finished drinking|done eating|finished eating|full|im full|full mana|mana full|full now|topped up|topped off|good to go|ready now|lets get going|ok lets go"
+
+#    OllamaChat.PartyCommands.ResumeFillers
+#    OllamaChat.PartyCommands.ResumeMaxWords
+#    OllamaChat.PartyCommands.ResumeMaxStray
+#        Words that go with a resume ("ok all done thanks"), the longest line
+#        that can be one, and how many other words it may have: "i have done
+#        this before" is not the end of a break.
+#        Default: (below), 6, 1
+OllamaChat.PartyCommands.ResumeFillers = "ok|okay|k|kk|alright|aight|right|so|im|i am|all|now|then|lol|ty|thanks|thx|cheers|thank you|guys|lads|mate|yep|yeah|yes|ye|sorry|sry|and|too|finally|phew|np|good|great|cool|nice"
+OllamaChat.PartyCommands.ResumeMaxWords = 6
+OllamaChat.PartyCommands.ResumeMaxStray = 1
 
 #    OllamaChat.PartyCommands.NegationWords
 #        Stop either kind: "not ready", "i dont need mana". Not when the
@@ -2197,6 +2217,36 @@ OllamaChat.Party.DungeonGlossary = "In group chat here: mb means mana break (the
 #        on Brelac, out of range)", "fighting trash", "paused"...). Empty
 #        disables.
 OllamaChat.Party.RunStateText = "About this dungeon run: {tank} leads it, {progress}, the next boss is {next}, and right now the group is {state}. Only bring this up when someone asks what is going on, what the plan is or which boss is next."
+
+#    OllamaChat.Party.GreetEnable
+#    OllamaChat.Party.GreetDelaySeconds
+#    OllamaChat.Party.GreetSituation
+#        When a group led by a bot tank comes into a dungeon, the tank says in
+#        party, in its own chat style, to let it know when everyone is ready
+#        to start -- once, GreetDelaySeconds after it and a real player are
+#        both inside, and not when the run is under way already. (The stock
+#        "I don't know this dungeon, lead the way!" whisper is muted: MUTED
+#        BOT LINES below.)
+#        Default: 1, 8, (below)
+OllamaChat.Party.GreetEnable = 1
+OllamaChat.Party.GreetDelaySeconds = 8
+OllamaChat.Party.GreetSituation = "The group has just come in and nobody has pulled anything yet. Tell everyone to let you know when they are ready to start, in your own way."
+
+#    OllamaChat.Party.DoneEnable
+#    OllamaChat.Party.DoneSituation
+#        When every boss the run means to kill is dead, the tank says in party
+#        that the dungeon is done.
+#        Default: 1, (below)
+OllamaChat.Party.DoneEnable = 1
+OllamaChat.Party.DoneSituation = "Every boss in the dungeon is dead: the group has just finished the whole run. Tell everyone it is done, in your own way: pleased, relieved or joking, whatever suits you."
+
+#    OllamaChat.Party.AnnouncePrompt
+#        The prompt for those two lines. Placeholders: {bot_name},
+#        {bot_level}, {bot_race}, {bot_class}, {bot_personality}, {dungeon},
+#        {situation} (GreetSituation or DoneSituation), {recent_acks} (the
+#        tank's last few lines in this group, RecentAcksText; added at the end
+#        if left out).
+OllamaChat.Party.AnnouncePrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, the tank of your group in {dungeon}. Your chat style: {bot_personality} {situation} Write it as one party chat line, 3 to 12 words, the way a player types it: no quotes, no name in front.{recent_acks}"
 
 ###############################################################################
 #
@@ -2365,6 +2415,344 @@ OllamaChat.Conjure.HintCant = "{player_name} asked you for {request}, but you ca
 OllamaChat.Conjure.HintNotMage = "{player_name} asked you for {request}, but you are a {class}, not a mage, so you can't conjure it.{mage} Tell them in a few words, in your own chat style."
 OllamaChat.Conjure.HintAlready = "{player_name} asked you for {request} again, but you have already offered them a trade with it. Tell them in a few words to accept the trade."
 OllamaChat.Conjure.HintNotGrouped = "{player_name} asked you for {request}, but you only hand out conjured food and water to your own group, and they are not in it. Tell them in a few words, in your own chat style, to invite you if they want some."
+
+###############################################################################
+#
+#   OLLAMA CHAT - ORDERS IN PLAIN WORDS
+#
+#   A real player tells the bots what to do the way they would tell anyone,
+#   in party, raid or a whisper, and the bot it was for does it and says so
+#   in its own words instead of a stock "Staying":
+#
+#       "stay back", "wait here", "hold position"    stay where you are
+#       "follow me", "come with me", "on me"         follow
+#       "attack my target", "kill that", "focus it"  attack what you target
+#       "run!", "fall back", "get out of there"      break off and come back
+#       "release", "res", "respawn", "run back"      (to the dead) get back up
+#       "come trade me", "open a trade"              come over and trade
+#       "hearth out", "use your hearthstone"         hearth home
+#       "you're stuck", "use unstuck"                the stuck tool
+#       "buffs pls", "rebuff"                        buff the group
+#       "pull", "pull when ready"                    (the tank) pull
+#       "Joanni leave the group"                     leave
+#
+#   Who it is for: the bots it names ("Joanni stay", "Frostiq and Zonin wait
+#   here"), else the bot it was whispered to, else every bot in the group that
+#   takes orders from you (your own bots, or all of them when you lead). Trade,
+#   unstuck and leave are for one bot: named, whispered, or plainly the one you
+#   were just talking to -- "come trade me" with four bots around and nobody
+#   in particular is just chat. A real player named first ("Bob, wait here")
+#   is theirs to answer.
+#
+#   An order is a short line that is one of the phrases below and little
+#   else: names, fillers ("pls", "now", "mate"), "can you", "everyone", and at
+#   most MaxStray other words. So "stay here while i grab the quest" is an
+#   order and "we should stay here and fight" is not. Not orders: anything
+#   asked rather than told ("should we wait here?", "why are you staying"),
+#   negated ("dont stay here", "no need to wait"), conditional ("if it runs,
+#   kill it"), or a line that tells the bots two different things ("follow me
+#   and stay here"). "can you wait here?" is still an order.
+#
+#   What each one does: stay, follow, attack, flee, release, rebuff, pull and
+#   leave are playerbots' own commands, sent from you a tick after you spoke.
+#   Trade walks the bot over (it follows you) and offers the trade once it is
+#   close. Hearth uses the bot's hearthstone. Unstuck does what the stuck tool
+#   does for a player -- in a dungeon or raid back to its entrance, outside
+#   to the nearest graveyard -- and the bot walks back from there; nothing is
+#   ever summoned. After "run!" the bots keep out of fights (that is what
+#   playerbots' flee is) until FleeRecoverSeconds after the fight, then fight
+#   again.
+#
+#   When a bot can't -- it is dead, you have nothing targeted, its
+#   hearthstone is on cooldown, it is not the tank -- it says so.
+#
+#   Playerbots.CommandPrefix. With it empty (the default), playerbots also
+#   reads every line in party and whispers as a command of its own: "stay
+#   here" is its "stay", "leave it" makes a bot leave the group, "go ahead"
+#   walks every bot off, "buff me" whispers you its buff potions. An order it
+#   is already carrying out is only answered here, never sent twice, and one
+#   it read differently ("stay close" is its "stay") is put right a tick
+#   later. Setting a prefix, e.g. Playerbots.CommandPrefix = "!", ends all of
+#   that: plain chat is then only ever chat or an order from this list, and
+#   playerbots' commands still work typed with the prefix ("!summon"). Lines
+#   starting with the prefix get no chat replies. Addons that send playerbots
+#   commands for you (MultiBot and the like) need the prefix too.
+#
+#   In a dungeon with a dungeon-clear tank, "stay here" and "wait" pause the
+#   run instead (PARTY INSTRUCTIONS above).
+#
+#   Phrase lists are separated by |; words are matched lowercase with
+#   punctuation and apostrophes dropped; a trailing * matches any word
+#   starting with it; a leading = means the whole order must be exactly
+#   that ("=run" is "run!" but not "run it again").
+#
+###############################################################################
+
+#    OllamaChat.Orders.Enable
+#        Default: 1
+OllamaChat.Orders.Enable = 1
+
+#    OllamaChat.Orders.Stay
+#    OllamaChat.Orders.Follow
+#    OllamaChat.Orders.Attack
+#    OllamaChat.Orders.Flee
+#    OllamaChat.Orders.Revive
+#    OllamaChat.Orders.Trade
+#    OllamaChat.Orders.Hearth
+#    OllamaChat.Orders.Unstuck
+#    OllamaChat.Orders.Buff
+#    OllamaChat.Orders.Pull
+#    OllamaChat.Orders.Leave
+#        The phrases for each order. When phrases of two orders both fit a
+#        line, the one covering more of it wins ("stay close" is follow);
+#        a tie is not an order.
+OllamaChat.Orders.Stay = "=stay|=hold|stay here|stay there|stay back|stay put|stay behind|stay where you are|stay where u are|stay right there|stay right here|wait here|wait there|wait right here|wait right there|wait back|wait for me|wait for me here|wait for me there|hold here|hold there|hold position|hold your position|hold up here|stand here|stand there|stand still|stand back|dont move|do not move|stop following|quit following|hang back|camp here|park here|park up"
+OllamaChat.Orders.Follow = "=follow|follow me|follow us|come with me|come with us|come w me|=with me|=on me|come here|come over here|=over here|get over here|come back|come back here|come to me|regroup|regroup on me|=this way|move out|lets move|keep up|catch up|follow again|start following|you can follow|come along|tag along|stick with me|stay with me|stay close|stay close to me|get back here|=get back"
+OllamaChat.Orders.Attack = "attack|attack my target|attack that|attack it|attack him|attack her|attack them|attack this|kill it|kill that|kill him|kill her|kill them|kill this|kill my target|get him|get her|focus my target|focus that|focus it|focus him|focus her|assist me|dps that|dps it|nuke it|nuke that|burn it|burn that|take it down|take that down"
+OllamaChat.Orders.Flee = "=run|=run run|run away|flee|retreat|fall back|get out|get out of there|get out of here|back off|abort|leg it|scatter"
+OllamaChat.Orders.Revive = "release|=res|=rez|res up|rez up|respawn|=spawn|run back|run back here|corpse run|get up|get back up|come back to life|=revive|revive yourself|resurrect|back to your body|go get your body|get your corpse"
+OllamaChat.Orders.Trade = "=trade|trade me|come trade me|come trade|open trade|open a trade|lets trade|trade with me|come and trade|come and trade me|come over and trade"
+OllamaChat.Orders.Hearth = "hearth|hearth out|hearth home|hearth back|use your hearth|use your hearthstone|use your hs|use hearth|use hearthstone|=hs|hs out|hs home|hearthstone out"
+OllamaChat.Orders.Unstuck = "unstuck|use unstuck|use the unstuck|get unstuck|unstuck yourself|youre stuck|ur stuck|you are stuck|youre stuck in|ur stuck in|you are stuck in|youre stuck on|ur stuck on|stuck again"
+OllamaChat.Orders.Buff = "=buff|=buffs|buff me|buff us|rebuff|need buffs|buff up|buff everyone|buff the group|can i get a buff|can i get buffs"
+OllamaChat.Orders.Pull = "=pull|pull it|pull that|pull them|you can pull|pull when ready|start pulling|tank pull|pull the next|pull next"
+OllamaChat.Orders.Leave = "leave the group|leave group|leave the party|leave party|you can leave|you can leave now|drop group|drop party"
+
+#    OllamaChat.Orders.Fillers
+#    OllamaChat.Orders.Polite
+#    OllamaChat.Orders.Everyone
+#        Words that go with any order without changing it ("stay here pls",
+#        "can you wait here", "everyone on me").
+OllamaChat.Orders.Fillers = "pls|plz|please|pleas|plox|now|right now|here|there|then|again|quick|quickly|asap|for now|for a sec|a sec|for a second|a second|a moment|for a moment|a minute|for a minute|a bit|for a bit|ok|okay|k|kk|alright|right|yeah|yes|you|u|ya|ye|mate|m8|buddy|man|dude|bro|hun|hon|thanks|ty|cheers|too|as well|also|just|real quick|rq|lol|go|ahead|go ahead|the|a"
+OllamaChat.Orders.Polite = "can you|can u|could you|could u|would you|would u|will you|will u|can ya|could ya|pls|plz|please|do you mind|would you mind|mind|wanna"
+OllamaChat.Orders.Everyone = "everyone|everybody|every1|evry1|all|yall|you all|u all|guys|you guys|u guys|team|group|lads|people|ppl|folks|party|squad"
+
+#    OllamaChat.Orders.Negations
+#    OllamaChat.Orders.Questions
+#    OllamaChat.Orders.Conditions
+#        Not an order: "dont stay here", "should we wait here", "if it runs,
+#        kill it". A negation inside a phrase is the order ("dont move"), and
+#        a "no" up front is emphasis ("no, stay here"). A question is still an
+#        order when asked nicely ("can you wait here?").
+OllamaChat.Orders.Negations = "dont|do not|didnt|doesnt|never|no need to|no need|not|stop|quit|nah|nope"
+OllamaChat.Orders.Questions = "why|where|what|when|how|who|whos|whats|wheres|hows|whys|should|shall|are|is|do|does|did|was|were|have|has|wonder"
+OllamaChat.Orders.Conditions = "if|unless|whenever|once|incase|in case"
+
+#    OllamaChat.Orders.Separators
+#        Where a line splits into parts, each judged on its own: "stay here
+#        while i loot" is a stay; two parts with two different orders are
+#        neither.
+OllamaChat.Orders.Separators = "and|while|whilst|till|until|then|but|so|cause|cuz|coz|because|bc|or"
+
+#    OllamaChat.Orders.MaxWords
+#    OllamaChat.Orders.MaxStray
+#        Longer lines are conversation. MaxStray is how many words in an
+#        order may be none of the above ("stay here while i grab the quest").
+#        Default: 14, 1
+OllamaChat.Orders.MaxWords = 14
+OllamaChat.Orders.MaxStray = 1
+
+#    OllamaChat.Orders.HintStay
+#    OllamaChat.Orders.HintFollow
+#    OllamaChat.Orders.HintAttack
+#    OllamaChat.Orders.HintFlee
+#    OllamaChat.Orders.HintRevive
+#    OllamaChat.Orders.HintTrade
+#    OllamaChat.Orders.HintHearth
+#    OllamaChat.Orders.HintUnstuck
+#    OllamaChat.Orders.HintBuff
+#    OllamaChat.Orders.HintPull
+#    OllamaChat.Orders.HintLeave
+#    OllamaChat.Orders.HintCant
+#        What the bot answering is told. One bot answers for everyone it was
+#        for -- the tank when it is one of them. Placeholders: {player_name};
+#        {who} ("you", or "you and the others"); {target} (what they have
+#        targeted); {doing} (HintTrade: "coming over to trade with them" or
+#        "opening a trade window with them"; HintRevive: "releasing your spirit
+#        to run back to your body" or "already running back"); {where}
+#        (HintUnstuck: "back at the entrance of the dungeon", "at the nearest
+#        graveyard"); {order} and {reason} (HintCant: "use your hearthstone",
+#        "your hearthstone is still on cooldown"). Empty: the order is carried
+#        out without a word.
+OllamaChat.Orders.HintStay = "{player_name} told {who} to stay put, and you are doing it: you will wait right here until they say to follow again. Say so in a few words, in your own chat style, the way you would tell them to give you a shout when they want you following again."
+OllamaChat.Orders.HintFollow = "{player_name} told {who} to follow them, and you are on your way. Say so in two to six words, in your own chat style."
+OllamaChat.Orders.HintAttack = "{player_name} told {who} to attack {target}, and you are going in. Say so in two to five words, in your own chat style."
+OllamaChat.Orders.HintFlee = "{player_name} told {who} to get out of the fight, so you are breaking off and running back to them. Say so in two to five words, in your own chat style."
+OllamaChat.Orders.HintRevive = "You died, and {player_name} told you to get yourself back up: you are {doing}. Say so in a few words, in your own chat style."
+OllamaChat.Orders.HintTrade = "{player_name} asked you to trade with them, and you are {doing}. Say so in a few words, in your own chat style."
+OllamaChat.Orders.HintHearth = "{player_name} told {who} to use your hearthstone, so you are hearthing home now. Say so in a few words, in your own chat style."
+OllamaChat.Orders.HintUnstuck = "You were stuck, and {player_name} told you to use the unstuck option. You have: in a moment you will be {where}, and you will make your way back from there. Say so in a few words, in your own chat style."
+OllamaChat.Orders.HintBuff = "{player_name} asked for buffs, and you are buffing the group now. Say so in two to five words, in your own chat style."
+OllamaChat.Orders.HintPull = "{player_name} told you to pull, and you are pulling {target} now. Say so in two to five words, in your own chat style."
+OllamaChat.Orders.HintLeave = "{player_name} said you can leave the group, so you are leaving now. Say a short goodbye, in your own chat style."
+OllamaChat.Orders.HintCant = "{player_name} asked you to {order}, but you cannot right now: {reason}. Say so in a few words, in your own chat style."
+
+#    OllamaChat.Orders.TradeWalkSeconds
+#        How long a bot told to come and trade keeps coming before it gives
+#        up (you walked off, it could not get to you).
+#        Default: 20
+OllamaChat.Orders.TradeWalkSeconds = 20
+
+#    OllamaChat.Orders.FleeRecoverSeconds
+#        After "run!", how long the bots and you have to be out of combat
+#        before they fight again.
+#        Default: 8
+OllamaChat.Orders.FleeRecoverSeconds = 8
+
+#    OllamaChat.State.Staying
+#        Added to the prompt of a bot told to stay, so "why aren't you
+#        coming?" gets a real answer. {player_name}: who it takes orders from.
+#        Empty disables.
+OllamaChat.State.Staying = "Right now you are waiting where {player_name} told you to stay, until they tell you to follow again."
+
+###############################################################################
+#
+#   OLLAMA CHAT - MUTED BOT LINES
+#
+#   Playerbots whispers a stock line for a lot of what bots do: "Using
+#   [Hearthstone]", "Drinking [Conjured Water] (40%)", "AI was reset to
+#   defaults", "I don't know this dungeon, lead the way!", "Staying",
+#   "Following". The ones listed here never reach you. "Staying",
+#   "Following" and the like are on it because the bot now says it in its
+#   own words (ORDERS above); take them off if you turn orders off.
+#
+#   Only lines a bot sends as a whisper or in party or raid chat are looked
+#   at, and only whole lines: "Staying" is muted, "staying here till you
+#   are back" is not. What the model writes for a bot is never on the list,
+#   so it always goes through.
+#
+#   Patterns are separated by ; (an item link starts with |, so | cannot
+#   be the separator here), compared ignoring case; * matches anything, so
+#   "Using |c*" is "Using " followed by an item link.
+#
+###############################################################################
+
+#    OllamaChat.Mute.Enable
+#        Default: 1
+OllamaChat.Mute.Enable = 1
+
+#    OllamaChat.Mute.Patterns
+OllamaChat.Mute.Patterns = "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;I don't know this dungeon, lead the way!;Staying;Following;Fleeing;Running away;Attacking;Releasing...;Meet me at the graveyard"
+
+###############################################################################
+#
+#   OLLAMA CHAT - GETTING BACK UP
+#
+#   Playerbots leaves a bot that dies near you lying where it fell until you
+#   tell it what to do, and mod-dungeon-clear keeps every dungeon body for a
+#   rez. People don't wait to be told: when nobody left standing in the
+#   group can resurrect -- no living priest, paladin, shaman or druid who has
+#   learned the spell -- a dead bot releases, runs back, gets up and joins
+#   the fight again.
+#
+#     * Someone alive can rez: the bot waits for it, for up to
+#       WaitForRezSeconds of nobody fighting, then gives up waiting.
+#     * Nobody can: it releases after ReleaseDelaySeconds.
+#     * Its body is in a dungeon or raid: the ghost runs from the graveyard
+#       to the entrance and walks in, which brings it back there, as it does
+#       for anyone. RunBackSeconds bounds the run when it cannot path there.
+#       A raid that will not let anyone in during a boss fight is tried again
+#       every few seconds.
+#     * In the open world the ghost walks back to its body, as playerbots
+#       already does.
+#
+#   Only bots in a group with a real player. Never in battlegrounds or arenas,
+#   and not while a mod-dungeon-clear run is on: the run decides how its party
+#   is brought back (a rez, a wait, or calling the run off), and once it has
+#   called the run off, this takes over. "release" or "res" said to a dead bot
+#   (ORDERS above) does it at once.
+#
+###############################################################################
+
+#    OllamaChat.Revive.Enable
+#        Default: 1
+OllamaChat.Revive.Enable = 1
+
+#    OllamaChat.Revive.ReleaseDelaySeconds
+#        How long a bot nobody can rez lies there before it releases.
+#        Default: 5
+OllamaChat.Revive.ReleaseDelaySeconds = 5
+
+#    OllamaChat.Revive.WaitForRezSeconds
+#        How long a bot waits for a rez from someone who could give one,
+#        counted only while nobody in the group is fighting. 0 waits for good.
+#        Default: 60
+OllamaChat.Revive.WaitForRezSeconds = 60
+
+#    OllamaChat.Revive.RunBackSeconds
+#        The longest a ghost spends running from the graveyard to its
+#        dungeon before it walks in anyway (about as long as the run takes).
+#        Default: 40
+OllamaChat.Revive.RunBackSeconds = 40
+
+###############################################################################
+#
+#   OLLAMA CHAT - RAID MARKS
+#
+#   Marks make the plan plain without anyone barking it:
+#
+#       skull     kill first -- putting it on a mob starts the fight
+#       cross     kill next -- it becomes the skull when the skull dies
+#       moon      polymorph (mage)            star     sap (rogue)
+#       diamond   banish or fear (warlock)    circle   shackle undead (priest)
+#       triangle  hibernate, roots, cyclone (druid)
+#       square    freezing trap (hunter)
+#
+#   Each bot whose class can crowd-control is told which mark is its to
+#   control (ClassIcons), with playerbots' crowd-control strategy turned on
+#   if it lacked it (priests and rogues do by default). Mark the pack, then
+#   put the skull on the mob to kill first: nothing happens until the skull
+#   goes on -- that is playerbots, the skull is every bot's target -- and as
+#   the pack comes in, each one controls its own mark. A sap has to land
+#   before the pull, so the star is the exception: put it on a mob that is
+#   not fighting and a rogue in the group sneaks over and saps it.
+#
+#   While someone in the group is marking (a mark changed in the last
+#   InUseSeconds that this did not make), the skull moves on by itself: to
+#   the cross when the skull dies, else to the nearest mob still fighting the
+#   group that nobody marked to control and nothing is controlling
+#   (AutoSkull). So the bots finish the loose mobs before they break
+#   anything that is controlled. Groups that do not mark see none of this.
+#
+#   In a 5-man dungeon playerbots' bots only crowd-control what is marked
+#   for them; in raids and out in the world they also pick targets of their
+#   own.
+#
+###############################################################################
+
+#    OllamaChat.Marks.Enable
+#        Default: 1
+OllamaChat.Marks.Enable = 1
+
+#    OllamaChat.Marks.ClassIcons
+#        class:mark pairs, comma separated. Classes: warrior, paladin,
+#        hunter, rogue, priest, deathknight, shaman, mage, warlock, druid.
+#        Marks: star, circle, diamond, triangle, moon, square, cross, skull.
+#        A paladin given a mark turns undead on it; shamans have no crowd
+#        control in playerbots.
+OllamaChat.Marks.ClassIcons = "mage:moon, rogue:star, priest:circle, warlock:diamond, druid:triangle, hunter:square"
+
+#    OllamaChat.Marks.AddCcStrategy
+#        Turn playerbots' crowd-control strategy on for those classes when a
+#        bot lacks it.
+#        Default: 1
+OllamaChat.Marks.AddCcStrategy = 1
+
+#    OllamaChat.Marks.SapStar
+#        A rogue bot saps the mob the star is put on, when nothing is fighting.
+#        Default: 1
+OllamaChat.Marks.SapStar = 1
+
+#    OllamaChat.Marks.AutoSkull
+#        With no cross to move to, the skull goes on the next loose mob.
+#        Default: 1
+OllamaChat.Marks.AutoSkull = 1
+
+#    OllamaChat.Marks.InUseSeconds
+#        How long after someone last changed a mark the skull keeps moving
+#        on by itself.
+#        Default: 180
+OllamaChat.Marks.InUseSeconds = 180
 
 ###############################################################################
 #

@@ -64,7 +64,6 @@ namespace
                     bots.insert(p->GetGUID().GetRawValue());
         return bots;
     }
-
 }
 
 void Mute_Publish(bool enable, std::vector<std::string> patterns)
@@ -136,7 +135,7 @@ bool OllamaChatMuteScript::CanPacketSend(WorldSession* session, WorldPacket cons
     const std::string line(text, strnlen(text, length - 1));
     for (const std::string& pattern : snap->patterns)
     {
-        if (Mute_Matches(pattern, line))
+        if (TextRules::GlobMatch(pattern, line))
         {
             g_dropped.fetch_add(1, std::memory_order_relaxed);
             return false;
