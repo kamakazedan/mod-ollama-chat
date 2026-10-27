@@ -17,6 +17,10 @@
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_conjure.h"
+#include "mod-ollama-chat_marks.h"
+#include "mod-ollama-chat_mute.h"
+#include "mod-ollama-chat_orders.h"
+#include "mod-ollama-chat_revive.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
 #include <thread>
@@ -563,6 +567,36 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              (unsigned long long)conjure.refused,
                              (unsigned long long)conjure.lapsed,
                              conjure.pending);
+
+    const OrdersStats orders = Orders_GetStats();
+    handler->PSendSysMessage("Orders: {} - {} given, {} commands sent, {} playerbots had already, {} could not, "
+                             "{} trades offered, {} unstuck, {} playerbots commands left alone",
+                             g_OrdersEnable ? "on" : "off",
+                             (unsigned long long)orders.orders,
+                             (unsigned long long)orders.sent,
+                             (unsigned long long)orders.already,
+                             (unsigned long long)orders.refused,
+                             (unsigned long long)orders.trades,
+                             (unsigned long long)orders.unstuck,
+                             (unsigned long long)orders.raw);
+
+    const ReviveStats revive = Revive_GetStats();
+    const MarksStats  marks  = Marks_GetStats();
+    handler->PSendSysMessage("Getting back up: {} - {} released, {} ran back in, {} stopped waiting for a rez   "
+                             "Muted bot lines: {}",
+                             g_ReviveEnable ? "on" : "off",
+                             (unsigned long long)revive.released,
+                             (unsigned long long)revive.returned,
+                             (unsigned long long)revive.gaveUp,
+                             (unsigned long long)Mute_GetDropped());
+    handler->PSendSysMessage("Raid marks: {} - {} crowd-control marks given out, skull moved {} to the cross and "
+                             "{} to the next mob, {} saps ({} failed)",
+                             g_MarksEnable ? "on" : "off",
+                             (unsigned long long)marks.assigned,
+                             (unsigned long long)marks.moved,
+                             (unsigned long long)marks.picked,
+                             (unsigned long long)marks.saps,
+                             (unsigned long long)marks.sapFails);
 
     const LinksStats   links   = Links_GetStats();
     const PhrasesStats phrases = Phrases_GetStats();

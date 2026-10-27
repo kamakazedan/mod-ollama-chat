@@ -45,6 +45,13 @@ namespace TextRules
     std::string StripVocatives(const std::string& text,
                                const std::vector<std::vector<std::string>>& vocatives);
 
+    // ---- muted bot lines ----------------------------------------------------
+
+    // Does `text` match `pattern`? Case-insensitive, the whole text; '*'
+    // matches any run of characters, so "Using |c*" is "Using " followed by an
+    // item link, and "Staying" is that word alone.
+    bool GlobMatch(const std::string& pattern, const std::string& text);
+
     // ---- party commands --------------------------------------------------
 
     // A phrase from a command list. "=r" in the config matches only a line
@@ -60,19 +67,24 @@ namespace TextRules
     {
         None,
         Start,   // ready / lets go / ok carry on: start or resume
-        Pause    // mb / wait / stop / brb: hold here
+        Pause,   // mb / wait / stop / brb: hold here
+        Resume   // ok im done / full / done drinking: carry on -- only while paused
     };
 
     struct PartyRules
     {
         std::vector<CommandPhrase> start;
         std::vector<CommandPhrase> pause;
+        std::vector<CommandPhrase> resume;                 // "im done", "full": only means go on after a pause
         std::vector<CommandPhrase> cancel;                 // "dont stop", "no need to wait": not a pause
         std::vector<std::vector<std::string>> negations;   // "not ready", "i dont need mana": neither
         std::vector<std::vector<std::string>> questions;   // anywhere: "wait what", "where do we go"
         std::vector<std::vector<std::string>> openers;     // first word: "you oom", "anyone need mana"
         std::vector<std::vector<std::string>> notYet;      // block a start: "almost ready", "ready in 5"
+        std::vector<std::vector<std::string>> resumeFillers;   // "ok", "thanks", "now": go with a resume
         uint32_t maxWords = 10;
+        uint32_t resumeMaxWords = 6;                       // "ok im done" yes, a story that says "done" no
+        uint32_t resumeMaxStray = 1;                       // words that are neither: "i have done this before" no
     };
 
     // What a short party line asks for:
@@ -86,7 +98,12 @@ namespace TextRules
     //     "no" up front is emphasis ("no wait"), and a negation inside the
     //     phrase itself ("dont pull") is the instruction;
     //   * a start -- "lets go", "im back" -- unless negated ("not ready") or
-    //     not yet ("almost ready", "ready in 5").
+    //     not yet ("almost ready", "ready in 5");
+    //   * a resume -- "ok im done", "full", "done drinking" -- in a short line,
+    //     unless negated ("not done") or not yet ("almost done"). Only the
+    //     caller knows whether the run is paused, which is the only time it
+    //     means anything. A pause word inside it ("drinking") is part of it;
+    //     one outside it ("done, wait") makes the line a pause.
     // A pause wins over a start. Lines starting "dc" or "dungeon clear" are left
     // to mod-dungeon-clear.
     PartyIntent MatchPartyIntent(const std::string& cleanText, const PartyRules& rules);

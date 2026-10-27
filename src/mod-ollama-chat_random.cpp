@@ -19,6 +19,11 @@
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_conjure.h"
+#include "mod-ollama-chat_marks.h"
+#include "mod-ollama-chat_mute.h"
+#include "mod-ollama-chat_orders.h"
+#include "mod-ollama-chat_partycmd.h"
+#include "mod-ollama-chat_revive.h"
 
 #include "CellImpl.h"
 #include "Channel.h"
@@ -303,6 +308,21 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 
     // Mages handing over the food and water they were asked for.
     Conjure_Update();
+
+    // Orders carried out a tick after they were given; bots walking over to trade.
+    Orders_Update(diff);
+
+    // Which characters are bots, for the stock lines that are muted.
+    Mute_Update(diff);
+
+    // Dead bots with nobody to rez them releasing and running back.
+    Revive_Update(diff);
+
+    // Raid marks: whose mark is whose, saps on the star, the skull moving on.
+    Marks_Update(diff);
+
+    // A bot tank greeting its dungeon group, and calling the finish.
+    PartyCmd_Update(diff);
 
     // After the crowds: a conversation waits for any crowd in its place.
     Conversation_Update();

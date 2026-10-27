@@ -6,6 +6,7 @@
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_rag.h"
 #include "mod-ollama-chat_conjure.h"
+#include "mod-ollama-chat_mute.h"
 #include "Log.h"
 
 void Addmod_ollama_chatScripts()
@@ -39,4 +40,7 @@ void Addmod_ollama_chatScripts()
 
     // Mages filling the trade window they offered as soon as it opens.
     new OllamaChatConjureScript();
+
+    // Stock bot lines nobody needs: "Using [Hearthstone]", "AI was reset to defaults".
+    new OllamaChatMuteScript();
 }

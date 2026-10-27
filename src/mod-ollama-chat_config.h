@@ -464,6 +464,36 @@ extern std::string g_StateGhostText;   // released, running back
 // World thread only.
 extern bool        g_OrdersEnable;
 extern TextRules::BotCommandRules g_OrdersRules;
+// What a bot says it is doing, per order ({player_name}, {who}, {target},
+// {doing}, {where}), and that it cannot ({order}, {reason}).
+extern std::string g_OrdersHint[static_cast<size_t>(TextRules::BotIntent::Count)];
+extern std::string g_OrdersHintCant;
+extern uint32_t    g_OrdersTradeWalkSeconds;    // how long a bot walks over to trade before giving up
+extern uint32_t    g_OrdersFleeRecoverSeconds;  // after "run!": out of combat this long, and it fights again
+extern std::string g_StateStayingText;          // a bot waiting where it was told to stay
+
+// Dead bots getting themselves back up (mod-ollama-chat_revive). World thread only.
+extern bool        g_ReviveEnable;
+extern uint32_t    g_ReviveReleaseDelaySeconds;
+extern uint32_t    g_ReviveWaitForRezSeconds;
+extern uint32_t    g_ReviveRunBackSeconds;
+
+// Raid marks (mod-ollama-chat_marks). World thread only.
+extern bool        g_MarksEnable;
+extern std::string g_MarksClassIcon[16];        // by class id: "moon", "star", ... or empty
+extern bool        g_MarksAddCcStrategy;
+extern bool        g_MarksSapStar;
+extern bool        g_MarksAutoSkull;
+extern uint32_t    g_MarksInUseSeconds;
+
+// A bot tank greeting its dungeon group and calling the finish
+// (mod-ollama-chat_partycmd). World thread only.
+extern std::string g_PartyAnnouncePrompt;
+extern bool        g_PartyGreetEnable;
+extern uint32_t    g_PartyGreetDelaySeconds;
+extern std::string g_PartyGreetSituation;
+extern bool        g_PartyDoneEnable;
+extern std::string g_PartyDoneSituation;
 
 // Read OllamaChat.Personality.Nudge.<KEY> and .MaxReplyLength.<KEY> for every
 // personality loaded from the database. Called right after LoadEmoteStyles.

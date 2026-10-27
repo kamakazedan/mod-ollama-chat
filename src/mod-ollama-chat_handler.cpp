@@ -49,6 +49,7 @@
 #include "mod-ollama-chat_partycmd.h"
 #include "mod-ollama-chat_conjure.h"
 #include "mod-ollama-chat_links.h"
+#include "mod-ollama-chat_orders.h"
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_presence.h"
@@ -1237,6 +1238,12 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // run and gets the water -- the mage answers after the tank. Before the
         // blacklist too, since "trade" starts a line people use to ask.
         if (Conjure_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq))
+            handled = true;
+
+        // "stay back", "Joanni come trade me", "res": orders, carried out and
+        // answered by the bot it was for. Before the blacklist, since "stay",
+        // "follow" and "trade" start lines that people use to say them.
+        if (!handled && Orders_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq))
             handled = true;
 
         if (handled)
@@ -3230,6 +3237,13 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         const std::string& state = bot->HasPlayerFlag(PLAYER_FLAGS_GHOST) ? g_StateGhostText : g_StateDeadText;
         if (!state.empty())
             prompt += " " + state;
+    }
+    else
+    {
+        // ...and one told to stay put knows why it is not following.
+        const std::string staying = Orders_StateTextFor(bot);
+        if (!staying.empty())
+            prompt += " " + staying;
     }
 
     // What this chat style is told on top of its personality, this time: a

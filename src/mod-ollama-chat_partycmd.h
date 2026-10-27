@@ -18,6 +18,7 @@ class Player;
 //
 //   "ready", "r?", "lets go", "ok carry on"   start the clear, or resume it
 //   "mb", "wait", "stop", "brb", "need mana"  pause it where it stands
+//   "ok im done", "full", "done drinking"     resume it -- only while paused
 //
 // The tank answers in party ("np, drink up, say when"), and the line gets no
 // other replies -- so "mb" is never read as "my bad" again. A start waits for
@@ -72,6 +73,12 @@ std::string PartyCmd_GlossaryFor(Player* bot, ChatChannelSourceLocal source);
 // right now (OllamaChat.Party.RunStateText), so it can answer "which boss is
 // next?" or "what are we waiting for?". Empty outside a run.
 std::string PartyCmd_RunStateFor(Player* bot, ChatChannelSourceLocal source);
+
+// The world tick, every couple of seconds: a bot tank leading a dungeon-clear
+// group greets it when it comes into a dungeon ("let me know when you're ready
+// to start", OllamaChat.Party.Greet*) and says so in party when every boss is
+// down (OllamaChat.Party.Done*), in its own chat style.
+void PartyCmd_Update(uint32_t diff);
 
 struct PartyCmdStats
 {

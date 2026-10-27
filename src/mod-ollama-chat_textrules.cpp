@@ -554,6 +554,41 @@ namespace TextRules
                (words[0] == "dc" || (words.size() >= 2 && words[0] == "dungeon" && words[1] == "clear"));
     }
 
+    bool GlobMatch(const std::string& pattern, const std::string& text)
+    {
+        if (pattern.empty())
+            return false;
+        // Iterative, with one backtrack point for the last '*'.
+        size_t p = 0, t = 0, star = std::string::npos, mark = 0;
+        auto same = [](char a, char b)
+        {
+            return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+        };
+        while (t < text.size())
+        {
+            if (p < pattern.size() && pattern[p] == '*')
+            {
+                star = p++;
+                mark = t;
+            }
+            else if (p < pattern.size() && same(pattern[p], text[t]))
+            {
+                ++p;
+                ++t;
+            }
+            else if (star != std::string::npos)
+            {
+                p = star + 1;
+                t = ++mark;
+            }
+            else
+                return false;
+        }
+        while (p < pattern.size() && pattern[p] == '*')
+            ++p;
+        return p == pattern.size();
+    }
+
     PartyIntent MatchPartyIntent(const std::string& cleanText, const PartyRules& rules)
     {
         const std::vector<std::string> words = CrowdText::Words(cleanText);
@@ -577,6 +612,31 @@ namespace TextRules
 
         bool pause = false;
         const std::vector<bool> covered = Coverage(words, rules.pause, pause);
+
+        // "ok im done", "done drinking": what someone says once they have
+        // had their break. The "drinking" in it is no pause.
+        bool resume = false;
+        const std::vector<bool> resumed = Coverage(words, rules.resume, resume);
+        if (resume && (rules.resumeMaxWords == 0 || words.size() <= rules.resumeMaxWords) &&
+            !NegatedOutside(words, resumed, rules.negations) &&
+            !CrowdText::ContainsPhrase(words, rules.notYet))
+        {
+            std::vector<bool> filler(words.size(), false);
+            for (const auto& [b, e] : Occurrences(words, rules.resumeFillers))
+                for (size_t i = b; i < e; ++i)
+                    filler[i] = true;
+            bool pauseOutside = false;
+            uint32_t stray = 0;
+            for (size_t i = 0; i < words.size(); ++i)
+            {
+                pauseOutside = pauseOutside || (covered[i] && !resumed[i]);
+                if (!resumed[i] && !filler[i])
+                    ++stray;
+            }
+            if (!pauseOutside && stray <= rules.resumeMaxStray)
+                return PartyIntent::Resume;
+        }
+
         if (pause && !MatchesAny(words, rules.cancel) && !NegatedOutside(words, covered, rules.negations))
             return PartyIntent::Pause;
 
