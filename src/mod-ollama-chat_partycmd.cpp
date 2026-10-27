@@ -4,6 +4,7 @@
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_governor.h"
+#include "mod-ollama-chat_orders.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_textrules.h"
@@ -397,6 +398,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
             return false;
         }
         ++g_stats.resumed;
+        Orders_ReleaseStays(player);
         Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Resumed, std::string());
     }
     else
@@ -408,6 +410,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
             return false;
         }
         ++g_stats.started;
+        Orders_ReleaseStays(player);
         Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Started, std::string());
     }
 

@@ -747,6 +747,46 @@ void Orders_Update(uint32_t /*diff*/)
     }
 }
 
+void Orders_ReleaseStays(Player* player)
+{
+    Group* group = player ? player->GetGroup() : nullptr;
+    if (!group)
+        return;
+
+    // Every bot in the group, whoever told it to stay: an order from here, a
+    // playerbots "stay" read from the same line that paused the run ("stay
+    // here"), or a stay from an addon. The run takes the whole group along, and
+    // a pause has already let go of dungeon-clear's own pins (it aborts the
+    // pull), so any stay left is one that would hold a bot back. Changed in
+    // place rather than as a command, so nobody's "Following" comes back and a
+    // bot of another player's is let go as well.
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* bot = ref->GetSource();
+        if (!bot || !bot->IsInWorld())
+            continue;
+        PlayerbotAI* ai = AiOf(bot);
+        if (!ai)
+            continue;
+
+        bool released = false;
+        if (ai->HasStrategy("stay", BOT_STATE_NON_COMBAT))
+        {
+            // "stay" and "follow" are siblings: adding follow takes stay off.
+            ai->ChangeStrategy("+follow", BOT_STATE_NON_COMBAT);
+            released = true;
+        }
+        if (ai->HasStrategy("stay", BOT_STATE_COMBAT))
+        {
+            ai->ChangeStrategy("-stay", BOT_STATE_COMBAT);
+            released = true;
+        }
+        if (released && g_DebugEnabled)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] {} stops staying put: the dungeon clear is moving",
+                     bot->GetName());
+    }
+}
+
 std::string Orders_StateTextFor(Player* bot)
 {
     if (!bot || g_StateStayingText.empty() || !bot->IsAlive())

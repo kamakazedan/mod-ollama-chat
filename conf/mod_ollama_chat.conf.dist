@@ -2479,7 +2479,9 @@ OllamaChat.Conjure.HintNotGrouped = "{player_name} asked you for {request}, but 
 #   commands for you (MultiBot and the like) need the prefix too.
 #
 #   In a dungeon with a dungeon-clear tank, "stay here" and "wait" pause the
-#   run instead (PARTY INSTRUCTIONS above).
+#   run instead (PARTY INSTRUCTIONS above). When a run starts or carries on,
+#   every bot in the group that was told to stay follows again, however it
+#   was told: a bot left staying put would hold back the run.
 #
 #   Phrase lists are separated by |; words are matched lowercase with
 #   punctuation and apostrophes dropped; a trailing * matches any word

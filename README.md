@@ -545,7 +545,8 @@ one; otherwise every bot that takes orders from you does it. Questions,
 negations and conditions are not orders ("should we wait here?", "dont stay
 here", "if it runs, kill it"), and neither is talk that only mentions one ("we
 should stay here and fight"). Nothing is ever summoned. See
-`OllamaChat.Orders.*`.
+`OllamaChat.Orders.*`. When a dungeon-clear run starts or carries on, any bot
+still told to stay comes along.
 
 Playerbots also reads every chat line as one of its own commands unless
 `Playerbots.CommandPrefix` is set: then "leave it" makes a bot leave and "go
