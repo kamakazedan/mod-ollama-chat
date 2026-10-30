@@ -181,6 +181,40 @@ namespace
         return out;
     }
 
+    // Words that say nothing about which thing is meant.
+    bool IsCommonWord(const std::string& w)
+    {
+        static const char* const kCommon[] = { "your", "that", "this", "them", "those", "these", "some", "please",
+                                               "thanks", "with", "have", "take", "want", "give", "trade", "need",
+                                               "spare", "mate", "just", "from", "there", "here", "what", "where",
+                                               "would", "could", "cheers", "really" };
+        return std::any_of(std::begin(kCommon), std::end(kCommon), [&](const char* c) { return w == c; }) ||
+               CrowdText::ContainsPhrase({ w }, g_BagsYesPhrases);
+    }
+
+    // "can I have it", "ill take that one": an ask that points back at what
+    // was offered rather than naming something -- a word like "it", and no
+    // word that could be the name of something else ("can i have that sword").
+    bool PointsAtOffer(const std::vector<std::string>& words)
+    {
+        static const char* const kPointers[] = { "it", "that", "those", "them", "this", "one", "these" };
+        bool pointer = false;
+        for (const std::string& w : words)
+        {
+            if (std::any_of(std::begin(kPointers), std::end(kPointers), [&](const char* p) { return w == p; }))
+                pointer = true;
+            else if (w.size() >= 4 && !IsCommonWord(w))
+            {
+                bool askWord = false;
+                for (const std::vector<std::string>& phrase : g_BagsAskPhrases)
+                    askWord = askWord || std::find(phrase.begin(), phrase.end(), w) != phrase.end();
+                if (!askWord)
+                    return false;
+            }
+        }
+        return pointer;
+    }
+
     // Which of `items` the line asks for: a link, then a name it contains
     // (longest first), then a word of four letters or more that only one of
     // the names has ("the leggings").
@@ -203,13 +237,10 @@ namespace
         if (best)
             return best;
 
-        static const char* const kCommon[] = { "your", "that", "this", "them", "those", "these", "some", "please",
-                                               "thanks", "with", "have", "take", "want", "give", "trade", "need",
-                                               "spare", "mate", "just", "from", "there", "here", "what", "where" };
         const BagEntry* only = nullptr;
         for (const std::string& w : words)
         {
-            if (w.size() < 4 || std::any_of(std::begin(kCommon), std::end(kCommon), [&](const char* c) { return w == c; }))
+            if (w.size() < 4 || IsCommonWord(w))
                 continue;
             const BagEntry* hit = nullptr;
             bool twice = false;
@@ -531,7 +562,7 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
 
     const std::vector<BagEntry> items = Bags_Scan(bot);
     const BagEntry* want = MatchAsked(items, linked, clean, words);
-    if (!want && offered)
+    if (!want && offered && (yes || PointsAtOffer(words)))
         for (const BagEntry& e : items)
             if (e.entry == offered)
                 want = &e;
