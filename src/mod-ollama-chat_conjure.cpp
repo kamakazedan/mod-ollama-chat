@@ -209,6 +209,7 @@ namespace
         bool                  windowOpen = false;  // their window for the trade with the mage is open
         bool                  ours       = false;  // the mage offered the trade (not them)
         bool                  placed     = false;
+        std::vector<ObjectGuid> placedGuids;       // the stacks this put in (or found in already): the gift
         bool                  refreshed  = false;
         Clock::time_point     created{};
         Clock::time_point     since{};             // entered this state
@@ -384,6 +385,7 @@ namespace
                     break;
                 if (mine->HasItem(item->GetGUID()))   // already in: playerbots' "t water"
                 {
+                    g.placedGuids.push_back(item->GetGUID());
                     left -= std::min(left, item->GetCount());
                     continue;
                 }
@@ -394,6 +396,8 @@ namespace
                 WorldPacket packet(CMSG_SET_TRADE_ITEM, 3);
                 packet << uint8(slot) << uint8(item->GetBagSlot()) << uint8(item->GetSlot());
                 mage->GetSession()->HandleSetTradeItemOpcode(packet);
+                if (mine->HasItem(item->GetGUID()))
+                    g.placedGuids.push_back(item->GetGUID());
                 left -= std::min(left, item->GetCount());
             }
         }
@@ -401,19 +405,28 @@ namespace
 
     // Keep the mage's side accepted while the trade is a pure gift: the
     // person's accept then completes it, and playerbots never weighs it up.
-    // Once they put anything in themselves, it is an ordinary trade again.
+    // Only the gift, though: once they put anything in themselves, or the
+    // bot's side holds anything this did not put there -- gold, another item
+    // (a master's "t [item]"), a spell -- it is an ordinary trade again, for
+    // playerbots to price.
     void KeepAccepted(Gift& g, Player* mage, Player* req)
     {
         TradeData* mine   = mage->GetTradeData();
         TradeData* theirs = req->GetTradeData();
-        if (!mine || !theirs || mine->IsAccepted() || mine->IsInAcceptProcess() || theirs->GetMoney())
+        if (!mine || !theirs || mine->IsAccepted() || mine->IsInAcceptProcess() || theirs->GetMoney() ||
+            mine->GetMoney() || mine->GetSpell())
             return;
         bool any = false;
         for (uint8 slot = 0; slot < TRADE_SLOT_COUNT; ++slot)
         {
             if (theirs->GetItem(TradeSlots(slot)))
                 return;
-            any = any || mine->GetItem(TradeSlots(slot));
+            if (Item* item = mine->GetItem(TradeSlots(slot)))
+            {
+                if (std::find(g.placedGuids.begin(), g.placedGuids.end(), item->GetGUID()) == g.placedGuids.end())
+                    return;
+                any = true;
+            }
         }
         if (!any)
             return;
@@ -975,8 +988,11 @@ void Conjure_Update()
                 KeepAccepted(g, mage, req);
 
                 // In a trade they opened, the window may have opened a moment
-                // after it was filled; show them the mage's side once more.
-                if (!g.ours && !g.refreshed && now - g.placedAt >= std::chrono::seconds(2))
+                // after it was filled; show them the mage's side once more --
+                // unless that accept just completed the trade, which leaves no
+                // trade to show (and SendUpdateTrade would read a null one).
+                if (!g.ours && !g.refreshed && now - g.placedAt >= std::chrono::seconds(2) &&
+                    mage->GetTrader() == req && mage->GetTradeData() && req->GetTradeData())
                 {
                     req->GetSession()->SendUpdateTrade(true);
                     g.refreshed = true;
@@ -1010,7 +1026,16 @@ std::string Conjure_GiveItems(Player* bot, Player* player, const std::vector<std
     const uint64_t botGuid = bot->GetGUID().GetRawValue();
     const uint64_t reqGuid = player->GetGUID().GetRawValue();
     if (FindGift(botGuid, reqGuid))
-        return {};   // one is on its way already
+        return "you are already handing them something, so one thing at a time";
+
+    // Playerbots.EnableRandomBotTrading = 2: random bots do not sell, so they
+    // do not give away anything that would sell either.
+    const bool randomBot = sRandomPlayerbotMgr.IsRandomBot(bot) || sRandomPlayerbotMgr.IsAddclassBot(bot);
+    if (randomBot && sPlayerbotAIConfig.EnableRandomBotTrading == 2)
+        for (const auto& [entry, count] : items)
+            if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(entry))
+                if (proto->SellPrice && count)
+                    return "bots like you are not allowed to sell or give things away on this realm";
 
     const auto now = Clock::now();
     Gift gift;

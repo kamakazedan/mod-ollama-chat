@@ -422,6 +422,17 @@ namespace
         }
     }
 
+    // Hand the rogue back to its own AI, which walks it back to the group (or
+    // into the fight) on its next update.
+    void FinishSap(Player* rogue, PlayerbotAI* ai, bool held)
+    {
+        if (held && rogue && ai)
+        {
+            rogue->GetMotionMaster()->Clear();
+            ai->SetNextCheckDelay(0);
+        }
+    }
+
     // The star went on a mob nobody is fighting: the nearest rogue bot that
     // can, sneaks over and saps it. One that cannot -- no Sap yet, or a mob
     // Sap does not work on -- leaves it alone and says so.
@@ -487,7 +498,12 @@ namespace
             return;
         }
 
+        // A new star while it was on its way to the last one: let go of that
+        // walk first.
         const uint64_t rogueGuid = rogue->GetGUID().GetRawValue();
+        for (const Sap& s : g_saps)
+            if (s.rogue == rogueGuid && s.phase != SapPhase::Stealth)
+                FinishSap(rogue, PlayerbotsMgr::instance().GetPlayerbotAI(rogue), true);
         g_saps.erase(std::remove_if(g_saps.begin(), g_saps.end(), [&](const Sap& s) { return s.rogue == rogueGuid; }),
                      g_saps.end());
         Sap sap;
@@ -499,17 +515,6 @@ namespace
         g_saps.push_back(sap);
         MARKS_SAP_LOG("[Ollama Chat] {} goes to sap {} (star){}.", rogue->GetName(), target->GetName(),
                       rogue->HasStealthAura() ? "" : ", stealth first");
-    }
-
-    // Hand the rogue back to its own AI, which walks it back to the group (or
-    // into the fight) on its next update.
-    void FinishSap(Player* rogue, PlayerbotAI* ai, bool held)
-    {
-        if (held && rogue && ai)
-        {
-            rogue->GetMotionMaster()->Clear();
-            ai->SetNextCheckDelay(0);
-        }
     }
 
     void UpdateSaps(Clock::time_point now)

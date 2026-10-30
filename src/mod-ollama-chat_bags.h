@@ -26,7 +26,9 @@ class Player;
 //     leggings", or just "me!" after it offered one), a spare thing goes over
 //     in a trade -- the way a mage's water does -- and a kept one gets a no
 //     and the reason. Playerbots only trades inside a group, so someone
-//     outside it is told to invite the bot first.
+//     outside it is told to invite the bot first. Only what a player would
+//     give away free counts as spare: not a blue, not a stack worth real
+//     gold (Bags.MaxGiftQuality, Bags.MaxGiftCopper).
 //
 // World thread only, except Bags_NoteLoot.
 // --------------------------------------------------------------------------
@@ -58,11 +60,9 @@ bool Bags_IsItemTalk(const std::string& msg);
 // A bot just looted something. Any thread: it only records the item.
 void Bags_NoteLoot(Player* bot, uint32_t entry);
 
-// A bot's line just went out in `scopeKey`: any spare thing it links in it
-// is on offer there, so for a few minutes "me!" claims it.
-void Bags_NoteOffersIn(Player* bot, const std::string& linkedText, const std::string& scopeKey);
-
-// ...and one it means to offer (an ask that is on its way), linked or not.
+// A bot just offered something in `scopeKey` (OllamaChat.Needs: "anyone
+// want [Linen Cloth]?", recorded when the line goes out): for a few minutes
+// "me!" there claims it.
 void Bags_NoteOffer(Player* bot, uint32_t entry, const std::string& scopeKey);
 
 // A real player asking a bot for something it carries. True when it was

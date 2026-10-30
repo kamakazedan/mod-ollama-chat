@@ -507,6 +507,9 @@ extern std::string g_BagsPromptText;
 extern std::vector<std::vector<std::string>> g_BagsTalkPhrases;   // "anything to trade", "what did you loot"
 extern std::vector<std::vector<std::string>> g_BagsAskPhrases;    // "can i have", "ill take"
 extern std::vector<std::vector<std::string>> g_BagsYesPhrases;    // words a bare claim is made of: "me", "yes", "please"
+extern std::vector<std::vector<std::string>> g_BagsClaimPhrases;  // ...one of which it needs: "me", "yes", "dibs"
+extern uint32_t    g_BagsMaxGiftQuality;     // given away free: no better than this (2 = green)
+extern uint32_t    g_BagsMaxGiftCopper;      // ...and a stack selling for no more than this
 extern std::vector<std::vector<std::string>> g_BagsNotPhrases;    // "dont", "no thanks"
 extern std::string g_BagsHintGive;
 extern std::string g_BagsHintInvite;

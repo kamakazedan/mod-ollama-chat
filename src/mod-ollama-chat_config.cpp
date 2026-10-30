@@ -384,6 +384,9 @@ std::string g_BagsPromptText;
 std::vector<std::vector<std::string>> g_BagsTalkPhrases;
 std::vector<std::vector<std::string>> g_BagsAskPhrases;
 std::vector<std::vector<std::string>> g_BagsYesPhrases;
+std::vector<std::vector<std::string>> g_BagsClaimPhrases;
+uint32_t    g_BagsMaxGiftQuality           = 2;
+uint32_t    g_BagsMaxGiftCopper            = 20000;
 std::vector<std::vector<std::string>> g_BagsNotPhrases;
 std::string g_BagsHintGive;
 std::string g_BagsHintInvite;
@@ -1371,6 +1374,8 @@ static void LoadNaturalChatV7Settings()
     g_BagsInviteWaitSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.InviteWaitSeconds", 120);
     g_BagsMaxSpare          = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.MaxSpare", 6);
     g_BagsMaxKept           = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.MaxKept", 3);
+    g_BagsMaxGiftQuality    = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.MaxGiftQuality", 2);
+    g_BagsMaxGiftCopper     = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.MaxGiftCopper", 20000);
     g_BagsPromptText = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.PromptText",
         "What you have on you (bring up only what fits what they said): you could spare {spare}; you are keeping "
         "{kept}; and you have {money}. Asked for something you can spare, you are happy to trade it over; asked for "
@@ -1379,14 +1384,17 @@ static void LoadNaturalChatV7Settings()
         "trade|trading|tradeable|loot|looted|loots|drop|dropped|drops|bags|inventory|spare|sell|selling|wts|wtb|"
         "for sale|what do you have|what have you got|what you got|what u got|whatcha got|watcha got|got anything|"
         "have anything|anything good|anything nice|anything for me|do you have|have you got|got any|you got any|"
-        "u got any|any spare|need any|items|gear"));
+        "u got any|any spare|need any|items|gear|can i have|could i have|can i get|could i get|give me|gimme|"
+        "trade me|ill take"));
     g_BagsAskPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.AskWords",
         "can i have|could i have|can i get|could i get|can i grab|can i take|may i have|give me|gimme|giv me|"
         "trade me|trade it|send me|send it|pass me|hand me|ill take|i will take|ill have|i will have|i want|"
-        "i need|id like|i would like|id love|can you trade|could you trade|can u trade|dibs"));
+        "id like|i would like|id love|can you trade|could you trade|can u trade|dibs"));
     g_BagsYesPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.YesWords",
-        "me|mee|meee|yes|yess|yeah|yea|ye|yep|yup|sure|please|pls|plz|plez|i|would|do|want|it|that|one|oh|ooh|"
-        "dibs|mine|deal|go|on|then|ty|thx|thanks|me2|too"));
+        "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|please|pls|plz|plez|i|would|want|it|that|"
+        "one|oh|ooh|too|do"));
+    g_BagsClaimPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.ClaimWords",
+        "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|want"));
     g_BagsNotPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.NotWords",
         "dont|do not|doesnt|not|no|nah|nope|never|cant|wont|didnt"));
     g_BagsHintGive = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.HintGive",

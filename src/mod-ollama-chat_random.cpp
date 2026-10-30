@@ -579,11 +579,10 @@ void OllamaBotRandomChatter::HandleRandomChatter()
                     request.botName     = bot->GetName();
                     request.kind        = OllamaRequestKind::RandomChatter;
                     request.triggerBotReplies = true;
+                    request.offerEntry  = need.kind == NeedKind::Spare ? need.itemEntry : 0;
                     if (OllamaDispatch_Submit(std::move(request)))
                     {
                         Needs_NoteAsked(bot, need);
-                        if (need.kind == NeedKind::Spare)
-                            Bags_NoteOffer(bot, need.itemEntry, needScope);
                         if (g_DebugEnabled)
                             LOG_INFO("module.ollamachat", "[Ollama Chat] {} asks ({}) in {}: {}", bot->GetName(),
                                      need.key, ChatChannelSourceLocalStr[needSource], need.ask);

@@ -623,7 +623,8 @@ namespace
 
         openerReport.done = true;   // it is out: the conversation hears it below
         Links_NoteSent(line);
-        Bags_NoteOffersIn(bot, line.text, c.request.scopeKey);   // a spare thing linked is on offer
+        if (c.request.offerEntry)   // "anyone want [Linen Cloth]?": out, so "me!" claims it
+            Bags_NoteOffer(bot, c.request.offerEntry, c.request.scopeKey);
         Governor_RecordUtterance(botGuid, c.request.scopeKey, plain);
         Phrases_NoteSaid(plain);
         if (c.request.partyAck)

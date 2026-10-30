@@ -6,6 +6,7 @@
 #include "Bag.h"
 #include "DBCStores.h"
 #include "Item.h"
+#include "Map.h"
 #include "ItemTemplate.h"
 #include "ObjectMgr.h"
 #include "Player.h"
@@ -325,11 +326,16 @@ bool Needs_Pick(Player* bot, bool hub, BotNeed& out)
         candidates.push_back(std::move(found[urand(0, uint32(found.size() - 1))]));
         weights.push_back(weight);
     };
-    gather(NeedKind::Quest,  [&](std::vector<BotNeed>& v) { GatherQuests(bot, hub, state, now, v); });
-    if (hub)
+    // Inside a dungeon only a spare thing is worth saying: nobody asks their
+    // own party to run the dungeon they are in.
+    const bool instance = bot->GetMap() && bot->GetMap()->Instanceable();
+    if (!instance)
+        gather(NeedKind::Quest, [&](std::vector<BotNeed>& v) { GatherQuests(bot, hub, state, now, v); });
+    if (hub && !instance)
         gather(NeedKind::Errand, [&](std::vector<BotNeed>& v) { GatherErrands(bot, state, now, v); });
-    gather(NeedKind::Spare,  [&](std::vector<BotNeed>& v) { GatherSpare(bot, state, now, v); });
-    gather(NeedKind::Short,  [&](std::vector<BotNeed>& v) { GatherShort(bot, state, now, v); });
+    gather(NeedKind::Spare, [&](std::vector<BotNeed>& v) { GatherSpare(bot, state, now, v); });
+    if (!instance)
+        gather(NeedKind::Short, [&](std::vector<BotNeed>& v) { GatherShort(bot, state, now, v); });
 
     if (candidates.empty())
     {
