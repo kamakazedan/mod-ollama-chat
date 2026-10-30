@@ -116,6 +116,10 @@ struct OllamaChatRequest
     // group remembers it, so the next answer is not a copy of this one.
     bool partyAck = false;
 
+    // A bot offering something it carries (mod-ollama-chat_needs): once the
+    // line is out, "me!" where it was said claims this item.
+    uint32_t offerEntry = 0;
+
     // A longer limit than MaxReplyLength for this bot's chat style
     // (OllamaChat.Personality.MaxReplyLength.<KEY>); 0 for the usual one.
     // Resolved on the world thread at submit time, like everything above.

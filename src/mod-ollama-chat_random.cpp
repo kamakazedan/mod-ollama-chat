@@ -18,8 +18,10 @@
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat-utilities.h"
+#include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_conjure.h"
 #include "mod-ollama-chat_marks.h"
+#include "mod-ollama-chat_needs.h"
 #include "mod-ollama-chat_mute.h"
 #include "mod-ollama-chat_orders.h"
 #include "mod-ollama-chat_partycmd.h"
@@ -242,6 +244,87 @@ namespace
         return prompt;
     }
 
+    // Where an ask goes (mod-ollama-chat_needs). In a real player's group: the
+    // party, and only for what a group can use -- a quest, a spare thing; a
+    // bot there never begs in General. Otherwise General -- Trade for a spare
+    // thing in a city, the LFG channel for a quest when the bot is in it --
+    // or /say with someone in earshot.
+    bool ChooseNeedDestination(Player* bot, const OllamaWorldSnapshot& world, const BotNeed& need, bool hub,
+                               ChatChannelSourceLocal& outSource, std::string& outChannelName,
+                               uint32_t& outChannelId)
+    {
+        outChannelName.clear();
+        outChannelId = 0;
+
+        if (bot->GetGroup() && OllamaGroupHasRealPlayer(bot))
+        {
+            if (!need.party || g_DisableForParty)
+                return false;
+            outSource = SRC_PARTY_LOCAL;
+            return true;
+        }
+
+        if (!g_DisableForCustomChannels && world.RealPlayerInZoneAndFaction(bot))
+        {
+            auto tryChannel = [&](uint32_t chanId, bool enabled)
+            {
+                if (!enabled)
+                    return false;
+                Channel* ch = OllamaResolveZoneChannel(bot, chanId);
+                if (!ch || !world.RealPlayerInChannel(ch))
+                    return false;
+                const std::string scope = Governor_MakeScopeKey(
+                    ChatChannelSourceLocalStr[SRC_GENERAL_LOCAL], ch->GetChannelId(), ch->GetName(), 0,
+                    bot->GetZoneId());
+                if (Conversation_IsActive(Crowd_KeyFor(scope, SRC_GENERAL_LOCAL, uint32(bot->GetTeamId()))))
+                    return false;   // not into the middle of a conversation
+                outSource      = SRC_GENERAL_LOCAL;
+                outChannelName = ch->GetName();
+                outChannelId   = ch->GetChannelId();
+                return true;
+            };
+            if (need.kind == NeedKind::Spare && hub && tryChannel(ChatChannelId::TRADE, g_ChatterUseTradeChannel))
+                return true;
+            if (need.kind == NeedKind::Quest &&
+                tryChannel(ChatChannelId::LOOKING_FOR_GROUP, g_ChatterUseLfgChannel))
+                return true;
+            if (tryChannel(ChatChannelId::GENERAL, g_ChatterUseGeneralChannel))
+                return true;
+        }
+
+        if (!g_DisableForSayYell && world.RealPlayerWithin(bot, g_SayDistance))
+        {
+            outSource = SRC_SAY_LOCAL;
+            return true;
+        }
+        return false;
+    }
+
+    std::string BuildNeedPrompt(Player* bot, const BotNeed& need, ChatChannelSourceLocal source,
+                                const std::string& channelName)
+    {
+        PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
+        if (!botAI || !botAI->GetChatHelper() || g_NeedsPromptTemplate.empty() || need.ask.empty())
+            return "";
+        AreaTableEntry const* zone = botAI->GetCurrentZone();
+        std::string prompt = SafeFormat(
+            g_NeedsPromptTemplate,
+            fmt::arg("bot_name", bot->GetName()),
+            fmt::arg("bot_level", bot->GetLevel()),
+            fmt::arg("bot_class", botAI->GetChatHelper()->FormatClass(bot->getClass())),
+            fmt::arg("bot_race", botAI->GetChatHelper()->FormatRace(bot->getRace())),
+            fmt::arg("bot_zone", zone ? PlayerbotAI::GetLocalizedAreaName(zone) : std::string("the world")),
+            fmt::arg("bot_personality", GetPersonalityPromptAddition(GetBotPersonality(bot))),
+            fmt::arg("channel", Context_ChannelLabel(source, channelName)),
+            fmt::arg("need", need.ask));
+        if (prompt.empty() || prompt == "[Format Error]")
+            return "";
+        prompt += Roleplay_BuildVoicePrompt(bot);
+        prompt += Outlook_ForBot(bot);
+        prompt += Links_PromptHint();
+        return prompt;
+    }
+
     // A bot standing within /say range of `bot`, near enough a real player to
     // be heard, for a conversation to start with. nullptr when there is none.
     Player* PickSayPartner(Player* bot, const OllamaWorldSnapshot& world)
@@ -306,8 +389,10 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
     // its next voice in the same tick the pause runs out.
     Crowd_Update();
 
-    // Mages handing over the food and water they were asked for.
+    // Mages handing over the food and water they were asked for (and any
+    // bot what it can spare); a trade promised once they invited it.
     Conjure_Update();
+    Bags_Tick();
 
     // Orders carried out a tick after they were given; bots walking over to trade.
     Orders_Update(diff);
@@ -339,6 +424,8 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
         Context_Update();
         Links_Update();
         Phrases_Update();
+        Bags_Update();
+        Needs_Update();
     }
     else
     {
@@ -457,6 +544,53 @@ void OllamaBotRandomChatter::HandleRandomChatter()
         {
             reschedule();
             continue;
+        }
+
+        // Now and then the line is an ask with a real reason behind it: a
+        // group for a quest it has, a "where's the ...?" in a city, something
+        // it would give away, a few silver (mod-ollama-chat_needs).
+        if (g_NeedsEnable && g_NeedsChance > 0 && urand(1, 100) <= g_NeedsChance)
+        {
+            BotNeed need;
+            ChatChannelSourceLocal needSource = SRC_SAY_LOCAL;
+            std::string needChannel;
+            uint32_t needChannelId = 0;
+            if (Needs_Pick(bot, hub, need) &&
+                ChooseNeedDestination(bot, world, need, hub, needSource, needChannel, needChannelId))
+            {
+                const uint32_t needGroupOrZone =
+                    (needSource == SRC_PARTY_LOCAL && bot->GetGroup()) ? bot->GetGroup()->GetGUID().GetCounter()
+                                                                       : bot->GetZoneId();
+                const std::string needScope = Governor_MakeScopeKey(
+                    ChatChannelSourceLocalStr[needSource], needChannelId, needChannel, 0, needGroupOrZone);
+                std::string prompt = Governor_CanSend(bot->GetGUID(), needScope)
+                                         ? BuildNeedPrompt(bot, need, needSource, needChannel)
+                                         : std::string();
+                if (!prompt.empty())
+                {
+                    OllamaChatRequest request;
+                    request.botGuid     = rawGuid;
+                    request.source      = needSource;
+                    request.channelName = needChannel;
+                    request.channelId   = needChannelId;
+                    request.chainDepth  = 0;
+                    request.scopeKey    = needScope;
+                    request.prompt      = std::move(prompt);
+                    request.botName     = bot->GetName();
+                    request.kind        = OllamaRequestKind::RandomChatter;
+                    request.triggerBotReplies = true;
+                    request.offerEntry  = need.kind == NeedKind::Spare ? need.itemEntry : 0;
+                    if (OllamaDispatch_Submit(std::move(request)))
+                    {
+                        Needs_NoteAsked(bot, need);
+                        if (g_DebugEnabled)
+                            LOG_INFO("module.ollamachat", "[Ollama Chat] {} asks ({}) in {}: {}", bot->GetName(),
+                                     need.key, ChatChannelSourceLocalStr[needSource], need.ask);
+                    }
+                    reschedule();
+                    continue;
+                }
+            }
         }
 
         // Pick what to talk about. Weighted toward the people and the world

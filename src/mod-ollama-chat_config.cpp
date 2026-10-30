@@ -203,6 +203,7 @@ std::string g_ContextHistoryHeader;
 std::string g_ContextHintAddressed;
 std::string g_ContextHintBystander;
 std::string g_ContextHintOpen;
+std::string g_ContextHintPublicWithGroup;
 std::string g_ContextHintEvent;
 std::string g_ContextHintAmbient;
 std::vector<std::string> g_ContextFillerWords;
@@ -363,6 +364,56 @@ bool        g_MarksAddCcStrategy           = true;
 bool        g_MarksSapStar                 = true;
 bool        g_MarksAutoSkull               = true;
 uint32_t    g_MarksInUseSeconds            = 180;
+uint32_t    g_MarksSapStealthWaitSeconds   = 12;
+uint32_t    g_MarksSapApproachSeconds      = 25;
+bool        g_MarksSayEnable               = true;
+uint32_t    g_MarksSayCooldownSeconds      = 120;
+std::string g_MarksSayPrompt;
+std::string g_MarksSapNotLearned;
+std::string g_MarksSapWrongType;
+std::string g_MarksSapNoStealth;
+std::string g_MarksSapFailed;
+
+bool        g_BagsEnable                   = true;
+uint32_t    g_BagsRecentMinutes            = 30;
+uint32_t    g_BagsOfferSeconds             = 180;
+uint32_t    g_BagsInviteWaitSeconds        = 120;
+uint32_t    g_BagsMaxSpare                 = 6;
+uint32_t    g_BagsMaxKept                  = 3;
+std::string g_BagsPromptText;
+std::vector<std::vector<std::string>> g_BagsTalkPhrases;
+std::vector<std::vector<std::string>> g_BagsAskPhrases;
+std::vector<std::vector<std::string>> g_BagsYesPhrases;
+std::vector<std::vector<std::string>> g_BagsClaimPhrases;
+uint32_t    g_BagsMaxGiftQuality           = 2;
+uint32_t    g_BagsMaxGiftCopper            = 20000;
+std::vector<std::vector<std::string>> g_BagsNotPhrases;
+std::string g_BagsHintGive;
+std::string g_BagsHintInvite;
+std::string g_BagsHintKeep;
+std::string g_BagsHintNotHave;
+std::string g_BagsHintCant;
+
+bool        g_NeedsEnable                  = true;
+uint32_t    g_NeedsChance                  = 20;
+uint32_t    g_NeedsBotCooldownMinutes      = 20;
+uint32_t    g_NeedsRepeatMinutes           = 60;
+uint32_t    g_NeedsZoneCooldownSeconds     = 300;
+uint32_t    g_NeedsRememberMinutes         = 15;
+uint32_t    g_NeedsWeight[4]               = { 40, 25, 25, 10 };
+uint32_t    g_NeedsShortMaxLevel           = 15;
+uint32_t    g_NeedsShortCopperPerLevel     = 1200;
+std::string g_NeedsPromptTemplate;
+std::string g_NeedsReasonText;
+std::string g_NeedsAskQuest;
+std::string g_NeedsAskDungeon;
+std::string g_NeedsReasonQuest;
+std::string g_NeedsAskErrand;
+std::string g_NeedsReasonErrand;
+std::string g_NeedsAskSpare;
+std::string g_NeedsReasonSpare;
+std::string g_NeedsAskShort;
+std::string g_NeedsReasonShort;
 std::string g_PartyAnnouncePrompt;
 bool        g_PartyGreetEnable             = true;
 uint32_t    g_PartyGreetDelaySeconds       = 8;
@@ -1297,6 +1348,113 @@ static void LoadNaturalChatV7Settings()
     g_MarksSapStar       = sConfigMgr->GetOption<bool>("OllamaChat.Marks.SapStar", true);
     g_MarksAutoSkull     = sConfigMgr->GetOption<bool>("OllamaChat.Marks.AutoSkull", true);
     g_MarksInUseSeconds  = sConfigMgr->GetOption<uint32_t>("OllamaChat.Marks.InUseSeconds", 180);
+    g_MarksSapStealthWaitSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Marks.SapStealthWaitSeconds", 12);
+    g_MarksSapApproachSeconds    = sConfigMgr->GetOption<uint32_t>("OllamaChat.Marks.SapApproachSeconds", 25);
+    g_MarksSayEnable             = sConfigMgr->GetOption<bool>("OllamaChat.Marks.SayEnable", true);
+    g_MarksSayCooldownSeconds    = sConfigMgr->GetOption<uint32_t>("OllamaChat.Marks.SayCooldownSeconds", 120);
+    g_MarksSayPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Marks.SayPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in a group. Your chat style: {bot_personality} "
+        "{situation} Write it as one party chat line, 3 to 12 words, the way a player types it: no quotes, no name in front.");
+    g_MarksSapNotLearned = sConfigMgr->GetOption<std::string>("OllamaChat.Marks.SapNotLearned",
+        "{player_name} just put the star on {target} for you to sap, but you can't sap yet: {detail}. Tell them, so "
+        "they don't count on it.");
+    g_MarksSapWrongType = sConfigMgr->GetOption<std::string>("OllamaChat.Marks.SapWrongType",
+        "{player_name} just put the star on {target} for you to sap, but you can't: {detail}. Tell them you can't sap "
+        "that one.");
+    g_MarksSapNoStealth = sConfigMgr->GetOption<std::string>("OllamaChat.Marks.SapNoStealth",
+        "{player_name} put the star on {target} for you to sap, but you could not go into stealth in time ({detail}), "
+        "and walking up to it without stealth would pull it. Tell them you are leaving it.");
+    g_MarksSapFailed = sConfigMgr->GetOption<std::string>("OllamaChat.Marks.SapFailed",
+        "You tried to sap {target} for {player_name} and it did not work: {detail}. Tell them in a few words.");
+
+    // --- what bots carry, and handing over what they can spare ------------------------
+    g_BagsEnable            = sConfigMgr->GetOption<bool>("OllamaChat.Bags.Enable", true);
+    g_BagsRecentMinutes     = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.RecentMinutes", 30);
+    g_BagsOfferSeconds      = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.OfferSeconds", 180);
+    g_BagsInviteWaitSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.InviteWaitSeconds", 120);
+    g_BagsMaxSpare          = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.MaxSpare", 6);
+    g_BagsMaxKept           = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.MaxKept", 3);
+    g_BagsMaxGiftQuality    = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.MaxGiftQuality", 2);
+    g_BagsMaxGiftCopper     = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.MaxGiftCopper", 20000);
+    g_BagsPromptText = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.PromptText",
+        "What you have on you (bring up only what fits what they said): you could spare {spare}; you are keeping "
+        "{kept}; and you have {money}. Asked for something you can spare, you are happy to trade it over; asked for "
+        "something you are keeping, say no and why. Never offer anything that is not listed here.");
+    g_BagsTalkPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.TalkWords",
+        "trade|trading|tradeable|loot|looted|loots|drop|dropped|drops|bags|inventory|spare|sell|selling|wts|wtb|"
+        "for sale|what do you have|what have you got|what you got|what u got|whatcha got|watcha got|got anything|"
+        "have anything|anything good|anything nice|anything for me|do you have|have you got|got any|you got any|"
+        "u got any|any spare|need any|items|gear|can i have|could i have|can i get|could i get|give me|gimme|"
+        "trade me|ill take"));
+    g_BagsAskPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.AskWords",
+        "can i have|could i have|can i get|could i get|can i grab|can i take|may i have|give me|gimme|giv me|"
+        "trade me|trade it|send me|send it|pass me|hand me|ill take|i will take|ill have|i will have|i want|"
+        "id like|i would like|id love|can you trade|could you trade|can u trade|dibs"));
+    g_BagsYesPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.YesWords",
+        "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|please|pls|plz|plez|i|would|want|it|that|"
+        "one|oh|ooh|too|do|go|on|then"));
+    g_BagsClaimPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.ClaimWords",
+        "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|want|go on then|go on"));
+    g_BagsNotPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.NotWords",
+        "dont|do not|doesnt|not|no|nah|nope|never|cant|wont|didnt"));
+    g_BagsHintGive = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.HintGive",
+        "{player_name} asked for {item}, which you have no use for, so you are trading it over to them {when}. Say "
+        "so in a few words, in your own way.");
+    g_BagsHintInvite = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.HintInvite",
+        "{player_name} wants {item}, which you could spare, but you only trade with people in your group: tell them "
+        "to invite you and you will trade it over.");
+    g_BagsHintKeep = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.HintKeep",
+        "{player_name} asked for {item}, but you are keeping it: {reason}. Say no, and why, in your own way.");
+    g_BagsHintNotHave = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.HintNotHave",
+        "{player_name} asked for {item}, but you do not have one. Say so.");
+    g_BagsHintCant = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.HintCant",
+        "{player_name} asked for {item}, and you would give it to them, but you can't right now: {reason}. Say so.");
+
+    // --- asks with a real reason behind them --------------------------------------------
+    g_NeedsEnable              = sConfigMgr->GetOption<bool>("OllamaChat.Needs.Enable", true);
+    g_NeedsChance              = sConfigMgr->GetOption<uint32_t>("OllamaChat.Needs.Chance", 20);
+    g_NeedsBotCooldownMinutes  = sConfigMgr->GetOption<uint32_t>("OllamaChat.Needs.BotCooldownMinutes", 20);
+    g_NeedsRepeatMinutes       = sConfigMgr->GetOption<uint32_t>("OllamaChat.Needs.RepeatMinutes", 60);
+    g_NeedsZoneCooldownSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Needs.ZoneCooldownSeconds", 300);
+    g_NeedsRememberMinutes     = sConfigMgr->GetOption<uint32_t>("OllamaChat.Needs.RememberMinutes", 15);
+    g_NeedsWeight[0]           = sConfigMgr->GetOption<uint32_t>("OllamaChat.Needs.WeightQuest", 40);
+    g_NeedsWeight[1]           = sConfigMgr->GetOption<uint32_t>("OllamaChat.Needs.WeightErrand", 25);
+    g_NeedsWeight[2]           = sConfigMgr->GetOption<uint32_t>("OllamaChat.Needs.WeightSpare", 25);
+    g_NeedsWeight[3]           = sConfigMgr->GetOption<uint32_t>("OllamaChat.Needs.WeightShort", 10);
+    g_NeedsShortMaxLevel       = sConfigMgr->GetOption<uint32_t>("OllamaChat.Needs.ShortMaxLevel", 15);
+    g_NeedsShortCopperPerLevel = sConfigMgr->GetOption<uint32_t>("OllamaChat.Needs.ShortCopperPerLevel", 1200);
+    g_NeedsPromptTemplate = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.PromptTemplate",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in {bot_zone}. Your chat style: "
+        "{bot_personality} {need} Write the line you type into {channel} for it, the way players do: short and "
+        "plain, 2 to 12 words, no greeting, no name in front, nothing made up beyond what is given here.");
+    g_NeedsReasonText = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.ReasonText",
+        "A little while ago you asked something in chat because {reason}. If anyone asks about it or answers it, "
+        "that is what it was about.");
+    g_NeedsAskQuest = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.AskQuest",
+        "You are on the quest {quest} in {where}{target}: {kind}, too much to do alone at your level. Ask if anyone "
+        "wants to group up for it, the way players looking for a group do.");
+    g_NeedsAskDungeon = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.AskDungeon",
+        "You have {quest}, a quest for {where}, in your log. Ask if anyone wants to run {where}, the way players "
+        "looking for a dungeon group do.");
+    g_NeedsReasonQuest = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.ReasonQuest",
+        "you are on {quest} in {where}{target}, {kind}, and need people for it; anyone who wants to come can invite "
+        "you");
+    g_NeedsAskErrand = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.AskErrand",
+        "You are in {city} and {why}, so you want to know {what}. Ask, the way a player who is not sure where things "
+        "are would.");
+    g_NeedsReasonErrand = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.ReasonErrand",
+        "you are in {city} and {why}, so you asked {what}");
+    g_NeedsAskSpare = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.AskSpare",
+        "You have {item}{looted} in your bags and no use for it. Offer it, free, to anyone who wants it, naming it "
+        "in square brackets.");
+    g_NeedsReasonSpare = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.ReasonSpare",
+        "you offered {item}, which you have no use for: whoever wants it can have it, in a trade if they are in "
+        "your group, and anyone else has to invite you first");
+    g_NeedsAskShort = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.AskShort",
+        "You are new and have only {money} to your name, saving for {want}. Ask if anyone could spare a few silver, "
+        "the way new players do: friendly, not pushy.");
+    g_NeedsReasonShort = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.ReasonShort",
+        "you only have {money} and are saving for {want}, so you asked for a few silver");
     for (std::string& icon : g_MarksClassIcon)
         icon.clear();
     {
@@ -1771,6 +1929,9 @@ void LoadOllamaChatConfig()
     g_ContextHintOpen = sConfigMgr->GetOption<std::string>("OllamaChat.Context.HintOpen",
         "It was said to everyone, not to you in particular. Answer if you know or have something to add; "
         "if the chat above already covers it, reply with just {pass_token}.");
+    g_ContextHintPublicWithGroup = sConfigMgr->GetOption<std::string>("OllamaChat.Context.HintPublicWithGroup",
+        "{player_name} is in your group, but said that in {channel}, not in party chat, so answer it as a {channel} "
+        "line: keep group business (moving on, pulling, waiting for someone) for party chat.");
     g_ContextHintEvent = sConfigMgr->GetOption<std::string>("OllamaChat.Context.HintEvent",
         "If a real player in your place would not bother commenting, reply with just {pass_token}.");
     g_ContextHintAmbient = sConfigMgr->GetOption<std::string>("OllamaChat.Context.HintAmbient",

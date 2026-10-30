@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_events.h"
+#include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_world.h"
@@ -525,6 +526,9 @@ void ChatOnLoot::OnPlayerStoreNewItem(Player* player, Item* item, uint32 /*count
         return;
 
     ItemTemplate const* tmpl = item->GetTemplate();
+
+    // What it just looted is what it offers first (mod-ollama-chat_bags).
+    Bags_NoteLoot(player, tmpl->ItemId);
 
     if (tmpl->Quality >= ITEM_QUALITY_UNCOMMON)
         eventChatter.DispatchGameEvent(player, g_EventTypeGotItem, tmpl->Name1);

@@ -44,6 +44,8 @@
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat_random.h"
 #include "mod-ollama-chat_context.h"
+#include "mod-ollama-chat_bags.h"
+#include "mod-ollama-chat_needs.h"
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_conversation.h"
 #include "mod-ollama-chat_partycmd.h"
@@ -1238,6 +1240,13 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // run and gets the water -- the mage answers after the tank. Before the
         // blacklist too, since "trade" starts a line people use to ask.
         if (Conjure_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq))
+            handled = true;
+
+        // "can I have your [Linen Cloth]", "ill take the leggings", "me!" right
+        // after a bot offered something: what it can spare goes over in a
+        // trade, what it keeps gets a no and why. Before orders, so "trade me
+        // the cloth" is about the cloth; "come trade me" is still an order.
+        if (!handled && Bags_HandleHumanLine(player, msg, sourceLocal, contextChannel, receiver, scopeKey, humanSeq))
             handled = true;
 
         // "stay back", "Joanni come trade me", "res": orders, carried out and
@@ -3231,6 +3240,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     if (!runState.empty())
         prompt += " " + runState;
 
+    // General, Trade, guild chat: everyone there reads it, not only the group.
+    const bool publicLine = source == SRC_GENERAL_LOCAL || source == SRC_GUILD_LOCAL || source == SRC_OFFICER_LOCAL;
+
     // A dead bot knows it is dead, so "respawn ffs" is about it.
     if (bot->isDead())
     {
@@ -3238,12 +3250,44 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         if (!state.empty())
             prompt += " " + state;
     }
-    else
+    else if (!publicLine)
     {
-        // ...and one told to stay put knows why it is not following.
+        // ...and one told to stay put knows why it is not following -- in the
+        // group's own chat, where it is the group's business.
         const std::string staying = Orders_StateTextFor(bot);
         if (!staying.empty())
             prompt += " " + staying;
+    }
+
+    // Asked what it has, or for something: what is in its bags, what it could
+    // spare and what it keeps (mod-ollama-chat_bags). Only when the talk is
+    // about that -- a list in every prompt is what a bot would talk about.
+    const bool spokenTo = source == SRC_WHISPER_LOCAL || source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL ||
+                          source == SRC_SAY_LOCAL || replyHint == g_ContextHintAddressed;
+    if (spokenTo && Bags_IsItemTalk(playerMessage))
+    {
+        const std::string bags = Bags_Describe(bot);
+        if (!bags.empty())
+            prompt += " " + bags;
+    }
+
+    // What it asked for in chat lately, and why: "why do you need hogger?"
+    // gets the real answer (mod-ollama-chat_needs).
+    const std::string asked = Needs_PromptFor(bot);
+    if (!asked.empty())
+        prompt += " " + asked;
+
+    // Someone from its own group, talking in General or guild chat: the answer
+    // goes there too, so it is not party talk ("hey all" in General got "ready
+    // to move?").
+    if (publicLine && !g_ContextHintPublicWithGroup.empty() && bot->GetGroup() &&
+        bot->GetGroup() == player->GetGroup())
+    {
+        const std::string note = SafeFormat(g_ContextHintPublicWithGroup,
+                                            fmt::arg("player_name", playerName),
+                                            fmt::arg("channel", Context_ChannelLabel(source, channelName)));
+        if (!note.empty() && note != "[Format Error]")
+            prompt += " " + note;
     }
 
     // What this chat style is told on top of its personality, this time: a
