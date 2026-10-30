@@ -416,6 +416,11 @@ uint64_t Context_LatestLineFrom(Player* speaker, ChatChannelSourceLocal source,
     return 0;
 }
 
+std::string Context_ChannelLabel(ChatChannelSourceLocal source, const std::string& channelName)
+{
+    return SpaceLabel(source, channelName);
+}
+
 std::string Context_BuildTranscript(Player* viewer, ChatChannelSourceLocal source,
                                     const std::string& channelName, uint64_t excludeSeq)
 {

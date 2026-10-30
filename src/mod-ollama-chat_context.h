@@ -60,6 +60,10 @@ uint64_t Context_LatestLineFrom(Player* speaker, ChatChannelSourceLocal source,
 std::string Context_BuildTranscript(Player* viewer, ChatChannelSourceLocal source,
                                     const std::string& channelName, uint64_t excludeSeq);
 
+// The channel as a prompt names it: "party chat", "guild chat", "General"
+// (for "General - Elwynn Forest"), "/say nearby".
+std::string Context_ChannelLabel(ChatChannelSourceLocal source, const std::string& channelName);
+
 struct ContextAddressee
 {
     uint64_t    guid  = 0;      // 0 = said to the room, no clear addressee

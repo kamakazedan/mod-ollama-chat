@@ -263,6 +263,7 @@ extern std::string g_ContextHistoryHeader;
 extern std::string g_ContextHintAddressed;
 extern std::string g_ContextHintBystander;
 extern std::string g_ContextHintOpen;
+extern std::string g_ContextHintPublicWithGroup;   // someone in its group, talking in General or guild chat
 extern std::string g_ContextHintEvent;
 extern std::string g_ContextHintAmbient;
 extern std::vector<std::string> g_ContextFillerWords;   // lowercase; "haha*" = prefix
@@ -485,6 +486,55 @@ extern bool        g_MarksAddCcStrategy;
 extern bool        g_MarksSapStar;
 extern bool        g_MarksAutoSkull;
 extern uint32_t    g_MarksInUseSeconds;
+extern uint32_t    g_MarksSapStealthWaitSeconds;   // how long a rogue waits for Stealth before giving up
+extern uint32_t    g_MarksSapApproachSeconds;      // how long it may take to sneak round and sap
+extern bool        g_MarksSayEnable;               // the rogue says why it is not sapping
+extern uint32_t    g_MarksSayCooldownSeconds;
+extern std::string g_MarksSayPrompt;
+extern std::string g_MarksSapNotLearned;
+extern std::string g_MarksSapWrongType;
+extern std::string g_MarksSapNoStealth;
+extern std::string g_MarksSapFailed;
+
+// What a bot carries, and handing over what it can spare (mod-ollama-chat_bags)
+extern bool        g_BagsEnable;
+extern uint32_t    g_BagsRecentMinutes;      // looted this recently: "just looted"
+extern uint32_t    g_BagsOfferSeconds;       // "me!" claims an offer made this recently
+extern uint32_t    g_BagsInviteWaitSeconds;  // told to invite it: the trade starts if they do within this
+extern uint32_t    g_BagsMaxSpare;
+extern uint32_t    g_BagsMaxKept;
+extern std::string g_BagsPromptText;
+extern std::vector<std::vector<std::string>> g_BagsTalkPhrases;   // "anything to trade", "what did you loot"
+extern std::vector<std::vector<std::string>> g_BagsAskPhrases;    // "can i have", "ill take"
+extern std::vector<std::vector<std::string>> g_BagsYesPhrases;    // words a bare claim is made of: "me", "yes", "please"
+extern std::vector<std::vector<std::string>> g_BagsNotPhrases;    // "dont", "no thanks"
+extern std::string g_BagsHintGive;
+extern std::string g_BagsHintInvite;
+extern std::string g_BagsHintKeep;
+extern std::string g_BagsHintNotHave;
+extern std::string g_BagsHintCant;
+
+// Asks with a real reason behind them (mod-ollama-chat_needs)
+extern bool        g_NeedsEnable;
+extern uint32_t    g_NeedsChance;                 // of an ambient line, the share that tries one
+extern uint32_t    g_NeedsBotCooldownMinutes;
+extern uint32_t    g_NeedsRepeatMinutes;          // the same thing again
+extern uint32_t    g_NeedsZoneCooldownSeconds;    // the same kind of ask in one zone
+extern uint32_t    g_NeedsRememberMinutes;
+extern uint32_t    g_NeedsWeight[4];              // quest, errand, spare, short
+extern uint32_t    g_NeedsShortMaxLevel;
+extern uint32_t    g_NeedsShortCopperPerLevel;
+extern std::string g_NeedsPromptTemplate;
+extern std::string g_NeedsReasonText;
+extern std::string g_NeedsAskQuest;
+extern std::string g_NeedsAskDungeon;
+extern std::string g_NeedsReasonQuest;
+extern std::string g_NeedsAskErrand;
+extern std::string g_NeedsReasonErrand;
+extern std::string g_NeedsAskSpare;
+extern std::string g_NeedsReasonSpare;
+extern std::string g_NeedsAskShort;
+extern std::string g_NeedsReasonShort;
 
 // A bot tank greeting its dungeon group and calling the finish
 // (mod-ollama-chat_partycmd). World thread only.

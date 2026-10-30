@@ -18,6 +18,8 @@
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_conjure.h"
 #include "mod-ollama-chat_marks.h"
+#include "mod-ollama-chat_bags.h"
+#include "mod-ollama-chat_needs.h"
 #include "mod-ollama-chat_mute.h"
 #include "mod-ollama-chat_orders.h"
 #include "mod-ollama-chat_revive.h"
@@ -592,13 +594,39 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              (unsigned long long)revive.gaveUp,
                              (unsigned long long)Mute_GetDropped());
     handler->PSendSysMessage("Raid marks: {} - {} crowd-control marks given out, skull moved {} to the cross and "
-                             "{} to the next mob, {} saps ({} failed)",
+                             "{} to the next mob, {} saps ({} would not cast{}, {} did not take, {} given up, "
+                             "{} could not sap it at all, {} said why)",
                              g_MarksEnable ? "on" : "off",
                              (unsigned long long)marks.assigned,
                              (unsigned long long)marks.moved,
                              (unsigned long long)marks.picked,
                              (unsigned long long)marks.saps,
-                             (unsigned long long)marks.sapFails);
+                             (unsigned long long)marks.sapFails,
+                             marks.lastFail ? fmt::format(", last cast result {}", marks.lastFail) : std::string(),
+                             (unsigned long long)marks.sapMissed,
+                             (unsigned long long)marks.sapGaveUp,
+                             (unsigned long long)marks.sapCant,
+                             (unsigned long long)marks.explained);
+
+    const BagsStats  bags  = Bags_GetStats();
+    const NeedsStats needs = Needs_GetStats();
+    handler->PSendSysMessage("Bags: {} - told what they carry {} times, {} asks for something ({} traded over, {} "
+                             "kept, {} told to invite first), {} spare things offered",
+                             g_BagsEnable ? "on" : "off",
+                             (unsigned long long)bags.described,
+                             (unsigned long long)bags.asked,
+                             (unsigned long long)bags.given,
+                             (unsigned long long)bags.kept,
+                             (unsigned long long)bags.invite,
+                             (unsigned long long)bags.offers);
+    handler->PSendSysMessage("Asks with a reason: {} ({}%) - {} quest groups, {} errands, {} spare things, {} for a "
+                             "few silver; {} tries found nothing",
+                             g_NeedsEnable ? "on" : "off", g_NeedsChance,
+                             (unsigned long long)needs.asked[size_t(NeedKind::Quest)],
+                             (unsigned long long)needs.asked[size_t(NeedKind::Errand)],
+                             (unsigned long long)needs.asked[size_t(NeedKind::Spare)],
+                             (unsigned long long)needs.asked[size_t(NeedKind::Short)],
+                             (unsigned long long)needs.none);
 
     const LinksStats   links   = Links_GetStats();
     const PhrasesStats phrases = Phrases_GetStats();

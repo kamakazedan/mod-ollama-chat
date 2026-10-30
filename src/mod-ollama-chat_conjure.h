@@ -5,6 +5,8 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
+#include <vector>
 
 class Player;
 class WorldPacket;
@@ -58,6 +60,15 @@ struct ConjureStats
     uint32_t pending   = 0;
 };
 ConjureStats Conjure_GetStats();
+
+// Hand things from `bot`'s bags to `player` the way the water goes over: the
+// trade offered (or, with a window between them open already, filled), the
+// bot's side kept accepted while it is a pure gift. `items` is (entry, count).
+// Empty when it is under way; `when` then says what it waits for first, if
+// anything ("once they come over to you, ..."). Otherwise why it cannot.
+// Only within a group: playerbots cancels any other trade. World thread.
+std::string Conjure_GiveItems(Player* bot, Player* player, const std::vector<std::pair<uint32_t, uint32_t>>& items,
+                              std::string& when);
 
 // Notices when a trade window opens for someone a mage is giving food or
 // water to -- the one the mage offered, or one they opened with the mage

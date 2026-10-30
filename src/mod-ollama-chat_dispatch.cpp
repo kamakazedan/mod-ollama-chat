@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_dispatch.h"
+#include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
@@ -622,6 +623,7 @@ namespace
 
         openerReport.done = true;   // it is out: the conversation hears it below
         Links_NoteSent(line);
+        Bags_NoteOffersIn(bot, line.text, c.request.scopeKey);   // a spare thing linked is on offer
         Governor_RecordUtterance(botGuid, c.request.scopeKey, plain);
         Phrases_NoteSaid(plain);
         if (c.request.partyAck)

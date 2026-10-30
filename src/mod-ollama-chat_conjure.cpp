@@ -989,6 +989,78 @@ void Conjure_Update()
     CountWatched();
 }
 
+std::string Conjure_GiveItems(Player* bot, Player* player, const std::vector<std::pair<uint32_t, uint32_t>>& items,
+                              std::string& when)
+{
+    when.clear();
+    if (!bot || !player || items.empty())
+        return "there is nothing to give";
+    if (!InGroupWith(player, bot))
+        return "you only trade with people in your group";
+    if (sPlayerbotAIConfig.EnableRandomBotTrading == 0 &&
+        (sRandomPlayerbotMgr.IsRandomBot(bot) || sRandomPlayerbotMgr.IsAddclassBot(bot)))
+        return "bots like you are not allowed to trade on this realm";
+    if (!bot->IsAlive())
+        return "you are dead";
+    if (!player->IsAlive())
+        return "they are dead, and nobody can trade with a ghost";
+    if (bot->GetMapId() != player->GetMapId())
+        return "you are nowhere near them";
+
+    const uint64_t botGuid = bot->GetGUID().GetRawValue();
+    const uint64_t reqGuid = player->GetGUID().GetRawValue();
+    if (FindGift(botGuid, reqGuid))
+        return {};   // one is on its way already
+
+    const auto now = Clock::now();
+    Gift gift;
+    gift.botGuid       = botGuid;
+    gift.requesterGuid = reqGuid;
+    gift.created = gift.since = gift.lastAnswer = now;
+    for (const auto& [entry, count] : items)
+    {
+        // No spell: nothing to conjure, so ConjureAll only cuts it down to
+        // what the bot really has, and no mana is waited for.
+        const uint32_t have = bot->GetItemCount(entry);
+        if (have == 0 || count == 0)
+            continue;
+        gift.items.push_back({ entry, 0, std::min(count, have), 0 });
+    }
+    if (gift.items.empty())
+        return "you do not have it any more";
+
+    for (const GiftItem& gi : gift.items)
+    {
+        ItemPosCountVec dest;
+        if (player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, gi.itemId, gi.count) != EQUIP_ERR_OK)
+            return "their bags are full, so they need to make room first";
+    }
+
+    // A window between them is open already: the tick fills it.
+    if (bot->GetTrader() == player)
+    {
+        gift.windowOpen = true;
+        g_gifts.push_back(std::move(gift));
+        CountWatched();
+        return {};
+    }
+
+    when = WaitReason(bot, player, gift.items);
+    if (!when.empty())
+    {
+        ++g_stats.waited;
+        g_gifts.push_back(std::move(gift));
+        CountWatched();
+        return {};
+    }
+
+    if (!StartGift(gift, bot, player))
+        return "something got in the way of the trade";
+    g_gifts.push_back(std::move(gift));
+    CountWatched();
+    return {};
+}
+
 ConjureStats Conjure_GetStats()
 {
     ConjureStats s = g_stats;

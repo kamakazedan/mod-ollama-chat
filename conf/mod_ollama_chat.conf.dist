@@ -1544,6 +1544,15 @@ OllamaChat.Context.HintAddressed = "They are talking to you, so answer them."
 OllamaChat.Context.HintBystander = "That message was most likely meant for {addressee}, not you. Usually stay out of it and reply with just {pass_token}; only chip in if a real player would, with a joke, a correction or something useful."
 OllamaChat.Context.HintOpen = "It was said to everyone, not to you in particular. Answer if you know or have something to add; if the chat above already covers it, reply with just {pass_token}."
 
+#    OllamaChat.Context.HintPublicWithGroup
+#        Added to a reply prompt when someone in the bot's own group says
+#        something in General, Trade or guild chat, so the answer is a line
+#        for that channel and not party talk -- without it "hey all" in
+#        General got "ready to move?". {player_name}, {channel} ("General",
+#        "guild chat"). There, a bot told to stay is not told so either.
+#        Empty disables.
+OllamaChat.Context.HintPublicWithGroup = "{player_name} is in your group, but said that in {channel}, not in party chat, so answer it as a {channel} line: keep group business (moving on, pulling, waiting for someone) for party chat."
+
 #    OllamaChat.Context.HintEvent
 #        Added to event reaction prompts.
 OllamaChat.Context.HintEvent = "If a real player in your place would not bother commenting, reply with just {pass_token}."
@@ -2723,7 +2732,13 @@ OllamaChat.Revive.RunBackSeconds = 40
 #   goes on -- that is playerbots, the skull is every bot's target -- and as
 #   the pack comes in, each one controls its own mark. A sap has to land
 #   before the pull, so the star is the exception: put it on a mob that is
-#   not fighting and a rogue in the group sneaks over and saps it.
+#   not fighting and a rogue in the group sneaks over and saps it. It goes
+#   into stealth first -- with Stealth still on cooldown it keeps following
+#   and goes when it can, rather than walking up in plain sight and pulling
+#   -- comes round to the mob's back (a mob only spots stealth in front of
+#   it), stops, turns to it and saps. A rogue that cannot -- no Sap before
+#   level 10, a mob Sap does not work on (undead, elementals, machines...),
+#   no stealth in time -- leaves the mob alone and says so in party.
 #
 #   While someone in the group is marking (a mark changed in the last
 #   InUseSeconds that this did not make), the skull moves on by itself when
@@ -2775,6 +2790,259 @@ OllamaChat.Marks.AutoSkull = 1
 #        on by itself.
 #        Default: 180
 OllamaChat.Marks.InUseSeconds = 180
+
+#    OllamaChat.Marks.SapStealthWaitSeconds
+#    OllamaChat.Marks.SapApproachSeconds
+#        How long the rogue waits to go into stealth (Stealth cools down for
+#        10 seconds after it breaks), and then how long it may take to sneak
+#        round the mob and sap it, before it gives up.
+#        Default: 12, 25
+OllamaChat.Marks.SapStealthWaitSeconds = 12
+OllamaChat.Marks.SapApproachSeconds = 25
+
+#    OllamaChat.Marks.SayEnable
+#    OllamaChat.Marks.SayCooldownSeconds
+#    OllamaChat.Marks.SayPrompt
+#        When the rogue cannot sap the star it says why in party, in its own
+#        chat style -- once per reason every SayCooldownSeconds, so marking
+#        the same mob again does not get the same excuse. Placeholders in
+#        SayPrompt: {bot_name}, {bot_level}, {bot_race}, {bot_class},
+#        {bot_personality}, {player_name}, {situation} (one of the four
+#        below).
+#        Default: 1, 120, (below)
+OllamaChat.Marks.SayEnable = 1
+OllamaChat.Marks.SayCooldownSeconds = 120
+OllamaChat.Marks.SayPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in a group. Your chat style: {bot_personality} {situation} Write it as one party chat line, 3 to 12 words, the way a player types it: no quotes, no name in front."
+
+#    OllamaChat.Marks.SapNotLearned
+#    OllamaChat.Marks.SapWrongType
+#    OllamaChat.Marks.SapNoStealth
+#    OllamaChat.Marks.SapFailed
+#        The situations. Placeholders: {player_name} (the real player in
+#        the group), {target} (the starred mob), {bot_level}, {sap_level}
+#        (10), {detail}: why -- "rogues learn Sap at level 10 and you are
+#        level 7"; "it is undead, and Sap only works on humanoids, beasts,
+#        demons and dragonkin" or "it is immune to Sap"; "your Stealth was
+#        still on cooldown"; "you could not get close enough", "it shrugged
+#        it off". Empty silences that one.
+OllamaChat.Marks.SapNotLearned = "{player_name} just put the star on {target} for you to sap, but you can't sap yet: {detail}. Tell them, so they don't count on it."
+OllamaChat.Marks.SapWrongType = "{player_name} just put the star on {target} for you to sap, but you can't: {detail}. Tell them you can't sap that one."
+OllamaChat.Marks.SapNoStealth = "{player_name} put the star on {target} for you to sap, but you could not go into stealth in time ({detail}), and walking up to it without stealth would pull it. Tell them you are leaving it."
+OllamaChat.Marks.SapFailed = "You tried to sap {target} for {player_name} and it did not work: {detail}. Tell them in a few words."
+
+###############################################################################
+#
+#   OLLAMA CHAT - WHAT BOTS CARRY, AND TRADING IT
+#
+#   A bot knows what is in its bags: what it could part with and what it
+#   keeps, and why. The judgement is playerbots' own item usage -- the one it
+#   loots, rolls and sells by -- so it never offers the upgrade it is about to
+#   put on or the quest item it is collecting. Spare is anything tradeable it
+#   has no use for: cloth it does not work, greens for another class or worse
+#   than what it wears, things it would sell. Kept: an upgrade, a quest item,
+#   its trade goods, the food and potions it uses, anything soulbound.
+#
+#   Asked what it has ("got anything to trade?", "what did you loot", a
+#   linked item, "come trade me"), its reply prompt gets the list
+#   (PromptText): the spare things as links, what it just looted first, a few
+#   things it keeps with the reason, and its money.
+#
+#   Asked for something ("can I have your [Linen Cloth]", "ill take the
+#   leggings", "trade me the cloth", or just "me!" / "yes please" right after
+#   it offered one), a spare thing goes over in a trade the way a mage's water
+#   does -- the bot's side accepted already, so the person's accept completes
+#   it, free -- and a kept one gets a no and the reason, in the bot's own
+#   words. Playerbots cancels trades with anyone outside the bot's group, so
+#   someone outside it is told to invite the bot first; if they do within
+#   InviteWaitSeconds, the trade starts by itself. "me!" in General gets its
+#   answer by whisper.
+#
+###############################################################################
+
+#    OllamaChat.Bags.Enable
+#        Default: 1
+OllamaChat.Bags.Enable = 1
+
+#    OllamaChat.Bags.RecentMinutes
+#        What a bot looted this recently is "just looted", and offered first.
+#        Default: 30
+OllamaChat.Bags.RecentMinutes = 30
+
+#    OllamaChat.Bags.OfferSeconds
+#        After a bot links something spare in a line (or offers it,
+#        OllamaChat.Needs), "me!" there claims it for this long.
+#        Default: 180
+OllamaChat.Bags.OfferSeconds = 180
+
+#    OllamaChat.Bags.InviteWaitSeconds
+#        Told to invite the bot first: the trade starts by itself if they do
+#        within this long.
+#        Default: 120
+OllamaChat.Bags.InviteWaitSeconds = 120
+
+#    OllamaChat.Bags.MaxSpare
+#    OllamaChat.Bags.MaxKept
+#        How many spare and kept things the list names.
+#        Default: 6, 3
+OllamaChat.Bags.MaxSpare = 6
+OllamaChat.Bags.MaxKept = 3
+
+#    OllamaChat.Bags.PromptText
+#        The list, in a reply prompt. Placeholders: {spare} ("[Linen Cloth]
+#        x12 (just looted), [Ironspine's Eye] (a blue)"), {kept} ("[Wolf
+#        Meat] (you need it for the quest [Bounty on Wolves])"), {money}.
+OllamaChat.Bags.PromptText = "What you have on you (bring up only what fits what they said): you could spare {spare}; you are keeping {kept}; and you have {money}. Asked for something you can spare, you are happy to trade it over; asked for something you are keeping, say no and why. Never offer anything that is not listed here."
+
+#    OllamaChat.Bags.TalkWords
+#        A line with one of these (or with a link) is about trading or what
+#        someone has, and gets the list. Words as CrowdText reads them:
+#        lowercase, no apostrophes.
+OllamaChat.Bags.TalkWords = "trade|trading|tradeable|loot|looted|loots|drop|dropped|drops|bags|inventory|spare|sell|selling|wts|wtb|for sale|what do you have|what have you got|what you got|what u got|whatcha got|watcha got|got anything|have anything|anything good|anything nice|anything for me|do you have|have you got|got any|you got any|u got any|any spare|need any|items|gear"
+
+#    OllamaChat.Bags.AskWords
+#    OllamaChat.Bags.YesWords
+#    OllamaChat.Bags.NotWords
+#        Asking for something: an AskWords phrase plus the thing (linked,
+#        named, or a word only one thing it carries has: "the leggings"); or,
+#        right after a bot offered something, a line made of nothing but
+#        YesWords ("me", "yes please", "go on then"). A NotWords word ("dont",
+#        "no thanks") means it is not an ask.
+OllamaChat.Bags.AskWords = "can i have|could i have|can i get|could i get|can i grab|can i take|may i have|give me|gimme|giv me|trade me|trade it|send me|send it|pass me|hand me|ill take|i will take|ill have|i will have|i want|i need|id like|i would like|id love|can you trade|could you trade|can u trade|dibs"
+OllamaChat.Bags.YesWords = "me|mee|meee|yes|yess|yeah|yea|ye|yep|yup|sure|please|pls|plz|plez|i|would|do|want|it|that|one|oh|ooh|dibs|mine|deal|go|on|then|ty|thx|thanks|me2|too"
+OllamaChat.Bags.NotWords = "dont|do not|doesnt|not|no|nah|nope|never|cant|wont|didnt"
+
+#    OllamaChat.Bags.HintGive
+#    OllamaChat.Bags.HintInvite
+#    OllamaChat.Bags.HintKeep
+#    OllamaChat.Bags.HintNotHave
+#    OllamaChat.Bags.HintCant
+#        What the bot is told to answer with. Placeholders: {player_name},
+#        {item} ("[Linen Cloth] x12"), {when} ("now", "once they come over
+#        to you, since you are too far apart to trade"), {reason} (kept:
+#        "it is an upgrade you mean to put on"; cannot: "their bags are full,
+#        so they need to make room first").
+OllamaChat.Bags.HintGive = "{player_name} asked for {item}, which you have no use for, so you are trading it over to them {when}. Say so in a few words, in your own way."
+OllamaChat.Bags.HintInvite = "{player_name} wants {item}, which you could spare, but you only trade with people in your group: tell them to invite you and you will trade it over."
+OllamaChat.Bags.HintKeep = "{player_name} asked for {item}, but you are keeping it: {reason}. Say no, and why, in your own way."
+OllamaChat.Bags.HintNotHave = "{player_name} asked for {item}, but you do not have one. Say so."
+OllamaChat.Bags.HintCant = "{player_name} asked for {item}, and you would give it to them, but you can't right now: {reason}. Say so."
+
+###############################################################################
+#
+#   OLLAMA CHAT - ASKS WITH A REAL REASON
+#
+#   Real people in General ask for a Hogger group, where potions are sold,
+#   for a few silver as a new player, or give away loot they cannot use. Now
+#   and then (Chance) an ambient line is one of these, read off the bot
+#   itself, and its reason is remembered:
+#
+#     quest    an elite, group or dungeon quest in its log that it is the
+#              right level for -- out in the world one for that zone, in a
+#              city any ("LF hogger group", "LFG deadmines, have the quests");
+#     errand   in a city, a "where's the ...?" it actually needs: a repair
+#              with gear nearly broken, a vendor or the auction house with its
+#              bags full, potions when it has none, the riding trainer at 20
+#              with no riding, its profession's trainer at a skill cap;
+#     spare    something it carries and has no use for, linked, free to
+#              whoever wants it ("me!" then claims it: WHAT BOTS CARRY above);
+#     short    a low-level bot with hardly any money, asking for a few silver.
+#
+#   A bot in a real player's group asks there, and only about a quest or a
+#   spare thing; otherwise in General (Trade for spare things in a city, the
+#   LFG channel for quests when it is in it), or /say with someone in earshot.
+#   For RememberMinutes afterwards, every reply prompt of that bot carries why
+#   it asked (ReasonText), so "why do you need hogger?" gets the real answer.
+#
+###############################################################################
+
+#    OllamaChat.Needs.Enable
+#    OllamaChat.Needs.Chance
+#        Of the ambient lines bots near real players say, the share (0-100)
+#        that try one of these first.
+#        Default: 1, 20
+OllamaChat.Needs.Enable = 1
+OllamaChat.Needs.Chance = 20
+
+#    OllamaChat.Needs.BotCooldownMinutes
+#    OllamaChat.Needs.RepeatMinutes
+#    OllamaChat.Needs.ZoneCooldownSeconds
+#        A bot asks at most once per BotCooldownMinutes, never the same thing
+#        twice in RepeatMinutes, and one zone hears one ask of each kind per
+#        ZoneCooldownSeconds, so General is not a wall of LFG.
+#        Default: 20, 60, 300
+OllamaChat.Needs.BotCooldownMinutes = 20
+OllamaChat.Needs.RepeatMinutes = 60
+OllamaChat.Needs.ZoneCooldownSeconds = 300
+
+#    OllamaChat.Needs.RememberMinutes
+#        How long it remembers why it asked.
+#        Default: 15
+OllamaChat.Needs.RememberMinutes = 15
+
+#    OllamaChat.Needs.WeightQuest
+#    OllamaChat.Needs.WeightErrand
+#    OllamaChat.Needs.WeightSpare
+#    OllamaChat.Needs.WeightShort
+#        Among the kinds it has something for, how likely each is. 0 turns a
+#        kind off.
+#        Default: 40, 25, 25, 10
+OllamaChat.Needs.WeightQuest = 40
+OllamaChat.Needs.WeightErrand = 25
+OllamaChat.Needs.WeightSpare = 25
+OllamaChat.Needs.WeightShort = 10
+
+#    OllamaChat.Needs.ShortMaxLevel
+#    OllamaChat.Needs.ShortCopperPerLevel
+#        Up to this level, a bot with less money than its level times this
+#        (in copper: 1200 is 12 silver a level) may ask for a few silver.
+#        Default: 15, 1200
+OllamaChat.Needs.ShortMaxLevel = 15
+OllamaChat.Needs.ShortCopperPerLevel = 1200
+
+#    OllamaChat.Needs.PromptTemplate
+#        The line's prompt. Placeholders: {bot_name}, {bot_level},
+#        {bot_race}, {bot_class}, {bot_zone}, {bot_personality}, {channel}
+#        ("General", "party chat", "/say"), {need} (one of the Ask* below).
+OllamaChat.Needs.PromptTemplate = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in {bot_zone}. Your chat style: {bot_personality} {need} Write the line you type into {channel} for it, the way players do: short and plain, 2 to 12 words, no greeting, no name in front, nothing made up beyond what is given here."
+
+#    OllamaChat.Needs.ReasonText
+#        Added to the bot's reply prompts afterwards. {reason}: one of the
+#        Reason* below.
+OllamaChat.Needs.ReasonText = "A little while ago you asked something in chat because {reason}. If anyone asks about it or answers it, that is what it was about."
+
+#    OllamaChat.Needs.AskQuest
+#    OllamaChat.Needs.AskDungeon
+#    OllamaChat.Needs.ReasonQuest
+#        {quest} ("[Wanted: Hogger]", linked), {target} (" (you have to
+#        kill Hogger)", or empty), {where} (its zone, or the dungeon), {kind}
+#        ("an elite quest", "a group quest for 3 players", "a dungeon quest").
+OllamaChat.Needs.AskQuest = "You are on the quest {quest} in {where}{target}: {kind}, too much to do alone at your level. Ask if anyone wants to group up for it, the way players looking for a group do."
+OllamaChat.Needs.AskDungeon = "You have {quest}, a quest for {where}, in your log. Ask if anyone wants to run {where}, the way players looking for a dungeon group do."
+OllamaChat.Needs.ReasonQuest = "you are on {quest} in {where}{target}, {kind}, and need people for it; anyone who wants to come can invite you"
+
+#    OllamaChat.Needs.AskErrand
+#    OllamaChat.Needs.ReasonErrand
+#        {city}, {why} ("your [Worn Shortsword] is nearly broken", "your bags
+#        are full", "you have no healing potions left", "you are level 20
+#        and still cannot ride", "your Mining is stuck at 75 until you train
+#        the next rank"), {what} ("where you can get your gear repaired
+#        here", "where the nearest vendor or the auction house is", ...).
+OllamaChat.Needs.AskErrand = "You are in {city} and {why}, so you want to know {what}. Ask, the way a player who is not sure where things are would."
+OllamaChat.Needs.ReasonErrand = "you are in {city} and {why}, so you asked {what}"
+
+#    OllamaChat.Needs.AskSpare
+#    OllamaChat.Needs.ReasonSpare
+#        {item} ("[Linen Cloth] x12"), {looted} (", which you just looted,"
+#        or empty).
+OllamaChat.Needs.AskSpare = "You have {item}{looted} in your bags and no use for it. Offer it, free, to anyone who wants it, naming it in square brackets."
+OllamaChat.Needs.ReasonSpare = "you offered {item}, which you have no use for: whoever wants it can have it, in a trade if they are in your group, and anyone else has to invite you first"
+
+#    OllamaChat.Needs.AskShort
+#    OllamaChat.Needs.ReasonShort
+#        {money} ("43s"), {want} ("your next skills at the trainer", "a
+#        bigger bag").
+OllamaChat.Needs.AskShort = "You are new and have only {money} to your name, saving for {want}. Ask if anyone could spare a few silver, the way new players do: friendly, not pushy."
+OllamaChat.Needs.ReasonShort = "you only have {money} and are saving for {want}, so you asked for a few silver"
 
 ###############################################################################
 #
