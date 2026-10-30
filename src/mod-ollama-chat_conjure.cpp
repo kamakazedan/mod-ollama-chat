@@ -36,6 +36,7 @@
 #include <fmt/core.h>
 
 #include <algorithm>
+#include <unordered_map>
 #include <atomic>
 #include <chrono>
 #include <list>
@@ -368,27 +369,42 @@ namespace
         mage->TradeCancel(true);
     }
 
-    // Put the gift in the open window, a stack per slot.
+    // Put the gift in the open window, a stack per slot. What is in the window
+    // already of the things given (playerbots' "t water", or "food" from its
+    // master) is part of the gift; a stack bigger than what is still to give
+    // is passed over while a smaller one can make it up, so no more goes than
+    // was said; a stack the core will not take does not count as given.
     void PlaceItems(Gift& g, Player* mage, Player* req)
     {
         TradeData* mine = mage->GetTradeData();
         if (!mine)
             return;
+
+        std::unordered_map<uint32_t, uint32_t> already;
+        for (uint8 s = 0; s < TRADE_SLOT_TRADED_COUNT; ++s)
+            if (Item* item = mine->GetItem(TradeSlots(s)))
+                for (const GiftItem& gi : g.items)
+                    if (item->GetEntry() == gi.itemId)
+                    {
+                        g.placedGuids.push_back(item->GetGUID());
+                        already[gi.itemId] += item->GetCount();
+                        break;
+                    }
+
         uint8 slot = 0;
         for (GiftItem& gi : g.items)
         {
             gi.before = req->GetItemCount(gi.itemId);
-            uint32_t left = gi.count;
+            uint32_t left = gi.count - std::min(gi.count, already[gi.itemId]);
+            bool placedAny = already[gi.itemId] > 0;
             for (Item* item : StacksOf(mage, gi.itemId))
             {
                 if (left == 0)
                     break;
-                if (mine->HasItem(item->GetGUID()))   // already in: playerbots' "t water"
-                {
-                    g.placedGuids.push_back(item->GetGUID());
-                    left -= std::min(left, item->GetCount());
-                    continue;
-                }
+                if (mine->HasItem(item->GetGUID()))
+                    continue;   // in already: counted above
+                if (item->GetCount() > left && placedAny)
+                    continue;   // more than is still to give
                 while (slot < TRADE_SLOT_TRADED_COUNT && mine->GetItem(TradeSlots(slot)))
                     ++slot;
                 if (slot >= TRADE_SLOT_TRADED_COUNT)
@@ -396,8 +412,10 @@ namespace
                 WorldPacket packet(CMSG_SET_TRADE_ITEM, 3);
                 packet << uint8(slot) << uint8(item->GetBagSlot()) << uint8(item->GetSlot());
                 mage->GetSession()->HandleSetTradeItemOpcode(packet);
-                if (mine->HasItem(item->GetGUID()))
-                    g.placedGuids.push_back(item->GetGUID());
+                if (!mine->HasItem(item->GetGUID()))
+                    continue;   // not taken
+                g.placedGuids.push_back(item->GetGUID());
+                placedAny = true;
                 left -= std::min(left, item->GetCount());
             }
         }

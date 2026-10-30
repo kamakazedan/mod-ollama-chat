@@ -2854,8 +2854,9 @@ OllamaChat.Marks.SapFailed = "You tried to sap {target} for {player_name} and it
 #   it, free -- and a kept one gets a no and the reason, in the bot's own
 #   words. The bot's side is only kept accepted while it holds exactly what
 #   was given: anything else put in (gold, another item) makes it an ordinary
-#   trade, priced by playerbots. Whole stacks go over, at most one stack's
-#   worth. Playerbots cancels trades with anyone outside the bot's group, so
+#   trade, priced by playerbots. Whole stacks go over: the biggest, then
+#   more only while they stay within what was asked and one stack's worth.
+#   Playerbots cancels trades with anyone outside the bot's group, so
 #   someone outside it is told to invite the bot first; if they do within
 #   InviteWaitSeconds, the trade starts by itself. "me!" in General gets its
 #   answer by whisper.
@@ -2921,14 +2922,14 @@ OllamaChat.Bags.TalkWords = "trade|trading|tradeable|loot|looted|loots|drop|drop
 #        Asking for something: an AskWords phrase plus the thing (linked,
 #        named, or a word only one thing it carries has: "the leggings").
 #        Right after a bot offered something (OllamaChat.Needs), a line made
-#        of nothing but YesWords, with at least one ClaimWords word in it
-#        ("me", "yes please", "dibs") claims it -- "ty" or "please" alone
-#        does not -- and so does an ask that points at it ("can I have it",
-#        "ill take the cloth"). Names do not count: "me Joanni" is a claim. A
+#        of nothing but YesWords that says yes somewhere (ClaimWords: "me",
+#        "yes please", "dibs", "go on then") claims it -- "ty" or "please"
+#        alone does not -- and so does an ask that points at it ("can I have
+#        it", "ill take the cloth"). Names do not count: "me Joanni" is a claim. A
 #        NotWords word ("dont", "no thanks") means it is not an ask.
 OllamaChat.Bags.AskWords = "can i have|could i have|can i get|could i get|can i grab|can i take|may i have|give me|gimme|giv me|trade me|trade it|send me|send it|pass me|hand me|ill take|i will take|ill have|i will have|i want|id like|i would like|id love|can you trade|could you trade|can u trade|dibs"
-OllamaChat.Bags.YesWords = "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|please|pls|plz|plez|i|would|want|it|that|one|oh|ooh|too|do"
-OllamaChat.Bags.ClaimWords = "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|want"
+OllamaChat.Bags.YesWords = "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|please|pls|plz|plez|i|would|want|it|that|one|oh|ooh|too|do|go|on|then"
+OllamaChat.Bags.ClaimWords = "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|want|go on then|go on"
 OllamaChat.Bags.NotWords = "dont|do not|doesnt|not|no|nah|nope|never|cant|wont|didnt"
 
 #    OllamaChat.Bags.HintGive

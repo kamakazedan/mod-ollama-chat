@@ -1392,9 +1392,9 @@ static void LoadNaturalChatV7Settings()
         "id like|i would like|id love|can you trade|could you trade|can u trade|dibs"));
     g_BagsYesPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.YesWords",
         "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|please|pls|plz|plez|i|would|want|it|that|"
-        "one|oh|ooh|too|do"));
+        "one|oh|ooh|too|do|go|on|then"));
     g_BagsClaimPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.ClaimWords",
-        "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|want"));
+        "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|want|go on then|go on"));
     g_BagsNotPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.NotWords",
         "dont|do not|doesnt|not|no|nah|nope|never|cant|wont|didnt"));
     g_BagsHintGive = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.HintGive",

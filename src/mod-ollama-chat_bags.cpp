@@ -28,6 +28,7 @@
 #include "PlayerbotAI.h"
 #include "PlayerbotAIConfig.h"
 #include "PlayerbotMgr.h"
+#include "PlayerbotSecurity.h"
 
 #include <algorithm>
 #include <cctype>
@@ -210,18 +211,24 @@ namespace
         return out;
     }
 
-    // What really goes over for "want" of them: whole stacks, biggest first,
-    // as many as cover it -- the window takes stacks, not part of one -- and
-    // no more than the six slots a trade has.
+    // What really goes over for "want" of them: whole stacks -- the window
+    // takes stacks, not part of one -- biggest first, the biggest even when
+    // it is more than asked, then more only while they keep within it, in no
+    // more than the six slots a trade has. The same stacks the window is
+    // filled with (Conjure: PlaceItems), so what is said is what goes.
     uint32_t WholeStacks(Player* bot, uint32_t entry, uint32_t want)
     {
         uint32_t sum = 0, used = 0;
         for (uint32_t size : StackSizes(bot, entry))
         {
-            if (sum >= want || used >= TRADE_SLOT_TRADED_COUNT)
+            if (used >= TRADE_SLOT_TRADED_COUNT)
                 break;
+            if (used && sum + size > want)
+                continue;
             sum += size;
             ++used;
+            if (sum >= want)
+                break;
         }
         return sum;
     }
@@ -269,26 +276,22 @@ namespace
         {
             if (std::any_of(std::begin(kPointers), std::end(kPointers), [&](const char* p) { return w == p; }))
                 pointer = true;
-            else if (w.size() >= 3 && !IsCommonWord(w))
-                return false;
+            else if (w.size() >= 4 && !IsCommonWord(w))
+                return false;   // "now", "lol" say nothing; "sword" names something else
         }
         return pointer;
     }
 
-    // "me!", "yes please", "dibs": nothing but claim words, and at least one
-    // that says yes -- "ty" or "please" on its own claims nothing.
+    // "me!", "yes please", "go on then": nothing but YesWords, saying yes
+    // somewhere (ClaimWords) -- "ty" or "please" on its own claims nothing.
     bool BareClaim(const std::vector<std::string>& words)
     {
         if (words.empty() || words.size() > 5)
             return false;
-        bool claim = false;
         for (const std::string& w : words)
-        {
             if (!CrowdText::ContainsPhrase({ w }, g_BagsYesPhrases))
                 return false;
-            claim = claim || CrowdText::ContainsPhrase({ w }, g_BagsClaimPhrases);
-        }
-        return claim;
+        return CrowdText::ContainsPhrase(words, g_BagsClaimPhrases);
     }
 
     // `name` in `text` as whole words: "ring" is not in "bring".
@@ -669,10 +672,6 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
         default:                return false;
     }
 
-    // A linked item is playerbots' to trade (Playerbots.EnableAutoTradeOnItemMention).
-    if (sPlayerbotAIConfig.EnableAutoTradeOnItemMention && msg.find("|Hitem:") != std::string::npos)
-        return false;
-
     const std::string clean = Context_CleanText(msg);   // a link reads as its [Name]
     if (CrowdText::Words(clean).empty())
         return false;
@@ -725,6 +724,13 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
     if (!bot || !bot->IsInWorld() || !OllamaIsBotPlayer(bot) || bot->GetMap() != player->GetMap())
         return false;
 
+    // A linked item from someone the bot takes orders from is playerbots' to
+    // trade (Playerbots.EnableAutoTradeOnItemMention); anyone else it ignores.
+    if (sPlayerbotAIConfig.EnableAutoTradeOnItemMention && msg.find("|Hitem:") != std::string::npos)
+        if (PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(bot))
+            if (ai->GetSecurity()->CheckLevelFor(PLAYERBOT_SECURITY_ALLOW_ALL, true, player))
+                return false;
+
     const std::vector<BagEntry> items = Bags_Scan(bot);
     const BagEntry* want = nullptr;
     if (offered && !named && !namesSomething && (yes || PointsAtOffer(words)))
@@ -746,6 +752,18 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
     }
     if (!want && (!ask || linked.empty()))
         return false;   // nothing it carries is meant: ordinary chat
+
+    // At most one stack's worth, in whole stacks: what the window can take.
+    uint32_t count = 0;
+    if (want && want->spare)
+    {
+        ItemTemplate const* proto = sObjectMgr->GetItemTemplate(want->entry);
+        const uint32_t stack = proto ? std::max<uint32_t>(1, proto->GetMaxStackSize()) : 1;
+        const uint32_t asked = AskedCount(words);
+        count = WholeStacks(bot, want->entry, std::min({ want->count, stack, asked ? asked : want->count }));
+        if (!count)
+            return false;   // gone since its bags were last read
+    }
 
     // The line is in the transcript before anyone answers it.
     if (!seq)
@@ -788,13 +806,6 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
         return true;
     }
 
-    // At most one stack's worth, in whole stacks: what the window can take.
-    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(want->entry);
-    const uint32_t stack = proto ? std::max<uint32_t>(1, proto->GetMaxStackSize()) : 1;
-    const uint32_t asked = AskedCount(words);
-    const uint32_t count = WholeStacks(bot, want->entry, std::min({ want->count, stack, asked ? asked : want->count }));
-    if (!count)
-        return false;
     const std::string itemText = ItemWords(*want, count);
 
     if (!InGroupWith(player, bot))
