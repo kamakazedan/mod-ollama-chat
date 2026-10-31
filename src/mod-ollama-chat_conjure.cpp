@@ -1109,8 +1109,8 @@ bool Conjure_IsGiving(Player* bot, Player* player, uint32_t entry)
     if (!bot || !player)
         return false;
     const Gift* gift = FindGift(bot->GetGUID().GetRawValue(), player->GetGUID().GetRawValue());
-    return gift && std::any_of(gift->items.begin(), gift->items.end(),
-                               [&](const GiftItem& gi) { return gi.itemId == entry; });
+    return gift && (!entry || std::any_of(gift->items.begin(), gift->items.end(),
+                                          [&](const GiftItem& gi) { return gi.itemId == entry; }));
 }
 
 ConjureStats Conjure_GetStats()

@@ -673,7 +673,9 @@ std::string Bags_PromptFor(Player* bot, Player* player, const std::string& msg, 
     std::string out;
     if (trading || Bags_IsItemTalk(msg))
         out = Bags_Describe(bot);
-    if (!g_BagsHandoverText.empty() && (!out.empty() || lately || trading))
+    // Not while something really is going over: then "it's in the window" is
+    // true, and its hint says so.
+    if (!g_BagsHandoverText.empty() && (!out.empty() || lately || trading) && !Conjure_IsGiving(bot, player, 0))
         out += (out.empty() ? "" : " ") + g_BagsHandoverText;
     return out;
 }
