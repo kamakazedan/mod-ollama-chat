@@ -418,6 +418,21 @@ namespace
                now - it->second.when <= std::chrono::seconds(g_BagsOfferSeconds);
     }
 
+    // What `player` could take in this place: gone once they have been given
+    // something here.
+    void DropOffersTo(const std::string& scopeKey, uint64_t player)
+    {
+        auto it = g_offers.find(scopeKey);
+        if (it == g_offers.end())
+            return;
+        std::vector<Offer>& list = it->second;
+        list.erase(std::remove_if(list.begin(), list.end(),
+                                  [&](const Offer& o) { return !o.player || o.player == player; }),
+                   list.end());
+        if (list.empty())
+            g_offers.erase(it);
+    }
+
     // It handed something over: nothing of its stays on offer anywhere.
     void DropOffers(uint64_t bot)
     {
@@ -830,9 +845,12 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
 
     // Asked again while it is going over ("sure", then "trade it"): the bot
     // handing them something says it is on its way -- not an order, not a
-    // second trade.
+    // second trade. Only an ask or a line pointing at it ("trade it", "can
+    // you trade me?"): a bare "yep" may well be an answer to someone else.
+    // And not when the newest offer they could take is another bot's, which
+    // is not handing them anything: that one is what they mean.
     Player* giving = nullptr;
-    if (claim && !namesSomething && offers.empty())
+    if (claim && !namesSomething && (ask || TextRules::ClaimsOffer(words, false, {}, {})))
     {
         if (named)
             giving = Conjure_IsGiving(named, player, 0) ? named : nullptr;
@@ -841,6 +859,8 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
                 if (Player* member = ref->GetSource())
                     if (member != player && OllamaIsBotPlayer(member) && Conjure_IsGiving(member, player, 0))
                         giving = member;
+        if (giving && offerer && offerer != giving && !Conjure_IsGiving(offerer, player, 0))
+            giving = nullptr;
     }
 
     // Whom it is for: the bot named or whispered; else the one that just
@@ -943,9 +963,12 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
     }
     auto answer = [&](std::string hint)
     {
-        g_quiet[bot->GetGUID().GetRawValue()] = now + kQuietAfterAnswer;   // its answer is no new offer
         OllamaBotAnswer(player, bot, msg, answerSource, answerScope, seq, std::move(hint), CrowdLineKind::Favor);
     };
+    // "sending the [Linen Cloth] over": its answer names the thing going over
+    // (or promised), and is no new offer. (A no -- "keeping that, but have
+    // the [Ankh]" -- may offer something else, and does.)
+    auto hushed = [&]() { g_quiet[bot->GetGUID().GetRawValue()] = now + kQuietAfterAnswer; };
 
     if (giving)
     {
@@ -954,6 +977,7 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
             if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(entry))
                 going.push_back(count > 1 ? fmt::format("[{}] x{}", proto->Name1, count)
                                           : fmt::format("[{}]", proto->Name1));
+        hushed();
         answer(Hint(g_BagsHintAlready, player, going.empty() ? std::string("it") : JoinWords(going)));
         return true;
     }
@@ -988,6 +1012,7 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
         g_promises.push_back({ bot->GetGUID().GetRawValue(), player->GetGUID().GetRawValue(), give,
                                now + std::chrono::seconds(g_BagsInviteWaitSeconds) });
         DropOffers(bot->GetGUID().GetRawValue());   // promised: the next "sure" is not asking again
+        hushed();
         answer(Hint(g_BagsHintInvite, player, itemText));
         return true;
     }
@@ -996,6 +1021,7 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
     // it is in the window, not a second trade.
     if (Conjure_IsGiving(bot, player, give.front().first))
     {
+        hushed();
         answer(Hint(g_BagsHintAlready, player, itemText));
         return true;
     }
@@ -1008,8 +1034,12 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
         return true;
     }
     Forget(bot);   // its bags are about to change
-    DropOffers(bot->GetGUID().GetRawValue());   // given: "yep" later is not a second helping
+    // Given: "yep" later is not a second helping -- nor a claim on whatever
+    // else here they could have taken ("trade it" means this one).
+    DropOffers(bot->GetGUID().GetRawValue());
+    DropOffersTo(scopeKey, player->GetGUID().GetRawValue());
     ++g_stats.given;
+    hushed();
     answer(Hint(g_BagsHintGive, player, itemText, when.empty() ? std::string("now") : when));
     if (g_DebugEnabled)
         LOG_INFO("module.ollamachat", "[Ollama Chat] {} asked {} for {}: trading it over{}.", player->GetName(),
