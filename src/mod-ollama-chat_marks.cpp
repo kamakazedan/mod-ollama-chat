@@ -14,6 +14,7 @@
 #include "Log.h"
 #include "Map.h"
 #include "MotionMaster.h"
+#include "PathGenerator.h"
 #include "ObjectAccessor.h"
 #include "Pet.h"
 #include "Player.h"
@@ -31,13 +32,17 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
-// Debug builds of the sap's progress go to INFO with OllamaChat.DebugEnabled,
-// to DEBUG otherwise, so a failing sap can be read back without the debug flag.
+// The sap's step-by-step progress goes to INFO with OllamaChat.DebugEnabled,
+// to DEBUG otherwise. How each one ended -- sapped, gave up and why -- is
+// always INFO (MARKS_SAP_RESULT), so a sap that fails can be read back from
+// the log without the debug flag.
+#define MARKS_SAP_RESULT(...) LOG_INFO("module.ollamachat", __VA_ARGS__)
 #define MARKS_SAP_LOG(...)                                       \
     do                                                           \
     {                                                            \
@@ -95,9 +100,14 @@ namespace
         Clock::time_point nextMove{};        // the walk is planned again at this point
         Clock::time_point moved{};           // last time it was given somewhere to walk
         Clock::time_point castAt{};
+        Clock::time_point lastTick{};        // the last update, for how long it has waited
         uint8             tries  = 0;        // facing and range retries, and missed casts
+        uint8             shortOf = 0;       // got to where it was going in, and still short of reach
         bool              closer = false;    // the cast said out of range: go right up to it
+        bool              waiting = false;   // the mob is wandering: hanging back until it stops
+        uint32_t          waitedMs = 0;      // ...this long so far
         const char*       noStealth = "you could not go into stealth";   // why, the last time it could not
+        const char*       how = "";          // the last plan, for the log
     };
     std::vector<Sap> g_saps;
 
@@ -305,50 +315,148 @@ namespace
         return rogue->IsWithinCombatRange(target, std::max(0.0f, range - 1.0f));
     }
 
-    // How far from the mob's edge the rogue stops to sap: right up to it for a
-    // melee-range sap (or after the cast said out of range), a few yards off
-    // otherwise.
-    float SapStandOff(Player* rogue, SpellInfo const* info, bool closer)
+    // How near in front a mob spots a rogue in stealth, centre to centre:
+    // the core's own sum (WorldObject::CanDetectStealthOf -- its level against
+    // the rogue's stealth), with the margin at which it only grows suspicious
+    // and turns to look. From behind it never does.
+    float SpotRange(Creature* mob, Player* rogue)
     {
-        if (closer || !info || !info->RangeEntry || (info->RangeEntry->Flags & SPELL_RANGE_MELEE))
-            return 0.5f;
-        return std::clamp(info->GetMaxRange(false, rogue) - 4.0f, 0.5f, 4.0f);
+        if (mob->HasAuraTypeWithMiscvalue(SPELL_AURA_DETECT_STEALTH, STEALTH_GENERAL))
+            return 40.0f;
+        const int32 value = 30 + (int32(mob->getLevelForTarget(rogue)) - 1) * 5 +
+                            mob->m_stealthDetect.GetValue(STEALTH_GENERAL) - rogue->m_stealth.GetValue(STEALTH_GENERAL);
+        const float range = float(std::max<int32>(value, 0)) * 0.3f + mob->GetCombatReach();
+        return range * 1.08f + 1.5f;
     }
 
-    // Where the rogue walks next. In front of the mob it goes round it
-    // first, a step of the circle at a time, far enough out not to be seen
-    // (a mob spots stealth only in front of it, and closer for a lower-level
-    // one); once it is round the side, straight in to the mob's back. Close
-    // already and only short of reach (`closer`): straight up to it from
-    // where it stands.
-    void NextSapPoint(Player* rogue, Creature* target, float standOff, bool closer, float& x, float& y, float& z)
+    // The farthest out the sap goes from, centre to centre: what InSapReach
+    // allows (a melee-range sap: melee range; any other: its range, less a
+    // yard to spare).
+    float SapCentreReach(Player* rogue, Unit* target, SpellInfo const* info)
     {
-        if (closer)
+        if (!info || !info->RangeEntry || (info->RangeEntry->Flags & SPELL_RANGE_MELEE))
+            return rogue->GetMeleeRange(target);
+        return std::max(0.0f, info->GetMaxRange(false, rogue) - 1.0f) + rogue->GetCombatReach() + target->GetCombatReach();
+    }
+
+    // Can the rogue walk there? A path that ends short of it (a tree, a rock,
+    // a ledge) is no good; a map with no navigation mesh walks straight.
+    bool Walkable(Player* rogue, float x, float y, float z)
+    {
+        PathGenerator path(rogue);
+        path.CalculatePath(x, y, z, false);
+        const uint32 type = path.GetPathType();
+        if (type & PATHFIND_NOPATH)
+            return false;
+        if (type & PATHFIND_INCOMPLETE)
         {
-            target->GetNearPoint(rogue, x, y, z, rogue->GetObjectSize(), standOff, target->GetAngle(rogue));
-            return;
+            const G3D::Vector3& end = path.GetActualEndPosition();
+            const float dx = end.x - x, dy = end.y - y;
+            return dx * dx + dy * dy <= 2.0f * 2.0f;
         }
+        return true;
+    }
 
-        constexpr float kRoundEnough = static_cast<float>(M_PI) * 100.0f / 180.0f;   // past the front half
-        constexpr float kStep        = static_cast<float>(M_PI) / 3.0f;              // 60 degrees at a time
-        constexpr float kSide        = static_cast<float>(M_PI) * 115.0f / 180.0f;
-
-        const float face = target->GetOrientation();
+    // Where the rogue walks next. The sap reaching farther than the mob can
+    // see: straight in, to between the two, from whatever side it is on.
+    // Otherwise it has to come from behind, the only side a mob never spots
+    // stealth from: in front, round it a step at a time, out of sight;
+    // behind, in towards its back. A mob wandering about: hang back out of
+    // sight until it stops (`restless`). Right up to it after a cast that
+    // said out of range (`closer`). Each point is tried for a walkable path,
+    // a little to either side and further out, before settling for it.
+    void PlanSapPoint(Player* rogue, Creature* target, SpellInfo const* info, bool closer, bool restless,
+                      float& x, float& y, float& z, const char*& how)
+    {
+        constexpr float kDeg = static_cast<float>(M_PI) / 180.0f;
+        const float face  = target->GetOrientation();
         float rel = Position::NormalizeOrientation(target->GetAngle(rogue) - face);   // 0 .. 2pi
         if (rel > static_cast<float>(M_PI))
             rel -= 2.0f * static_cast<float>(M_PI);                                   // -pi .. pi
         const float side = rel >= 0.0f ? 1.0f : -1.0f;
         const float off  = std::fabs(rel);
 
-        float angle = face + static_cast<float>(M_PI);   // its back
-        float dist  = standOff;
-        if (off < kRoundEnough)
+        const float spot    = SpotRange(target, rogue);
+        const float reach   = SapCentreReach(rogue, target, info);
+        const float nearest = rogue->GetCombatReach() + target->GetCombatReach() + 0.3f;
+
+        float angle = target->GetAngle(rogue);   // as it is: straight in
+        float dist  = 0.0f;
+        bool  round = false;
+        if (closer)
         {
-            const float edge = rogue->GetExactDist2d(target) - rogue->GetCombatReach() - target->GetCombatReach();
-            angle = face + side * std::min(off + kStep, kSide);
-            dist  = std::clamp(edge, 8.0f, 14.0f);
+            dist = nearest + 0.2f;
+            how  = "right up to it";
         }
-        target->GetNearPoint(rogue, x, y, z, rogue->GetObjectSize(), dist, Position::NormalizeOrientation(angle));
+        else if (reach > spot + 1.0f)
+        {
+            dist = restless ? std::max(spot + 3.0f, reach + 1.0f) : (spot + 1.0f + reach - 0.5f) / 2.0f;
+            how  = restless ? "hanging back" : "straight in";
+        }
+        else if (off < 100.0f * kDeg)
+        {
+            angle = face + side * std::min(off + 60.0f * kDeg, 130.0f * kDeg);
+            dist  = std::max(spot + 1.5f, reach + 1.0f);
+            round = true;
+            how   = "round the side";
+        }
+        else
+        {
+            angle = face + side * std::min(off + 30.0f * kDeg, static_cast<float>(M_PI));
+            dist  = restless ? std::max(spot + 1.5f, reach + 1.0f)
+                             : std::clamp(reach - 1.0f, nearest, std::max(nearest, reach - 0.3f));
+            how   = restless ? "hanging back" : "in from behind";
+        }
+
+        auto at = [&](float a, float d, float& px, float& py, float& pz)
+        {
+            a  = Position::NormalizeOrientation(a);
+            px = target->GetPositionX() + d * std::cos(a);
+            py = target->GetPositionY() + d * std::sin(a);
+            pz = target->GetPositionZ();
+            rogue->UpdateAllowedPositionZ(px, py, pz);
+        };
+        at(angle, dist, x, y, z);
+        if (Walkable(rogue, x, y, z))
+            return;
+
+        // Blocked: a little to either side, further out, the other way round.
+        struct Try
+        {
+            float da, dd;
+        };
+        const Try tries[] = { { 20.0f, 0.0f }, { -20.0f, 0.0f }, { 0.0f, 2.5f }, { 35.0f, 2.5f }, { -35.0f, 2.5f } };
+        for (const Try& t : tries)
+        {
+            // Behind it, never round to its front for a better path.
+            const float a = angle + side * t.da * kDeg;
+            float r = Position::NormalizeOrientation(a - face);
+            if (r > static_cast<float>(M_PI))
+                r -= 2.0f * static_cast<float>(M_PI);
+            if (!round && reach <= spot + 1.0f && !closer && std::fabs(r) < 95.0f * kDeg)
+                continue;
+            float px = 0.0f, py = 0.0f, pz = 0.0f;
+            at(a, dist + t.dd, px, py, pz);
+            if (Walkable(rogue, px, py, pz))
+            {
+                x = px;
+                y = py;
+                z = pz;
+                return;
+            }
+        }
+        if (round)
+        {
+            float px = 0.0f, py = 0.0f, pz = 0.0f;
+            at(face - side * std::min(off + 60.0f * kDeg, 130.0f * kDeg), dist, px, py, pz);
+            if (Walkable(rogue, px, py, pz))
+            {
+                x = px;
+                y = py;
+                z = pz;
+                how = "round the other side";
+            }
+        }
     }
 
     // The rogue says, in party, why it is not sapping the star -- in its own
@@ -481,7 +589,7 @@ namespace
                     : std::string("you have not trained Sap");
                 Explain(without, asker, target, SapWhy::NotLearned, why, now);
                 ++g_stats.sapCant;
-                MARKS_SAP_LOG("[Ollama Chat] {} cannot sap {} (star): no Sap.", without->GetName(), target->GetName());
+                MARKS_SAP_RESULT("[Ollama Chat] {} cannot sap {} (star): no Sap.", without->GetName(), target->GetName());
             }
             return;
         }
@@ -494,7 +602,7 @@ namespace
         {
             Explain(rogue, asker, target, SapWhy::WrongType, cant, now);
             ++g_stats.sapCant;
-            MARKS_SAP_LOG("[Ollama Chat] {} cannot sap {} (star): {}.", rogue->GetName(), target->GetName(), cant);
+            MARKS_SAP_RESULT("[Ollama Chat] {} cannot sap {} (star): {}.", rogue->GetName(), target->GetName(), cant);
             return;
         }
 
@@ -513,8 +621,9 @@ namespace
         sap.phase  = SapPhase::Stealth;
         sap.until  = now + std::chrono::seconds(g_MarksSapStealthWaitSeconds);
         g_saps.push_back(sap);
-        MARKS_SAP_LOG("[Ollama Chat] {} goes to sap {} (star){}.", rogue->GetName(), target->GetName(),
-                      rogue->HasStealthAura() ? "" : ", stealth first");
+        MARKS_SAP_RESULT("[Ollama Chat] {} goes to sap {} (star, level {} against {}){}.", rogue->GetName(),
+                         target->GetName(), target->GetLevel(), rogue->GetLevel(),
+                         rogue->HasStealthAura() ? "" : ", stealth first");
     }
 
     void UpdateSaps(Clock::time_point now)
@@ -536,7 +645,7 @@ namespace
                 if (s.phase == SapPhase::Check)
                 {
                     ++g_stats.saps;
-                    MARKS_SAP_LOG("[Ollama Chat] {} sapped {}.", rogue ? rogue->GetName() : "?", target->GetName());
+                    MARKS_SAP_RESULT("[Ollama Chat] {} sapped {}.", rogue ? rogue->GetName() : "?", target->GetName());
                 }
                 FinishSap(rogue, ai, held);
                 it = g_saps.erase(it);
@@ -549,8 +658,8 @@ namespace
                 rogue->GetMap() != target->GetMap() || group->GetTargetIcon(ICON_STAR) != target->GetGUID())
             {
                 if (rogue && target && (rogue->IsInCombat() || target->IsInCombat()))
-                    MARKS_SAP_LOG("[Ollama Chat] {} stopped going to sap {}: a fight started.", rogue->GetName(),
-                                  target->GetName());
+                    MARKS_SAP_RESULT("[Ollama Chat] {} stopped going to sap {}: a fight started.", rogue->GetName(),
+                                     target->GetName());
                 FinishSap(rogue, ai, held && rogue && rogue->IsInWorld());
                 it = g_saps.erase(it);
                 continue;
@@ -594,8 +703,8 @@ namespace
                     else if (now >= s.until)
                     {
                         ++g_stats.sapGaveUp;
-                        MARKS_SAP_LOG("[Ollama Chat] {} gave up on sapping {}: no stealth in {}s ({}).",
-                                      rogue->GetName(), target->GetName(), g_MarksSapStealthWaitSeconds, s.noStealth);
+                        MARKS_SAP_RESULT("[Ollama Chat] {} gave up on sapping {}: no stealth in {}s ({}).",
+                                         rogue->GetName(), target->GetName(), g_MarksSapStealthWaitSeconds, s.noStealth);
                         Explain(rogue, s.asker, target, SapWhy::NoStealth, s.noStealth, now);
                         done = true;
                     }
@@ -608,44 +717,91 @@ namespace
                     if (!rogue->HasStealthAura())
                     {
                         ++g_stats.sapGaveUp;
-                        MARKS_SAP_LOG("[Ollama Chat] {} lost stealth on the way to sap {}.",
-                                      rogue->GetName(), target->GetName());
+                        MARKS_SAP_RESULT("[Ollama Chat] {} lost stealth on the way to sap {}.",
+                                         rogue->GetName(), target->GetName());
                         done = true;
                         break;
                     }
+
+                    // A mob wandering about: the time spent hanging back for it
+                    // to stop does not count, up to Marks.SapWaitSeconds.
+                    const bool restless = target->isMoving();
+                    const uint32_t tick = s.lastTick == Clock::time_point{} ? 0u
+                        : uint32_t(std::chrono::duration_cast<std::chrono::milliseconds>(now - s.lastTick).count());
+                    s.lastTick = now;
+                    if (restless && s.waitedMs < g_MarksSapWaitSeconds * 1000)
+                    {
+                        s.waitedMs += tick;
+                        s.until += std::chrono::milliseconds(tick);
+                    }
+                    if (restless != s.waiting)
+                    {
+                        s.waiting  = restless;
+                        s.nextMove = now;   // plan again for it: hang back, or go in
+                    }
+
                     if (now >= s.until)
                     {
                         ++g_stats.sapGaveUp;
-                        MARKS_SAP_LOG("[Ollama Chat] {} could not reach {} to sap it in {}s.",
-                                      rogue->GetName(), target->GetName(), g_MarksSapApproachSeconds);
-                        Explain(rogue, s.asker, target, SapWhy::Failed, "you could not get round to it in time", now);
+                        const char* why = s.waitedMs >= g_MarksSapWaitSeconds * 1000
+                                              ? "it would not stop wandering about"
+                                              : "you could not get round to it in time";
+                        MARKS_SAP_RESULT("[Ollama Chat] {} could not reach {} to sap it ({}; last plan: {}; {:.1f} yd "
+                                         "off, it spots stealth at {:.1f} yd in front, sap reaches {:.1f} yd).",
+                                         rogue->GetName(), target->GetName(), why, s.how, rogue->GetExactDist(target),
+                                         SpotRange(target, rogue), SapCentreReach(rogue, target, info));
+                        Explain(rogue, s.asker, target, SapWhy::Failed, why, now);
                         done = true;
                         break;
                     }
-                    // After a cast that said out of range: right up to it, or
-                    // as close as the walk gets it.
+
+                    // In reach, and where it cannot be seen -- behind, or
+                    // further off than it sees in front: stop, face it, sap.
+                    // (After a cast that said out of range: right up to it, or
+                    // as close as the walk gets it.)
                     const bool arrived = !rogue->isMoving() && now - s.moved >= std::chrono::milliseconds(300);
+                    float rel = Position::NormalizeOrientation(target->GetAngle(rogue) - target->GetOrientation());
+                    if (rel > static_cast<float>(M_PI))
+                        rel -= 2.0f * static_cast<float>(M_PI);
+                    const bool unseen = std::fabs(rel) > static_cast<float>(M_PI) * 95.0f / 180.0f ||
+                                        rogue->GetExactDist(target) > SpotRange(target, rogue);
                     const bool inReach = s.closer
                         ? (rogue->IsWithinDistInMap(target, 1.0f) || (arrived && InSapReach(rogue, target, info)))
-                        : InSapReach(rogue, target, info);
-                    if (inReach)
+                        : (InSapReach(rogue, target, info) && unseen);
+                    if (inReach && !restless)
                     {
                         rogue->GetMotionMaster()->Clear();
                         rogue->StopMoving();
                         rogue->SetFacingToObject(target);
                         s.phase  = SapPhase::Settle;
                         s.castAt = now + std::chrono::milliseconds(250);   // the turn lands on the next update
+                        MARKS_SAP_LOG("[Ollama Chat] {} is in reach of {} ({:.1f} yd, {:.0f} deg round): sapping.",
+                                      rogue->GetName(), target->GetName(), rogue->GetExactDist(target),
+                                      std::fabs(rel) * 180.0f / static_cast<float>(M_PI));
                         break;
                     }
-                    // Planned again every second (the mob turns, a patrol
-                    // walks on) and as soon as it stands still at a step.
+                    // Got where it was going in and still short (a slope, the
+                    // mob's size): right up to it.
+                    if (arrived && !restless && !s.closer && std::strcmp(s.how, "in from behind") == 0 &&
+                        ++s.shortOf >= 2)
+                    {
+                        s.closer   = true;
+                        s.nextMove = now;
+                    }
+                    // Planned again every second (the mob turns, wanders on)
+                    // and as soon as it stands still at a step.
                     if (now >= s.nextMove || arrived)
                     {
                         float x = 0.0f, y = 0.0f, z = 0.0f;
-                        NextSapPoint(rogue, target, SapStandOff(rogue, info, s.closer), s.closer, x, y, z);
+                        PlanSapPoint(rogue, target, info, s.closer, restless, x, y, z, s.how);
                         rogue->GetMotionMaster()->MovePoint(0, x, y, z);
                         s.moved    = now;
                         s.nextMove = now + std::chrono::seconds(1);
+                        MARKS_SAP_LOG("[Ollama Chat] {} to sap {}: {} ({:.1f} yd off, {:.0f} deg round, spots at "
+                                      "{:.1f}, reach {:.1f}{}).",
+                                      rogue->GetName(), target->GetName(), s.how, rogue->GetExactDist(target),
+                                      std::fabs(rel) * 180.0f / static_cast<float>(M_PI), SpotRange(target, rogue),
+                                      SapCentreReach(rogue, target, info), restless ? ", it is moving" : "");
                     }
                     break;
                 }
@@ -677,8 +833,9 @@ namespace
                         break;
                     }
                     g_stats.lastFail = static_cast<uint32>(result);
-                    MARKS_SAP_LOG("[Ollama Chat] {} could not sap {}: {} (cast result {}).", rogue->GetName(),
-                                  target->GetName(), FailWords(result), static_cast<uint32>(result));
+                    MARKS_SAP_RESULT("[Ollama Chat] {} could not sap {}: {} (cast result {}, {:.1f} yd off).",
+                                     rogue->GetName(), target->GetName(), FailWords(result), static_cast<uint32>(result),
+                                     rogue->GetExactDist(target));
                     if (s.tries < 4 &&
                         (result == SPELL_FAILED_OUT_OF_RANGE || result == SPELL_FAILED_LINE_OF_SIGHT))
                     {
@@ -686,7 +843,7 @@ namespace
                         s.closer = true;
                         s.phase  = SapPhase::Approach;
                         float x = 0.0f, y = 0.0f, z = 0.0f;
-                        NextSapPoint(rogue, target, SapStandOff(rogue, info, true), true, x, y, z);
+                        PlanSapPoint(rogue, target, info, true, false, x, y, z, s.how);
                         rogue->GetMotionMaster()->MovePoint(0, x, y, z);
                         s.moved    = now;
                         s.nextMove = now + std::chrono::seconds(1);
@@ -720,8 +877,8 @@ namespace
                     // Cast, but no sap on it and no fight either: it shrugged
                     // it off. Once more, then say so.
                     ++g_stats.sapMissed;
-                    MARKS_SAP_LOG("[Ollama Chat] {} cast Sap on {} but it did not take.", rogue->GetName(),
-                                  target->GetName());
+                    MARKS_SAP_RESULT("[Ollama Chat] {} cast Sap on {} but it did not take.", rogue->GetName(),
+                                     target->GetName());
                     if (++s.tries < 5 && now < s.until)
                     {
                         s.phase  = SapPhase::Settle;

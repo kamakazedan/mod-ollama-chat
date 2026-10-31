@@ -1,5 +1,6 @@
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_bags.h"
+#include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
@@ -9,9 +10,12 @@
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_governor.h"
+#include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_memory.h"
+#include "mod-ollama-chat_mute.h"
 #include "mod-ollama-chat_partycmd.h"
+#include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_phrases.h"
 #include "mod-ollama-chat_response.h"
 #include "mod-ollama-chat_roleplay.h"
@@ -35,6 +39,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <unordered_map>
 #include <condition_variable>
 #include <deque>
 #include <list>
@@ -92,6 +97,9 @@ namespace
     std::atomic<uint64_t> g_totalDelivered{ 0 };
     std::atomic<uint64_t> g_droppedQueueFull{ 0 };
     std::atomic<uint64_t> g_droppedEmpty{ 0 };
+
+    // When each bot last let an insult through (world thread, at delivery).
+    std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> g_insultUse;
     std::atomic<uint64_t> g_droppedGovernor{ 0 };
     std::atomic<uint64_t> g_droppedPassed{ 0 };
     std::atomic<uint64_t> g_droppedPhrase{ 0 };
@@ -529,6 +537,42 @@ namespace
             c.text = kept;
         }
 
+        // "nah just chilling here you knob": an insult out of nowhere. One
+        // fits banter someone started, or a line that was rude to it, or a
+        // bot whose style is just rude -- and even then not every time.
+        if (!g_ResponseInsultWords.empty() &&
+            CrowdText::ContainsPhrase(CrowdText::Words(c.text), g_ResponseInsultWords))
+        {
+            const std::vector<std::string> said = CrowdText::Words(origin);
+            const bool provoked = CrowdText::ContainsPhrase(said, g_ResponseInsultWords) ||
+                                  CrowdText::ContainsPhrase(said, g_ResponseProvokeWords);
+            const std::string style = GetBotPersonality(bot);
+            const bool rude = std::find(g_ResponseInsultPersonalities.begin(), g_ResponseInsultPersonalities.end(),
+                                        style) != g_ResponseInsultPersonalities.end();
+            const auto now = std::chrono::steady_clock::now();
+            auto last = g_insultUse.find(botGuid.GetRawValue());
+            const bool rested = last == g_insultUse.end() ||
+                                now - last->second >= std::chrono::seconds(g_ResponseInsultCooldownSeconds);
+            if ((provoked || rude) && rested)
+                g_insultUse[botGuid.GetRawValue()] = now;
+            else
+            {
+                const std::string kept = TextRules::StripInsults(c.text, g_ResponseInsultWords);
+                if (kept.empty())
+                {
+                    ++g_droppedEmpty;
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} reply was only an insult: '{}'",
+                                 bot->GetName(), c.text);
+                    return;
+                }
+                if (g_DebugEnabled && kept != c.text)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} insult out of nowhere dropped: '{}' -> '{}'",
+                             bot->GetName(), c.text, kept);
+                c.text = kept;
+            }
+        }
+
         // Only the player who levelled says ding.
         if (c.request.noSelfDing && TextRules::IsSelfDing(c.text))
         {
@@ -612,7 +656,12 @@ namespace
         const std::string& plain = line.plain;
 
         Channel* channel = nullptr;
-        if (!RouteMessage(bot, botAI, c, world, channel))
+        bool routed = false;
+        {
+            MuteOwnLine own;   // what the module says for a bot is never muted, "Hi" or not
+            routed = RouteMessage(bot, botAI, c, world, channel);
+        }
+        if (!routed)
         {
             if (g_DebugEnabled)
                 LOG_INFO("module.ollamachat",
@@ -625,10 +674,16 @@ namespace
         Links_NoteSent(line);
         if (c.request.offerEntry)   // "anyone want [Linen Cloth]?": out, so "me!" claims it
             Bags_NoteOffer(bot, c.request.offerEntry, c.request.scopeKey);
+        else                        // "just have some [Ankh] if you want", asked what it has
+            Bags_NoteReply(bot, plain, line.text, c.request.scopeKey);
         Governor_RecordUtterance(botGuid, c.request.scopeKey, plain);
         Phrases_NoteSaid(plain);
         if (c.request.partyAck)
             PartyCmd_NoteAck(bot, plain);
+        if (c.request.noSelfDing)   // a "gz": the one it is for hears it, and thanks once for the lot
+            Congrats_NoteBotCongrats(bot, c.request.congratsName, c.request.source,
+                                     channel ? channel->GetName() : c.request.channelName, c.request.channelId,
+                                     c.request.scopeKey);
         ++g_totalDelivered;
 
         // Into the shared transcript before other bots hear it below, so the
@@ -652,8 +707,13 @@ namespace
         {
             Player* addressee = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.targetGuid));
             if (OllamaIsRealPlayer(addressee))
+            {
                 Governor_NoteConversation(botGuid, ObjectGuid(c.request.targetGuid),
                                           c.request.scopeKey);
+                // An invite that follows carries on from this (mod-ollama-chat_joined).
+                Joined_NoteExchange(bot, addressee, c.request.source,
+                                    channel ? channel->GetName() : c.request.channelName, origin, plain);
+            }
         }
 
         // Body language. Safe here and only here: this is the world thread.

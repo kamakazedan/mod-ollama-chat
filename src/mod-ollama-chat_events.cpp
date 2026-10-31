@@ -1,5 +1,6 @@
 #include "mod-ollama-chat_events.h"
 #include "mod-ollama-chat_bags.h"
+#include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_world.h"
@@ -633,6 +634,10 @@ void ChatOnLevelUp::OnPlayerLevelChanged(Player* player, uint8 /*oldLevel*/)
         return;
 
     const std::string level = std::to_string(player->GetLevel());
+
+    // The "gz" that follow are for this one: it, and only it, says ty.
+    Congrats_NoteCelebrated(player, level);
+
     eventChatter.DispatchGameEvent(player, g_EventTypeLeveledUp, level);
 
     if (player->GetGuild() && g_EnableGuildEventChatter && !g_GuildEventTypeLevelUp.empty())
@@ -648,6 +653,8 @@ void ChatOnAchievement::OnPlayerAchievementComplete(Player* player, AchievementE
 {
     if (!player || !achievement || !achievement->name[0])
         return;
+
+    Congrats_NoteCelebrated(player, achievement->name[0]);
 
     eventChatter.DispatchGameEvent(player, g_EventTypeAchievement, achievement->name[0]);
 

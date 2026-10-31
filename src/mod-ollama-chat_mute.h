@@ -16,7 +16,7 @@ class WorldSession;
 // the way!", and the "Staying" and "Following" a bot now says in its own
 // words instead (mod-ollama-chat_orders). OllamaChat.Mute.Patterns lists
 // them. Only whispers and party or raid lines from a bot are looked at, and
-// anything the model wrote for a bot is not on the list, so it goes through.
+// anything the module itself sends for a bot goes through (MuteOwnLine).
 //
 // The packet hook runs on whatever thread sends the packet, so it reads
 // nothing of the world: only the published pattern list and the set of bot
@@ -31,6 +31,18 @@ void Mute_Update(uint32_t diff);
 
 // Lines dropped so far.
 uint64_t Mute_GetDropped();
+
+// While one of these is alive on a thread, the lines that thread sends are
+// the module's own -- what the model (or a canned "gz") says for a bot -- and
+// are never muted, even when one happens to read "Hi" or "Following".
+// Delivery holds one around sending.
+struct MuteOwnLine
+{
+    MuteOwnLine();
+    ~MuteOwnLine();
+    MuteOwnLine(const MuteOwnLine&) = delete;
+    MuteOwnLine& operator=(const MuteOwnLine&) = delete;
+};
 
 class OllamaChatMuteScript : public ServerScript
 {

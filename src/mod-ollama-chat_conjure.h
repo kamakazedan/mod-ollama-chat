@@ -70,6 +70,10 @@ ConjureStats Conjure_GetStats();
 std::string Conjure_GiveItems(Player* bot, Player* player, const std::vector<std::pair<uint32_t, uint32_t>>& items,
                               std::string& when);
 
+// Is `bot` handing `player` some of `entry` already (offered, waiting, or in
+// the window)? World thread.
+bool Conjure_IsGiving(Player* bot, Player* player, uint32_t entry);
+
 // Notices when a trade window opens for someone a mage is giving food or
 // water to -- the one the mage offered, or one they opened with the mage
 // themselves -- so it can go in at once. The server keeps no "window open"

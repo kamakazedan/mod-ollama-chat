@@ -64,6 +64,10 @@ namespace
 {
     PartyCmdStats g_stats;
 
+    // "just start the dingeon": the words a line about the run hangs on,
+    // read right however they are typed.
+    const std::vector<std::string> kTypoKeys = { "dungeon", "instance" };
+
 #if OLLAMA_CHAT_DUNGEON_CLEAR
     // The tank's last few answers, per group (by the group's guid counter).
     std::unordered_map<uint32_t, std::deque<std::string>> g_recentAcks;
@@ -336,6 +340,33 @@ bool PartyCmd_Available()
     return OLLAMA_CHAT_DUNGEON_CLEAR != 0;
 }
 
+Player* PartyCmd_RunVoiceFor(Player* player, const std::string& msg, ChatChannelSourceLocal source)
+{
+#if !OLLAMA_CHAT_DUNGEON_CLEAR
+    (void)player; (void)msg; (void)source;
+    return nullptr;
+#else
+    if (!g_PartyCmdEnable || g_PartyRunQuestionPhrases.empty() || !player ||
+        (source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL))
+        return nullptr;
+    if (OllamaIsBotPlayer(player) || !player->GetGroup() || !DcModule::IsEnabled())
+        return nullptr;
+    Map* map = player->GetMap();
+    if (!map || !map->IsDungeon())
+        return nullptr;
+
+    const std::vector<std::string> words =
+        CrowdText::Words(TextRules::FixKeyTypos(Context_CleanText(msg), kTypoKeys));
+    if (words.empty() || words.size() > g_PartyRunQuestionMaxWords ||
+        !CrowdText::ContainsPhrase(words, g_PartyRunQuestionPhrases))
+        return nullptr;
+
+    // No bot tank -- the player tanks, or there is no run -- and anyone may answer.
+    Player* tank = DcLeaderSignal::FindLeaderTank(player);
+    return (tank && tank->IsInWorld() && OllamaIsBotPlayer(tank)) ? tank : nullptr;
+#endif
+}
+
 PartyCmdLine PartyCmd_Classify(Player* player, const std::string& msg, ChatChannelSourceLocal source)
 {
 #if !OLLAMA_CHAT_DUNGEON_CLEAR
@@ -347,7 +378,7 @@ PartyCmdLine PartyCmd_Classify(Player* player, const std::string& msg, ChatChann
     if (OllamaIsBotPlayer(player) || !player->GetGroup() || !DcModule::IsEnabled())
         return PartyCmdLine::None;
 
-    const std::string clean = Context_CleanText(msg);
+    const std::string clean = TextRules::FixKeyTypos(Context_CleanText(msg), kTypoKeys);
 
     // Its commands work anywhere, not only inside.
     if (TextRules::IsDungeonClearCommand(clean))
@@ -395,7 +426,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
     if (!map || !map->IsDungeon())   // dungeons and raids
         return false;
 
-    const std::string clean = Context_CleanText(msg);
+    const std::string clean = TextRules::FixKeyTypos(Context_CleanText(msg), kTypoKeys);
     const TextRules::PartyIntent intent = TextRules::MatchPartyIntent(clean, g_PartyCmdRules);
     if (intent == TextRules::PartyIntent::None)
         return false;

@@ -360,6 +360,146 @@ namespace TextRules
         return removed ? Trim(out) : text;
     }
 
+    std::string StripInsults(const std::string& text, const std::vector<std::vector<std::string>>& insults)
+    {
+        if (text.empty() || insults.empty())
+            return text;
+
+        struct Tok
+        {
+            size_t      b = 0;
+            size_t      e = 0;
+            std::string norm;
+        };
+        std::vector<Tok> toks;
+        for (size_t i = 0; i < text.size();)
+        {
+            if (!std::isalnum(static_cast<unsigned char>(text[i])) && text[i] != '\'')
+            {
+                ++i;
+                continue;
+            }
+            Tok t;
+            t.b = i;
+            while (i < text.size() && (std::isalnum(static_cast<unsigned char>(text[i])) || text[i] == '\''))
+            {
+                if (text[i] != '\'')
+                    t.norm += static_cast<char>(std::tolower(static_cast<unsigned char>(text[i])));
+                ++i;
+            }
+            t.e = i;
+            if (!t.norm.empty())
+                toks.push_back(std::move(t));
+        }
+
+        auto in = [](const std::string& w, std::initializer_list<const char*> list)
+        {
+            for (const char* x : list)
+                if (w == x)
+                    return true;
+            return false;
+        };
+        auto isInsult = [&](const std::string& w) { return CrowdText::ContainsPhrase({ w }, insults); };
+        auto isYou = [&](const std::string& w) { return in(w, { "you", "ya", "u", "yu", "yeh", "ye", "yah" }); };
+        auto isIntensifier = [&](const std::string& w)
+        {
+            return in(w, { "absolute", "massive", "utter", "complete", "total", "bloody", "fucking", "fkn", "big",
+                           "little", "lil", "fat", "stupid", "daft", "silly", "proper", "right", "mega", "huge",
+                           "dirty", "useless" });
+        };
+        // "a knob", "what a knob", "the knob", "that knob": talked about.
+        auto isDeterminer = [&](const std::string& w)
+        {
+            return in(w, { "a", "an", "the", "my", "your", "ur", "yer", "his", "her", "their", "our", "this", "that",
+                           "these", "those", "such", "what", "some", "any", "no", "one", "of", "like", "is", "are",
+                           "was", "be", "being", "been", "im", "hes", "shes", "theyre", "youre", "thats", "to", "for",
+                           "at", "in", "on", "with", "and", "or", "by", "from", "as" });
+        };
+        auto hasAny = [](const std::string& s, const char* set) { return s.find_first_of(set) != std::string::npos; };
+
+        std::vector<std::pair<size_t, size_t>> cuts;
+        for (size_t k = 0; k < toks.size(); ++k)
+        {
+            if (!isInsult(toks[k].norm))
+                continue;
+
+            // Back over "absolute", then the "you" it was thrown with.
+            size_t first = k;
+            while (first > 0 && isIntensifier(toks[first - 1].norm))
+                --first;
+            bool you = false;
+            if (first > 0 && isYou(toks[first - 1].norm))
+            {
+                --first;
+                you = true;
+            }
+            if (!you && first > 0 && isDeterminer(toks[first - 1].norm))
+                continue;   // "dont be a knob": about someone, not at them
+
+            const size_t prevEnd   = first > 0 ? toks[first - 1].e : 0;
+            const size_t nextBegin = k + 1 < toks.size() ? toks[k + 1].b : text.size();
+            const std::string before = text.substr(prevEnd, toks[first].b - prevEnd);
+            const std::string after  = text.substr(toks[k].e, nextBegin - toks[k].e);
+            const bool sentenceStart = first == 0 || hasAny(before, ".!?\n");
+            const bool sentenceEnd   = k + 1 == toks.size() || hasAny(after, ".!?\n");
+            const bool commaBefore   = hasAny(before, ",;:");
+            const bool commaAfter    = hasAny(after, ",;:");
+
+            // Thrown at someone: "you knob" anywhere; else the last word, or
+            // set off by commas. "tit for tat" opens a line and is not.
+            if (!you && !sentenceEnd && !commaAfter && !(commaBefore && sentenceEnd))
+                continue;
+
+            size_t from = toks[first].b;
+            size_t to   = toks[k].e;
+            if (sentenceEnd || !sentenceStart)
+                from = first == 0 ? 0 : prevEnd;   // "... here you knob" -> "... here"
+            if (sentenceStart && !sentenceEnd)
+            {
+                // "you knob, i said no" -> "i said no"
+                while (to < text.size() && (text[to] == ',' || text[to] == ';' || text[to] == ':' ||
+                                            std::isspace(static_cast<unsigned char>(text[to]))))
+                    ++to;
+            }
+            cuts.emplace_back(from, to);
+        }
+        if (cuts.empty())
+            return text;
+
+        std::string out;
+        size_t at = 0;
+        for (const auto& [from, to] : cuts)
+        {
+            if (from < at)
+                continue;
+            out += text.substr(at, from - at);
+            at = to;
+        }
+        out += text.substr(at);
+
+        std::string tidy;
+        for (char c : out)
+        {
+            if (c == ' ' && (tidy.empty() || tidy.back() == ' '))
+                continue;
+            if ((c == '.' || c == '!' || c == '?' || c == ',') && !tidy.empty() && tidy.back() == ' ')
+                tidy.pop_back();
+            if (c == ',' && !tidy.empty() && (tidy.back() == ',' || tidy.back() == '.' || tidy.back() == '!' ||
+                                              tidy.back() == '?'))
+                continue;
+            tidy += c;
+        }
+        tidy = Trim(tidy);
+        while (!tidy.empty() && (tidy.front() == ',' || tidy.front() == ';' || tidy.front() == ':'))
+            tidy = Trim(tidy.substr(1));
+        while (!tidy.empty() && (tidy.back() == ',' || tidy.back() == ';' || tidy.back() == ':'))
+            tidy.pop_back();
+        tidy = Trim(tidy);
+        if (std::none_of(tidy.begin(), tidy.end(), [](unsigned char c) { return std::isalnum(c) != 0; }))
+            return std::string();
+        return tidy;
+    }
+
     std::string StripVocatives(const std::string& text,
                                const std::vector<std::vector<std::string>>& vocatives)
     {
@@ -1475,6 +1615,92 @@ namespace TextRules
 
         std::string out = line;
         out.replace(at, token.size(), who);
+        return out;
+    }
+
+    namespace
+    {
+        // One edit apart (substitution, insertion, deletion, or two letters
+        // next to each other swapped), or the same.
+        bool WithinOneSlip(const std::string& a, const std::string& b)
+        {
+            if (a == b)
+                return true;
+            const size_t n = a.size(), m = b.size();
+            if (n + 1 < m || m + 1 < n)
+                return false;
+            if (n == m)
+            {
+                size_t first = 0;
+                while (first < n && a[first] == b[first])
+                    ++first;
+                size_t last = n - 1;
+                while (last > first && a[last] == b[last])
+                    --last;
+                if (first == last)
+                    return true;   // one letter wrong
+                return last == first + 1 && a[first] == b[last] && a[last] == b[first];   // swapped
+            }
+            const std::string& longer  = n > m ? a : b;
+            const std::string& shorter = n > m ? b : a;
+            size_t i = 0;
+            while (i < shorter.size() && shorter[i] == longer[i])
+                ++i;
+            return shorter.compare(i, std::string::npos, longer, i + 1, std::string::npos) == 0;
+        }
+    }
+
+    bool IsOnlyCongrats(const std::vector<std::string>& words,
+                        const std::vector<std::vector<std::string>>& congrats,
+                        const std::vector<std::vector<std::string>>& filler,
+                        const std::vector<std::vector<std::string>>& ack,
+                        const std::function<bool(const std::string&)>& isName)
+    {
+        if (words.empty() || congrats.empty() || !CrowdText::ContainsPhrase(words, congrats))
+            return false;
+        auto is = [](const std::string& w, const std::vector<std::vector<std::string>>& list)
+        {
+            return !list.empty() && CrowdText::ContainsPhrase({ w }, list);
+        };
+        for (const std::string& w : words)
+        {
+            if (isName && isName(w))
+                continue;
+            const bool number = w.size() <= 3 && std::all_of(w.begin(), w.end(), ::isdigit);
+            if (!number && !is(w, congrats) && !is(w, filler) && !is(w, ack))
+                return false;   // "gz, now lets go" is more than that
+        }
+        return true;
+    }
+
+    std::string FixKeyTypos(const std::string& text, const std::vector<std::string>& keys)
+    {
+        std::string out;
+        out.reserve(text.size());
+        for (size_t i = 0; i < text.size();)
+        {
+            if (!std::isalpha(static_cast<unsigned char>(text[i])))
+            {
+                out += text[i++];
+                continue;
+            }
+            size_t j = i;
+            while (j < text.size() && std::isalpha(static_cast<unsigned char>(text[j])))
+                ++j;
+            const std::string word = text.substr(i, j - i);
+            std::string lower = word;
+            for (char& c : lower)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            std::string fixed = word;
+            for (const std::string& key : keys)
+                if (key.size() >= 6 && lower != key && WithinOneSlip(lower, key))
+                {
+                    fixed = key;
+                    break;
+                }
+            out += fixed;
+            i = j;
+        }
         return out;
     }
 }

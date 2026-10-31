@@ -50,6 +50,7 @@
 #include "mod-ollama-chat_conversation.h"
 #include "mod-ollama-chat_partycmd.h"
 #include "mod-ollama-chat_conjure.h"
+#include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_orders.h"
 #include "mod-ollama-chat_outlook.h"
@@ -1219,6 +1220,17 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
     uint64_t humanSeq = 0;   // the person's line, once it is in the transcript
     if (!senderIsBot)
     {
+        // "!!trade", "!!summon": playerbots' own command, typed with its
+        // prefix. Playerbots carries it out; orders answers what it would
+        // have answered in words (a muted "Staying"), and nothing else here
+        // reads it as an ask, a claim or chat.
+        const std::string& commandPrefix = sPlayerbotAIConfig.CommandPrefix;
+        if (!commandPrefix.empty() && msg.compare(0, commandPrefix.size(), commandPrefix) == 0)
+        {
+            Orders_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq);
+            return;
+        }
+
         const PartyCmdLine partyLine = PartyCmd_Classify(player, msg, sourceLocal);
 
         // "dc on", "dc pause": mod-dungeon-clear answers those itself.
@@ -1267,6 +1279,15 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
     };
 
     std::string trimmedMsg = rtrim(msg);
+
+    // "!!summon" from a bot (or anyone the block above did not see): a
+    // playerbots command, typed with its prefix. Not chat.
+    {
+        const std::string& prefix = sPlayerbotAIConfig.CommandPrefix;
+        if (!prefix.empty() && trimmedMsg.compare(0, prefix.size(), prefix) == 0)
+            return;
+    }
+
     for (const std::string& blacklist : g_BlacklistCommands)
     {
         if (startsWithWord(trimmedMsg, blacklist))
@@ -1376,6 +1397,11 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         Conversation_NoteLine(Crowd_KeyFor(scopeKey, sourceLocal, uint32(player->GetTeamId())),
                               player, false, msg, contextSeq, 0, addressee.guid);
     }
+
+    // "gz", "grats on 20 Edos": the one it is for thanks -- once for that ding,
+    // however many it gets -- and nobody else answers (mod-ollama-chat_congrats).
+    if (!senderIsBot && Congrats_HandleHumanLine(player, msg, sourceLocal, channel, receiver, scopeKey))
+        return;
 
     // One pass over the online players, reused by every eligibility test
     // below. These questions used to be answered by a fresh full walk per
@@ -2504,6 +2530,33 @@ static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
     std::vector<Player*> fixed;
     const std::vector<Player*> firstNamed = NamedBots(msg, candidates, 1);
     const bool someoneNamed = !firstNamed.empty();
+
+    // "whats next?", "why are we waiting": a question about the dungeon run,
+    // so the bot tank leading it answers -- nobody else, unless the line
+    // names some other bot (mod-ollama-chat_partycmd).
+    if (Player* tank = PartyCmd_RunVoiceFor(player, msg, source))
+    {
+        if (!someoneNamed || firstNamed.front() == tank)
+        {
+            if (std::find(pool.begin(), pool.end(), tank) == pool.end())
+                return;   // it cannot answer just now; the rest leave it to it all the same
+
+            CrowdPlan plan = NewPlan(player, msg, source, channel, scopeKey, seq);
+            plan.kind      = CrowdLineKind::Aimed;
+            plan.shouted   = shouted;
+            plan.listeners = listeners;
+            plan.aimedAt   = tank->GetName();
+            CrowdSlot slot;
+            slot.botGuid   = tank->GetGUID().GetRawValue();
+            slot.addressed = true;
+            plan.slots.push_back(slot);
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] {}'s line is about the run: {} answers it.",
+                         player->GetName(), tank->GetName());
+            Crowd_Start(std::move(plan));
+            return;
+        }
+    }
     for (Player* bot : NamedBots(msg, pool, std::min<uint32_t>(cap, 3)))
         if (urand(0, 99) < g_DirectAddressReplyChance)
             fixed.push_back(bot);
@@ -3261,12 +3314,12 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
 
     // Asked what it has, or for something: what is in its bags, what it could
     // spare and what it keeps (mod-ollama-chat_bags). Only when the talk is
-    // about that -- a list in every prompt is what a bot would talk about.
+    // about that -- a list in every prompt is what a bot would talk about --
+    // and then, and for a few minutes after, that saying so hands nothing over.
     const bool spokenTo = source == SRC_WHISPER_LOCAL || source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL ||
                           source == SRC_SAY_LOCAL || replyHint == g_ContextHintAddressed;
-    if (spokenTo && Bags_IsItemTalk(playerMessage))
     {
-        const std::string bags = Bags_Describe(bot);
+        const std::string bags = Bags_PromptFor(bot, player, playerMessage, spokenTo);
         if (!bags.empty())
             prompt += " " + bags;
     }
@@ -3276,6 +3329,15 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     const std::string asked = Needs_PromptFor(bot);
     if (!asked.empty())
         prompt += " " + asked;
+
+    // Asked what it is up to, or about one of its quests: what it is really
+    // doing, so "you going for yowler?" is not met with "nah just chilling".
+    if (spokenTo)
+    {
+        const std::string plans = Needs_PlanPromptFor(bot, playerMessage);
+        if (!plans.empty())
+            prompt += " " + plans;
+    }
 
     // Someone from its own group, talking in General or guild chat: the answer
     // goes there too, so it is not party talk ("hey all" in General got "ready

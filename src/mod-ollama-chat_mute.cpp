@@ -32,6 +32,9 @@ namespace
     std::atomic<bool>               g_enabled{ false };   // fast path: most packets are not chat at all
     std::atomic<uint64_t>           g_dropped{ 0 };
 
+    // Lines being sent by the module itself on this thread (MuteOwnLine).
+    thread_local int t_ownLines = 0;
+
     // Kept on the world thread, published with the bots.
     bool                     g_enable = false;
     std::vector<std::string> g_patterns;
@@ -101,12 +104,23 @@ uint64_t Mute_GetDropped()
     return g_dropped.load(std::memory_order_relaxed);
 }
 
+MuteOwnLine::MuteOwnLine()
+{
+    ++t_ownLines;
+}
+
+MuteOwnLine::~MuteOwnLine()
+{
+    --t_ownLines;
+}
+
 bool OllamaChatMuteScript::CanPacketSend(WorldSession* session, WorldPacket const& packet)
 {
     // Every packet to every client comes through here, from any thread: say
     // yes to all of them, and look no further than the opcode unless muting
     // is on.
-    if (packet.GetOpcode() != SMSG_MESSAGECHAT || !g_enabled.load(std::memory_order_relaxed) || !session)
+    if (packet.GetOpcode() != SMSG_MESSAGECHAT || !g_enabled.load(std::memory_order_relaxed) || !session ||
+        t_ownLines > 0)
         return true;
 
     // type u8, language i32, sender u64, flags u32, receiver u64, length u32,

@@ -1104,6 +1104,15 @@ std::string Conjure_GiveItems(Player* bot, Player* player, const std::vector<std
     return {};
 }
 
+bool Conjure_IsGiving(Player* bot, Player* player, uint32_t entry)
+{
+    if (!bot || !player)
+        return false;
+    const Gift* gift = FindGift(bot->GetGUID().GetRawValue(), player->GetGUID().GetRawValue());
+    return gift && std::any_of(gift->items.begin(), gift->items.end(),
+                               [&](const GiftItem& gi) { return gi.itemId == entry; });
+}
+
 ConjureStats Conjure_GetStats()
 {
     ConjureStats s = g_stats;

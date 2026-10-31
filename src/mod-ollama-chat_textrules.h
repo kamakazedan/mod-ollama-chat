@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <random>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -42,6 +43,14 @@ namespace TextRules
     // you need ..."). Not where it is what is talked about: "the kid", "a kid",
     // "my kid", "two kids", "that kid is ...". Returns what is left, tidied;
     // empty when the line was only that word.
+    // An insult (one-word entries of `insults`, a trailing * matching any
+    // ending) where it is thrown at someone -- "you knob", "u absolute
+    // muppet", "nah just chilling here knob", "knob, i said no" -- taken out
+    // with the "you" and the "absolute" that went with it. Not where it is
+    // talked about: "dont be a knob", "what a knob", "that pillock in trade".
+    // Returns what is left, tidied; empty when that was all the line said.
+    std::string StripInsults(const std::string& text, const std::vector<std::vector<std::string>>& insults);
+
     std::string StripVocatives(const std::string& text,
                                const std::vector<std::vector<std::string>>& vocatives);
 
@@ -326,6 +335,22 @@ namespace TextRules
 
     // Lowercase, inner runs of spaces folded: the key names are matched on.
     std::string NameKey(const std::string& name);
+
+    // Nothing but a congratulation: one of `congrats` ("gz", "grats"), and
+    // every other word one of those, `filler` ("on", "the", "ding"), `ack`
+    // ("lol", "ty"), a number ("20") or a name (`isName`, which may note
+    // whose): "gz", "grats on 20 Edos!", "congrats on the ding mate".
+    bool IsOnlyCongrats(const std::vector<std::string>& words,
+                        const std::vector<std::vector<std::string>>& congrats,
+                        const std::vector<std::vector<std::string>>& filler,
+                        const std::vector<std::vector<std::string>>& ack,
+                        const std::function<bool(const std::string&)>& isName);
+
+    // `text` with any word one slip off one of `keys` -- a letter wrong,
+    // missing, extra or swapped: "dingeon", "dungen", "dugneon" -- written as
+    // the key ("dungeon"). Only keys of six letters or more, where one slip
+    // off is not some other word. Everything else is left as it is.
+    std::string FixKeyTypos(const std::string& text, const std::vector<std::string>& keys);
 
     // ---- picking ----------------------------------------------------------
 
