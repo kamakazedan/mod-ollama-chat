@@ -74,6 +74,9 @@ std::string Conjure_GiveItems(Player* bot, Player* player, const std::vector<std
 // the window)? `entry` 0: anything at all. World thread.
 bool Conjure_IsGiving(Player* bot, Player* player, uint32_t entry);
 
+// What `bot` is handing `player` right now, (entry, count); empty when nothing.
+std::vector<std::pair<uint32_t, uint32_t>> Conjure_GivingItems(Player* bot, Player* player);
+
 // Notices when a trade window opens for someone a mage is giving food or
 // water to -- the one the mage offered, or one they opened with the mage
 // themselves -- so it can go in at once. The server keeps no "window open"

@@ -429,7 +429,16 @@ namespace TextRules
             while (first > 0 && isIntensifier(toks[first - 1].norm))
                 --first;
             bool you = false;
-            if (first > 0 && isYou(toks[first - 1].norm))
+            // "thank you idiot", "see you loser": that "you" goes with the
+            // verb, and stays.
+            auto takesYou = [&](const std::string& w)
+            {
+                return in(w, { "thank", "thanks", "see", "told", "tell", "bet", "love", "hate", "miss", "got", "get",
+                               "meet", "hear", "help", "like", "owe", "kill", "carry", "fuck", "screw", "ask", "asked",
+                               "beat", "catch", "need", "want", "saw", "heard", "warned", "warn", "bless", "trust" });
+            };
+            const bool verbYou = first > 1 && isYou(toks[first - 1].norm) && takesYou(toks[first - 2].norm);
+            if (first > 0 && isYou(toks[first - 1].norm) && !verbYou)
             {
                 --first;
                 you = true;
@@ -467,9 +476,10 @@ namespace TextRules
             const bool commaBefore   = hasAny(before, ",;:");
             const bool commaAfter    = hasAny(after, ",;:");
 
-            // Thrown at someone: "you knob" anywhere; else the last word, or
-            // set off by commas. "tit for tat" opens a line and is not.
-            if (!you && !sentenceEnd && !commaAfter && !(commaBefore && sentenceEnd))
+            // Thrown at someone: "you knob" (or "see you loser") anywhere; else
+            // the last word, or set off by commas. "tit for tat" opens a line
+            // and is not.
+            if (!you && !verbYou && !sentenceEnd && !commaAfter && !(commaBefore && sentenceEnd))
                 continue;
 
             size_t from = toks[first].b;
