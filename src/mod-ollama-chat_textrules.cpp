@@ -423,7 +423,8 @@ namespace TextRules
             if (!isInsult(toks[k].norm))
                 continue;
 
-            // Back over "absolute", then the "you" it was thrown with.
+            // Back over "absolute", then the "you" it was thrown with -- or
+            // "youre a", "ur such a", "you are an": said to them all the same.
             size_t first = k;
             while (first > 0 && isIntensifier(toks[first - 1].norm))
                 --first;
@@ -432,6 +433,27 @@ namespace TextRules
             {
                 --first;
                 you = true;
+            }
+            else
+            {
+                size_t j = first;
+                if (j > 0 && in(toks[j - 1].norm, { "a", "an" }))
+                    --j;
+                if (j > 0 && toks[j - 1].norm == "such")
+                    --j;
+                if (j < first && j > 0)
+                {
+                    if (in(toks[j - 1].norm, { "youre", "ur", "ure", "yer", "your", "yur" }))
+                    {
+                        first = j - 1;
+                        you = true;
+                    }
+                    else if (j > 1 && in(toks[j - 1].norm, { "are", "r", "re" }) && isYou(toks[j - 2].norm))
+                    {
+                        first = j - 2;
+                        you = true;
+                    }
+                }
             }
             if (!you && first > 0 && isDeterminer(toks[first - 1].norm))
                 continue;   // "dont be a knob": about someone, not at them
@@ -468,10 +490,11 @@ namespace TextRules
 
         std::string out;
         size_t at = 0;
-        for (const auto& [from, to] : cuts)
+        for (auto [from, to] : cuts)
         {
-            if (from < at)
-                continue;
+            if (to <= at)
+                continue;          // inside the last cut already
+            from = std::max(from, at);   // "you idiot you moron": the second runs on from the first
             out += text.substr(at, from - at);
             at = to;
         }
@@ -1650,6 +1673,37 @@ namespace TextRules
         }
     }
 
+    bool ClaimsOffer(const std::vector<std::string>& words, bool ask,
+                     const std::vector<std::vector<std::string>>& askPhrases,
+                     const std::vector<std::vector<std::string>>& yesPhrases)
+    {
+        static const char* const kPointers[] = { "it", "that", "those", "them", "this", "one", "these", "both", "all",
+                                                 "em", "ones", "some", "the", "stuff", "everything", "lot" };
+        static const char* const kQuiet[] = { "please", "pls", "plz", "now", "then", "mate", "ty", "thanks", "thx",
+                                              "cheers", "ok", "okay", "pretty", "of", "too", "yes", "yeah", "sure" };
+        auto listed = [](const std::string& w, const char* const* b, const char* const* e)
+        {
+            return std::any_of(b, e, [&](const char* x) { return w == x; });
+        };
+        auto inPhrases = [](const std::string& w, const std::vector<std::vector<std::string>>& phrases)
+        {
+            for (const std::vector<std::string>& phrase : phrases)
+                if (std::find(phrase.begin(), phrase.end(), w) != phrase.end())
+                    return true;
+            return false;
+        };
+        bool pointer = ask;
+        for (const std::string& w : words)
+        {
+            if (listed(w, std::begin(kPointers), std::end(kPointers)))
+                pointer = true;
+            else if (!listed(w, std::begin(kQuiet), std::end(kQuiet)) && !inPhrases(w, askPhrases) &&
+                     !inPhrases(w, yesPhrases))
+                return false;
+        }
+        return pointer;
+    }
+
     bool IsOnlyCongrats(const std::vector<std::string>& words,
                         const std::vector<std::vector<std::string>>& congrats,
                         const std::vector<std::vector<std::string>>& filler,
@@ -1666,7 +1720,8 @@ namespace TextRules
         {
             if (isName && isName(w))
                 continue;
-            const bool number = w.size() <= 3 && std::all_of(w.begin(), w.end(), ::isdigit);
+            const bool number = w.size() <= 3 &&
+                                std::all_of(w.begin(), w.end(), [](unsigned char c) { return std::isdigit(c) != 0; });
             if (!number && !is(w, congrats) && !is(w, filler) && !is(w, ack))
                 return false;   // "gz, now lets go" is more than that
         }

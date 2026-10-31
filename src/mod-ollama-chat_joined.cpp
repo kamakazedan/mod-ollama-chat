@@ -136,6 +136,8 @@ namespace
         if (!group || group->GetGUID().GetRawValue() != j.group || group->isBGGroup() || group->isBFGroup() ||
             bot->InBattleground() || bot->InArena())
             return;   // gone again, or a battleground raid
+        if (group->IsLeader(bot->GetGUID()))
+            return;   // it made the group (Group::Create adds the leader too): nobody invited it
         PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
         if (!ai || !ai->GetChatHelper())
             return;
@@ -164,11 +166,15 @@ namespace
         {
             // Out of the blue: one hello for a group invited together, and
             // not every time.
+            // The roll is the group's: five invited together get one roll
+            // between them, not five.
             auto last = g_lastGreet.find(j.group);
             const bool justNow = last != g_lastGreet.end() &&
                                  now - last->second < std::chrono::seconds(g_JoinedGroupCooldownSeconds);
             if (justNow || g_JoinedGreetChance == 0 || urand(1, 100) > g_JoinedGreetChance)
             {
+                if (!justNow)
+                    g_lastGreet[j.group] = now;
                 ++g_stats.quiet;
                 return;
             }

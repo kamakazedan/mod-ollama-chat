@@ -539,25 +539,29 @@ namespace
 
         // "nah just chilling here you knob": an insult out of nowhere. One
         // fits banter someone started, or a line that was rude to it, or a
-        // bot whose style is just rude -- and even then not every time.
-        if (!g_ResponseInsultWords.empty() &&
-            CrowdText::ContainsPhrase(CrowdText::Words(c.text), g_ResponseInsultWords))
+        // bot whose style is just rude -- and even then not every time (the
+        // time counts from a line that really went out with one).
+        bool insultKept = false;
+        const std::string unInsulted = (!g_ResponseInsultWords.empty() &&
+                                        CrowdText::ContainsPhrase(CrowdText::Words(c.text), g_ResponseInsultWords))
+                                           ? TextRules::StripInsults(c.text, g_ResponseInsultWords)
+                                           : c.text;
+        if (unInsulted != c.text)   // one thrown at someone; "dont be a knob" is only talk
         {
+            const std::string& kept = unInsulted;
             const std::vector<std::string> said = CrowdText::Words(origin);
             const bool provoked = CrowdText::ContainsPhrase(said, g_ResponseInsultWords) ||
                                   CrowdText::ContainsPhrase(said, g_ResponseProvokeWords);
             const std::string style = GetBotPersonality(bot);
             const bool rude = std::find(g_ResponseInsultPersonalities.begin(), g_ResponseInsultPersonalities.end(),
                                         style) != g_ResponseInsultPersonalities.end();
-            const auto now = std::chrono::steady_clock::now();
             auto last = g_insultUse.find(botGuid.GetRawValue());
-            const bool rested = last == g_insultUse.end() ||
-                                now - last->second >= std::chrono::seconds(g_ResponseInsultCooldownSeconds);
+            const bool rested = last == g_insultUse.end() || std::chrono::steady_clock::now() - last->second >=
+                                                                 std::chrono::seconds(g_ResponseInsultCooldownSeconds);
             if ((provoked || rude) && rested)
-                g_insultUse[botGuid.GetRawValue()] = now;
+                insultKept = true;
             else
             {
-                const std::string kept = TextRules::StripInsults(c.text, g_ResponseInsultWords);
                 if (kept.empty())
                 {
                     ++g_droppedEmpty;
@@ -566,7 +570,7 @@ namespace
                                  bot->GetName(), c.text);
                     return;
                 }
-                if (g_DebugEnabled && kept != c.text)
+                if (g_DebugEnabled)
                     LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} insult out of nowhere dropped: '{}' -> '{}'",
                              bot->GetName(), c.text, kept);
                 c.text = kept;
@@ -671,11 +675,13 @@ namespace
         }
 
         openerReport.done = true;   // it is out: the conversation hears it below
+        if (insultKept)
+            g_insultUse[botGuid.GetRawValue()] = std::chrono::steady_clock::now();
         Links_NoteSent(line);
         if (c.request.offerEntry)   // "anyone want [Linen Cloth]?": out, so "me!" claims it
             Bags_NoteOffer(bot, c.request.offerEntry, c.request.scopeKey);
         else                        // "just have some [Ankh] if you want", asked what it has
-            Bags_NoteReply(bot, plain, line.text, c.request.scopeKey);
+            Bags_NoteReply(bot, plain, line.text, c.request.scopeKey, c.request.targetGuid);
         Governor_RecordUtterance(botGuid, c.request.scopeKey, plain);
         Phrases_NoteSaid(plain);
         if (c.request.partyAck)

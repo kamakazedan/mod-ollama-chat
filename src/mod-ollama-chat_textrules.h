@@ -336,6 +336,16 @@ namespace TextRules
     // Lowercase, inner runs of spaces folded: the key names are matched on.
     std::string NameKey(const std::string& name);
 
+    // Right after an offer, does this ask (or yes) mean the thing offered?
+    // Every word has to be part of an ask (`askPhrases`: "can you trade", "i
+    // want"), a yes (`yesPhrases`), a word pointing at it ("it", "those",
+    // "the stuff") or one that says nothing ("please", "now"), and there has
+    // to be an ask or a pointer: "trade it", "can you trade me?", "i want
+    // those". Not "give me a sec", "i want to go", "can i get in".
+    bool ClaimsOffer(const std::vector<std::string>& words, bool ask,
+                     const std::vector<std::vector<std::string>>& askPhrases,
+                     const std::vector<std::vector<std::string>>& yesPhrases);
+
     // Nothing but a congratulation: one of `congrats` ("gz", "grats"), and
     // every other word one of those, `filler` ("on", "the", "ding"), `ack`
     // ("lol", "ty"), a number ("20") or a name (`isName`, which may note

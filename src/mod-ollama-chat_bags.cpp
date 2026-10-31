@@ -77,9 +77,19 @@ namespace
     std::unordered_map<std::string, std::vector<Offer>> g_offers;   // by scope key, newest last
     uint32_t g_offerLine = 0;
 
-    // When each bot was last shown its bags in a reply prompt: what it says
-    // in the next few minutes is about them.
-    std::unordered_map<uint64_t, Clock::time_point> g_described;
+    // When each bot was last shown its bags in a reply prompt, and for whom:
+    // what it says to them in the next few minutes is about its bags.
+    struct Told
+    {
+        Clock::time_point when{};
+        uint64_t          player = 0;
+    };
+    std::unordered_map<uint64_t, Told> g_described;
+
+    // A bot that just answered an ask (handing it over, keeping it, "invite
+    // me"): what it says next names the thing again, and is no new offer.
+    std::unordered_map<uint64_t, Clock::time_point> g_quiet;
+    constexpr auto kQuietAfterAnswer = std::chrono::seconds(60);
 
     // Told to invite it first: once the two are grouped, the trade starts by
     // itself rather than waiting to be asked again.
@@ -282,21 +292,10 @@ namespace
     }
 
     // "can I have it", "ill take that one", "trade it", "can you trade me?":
-    // right after an offer, an ask that points back at it, or that names
-    // nothing at all, means the thing offered -- so long as no word in it
-    // could be the name of something else ("can i have that sword").
+    // right after an offer, an ask about the thing offered (TextRules).
     bool ClaimsOffer(const std::vector<std::string>& words, bool ask)
     {
-        static const char* const kPointers[] = { "it", "that", "those", "them", "this", "one", "these", "both", "all" };
-        bool pointer = ask;
-        for (const std::string& w : words)
-        {
-            if (std::any_of(std::begin(kPointers), std::end(kPointers), [&](const char* p) { return w == p; }))
-                pointer = true;
-            else if (w.size() >= 4 && !IsCommonWord(w))
-                return false;   // "now", "lol" say nothing; "sword" names something else
-        }
-        return pointer;
+        return TextRules::ClaimsOffer(words, ask, g_BagsAskPhrases, g_BagsYesPhrases);
     }
 
     // "me!", "yes please", "go on then": nothing but YesWords, saying yes
@@ -406,10 +405,24 @@ namespace
         ++g_stats.offers;
     }
 
-    bool DescribedLately(Player* bot, Clock::time_point now)
+    // Shown its bags lately, for this real player.
+    bool DescribedLately(Player* bot, uint64_t player, Clock::time_point now)
     {
         auto it = g_described.find(bot->GetGUID().GetRawValue());
-        return it != g_described.end() && now - it->second <= std::chrono::seconds(g_BagsOfferSeconds);
+        return it != g_described.end() && it->second.player == player &&
+               now - it->second.when <= std::chrono::seconds(g_BagsOfferSeconds);
+    }
+
+    // It handed something over: nothing of its stays on offer anywhere.
+    void DropOffers(uint64_t bot)
+    {
+        for (auto it = g_offers.begin(); it != g_offers.end();)
+        {
+            std::vector<Offer>& list = it->second;
+            list.erase(std::remove_if(list.begin(), list.end(), [&](const Offer& o) { return o.bot == bot; }),
+                       list.end());
+            it = list.empty() ? g_offers.erase(it) : std::next(it);
+        }
     }
 
     // Whom the line names first: one of the group, or in /say a bot standing
@@ -501,7 +514,8 @@ namespace
     uint32_t AskedCount(const std::vector<std::string>& words)
     {
         for (const std::string& w : words)
-            if (!w.empty() && w.size() <= 3 && std::all_of(w.begin(), w.end(), ::isdigit))
+            if (!w.empty() && w.size() <= 3 &&
+                std::all_of(w.begin(), w.end(), [](unsigned char c) { return std::isdigit(c) != 0; }))
                 return uint32_t(std::strtoul(w.c_str(), nullptr, 10));
         return 0;
     }
@@ -658,21 +672,26 @@ std::string Bags_Describe(Player* bot)
     if (out.empty() || out == "[Format Error]")
         return {};
     ++g_stats.described;
-    g_described[bot->GetGUID().GetRawValue()] = Clock::now();
     return out;
 }
 
 std::string Bags_PromptFor(Player* bot, Player* player, const std::string& msg, bool spokenTo)
 {
-    if (!g_BagsEnable || !bot || !player || !spokenTo)
+    // Only for a real player: bots talking loot among themselves offer nothing.
+    if (!g_BagsEnable || !bot || !spokenTo || !OllamaIsRealPlayer(player))
         return {};
     const auto now = Clock::now();
-    const bool lately  = DescribedLately(bot, now);
+    const uint64_t playerGuid = player->GetGUID().GetRawValue();
+    const bool lately  = DescribedLately(bot, playerGuid, now);
     const bool trading = bot->GetTrader() == player;   // a window between them is open: it is about items
 
     std::string out;
     if (trading || Bags_IsItemTalk(msg))
+    {
         out = Bags_Describe(bot);
+        if (!out.empty())
+            g_described[bot->GetGUID().GetRawValue()] = { now, playerGuid };
+    }
     // Not while something really is going over: then "it's in the window" is
     // true, and its hint says so.
     if (!g_BagsHandoverText.empty() && (!out.empty() || lately || trading) && !Conjure_IsGiving(bot, player, 0))
@@ -710,13 +729,15 @@ void Bags_NoteOffer(Player* bot, uint32_t entry, const std::string& scopeKey)
 }
 
 void Bags_NoteReply(Player* bot, const std::string& plainText, const std::string& linkedText,
-                    const std::string& scopeKey)
+                    const std::string& scopeKey, uint64_t targetGuid)
 {
-    if (!g_BagsEnable || !bot || scopeKey.empty())
+    if (!g_BagsEnable || !bot || scopeKey.empty() || !targetGuid)
         return;
     const auto now = Clock::now();
-    if (!DescribedLately(bot, now))
-        return;   // not talking about its bags: a name in it is just talk
+    if (!DescribedLately(bot, targetGuid, now))
+        return;   // not telling this person about its bags: a name in it is just talk
+    if (auto quiet = g_quiet.find(bot->GetGUID().GetRawValue()); quiet != g_quiet.end() && now < quiet->second)
+        return;   // its answer to an ask: "sending the [Linen Cloth] over" offers nothing new
 
     // What it named: linked, as Links_Resolve makes "[Ankh]" into a link to
     // its own; else by name, with links off or a name written bare.
@@ -740,6 +761,8 @@ void Bags_NoteReply(Player* bot, const std::string& plainText, const std::string
         auto it = std::find_if(items.begin(), items.end(), [&](const BagEntry& e) { return e.entry == entry; });
         if (it == items.end() || !it->spare)
             continue;   // something it keeps, or does not have: not on offer
+        if (Player* to = Find(targetGuid); to && Conjure_IsGiving(bot, to, entry))
+            continue;   // going over already
         if (!line)
             line = ++g_offerLine;
         AddOffer(guid, entry, scopeKey, line, now);
@@ -897,6 +920,7 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
     }
     auto answer = [&](std::string hint)
     {
+        g_quiet[bot->GetGUID().GetRawValue()] = now + kQuietAfterAnswer;   // its answer is no new offer
         OllamaBotAnswer(player, bot, msg, answerSource, answerScope, seq, std::move(hint), CrowdLineKind::Favor);
     };
 
@@ -949,6 +973,7 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
         return true;
     }
     Forget(bot);   // its bags are about to change
+    DropOffers(bot->GetGUID().GetRawValue());   // given: "yep" later is not a second helping
     ++g_stats.given;
     answer(Hint(g_BagsHintGive, player, itemText, when.empty() ? std::string("now") : when));
     if (g_DebugEnabled)
@@ -982,7 +1007,9 @@ void Bags_Update()
     for (auto it = g_scans.begin(); it != g_scans.end();)
         it = (now - it->second.when > kScanFresh) ? g_scans.erase(it) : std::next(it);
     for (auto it = g_described.begin(); it != g_described.end();)
-        it = (now - it->second > std::chrono::seconds(g_BagsOfferSeconds)) ? g_described.erase(it) : std::next(it);
+        it = (now - it->second.when > std::chrono::seconds(g_BagsOfferSeconds)) ? g_described.erase(it) : std::next(it);
+    for (auto it = g_quiet.begin(); it != g_quiet.end();)
+        it = now >= it->second ? g_quiet.erase(it) : std::next(it);
 }
 
 void Bags_Tick()
@@ -1015,6 +1042,7 @@ void Bags_Tick()
             if (!give.empty() && Conjure_GiveItems(bot, player, give, when).empty())
             {
                 Forget(bot);
+                DropOffers(it->bot);
                 ++g_stats.given;
             }
             done = true;

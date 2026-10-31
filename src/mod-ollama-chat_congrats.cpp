@@ -117,7 +117,18 @@ namespace
             return;
         }
         if (c.pending)
+        {
+            // A whisper first, then the group too: "ty all" belongs where the
+            // group can read it, not in the whisper.
+            if (c.source == SRC_WHISPER_LOCAL && source != SRC_WHISPER_LOCAL)
+            {
+                c.source      = source;
+                c.channelName = channelName;
+                c.channelId   = channelId;
+                c.scopeKey    = scopeKey;
+            }
             return;
+        }
         const uint32_t lo = std::min(g_CongratsThanksDelayMinMs, g_CongratsThanksDelayMaxMs);
         const uint32_t hi = std::max(g_CongratsThanksDelayMinMs, g_CongratsThanksDelayMaxMs);
         c.pending     = true;
@@ -204,9 +215,13 @@ bool Congrats_HandleHumanLine(Player* player, const std::string& msg, ChatChanne
     if (!TextRules::IsOnlyCongrats(words, g_CongratsWords, g_CongratsFillerWords, g_CrowdAckWords, isName))
         return false;
 
-    // For whom it names, else for whoever dinged last among those reading it.
+    // For whom it names -- someone who can read it: in General, on that
+    // channel -- else for whoever dinged last among those reading it.
     Player* whom = named ? ObjectAccessor::FindConnectedPlayer(ObjectGuid(named)) : nullptr;
-    if (!whom)
+    if (whom && !(source == SRC_GENERAL_LOCAL ? (channel && OllamaIsOnChannel(channel, whom->GetGUID()))
+                                              : Hears(player, whom, source, receiver)))
+        whom = nullptr;
+    if (!whom && !named)
     {
         std::vector<std::pair<Clock::time_point, uint64_t>> recent;
         {
@@ -310,7 +325,10 @@ void Congrats_Tick()
         if (g_RoleplayEnable || g_CongratsThanksChance == 0 || urand(1, 100) > g_CongratsThanksChance)
             continue;
 
-        const bool many = d.c.from > 1;
+        // "ty all" after several -- but a whisper is to one person: a plain
+        // "ty" back to whoever whispered first.
+        const bool whisper = d.c.source == SRC_WHISPER_LOCAL;
+        const bool many = d.c.from > 1 && !whisper;
         const std::string line = many ? Pick(g_CongratsThanksAllLines, {}) : Pick(g_CongratsThanksLines, d.c.firstName);
         if (line.empty())
             continue;

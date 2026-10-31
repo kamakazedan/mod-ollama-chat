@@ -1390,6 +1390,12 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
                  "[Ollama Chat] {}'s line looks like a reply to {}.",
                  player->GetName(), addressee.name);
 
+    // "gz", "grats on 20 Edos": the one it is for thanks -- once for that ding,
+    // however many it gets -- and nobody else answers, a conversation running
+    // here included (mod-ollama-chat_congrats).
+    if (!senderIsBot && Congrats_HandleHumanLine(player, msg, sourceLocal, channel, receiver, scopeKey))
+        return;
+
     if (!senderIsBot && sourceLocal != SRC_WHISPER_LOCAL)
     {
         // A conversation running here hears the person too. (Bot lines are
@@ -1397,11 +1403,6 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         Conversation_NoteLine(Crowd_KeyFor(scopeKey, sourceLocal, uint32(player->GetTeamId())),
                               player, false, msg, contextSeq, 0, addressee.guid);
     }
-
-    // "gz", "grats on 20 Edos": the one it is for thanks -- once for that ding,
-    // however many it gets -- and nobody else answers (mod-ollama-chat_congrats).
-    if (!senderIsBot && Congrats_HandleHumanLine(player, msg, sourceLocal, channel, receiver, scopeKey))
-        return;
 
     // One pass over the online players, reused by every eligibility test
     // below. These questions used to be answered by a fresh full walk per

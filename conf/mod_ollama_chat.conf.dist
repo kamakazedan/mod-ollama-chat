@@ -1348,12 +1348,14 @@ OllamaChat.Response.DropVocatives = "kid|kiddo"
 #        insult or a ProvokeWords word in it ("stfu", "ur mum", "fuck off"),
 #        or when the bot's chat style is in InsultPersonalities -- and even
 #        then once in InsultCooldownSeconds for that bot. Otherwise it is
-#        taken out, with the "you" that went with it. Talking about someone
-#        ("dont be a knob", "that pillock in trade") is left alone. Words as
-#        CrowdText reads them; a trailing * matches any ending. Empty
-#        InsultWords turns this off.
+#        taken out, with the "you" ("youre a", "ur such a") that went with
+#        it. Talking about someone ("dont be a knob", "that pillock in
+#        trade") is left alone. Words that are something else too (melon,
+#        mug, clown) are not on the list: "selling melon" would lose its
+#        melon. Words as CrowdText reads them; a trailing * matches any
+#        ending. Empty InsultWords turns this off.
 #        Default: (below), NAT_RUDE, 600
-OllamaChat.Response.InsultWords = "knob|knobhead|knobend|nob|nobhead|twat|dickhead|bellend|pillock|wanker|tosser|prat|muppet|numpty|plonker|wally|idiot|moron|tit|berk|clown|scrub|noob|nub|loser|weirdo|melon|donut|doughnut|mug"
+OllamaChat.Response.InsultWords = "knob|knobhead|knobend|nob|nobhead|twat|dickhead|bellend|pillock|wanker|tosser|prat|muppet|numpty|plonker|wally|idiot|moron|berk|noob|nub|loser|weirdo"
 OllamaChat.Response.ProvokeWords = "fuck*|shit*|bastard*|bollocks|stfu|gtfo|shut up|ur mum|your mum|ur nan|your nan|yo mama|ur mom|your mom|l2p|learn to play|rekt|cope|useless|clueless|stupid|dumb|bad at|suck|sucks|banter|bants"
 OllamaChat.Response.InsultPersonalities = "NAT_RUDE"
 OllamaChat.Response.InsultCooldownSeconds = 600

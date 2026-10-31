@@ -78,11 +78,13 @@ void Bags_NoteLoot(Player* bot, uint32_t entry);
 // "me!" there claims it.
 void Bags_NoteOffer(Player* bot, uint32_t entry, const std::string& scopeKey);
 
-// A bot's line went out. Just after it was shown its bags, whatever spare
-// thing it names -- linked in `linkedText`, or by name in `plainText` --
-// counts as offered in `scopeKey`, all of them together as one offer.
+// A bot's line to `targetGuid` went out. Just after it was shown its bags
+// for that real player, whatever spare thing it names -- linked in
+// `linkedText`, or by name in `plainText` -- counts as offered in `scopeKey`,
+// all of them together as one offer. Not its answer to an ask, and nothing
+// already going over to them.
 void Bags_NoteReply(Player* bot, const std::string& plainText, const std::string& linkedText,
-                    const std::string& scopeKey);
+                    const std::string& scopeKey, uint64_t targetGuid);
 
 // A real player asking a bot for something it carries. True when it was
 // that and has been answered (and the trade started, where it could be).

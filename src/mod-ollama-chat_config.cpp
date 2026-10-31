@@ -1298,7 +1298,7 @@ static void LoadNaturalChatV7Settings()
     g_ResponseDropVocatives = phrases("OllamaChat.Response.DropVocatives", "kid|kiddo");
     g_ResponseInsultWords = phrases("OllamaChat.Response.InsultWords",
         "knob|knobhead|knobend|nob|nobhead|twat|dickhead|bellend|pillock|wanker|tosser|prat|muppet|numpty|"
-        "plonker|wally|idiot|moron|tit|berk|clown|scrub|noob|nub|loser|weirdo|melon|donut|doughnut|mug");
+        "plonker|wally|idiot|moron|berk|noob|nub|loser|weirdo");
     g_ResponseProvokeWords = phrases("OllamaChat.Response.ProvokeWords",
         "fuck*|shit*|bastard*|bollocks|stfu|gtfo|shut up|ur mum|your mum|ur nan|your nan|yo mama|ur mom|"
         "your mom|l2p|learn to play|rekt|cope|useless|clueless|stupid|dumb|bad at|suck|sucks|banter|bants");
