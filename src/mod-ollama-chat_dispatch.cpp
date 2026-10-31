@@ -574,6 +574,16 @@ namespace
                     LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} insult out of nowhere dropped: '{}' -> '{}'",
                              bot->GetName(), c.text, kept);
                 c.text = kept;
+                // ...and the rude gesture it was going to go with.
+                switch (c.emoteId)
+                {
+                    case TEXT_EMOTE_RUDE:  case TEXT_EMOTE_SPIT:  case TEXT_EMOTE_THREATEN: case TEXT_EMOTE_INSULT:
+                    case TEXT_EMOTE_MOCK:  case TEXT_EMOTE_TAUNT: case TEXT_EMOTE_RASP:     case TEXT_EMOTE_CHICKEN:
+                        c.emoteId = 0;
+                        break;
+                    default:
+                        break;
+                }
             }
         }
 
