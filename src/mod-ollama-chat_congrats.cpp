@@ -244,10 +244,11 @@ bool Congrats_HandleHumanLine(Player* player, const std::string& msg, ChatChanne
         std::lock_guard<std::mutex> lock(g_mutex);
         ++g_stats.heard;
         Celebration& c = g_celebrations[whom->GetGUID().GetRawValue()];
-        if (c.name.empty())
+        if (c.name.empty() || (!c.pending && now - c.when > window))
         {
-            // Named, with nothing noted ("gz on the drop Edos"): one thank-you
-            // for it all the same.
+            // Named, with nothing noted lately ("gz on the drop Edos"): one
+            // thank-you for it all the same.
+            c = Celebration{};
             c.name = whom->GetName();
             c.when = now;
         }

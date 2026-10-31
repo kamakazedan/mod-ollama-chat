@@ -208,17 +208,19 @@ namespace
             return;
 
         g_lastGreet[j.group] = now;
+        const std::string what = ex ? "carrying on from " + ex->where : std::string("saying hi");
         if (ex)
         {
             ++g_stats.carriedOn;
             // Said: the next invite is not a carry-on from the same words.
+            // (`ex` points into what this erases: not used after it.)
             g_exchanges[j.member].erase(player->GetGUID().GetRawValue());
         }
         else
             ++g_stats.greeted;
         if (g_DebugEnabled)
             LOG_INFO("module.ollamachat", "[Ollama Chat] {} joined {}'s group: {}.", bot->GetName(), player->GetName(),
-                     ex ? "carrying on from " + ex->where : std::string("saying hi"));
+                     what);
     }
 }
 
