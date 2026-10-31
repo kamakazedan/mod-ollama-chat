@@ -69,11 +69,28 @@ namespace
 
     struct Offer
     {
-        uint64_t          bot   = 0;
-        uint32_t          entry = 0;
+        uint64_t          bot    = 0;
+        uint32_t          entry  = 0;
         Clock::time_point when{};
+        uint32_t          line   = 0;   // offers named in the same line share this: "yes please" takes them all
+        uint64_t          player = 0;   // offered to this one only (told what it has); 0: anyone ("anyone want ...?")
     };
     std::unordered_map<std::string, std::vector<Offer>> g_offers;   // by scope key, newest last
+    uint32_t g_offerLine = 0;
+
+    // When each bot was last shown its bags in a reply prompt, and for whom:
+    // what it says to them in the next few minutes is about its bags.
+    struct Told
+    {
+        Clock::time_point when{};
+        uint64_t          player = 0;
+    };
+    std::unordered_map<uint64_t, Told> g_described;
+
+    // A bot that just answered an ask (handing it over, keeping it, "invite
+    // me"): what it says next names the thing again, and is no new offer.
+    std::unordered_map<uint64_t, Clock::time_point> g_quiet;
+    constexpr auto kQuietAfterAnswer = std::chrono::seconds(60);
 
     // Told to invite it first: once the two are grouped, the trade starts by
     // itself rather than waiting to be asked again.
@@ -81,8 +98,7 @@ namespace
     {
         uint64_t          bot    = 0;
         uint64_t          player = 0;
-        uint32_t          entry  = 0;
-        uint32_t          count  = 0;
+        std::vector<std::pair<uint32_t, uint32_t>> items;   // (entry, count)
         Clock::time_point until{};
     };
     std::vector<Promise> g_promises;
@@ -192,6 +208,15 @@ namespace
         return count > 1 ? fmt::format("[{}] x{}", e.name, count) : fmt::format("[{}]", e.name);
     }
 
+    // "[Linen Cloth] x12, [Ankh] and [Small Pouch]"
+    std::string JoinWords(const std::vector<std::string>& parts)
+    {
+        std::string out;
+        for (size_t i = 0; i < parts.size(); ++i)
+            out += (i == 0 ? "" : (i + 1 == parts.size() ? " and " : ", ")) + parts[i];
+        return out;
+    }
+
     // Every stack of `entry` in the bot's bags, biggest first -- the order
     // the trade window is filled in.
     std::vector<uint32_t> StackSizes(Player* bot, uint32_t entry)
@@ -260,26 +285,18 @@ namespace
         static const char* const kCommon[] = { "your", "that", "this", "them", "those", "these", "some", "please",
                                                "thanks", "with", "have", "take", "want", "give", "trade", "need",
                                                "spare", "mate", "just", "from", "there", "here", "what", "where",
-                                               "would", "could", "cheers", "really", "about", "after", "before" };
+                                               "would", "could", "cheers", "really", "about", "after", "before",
+                                               "come", "over", "stuff", "things", "both", "everything", "okay",
+                                               "sure", "yeah", "send", "pass", "hand", "gimme", "then", "thank" };
         return std::any_of(std::begin(kCommon), std::end(kCommon), [&](const char* c) { return w == c; }) ||
                InPhrases(w, g_BagsYesPhrases) || InPhrases(w, g_BagsAskPhrases);
     }
 
-    // "can I have it", "ill take that one": an ask that points back at what
-    // was offered rather than naming something -- a word like "it", and no
-    // word that could be the name of something else ("can i have that sword").
-    bool PointsAtOffer(const std::vector<std::string>& words)
+    // "can I have it", "ill take that one", "trade it", "can you trade me?":
+    // right after an offer, an ask about the thing offered (TextRules).
+    bool ClaimsOffer(const std::vector<std::string>& words, bool ask)
     {
-        static const char* const kPointers[] = { "it", "that", "those", "them", "this", "one", "these" };
-        bool pointer = false;
-        for (const std::string& w : words)
-        {
-            if (std::any_of(std::begin(kPointers), std::end(kPointers), [&](const char* p) { return w == p; }))
-                pointer = true;
-            else if (w.size() >= 4 && !IsCommonWord(w))
-                return false;   // "now", "lol" say nothing; "sword" names something else
-        }
-        return pointer;
+        return TextRules::ClaimsOffer(words, ask, g_BagsAskPhrases, g_BagsYesPhrases);
     }
 
     // "me!", "yes please", "go on then": nothing but YesWords, saying yes
@@ -361,14 +378,71 @@ namespace
         return only;
     }
 
-    // The newest offer made in this place lately.
-    const Offer* LatestOffer(const std::string& scopeKey, Clock::time_point now)
+    // The newest offer made in this place lately, with whatever else the same
+    // line offered: what "yes please" takes. Newest last.
+    // ...that `player` may take: one made to them, or to anyone.
+    std::vector<Offer> LatestOffers(const std::string& scopeKey, uint64_t player, Clock::time_point now)
     {
+        std::vector<Offer> out;
         auto it = g_offers.find(scopeKey);
         if (it == g_offers.end() || it->second.empty())
-            return nullptr;
-        const Offer& last = it->second.back();
-        return now - last.when <= std::chrono::seconds(g_BagsOfferSeconds) ? &last : nullptr;
+            return out;
+        auto mine = [&](const Offer& o) { return !o.player || o.player == player; };
+        auto last = std::find_if(it->second.rbegin(), it->second.rend(), mine);
+        if (last == it->second.rend() || now - last->when > std::chrono::seconds(g_BagsOfferSeconds))
+            return out;
+        const Offer newest = *last;
+        for (const Offer& o : it->second)
+            if (o.bot == newest.bot && o.line == newest.line && mine(o))
+                out.push_back(o);
+        return out;
+    }
+
+    void AddOffer(uint64_t bot, uint32_t entry, const std::string& scopeKey, uint32_t line, Clock::time_point now,
+                  uint64_t player = 0)
+    {
+        std::vector<Offer>& list = g_offers[scopeKey];
+        list.erase(std::remove_if(list.begin(), list.end(), [&](const Offer& o) { return o.bot == bot && o.entry == entry; }),
+                   list.end());
+        list.push_back({ bot, entry, now, line, player });
+        if (list.size() > 8)
+            list.erase(list.begin());
+        ++g_stats.offers;
+    }
+
+    // Shown its bags lately, for this real player.
+    bool DescribedLately(Player* bot, uint64_t player, Clock::time_point now)
+    {
+        auto it = g_described.find(bot->GetGUID().GetRawValue());
+        return it != g_described.end() && it->second.player == player &&
+               now - it->second.when <= std::chrono::seconds(g_BagsOfferSeconds);
+    }
+
+    // What `player` could take in this place: gone once they have been given
+    // something here.
+    void DropOffersTo(const std::string& scopeKey, uint64_t player)
+    {
+        auto it = g_offers.find(scopeKey);
+        if (it == g_offers.end())
+            return;
+        std::vector<Offer>& list = it->second;
+        list.erase(std::remove_if(list.begin(), list.end(),
+                                  [&](const Offer& o) { return !o.player || o.player == player; }),
+                   list.end());
+        if (list.empty())
+            g_offers.erase(it);
+    }
+
+    // It handed something over: nothing of its stays on offer anywhere.
+    void DropOffers(uint64_t bot)
+    {
+        for (auto it = g_offers.begin(); it != g_offers.end();)
+        {
+            std::vector<Offer>& list = it->second;
+            list.erase(std::remove_if(list.begin(), list.end(), [&](const Offer& o) { return o.bot == bot; }),
+                       list.end());
+            it = list.empty() ? g_offers.erase(it) : std::next(it);
+        }
     }
 
     // Whom the line names first: one of the group, or in /say a bot standing
@@ -460,7 +534,8 @@ namespace
     uint32_t AskedCount(const std::vector<std::string>& words)
     {
         for (const std::string& w : words)
-            if (!w.empty() && w.size() <= 3 && std::all_of(w.begin(), w.end(), ::isdigit))
+            if (!w.empty() && w.size() <= 3 &&
+                std::all_of(w.begin(), w.end(), [](unsigned char c) { return std::isdigit(c) != 0; }))
                 return uint32_t(std::strtoul(w.c_str(), nullptr, 10));
         return 0;
     }
@@ -620,6 +695,30 @@ std::string Bags_Describe(Player* bot)
     return out;
 }
 
+std::string Bags_PromptFor(Player* bot, Player* player, const std::string& msg, bool spokenTo)
+{
+    // Only for a real player: bots talking loot among themselves offer nothing.
+    if (!g_BagsEnable || !bot || !spokenTo || !OllamaIsRealPlayer(player))
+        return {};
+    const auto now = Clock::now();
+    const uint64_t playerGuid = player->GetGUID().GetRawValue();
+    const bool lately  = DescribedLately(bot, playerGuid, now);
+    const bool trading = bot->GetTrader() == player;   // a window between them is open: it is about items
+
+    std::string out;
+    if (trading || Bags_IsItemTalk(msg))
+    {
+        out = Bags_Describe(bot);
+        if (!out.empty())
+            g_described[bot->GetGUID().GetRawValue()] = { now, playerGuid };
+    }
+    // Not while something really is going over: then "it's in the window" is
+    // true, and its hint says so.
+    if (!g_BagsHandoverText.empty() && (!out.empty() || lately || trading) && !Conjure_IsGiving(bot, player, 0))
+        out += (out.empty() ? "" : " ") + g_BagsHandoverText;
+    return out;
+}
+
 bool Bags_IsItemTalk(const std::string& msg)
 {
     if (!g_BagsEnable || msg.empty())
@@ -646,14 +745,51 @@ void Bags_NoteOffer(Player* bot, uint32_t entry, const std::string& scopeKey)
 {
     if (!g_BagsEnable || !bot || !entry || scopeKey.empty())
         return;
+    AddOffer(bot->GetGUID().GetRawValue(), entry, scopeKey, ++g_offerLine, Clock::now());
+}
+
+void Bags_NoteReply(Player* bot, const std::string& plainText, const std::string& linkedText,
+                    const std::string& scopeKey, uint64_t targetGuid)
+{
+    if (!g_BagsEnable || !bot || scopeKey.empty() || !targetGuid)
+        return;
+    const auto now = Clock::now();
+    if (!DescribedLately(bot, targetGuid, now))
+        return;   // not telling this person about its bags: a name in it is just talk
+    if (auto quiet = g_quiet.find(bot->GetGUID().GetRawValue()); quiet != g_quiet.end() && now < quiet->second)
+        return;   // its answer to an ask: "sending the [Linen Cloth] over" offers nothing new
+
+    // What it named: linked, as Links_Resolve makes "[Ankh]" into a link to
+    // its own; else by name, with links off or a name written bare.
+    const std::vector<BagEntry> items = Bags_Scan(bot);
+    std::vector<uint32_t> named = LinkedEntries(linkedText);
+    const std::string text = TextRules::NameKey(plainText);
+    for (const BagEntry& e : items)
+    {
+        if (!e.spare || std::find(named.begin(), named.end(), e.entry) != named.end())
+            continue;
+        const std::string name = TextRules::NameKey(e.name);
+        if (name.size() >= 4 && HasWords(text, name))
+            named.push_back(e.entry);
+    }
+
     const uint64_t guid = bot->GetGUID().GetRawValue();
-    std::vector<Offer>& list = g_offers[scopeKey];
-    list.erase(std::remove_if(list.begin(), list.end(), [&](const Offer& o) { return o.bot == guid && o.entry == entry; }),
-               list.end());
-    list.push_back({ guid, entry, Clock::now() });
-    if (list.size() > 8)
-        list.erase(list.begin());
-    ++g_stats.offers;
+    uint32_t line = 0;
+    std::string said;
+    for (uint32_t entry : named)
+    {
+        auto it = std::find_if(items.begin(), items.end(), [&](const BagEntry& e) { return e.entry == entry; });
+        if (it == items.end() || !it->spare)
+            continue;   // something it keeps, or does not have: not on offer
+        if (Player* to = Find(targetGuid); to && Conjure_IsGiving(bot, to, entry))
+            continue;   // going over already
+        if (!line)
+            line = ++g_offerLine;
+        AddOffer(guid, entry, scopeKey, line, now, targetGuid);
+        said += (said.empty() ? "" : ", ") + it->name;
+    }
+    if (line && g_DebugEnabled)
+        LOG_INFO("module.ollamachat", "[Ollama Chat] {} offered {} in {}.", bot->GetName(), said, scopeKey);
 }
 
 bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSourceLocal source,
@@ -682,8 +818,13 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
         return false;   // said to a real player: theirs to answer
 
     const auto now = Clock::now();
-    const Offer* offer = LatestOffer(scopeKey, now);
+    const std::vector<Offer> offers = LatestOffers(scopeKey, player->GetGUID().GetRawValue(), now);
+    const Offer* offer = offers.empty() ? nullptr : &offers.back();
     Player* offerer = offer ? Find(offer->bot) : nullptr;
+    auto offered = [&](uint32_t entry)
+    {
+        return std::any_of(offers.begin(), offers.end(), [&](const Offer& o) { return o.entry == entry; });
+    };
 
     // "can I have", "ill take" -- or a line of nothing but "me!", "yes
     // please" and the like, which only claims what was just offered. Names
@@ -695,31 +836,53 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
     const bool yes = BareClaim(words);
     if ((!ask && !yes) || CrowdText::ContainsPhrase(words, g_BagsNotPhrases))
         return false;
+    // ...about what was offered, not something it names: "sure yes please",
+    // "trade it", "can you trade me?".
+    const bool claim = yes || ClaimsOffer(words, ask);
 
     const std::vector<uint32_t> linked = LinkedEntries(msg);
     const bool namesSomething = !linked.empty() || !TextRules::FindBracketNames(clean).empty();
 
+    // Asked again while it is going over ("sure", then "trade it"): the bot
+    // handing them something says it is on its way -- not an order, not a
+    // second trade. Only an ask or a line pointing at it ("trade it", "can
+    // you trade me?"): a bare "yep" may well be an answer to someone else.
+    // And not when the newest offer they could take is another bot's, which
+    // is not handing them anything: that one is what they mean.
+    Player* giving = nullptr;
+    if (claim && !namesSomething && (ask || TextRules::ClaimsOffer(words, false, {}, {})))
+    {
+        if (named)
+            giving = Conjure_IsGiving(named, player, 0) ? named : nullptr;
+        else if (Group* group = player->GetGroup())
+            for (GroupReference* ref = group->GetFirstMember(); ref && !giving; ref = ref->next())
+                if (Player* member = ref->GetSource())
+                    if (member != player && OllamaIsBotPlayer(member) && Conjure_IsGiving(member, player, 0))
+                        giving = member;
+        if (giving && offerer && offerer != giving && !Conjure_IsGiving(offerer, player, 0))
+            giving = nullptr;
+    }
+
     // Whom it is for: the bot named or whispered; else the one that just
     // offered something, when the line names nothing else ("me!", "can I
     // have it"); else, in party, the bot carrying what was linked or named.
-    Player* bot = named;
-    uint32_t offered = 0;
-    if (offer && offerer && (!bot || bot == offerer))
+    Player* bot = giving ? giving : named;
+    bool byOffer = false;
+    if (!giving && offer && offerer && (!bot || bot == offerer))
     {
-        if (!bot && (yes || PointsAtOffer(words)))
+        if (!bot && claim)
             bot = offerer;
         else if (!bot)
         {
             // "can I have the cloth" right after it offered [Linen Cloth].
             const std::vector<BagEntry> offering = Bags_Scan(offerer);
             const BagEntry* match = MatchAsked(offering, linked, clean, words);
-            if (match && match->entry == offer->entry)
+            if (match && offered(match->entry))
                 bot = offerer;
         }
-        if (bot == offerer)
-            offered = offer->entry;
+        byOffer = bot == offerer;
     }
-    if (!bot && (source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL))
+    if (!bot && !giving && (source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL))
         bot = GroupBotWith(player, linked, clean, words);
     if (!bot || !bot->IsInWorld() || !OllamaIsBotPlayer(bot) || bot->GetMap() != player->GetMap())
         return false;
@@ -732,38 +895,54 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
                 return false;
 
     const std::vector<BagEntry> items = Bags_Scan(bot);
-    const BagEntry* want = nullptr;
-    if (offered && !named && !namesSomething && (yes || PointsAtOffer(words)))
+    std::vector<const BagEntry*> wants;
+    auto takeOffered = [&]()
     {
-        // Picked by its offer: only the offered thing, never something else of
-        // its that a word happens to match ("i need mana" is not a claim on
-        // its mana potions).
-        for (const BagEntry& e : items)
-            if (e.entry == offered)
-                want = &e;
-    }
-    else
-    {
-        want = MatchAsked(items, linked, clean, words);
-        if (!want && offered && (yes || PointsAtOffer(words)))
+        for (const Offer& o : offers)
             for (const BagEntry& e : items)
-                if (e.entry == offered)
-                    want = &e;
+                if (e.entry == o.entry)
+                    wants.push_back(&e);
+    };
+    if (!giving)   // (giving: nothing new is asked for -- it is answered below)
+    {
+        if (byOffer && !named && !namesSomething && claim)
+        {
+            // Picked by its offer: only what it offered, never something else
+            // of its that a word happens to match ("i need mana" is not a
+            // claim on its mana potions).
+            takeOffered();
+        }
+        else if (const BagEntry* match = MatchAsked(items, linked, clean, words))
+            wants.push_back(match);
+        else if (byOffer && claim)
+            takeOffered();
     }
-    if (!want && (!ask || linked.empty()))
+    if (!giving && wants.empty() && (!ask || linked.empty()))
         return false;   // nothing it carries is meant: ordinary chat
 
-    // At most one stack's worth, in whole stacks: what the window can take.
-    uint32_t count = 0;
-    if (want && want->spare)
+    // At most one stack's worth of each, in whole stacks: what the window can
+    // take. A number ("2 cloth") only counts for a single thing.
+    std::vector<std::pair<uint32_t, uint32_t>> give;
+    std::vector<std::string> parts;
+    const BagEntry* keptOne = nullptr;
+    const uint32_t asked = wants.size() == 1 ? AskedCount(words) : 0;
+    for (const BagEntry* e : wants)
     {
-        ItemTemplate const* proto = sObjectMgr->GetItemTemplate(want->entry);
+        if (!e->spare)
+        {
+            keptOne = keptOne ? keptOne : e;
+            continue;
+        }
+        ItemTemplate const* proto = sObjectMgr->GetItemTemplate(e->entry);
         const uint32_t stack = proto ? std::max<uint32_t>(1, proto->GetMaxStackSize()) : 1;
-        const uint32_t asked = AskedCount(words);
-        count = WholeStacks(bot, want->entry, std::min({ want->count, stack, asked ? asked : want->count }));
+        const uint32_t count = WholeStacks(bot, e->entry, std::min({ e->count, stack, asked ? asked : e->count }));
         if (!count)
-            return false;   // gone since its bags were last read
+            continue;   // gone since its bags were last read
+        give.emplace_back(e->entry, count);
+        parts.push_back(ItemWords(*e, count));
     }
+    if (!giving && !wants.empty() && give.empty() && !keptOne)
+        return false;   // all of it gone since its bags were last read
 
     // The line is in the transcript before anyone answers it.
     if (!seq)
@@ -786,8 +965,24 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
     {
         OllamaBotAnswer(player, bot, msg, answerSource, answerScope, seq, std::move(hint), CrowdLineKind::Favor);
     };
+    // "sending the [Linen Cloth] over": its answer names the thing going over
+    // (or promised), and is no new offer. (A no -- "keeping that, but have
+    // the [Ankh]" -- may offer something else, and does.)
+    auto hushed = [&]() { g_quiet[bot->GetGUID().GetRawValue()] = now + kQuietAfterAnswer; };
 
-    if (!want)
+    if (giving)
+    {
+        std::vector<std::string> going;
+        for (const auto& [entry, count] : Conjure_GivingItems(giving, player))
+            if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(entry))
+                going.push_back(count > 1 ? fmt::format("[{}] x{}", proto->Name1, count)
+                                          : fmt::format("[{}]", proto->Name1));
+        hushed();
+        answer(Hint(g_BagsHintAlready, player, going.empty() ? std::string("it") : JoinWords(going)));
+        return true;
+    }
+
+    if (wants.empty())
     {
         // A link to something it does not have.
         const std::vector<TextRules::ChatLink> links = TextRules::ExtractChatLinks(msg);
@@ -796,17 +991,17 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
         return true;
     }
 
-    if (!want->spare)
+    if (give.empty())
     {
         ++g_stats.kept;
-        answer(Hint(g_BagsHintKeep, player, ItemWords(*want, 1), {}, want->why));
+        answer(Hint(g_BagsHintKeep, player, ItemWords(*keptOne, 1), {}, keptOne->why));
         if (g_DebugEnabled)
             LOG_INFO("module.ollamachat", "[Ollama Chat] {} asked {} for {}: kept ({}).", player->GetName(),
-                     bot->GetName(), want->name, want->why);
+                     bot->GetName(), keptOne->name, keptOne->why);
         return true;
     }
 
-    const std::string itemText = ItemWords(*want, count);
+    const std::string itemText = JoinWords(parts);
 
     if (!InGroupWith(player, bot))
     {
@@ -814,21 +1009,37 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
         g_promises.erase(std::remove_if(g_promises.begin(), g_promises.end(),
                                         [&](const Promise& p) { return p.bot == bot->GetGUID().GetRawValue(); }),
                          g_promises.end());
-        g_promises.push_back({ bot->GetGUID().GetRawValue(), player->GetGUID().GetRawValue(), want->entry, count,
+        g_promises.push_back({ bot->GetGUID().GetRawValue(), player->GetGUID().GetRawValue(), give,
                                now + std::chrono::seconds(g_BagsInviteWaitSeconds) });
+        DropOffers(bot->GetGUID().GetRawValue());   // promised: the next "sure" is not asking again
+        hushed();
         answer(Hint(g_BagsHintInvite, player, itemText));
         return true;
     }
 
+    // Asked again while it is going over already ("sure" then "trade it"):
+    // it is in the window, not a second trade.
+    if (Conjure_IsGiving(bot, player, give.front().first))
+    {
+        hushed();
+        answer(Hint(g_BagsHintAlready, player, itemText));
+        return true;
+    }
+
     std::string when;
-    const std::string cant = Conjure_GiveItems(bot, player, { { want->entry, count } }, when);
+    const std::string cant = Conjure_GiveItems(bot, player, give, when);
     if (!cant.empty())
     {
         answer(Hint(g_BagsHintCant, player, itemText, {}, cant));
         return true;
     }
     Forget(bot);   // its bags are about to change
+    // Given: "yep" later is not a second helping -- nor a claim on whatever
+    // else here they could have taken ("trade it" means this one).
+    DropOffers(bot->GetGUID().GetRawValue());
+    DropOffersTo(scopeKey, player->GetGUID().GetRawValue());
     ++g_stats.given;
+    hushed();
     answer(Hint(g_BagsHintGive, player, itemText, when.empty() ? std::string("now") : when));
     if (g_DebugEnabled)
         LOG_INFO("module.ollamachat", "[Ollama Chat] {} asked {} for {}: trading it over{}.", player->GetName(),
@@ -860,6 +1071,10 @@ void Bags_Update()
     }
     for (auto it = g_scans.begin(); it != g_scans.end();)
         it = (now - it->second.when > kScanFresh) ? g_scans.erase(it) : std::next(it);
+    for (auto it = g_described.begin(); it != g_described.end();)
+        it = (now - it->second.when > std::chrono::seconds(g_BagsOfferSeconds)) ? g_described.erase(it) : std::next(it);
+    for (auto it = g_quiet.begin(); it != g_quiet.end();)
+        it = now >= it->second ? g_quiet.erase(it) : std::next(it);
 }
 
 void Bags_Tick()
@@ -879,15 +1094,20 @@ void Bags_Tick()
         if (!done && InGroupWith(player, bot))
         {
             Forget(bot);
-            bool spare = false;
-            for (const BagEntry& e : Bags_Scan(bot))
-                if (e.entry == it->entry)
-                    spare = e.spare;
-            const uint32_t count = spare ? WholeStacks(bot, it->entry, it->count) : 0;
+            const std::vector<BagEntry> items = Bags_Scan(bot);
+            std::vector<std::pair<uint32_t, uint32_t>> give;
+            for (const auto& [entry, count] : it->items)
+            {
+                auto e = std::find_if(items.begin(), items.end(), [&](const BagEntry& b) { return b.entry == entry; });
+                const uint32_t stacks = (e != items.end() && e->spare) ? WholeStacks(bot, entry, count) : 0;
+                if (stacks)
+                    give.emplace_back(entry, stacks);
+            }
             std::string when;
-            if (count && Conjure_GiveItems(bot, player, { { it->entry, count } }, when).empty())
+            if (!give.empty() && Conjure_GiveItems(bot, player, give, when).empty())
             {
                 Forget(bot);
+                DropOffers(it->bot);
                 ++g_stats.given;
             }
             done = true;

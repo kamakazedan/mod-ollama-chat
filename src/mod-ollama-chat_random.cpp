@@ -20,6 +20,8 @@
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_conjure.h"
+#include "mod-ollama-chat_congrats.h"
+#include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_marks.h"
 #include "mod-ollama-chat_needs.h"
 #include "mod-ollama-chat_mute.h"
@@ -241,6 +243,17 @@ namespace
         prompt += Links_PromptHint();
         prompt += Expression_BuildGesturePrompt(bot);
 
+        // Mid-run, the run is what is on its mind: what it is doing, and to
+        // keep to that (no "did you hear about the druid that got kicked?").
+        if ((source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL) && bot->GetMap() && bot->GetMap()->IsDungeon())
+        {
+            const std::string runState = PartyCmd_RunStateFor(bot, source);
+            if (!runState.empty())
+                prompt += " " + runState;
+            if (!g_PartyDungeonFocusText.empty())
+                prompt += " " + g_PartyDungeonFocusText;
+        }
+
         return prompt;
     }
 
@@ -394,6 +407,12 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
     Conjure_Update();
     Bags_Tick();
 
+    // The one "ty" for a ding, once the gz have come in.
+    Congrats_Tick();
+
+    // A bot that just joined a group saying hi, or carrying on a conversation.
+    Joined_Update();
+
     // Orders carried out a tick after they were given; bots walking over to trade.
     Orders_Update(diff);
 
@@ -426,6 +445,8 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
         Phrases_Update();
         Bags_Update();
         Needs_Update();
+        Congrats_Update();
+        Joined_Maintain();
     }
     else
     {
@@ -534,11 +555,14 @@ void OllamaBotRandomChatter::HandleRandomChatter()
             g_nextRandomChatTime[rawGuid] = now + urand(g_MinRandomInterval, g_MaxRandomInterval);
         };
 
-        // People come to a city to talk: bots there speak up more often.
+        // People come to a city to talk: bots there speak up more often. In a
+        // dungeon they keep their mind on the run, and talk less.
         const bool hub = OllamaIsSocialHub(bot);
         uint32_t commentChance = g_RandomChatterBotCommentChance;
         if (hub)
             commentChance = std::min<uint32_t>(100, commentChance * g_CityChatterMultiplier);
+        if (bot->GetMap() && bot->GetMap()->IsDungeon())
+            commentChance = commentChance * g_PartyDungeonAmbientPercent / 100;
 
         if (urand(0, 99) >= commentChance)
         {

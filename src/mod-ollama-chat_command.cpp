@@ -17,6 +17,8 @@
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_conjure.h"
+#include "mod-ollama-chat_congrats.h"
+#include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_marks.h"
 #include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_needs.h"
@@ -619,14 +621,32 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              (unsigned long long)bags.kept,
                              (unsigned long long)bags.invite,
                              (unsigned long long)bags.offers);
+    const JoinedStats joined = Joined_GetStats();
+    handler->PSendSysMessage("Joining a group: {} - {} joins with a real player, {} said hi, {} carried on a "
+                             "conversation, {} said nothing",
+                             g_JoinedEnable ? "on" : "off",
+                             (unsigned long long)joined.joins,
+                             (unsigned long long)joined.greeted,
+                             (unsigned long long)joined.carriedOn,
+                             (unsigned long long)joined.quiet);
+    const CongratsStats cheers = Congrats_GetStats();
+    handler->PSendSysMessage("Congratulations: {} - {} dings noted, {} gz answered only by the one they were for, {} "
+                             "thank-yous, {} more gz after it ({} for nobody in particular)",
+                             g_CongratsEnable ? "on" : "off",
+                             (unsigned long long)cheers.celebrated,
+                             (unsigned long long)cheers.heard,
+                             (unsigned long long)cheers.thanked,
+                             (unsigned long long)cheers.repeat,
+                             (unsigned long long)cheers.nobody);
     handler->PSendSysMessage("Asks with a reason: {} ({}%) - {} quest groups, {} errands, {} spare things, {} for a "
-                             "few silver; {} tries found nothing",
+                             "few silver; {} tries found nothing; {} replies told what it is really doing",
                              g_NeedsEnable ? "on" : "off", g_NeedsChance,
                              (unsigned long long)needs.asked[size_t(NeedKind::Quest)],
                              (unsigned long long)needs.asked[size_t(NeedKind::Errand)],
                              (unsigned long long)needs.asked[size_t(NeedKind::Spare)],
                              (unsigned long long)needs.asked[size_t(NeedKind::Short)],
-                             (unsigned long long)needs.none);
+                             (unsigned long long)needs.none,
+                             (unsigned long long)needs.plans);
 
     const LinksStats   links   = Links_GetStats();
     const PhrasesStats phrases = Phrases_GetStats();

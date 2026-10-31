@@ -315,6 +315,29 @@ extern std::string g_EventChatterSelfPromptTemplate;   // when it happened to th
 extern std::vector<std::string> g_EventCongratsLines;  // "gz|grats {name}|..."
 extern uint32_t    g_EventCongratsCannedChance;        // % of congratulations typed without the LLM
 
+// Joining a group (mod-ollama-chat_joined)
+extern bool        g_JoinedEnable;
+extern uint32_t    g_JoinedGreetChance;            // % of out-of-the-blue invites that get a hello
+extern uint32_t    g_JoinedGroupCooldownSeconds;   // one hello per group in this long
+extern uint32_t    g_JoinedContinueMinutes;        // talked this lately: carry on instead of a hello
+extern uint32_t    g_JoinedCannedChance;           // % of hellos typed from GreetLines without the model
+extern std::vector<std::string> g_JoinedGreetLines;
+extern std::string g_JoinedGreetPrompt;
+extern std::string g_JoinedContinuePrompt;
+extern uint32_t    g_JoinedDelayMinMs;
+extern uint32_t    g_JoinedDelayMaxMs;
+
+// "gz", and the one "ty" (mod-ollama-chat_congrats)
+extern bool        g_CongratsEnable;
+extern uint32_t    g_CongratsWindowSeconds;            // a gz this long after a ding is for it
+extern std::vector<std::vector<std::string>> g_CongratsWords;        // "gz", "grats", "congrats"
+extern std::vector<std::vector<std::string>> g_CongratsFillerWords;  // "on", "the", "ding", "level"
+extern std::vector<std::string> g_CongratsThanksLines;               // "ty", "ty {name}", "cheers"
+extern std::vector<std::string> g_CongratsThanksAllLines;            // "ty all", "thanks guys"
+extern uint32_t    g_CongratsThanksChance;             // % of dings that get a thank-you at all
+extern uint32_t    g_CongratsThanksDelayMinMs;         // after the first gz: the rest come in first
+extern uint32_t    g_CongratsThanksDelayMaxMs;
+
 // Reply cleanup
 extern std::vector<std::vector<std::string>> g_ResponseAssistantPhrases;
 
@@ -375,11 +398,15 @@ extern std::string g_ConversationHintObserve;
 extern bool        g_PartyCmdEnable;
 extern TextRules::PartyRules g_PartyCmdRules;
 extern float       g_PartyCmdMaxDistance;
+extern std::vector<std::vector<std::string>> g_PartyRunQuestionPhrases;   // "whats next", "why are we waiting"
+extern uint32_t    g_PartyRunQuestionMaxWords;
 extern std::string g_PartyCmdHintStart;
 extern std::string g_PartyCmdHintPause;
 extern std::string g_PartyCmdHintResume;
 extern std::string g_PartyCmdHintWaiting;
 extern std::string g_PartyDungeonGlossary;
+extern uint32_t    g_PartyDungeonAmbientPercent;   // ambient lines inside, as a share of outside
+extern std::string g_PartyDungeonFocusText;        // ...and what they keep to
 // The tank's last few acknowledgements in a group, so the next one is not a
 // copy: how many to keep, and the sentence that shows them ({lines}).
 extern uint32_t    g_PartyCmdRecentAcks;
@@ -450,6 +477,10 @@ void LoadEmoteStyles();
 // --------------------------------------------
 // Replies. World thread only.
 extern std::vector<std::vector<std::string>> g_ResponseDropVocatives;   // "kid", where it addresses someone
+extern std::vector<std::vector<std::string>> g_ResponseInsultWords;     // "knob", "muppet": banter or heat only
+extern std::vector<std::vector<std::string>> g_ResponseProvokeWords;    // what makes one fair: "stfu", "ur mum"
+extern std::vector<std::string> g_ResponseInsultPersonalities;          // styles that are just rude: NAT_RUDE
+extern uint32_t    g_ResponseInsultCooldownSeconds;                     // even then, not every line
 extern std::vector<std::vector<std::string>> g_ResponseRarePhrases;     // once per cooldown, even said to someone
 extern uint32_t    g_ResponseRareCooldownSeconds;
 
@@ -488,6 +519,7 @@ extern bool        g_MarksAutoSkull;
 extern uint32_t    g_MarksInUseSeconds;
 extern uint32_t    g_MarksSapStealthWaitSeconds;   // how long a rogue waits for Stealth before giving up
 extern uint32_t    g_MarksSapApproachSeconds;      // how long it may take to sneak round and sap
+extern uint32_t    g_MarksSapWaitSeconds;          // ...not counting this long hanging back for a wandering mob
 extern bool        g_MarksSayEnable;               // the rogue says why it is not sapping
 extern uint32_t    g_MarksSayCooldownSeconds;
 extern std::string g_MarksSayPrompt;
@@ -516,6 +548,8 @@ extern std::string g_BagsHintInvite;
 extern std::string g_BagsHintKeep;
 extern std::string g_BagsHintNotHave;
 extern std::string g_BagsHintCant;
+extern std::string g_BagsHintAlready;      // asked again while it is going over
+extern std::string g_BagsHandoverText;     // saying so hands nothing over
 
 // Asks with a real reason behind them (mod-ollama-chat_needs)
 extern bool        g_NeedsEnable;
@@ -529,6 +563,9 @@ extern uint32_t    g_NeedsShortMaxLevel;
 extern uint32_t    g_NeedsShortCopperPerLevel;
 extern std::string g_NeedsPromptTemplate;
 extern std::string g_NeedsReasonText;
+extern std::string g_NeedsPlanText;                                     // what it is really doing, {doing}
+extern std::vector<std::vector<std::string>> g_NeedsPlanPhrases;        // "what you doing", "going for"
+extern uint32_t    g_NeedsPlanMaxQuests;
 extern std::string g_NeedsAskQuest;
 extern std::string g_NeedsAskDungeon;
 extern std::string g_NeedsReasonQuest;

@@ -7,6 +7,7 @@
 #include "mod-ollama-chat_rag.h"
 #include "mod-ollama-chat_conjure.h"
 #include "mod-ollama-chat_mute.h"
+#include "mod-ollama-chat_joined.h"
 #include "Log.h"
 
 void Addmod_ollama_chatScripts()
@@ -43,4 +44,7 @@ void Addmod_ollama_chatScripts()
 
     // Stock bot lines nobody needs: "Using [Hearthstone]", "AI was reset to defaults".
     new OllamaChatMuteScript();
+
+    // A bot joining a group says hi in party chat, or carries on from what was said.
+    new OllamaChatJoinScript();
 }

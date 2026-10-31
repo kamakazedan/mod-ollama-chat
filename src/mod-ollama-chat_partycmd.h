@@ -54,6 +54,12 @@ enum class PartyCmdLine : uint8_t
 // it. No side effects.
 PartyCmdLine PartyCmd_Classify(Player* player, const std::string& msg, ChatChannelSourceLocal source);
 
+// "whats next?", "why are we waiting", "how many bosses left": a question
+// about the run (OllamaChat.PartyCommands.RunQuestionPhrases), in a dungeon
+// with a dungeon-clear bot tank. The tank, which answers it and nobody else;
+// nullptr for anything else, or with no bot tank to ask (the player tanks).
+Player* PartyCmd_RunVoiceFor(Player* player, const std::string& msg, ChatChannelSourceLocal source);
+
 // A real player's party or raid line. True when it was a dungeon-clear
 // instruction and has been dealt with: the caller sends no other replies.
 bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,

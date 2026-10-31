@@ -775,7 +775,9 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
     // One bot says it is on it.
     Player* voice = audience.named && able.size() == 1 ? able[0] : Spokesperson(able);
     if (intent == BotIntent::Trade)
-        facts.doing = voice->IsWithinDistInMap(player, kTradeRange) ? "opening a trade window with them"
+        facts.doing = voice->GetTrader() == player                  ? "in a trade window with them already: "
+                                                                      "they can say what they want from you"
+                    : voice->IsWithinDistInMap(player, kTradeRange) ? "opening a trade window with them"
                                                                     : "coming over to trade with them";
     if (intent == BotIntent::Unstuck)
     {

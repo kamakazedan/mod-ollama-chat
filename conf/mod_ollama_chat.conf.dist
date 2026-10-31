@@ -333,10 +333,16 @@ OllamaChat.EnableWhisperReplies = 0
 OllamaChat.MaxBotsToPick = 2
 
 # OllamaChat.BlacklistCommands
+# OllamaChat.BlacklistWithPrefix
 #     Description: A comma-separated list of command prefixes that should be ignored by AI bots.
 #                  If a message starts with any of these prefixes, the bot will not respond.
+#                  BlacklistCommands is playerbots' commands, for when playerbots reads them from plain
+#                  chat. With Playerbots.CommandPrefix set it no longer does -- "stay safe", "go to the
+#                  inn" and "ready?" are chat again -- so BlacklistWithPrefix (addon messages) is used
+#                  instead, and any line starting with the prefix ("!!summon") gets no replies.
 #     Default:     
 OllamaChat.BlacklistCommands = autogear,talents,reset botAI,summon,release,revive,leave,attack,follow,flee,stay,runaway,grind,disperse,give leader,spells,cast ,quests,accept,drop,talk,reset,ss ,trainer,rti,rtsc,do ,ll ,e ,ue ,nc ,open,destroy,s ,b ,bank,gb ,u ,co ,ELVUI_VERSIONCHK,Asked,DPSMate_,LibGroupTalents,BLT,oRA3,Skada,HealBot,hbComms,questie,pfQuest,DBMv4-Ver,BWVQ3,add,remove,reset ai,report,state,help,log,stats,tank,offtank,healer,cc ,damage,boost,passive,defensive,aggressive,stay,guard,free,follow,assist,pet,stance,formation,rpg,emote,cheer,applaud,drink,eat,dance,attackers,reset instances,home,zone,who ,pos ,tele,grind,loot,quest,trainer,travel,teleport,homebind,unfollow,invite,uninvite,join,leave,leader,ready,release,save,update,reset talents,gear,trade,mail,ah ,ahscan,ahbid,ahbuy,ahsell,ahcancel,bag,repair,vendor,train,spells,reset spells,learn,unlearn,cast,uncast,use ,move,go ,look,stop,turn,face,wait,party,followleader,stayleader,moveleader,info,distance,debug,reset path,reset state,reset all,reset dungeon,reset raid,zone info,LHC40,RECOUNT,GTFO_v,Altoholic,DS_,DataStore
+OllamaChat.BlacklistWithPrefix = ELVUI_VERSIONCHK,Asked,DPSMate_,LibGroupTalents,BLT,oRA3,Skada,HealBot,hbComms,questie,pfQuest,DBMv4-Ver,BWVQ3,LHC40,RECOUNT,GTFO_v,Altoholic,DS_,DataStore
 
 # OllamaChat.SayDistance
 #     Description: The maximum distance (in game units) a bot must be within to reply on a Say message.
@@ -493,6 +499,60 @@ OllamaChat.Events.CongratsLines = "gz|gz|grats|gratz|congrats|congratz|gz {name}
 #                  Most players type "gz" without a thought; the rest get the bot's own personality.
 #     Default:     50
 OllamaChat.Events.CongratsCannedChance = 50
+
+# --------------------------------------------
+# "GZ", AND THE ONE "TY"
+# --------------------------------------------
+# Someone dings and the group types gz. The one who dinged says "ty" -- or "ty all" once the gz have
+# stopped coming -- and that is the end of it: nobody else answers a "gz", and the one who dinged does not
+# thank every single one.
+#
+# A real player's line that is nothing but a congratulation (Words, with names, numbers and FillerWords
+# around them: "gz", "grats on 20 Edos!", "congrats on the ding mate") gets no crowd at all. It is for
+# whoever it names, else for whoever levelled or earned an achievement in the last WindowSeconds among
+# those who can read it: the group, the guild, those near enough to hear /say. (In General it has to name
+# them.) When that is a bot, it thanks -- once for that ding, however many gz it gets from real players or
+# other bots -- ThanksDelayMinMs to ThanksDelayMaxMs after the first one, so "ty all" can come after the
+# lot. A gz for nobody in particular gets nothing. "gz, now lets go" is more than a congratulation: an
+# ordinary line.
+
+# OllamaChat.Congrats.Enable
+#     Default:     1
+OllamaChat.Congrats.Enable = 1
+
+# OllamaChat.Congrats.WindowSeconds
+#     Description: A gz this long after a ding (or an achievement) is for it.
+#     Default:     300
+OllamaChat.Congrats.WindowSeconds = 300
+
+# OllamaChat.Congrats.Words
+# OllamaChat.Congrats.FillerWords
+#     Description: What a congratulation is made of (one of Words, and nothing but Words, FillerWords,
+#                  Crowd.AckWords, numbers and names). Words as CrowdText reads them: lowercase, no
+#                  apostrophes; a trailing * matches any ending.
+OllamaChat.Congrats.Words = "gz*|grats*|gratz*|grz|grtz|congrats*|congratz*|congratulations|congrat|gratulations"
+OllamaChat.Congrats.FillerWords = "on|the|a|an|ur|your|ya|that|it|this|again|finally|ding|dinged|lvl|lvls|level|levels|levelled|leveled|achievement|achievements|achiev*|cheevo*|nice|one|well|done|big|huge|very|so|man|mate|m8|bro|dude|buddy|pal|lad|lads|guys|all|everyone|yall|haha*|lol*|lmao*|xd*|wp|gg|gj|yay|woo*|ayy*|for|to|you|u|and|both|new|omg|wow|nicely|sweet|epic|at|last|another|drop|loot|item|mount|pet|title|rep|exalted|kill|first|upgrade|gear|purple|max|cap|80"
+
+# OllamaChat.Congrats.ThanksLines
+# OllamaChat.Congrats.ThanksAllLines
+#     Description: The thank-you, separated by |: ThanksLines after one gz ({name} is who said it, lowercased
+#                  about half the time), ThanksAllLines after several. A repeated line is picked more often.
+#                  Typed as they are, without the model -- that is what "ty" is. (Not in roleplay mode, where
+#                  it would break character: there the bot says nothing.)
+OllamaChat.Congrats.ThanksLines = "ty|ty|ty|thanks|thx|ty {name}|thanks {name}|cheers|cheers {name}|ty ty|tyty"
+OllamaChat.Congrats.ThanksAllLines = "ty all|ty guys|thanks all|thanks guys|cheers all|ty ty|tyty|thx all|cheers guys"
+
+# OllamaChat.Congrats.ThanksChance
+#     Description: Percent of dings that get the thank-you at all: not everyone says it.
+#     Default:     90
+OllamaChat.Congrats.ThanksChance = 90
+
+# OllamaChat.Congrats.ThanksDelayMinMs
+# OllamaChat.Congrats.ThanksDelayMaxMs
+#     Description: How long after the first gz the thank-you comes, so the rest come in first.
+#     Default:     2500, 6000
+OllamaChat.Congrats.ThanksDelayMinMs = 2500
+OllamaChat.Congrats.ThanksDelayMaxMs = 6000
 
 # --------------------------------------------
 # TYPING SIMULATION
@@ -1276,6 +1336,30 @@ OllamaChat.Response.RareCooldownSeconds = 3600
 #        Default: "kid|kiddo"
 OllamaChat.Response.DropVocatives = "kid|kiddo"
 
+#    OllamaChat.Response.InsultWords
+#    OllamaChat.Response.ProvokeWords
+#    OllamaChat.Response.InsultPersonalities
+#    OllamaChat.Response.InsultCooldownSeconds
+#        An insult has its place: banter someone started, or someone being
+#        rude first. Out of nowhere it is just wrong -- "are you doing
+#        yowler?" got "nah just chilling here you knob". A reply that throws
+#        one of InsultWords at someone ("you knob", "u absolute muppet",
+#        "nice try noob") keeps it only when the line it answers had an
+#        insult or a ProvokeWords word in it ("stfu", "ur mum", "fuck off"),
+#        or when the bot's chat style is in InsultPersonalities -- and even
+#        then once in InsultCooldownSeconds for that bot. Otherwise it is
+#        taken out, with the "you" ("youre a", "ur such a") that went with
+#        it. Talking about someone ("dont be a knob", "that pillock in
+#        trade") is left alone. Words that are something else too (melon,
+#        mug, clown) are not on the list: "selling melon" would lose its
+#        melon. Words as CrowdText reads them; a trailing * matches any
+#        ending. Empty InsultWords turns this off.
+#        Default: (below), NAT_RUDE, 600
+OllamaChat.Response.InsultWords = "knob|knobhead|knobend|nob|nobhead|twat|dickhead|bellend|pillock|wanker|tosser|prat|muppet|numpty|plonker|wally|idiot|moron|berk|noob|nub|loser|weirdo"
+OllamaChat.Response.ProvokeWords = "fuck*|shit*|bastard*|bollocks|stfu|gtfo|shut up|ur mum|your mum|ur nan|your nan|yo mama|ur mom|your mom|l2p|learn to play|rekt|cope|useless|clueless|stupid|dumb|bad at|suck|sucks|banter|bants"
+OllamaChat.Response.InsultPersonalities = "NAT_RUDE"
+OllamaChat.Response.InsultCooldownSeconds = 600
+
 #    OllamaChat.State.Dead
 #    OllamaChat.State.Ghost
 #        Added to a dead bot's prompt, so what it says fits: lying where it
@@ -2032,6 +2116,8 @@ OllamaChat.Emote.Style.NAT_RAIDER = "ready|flex|facepalm|point|golfclap|salute|s
 OllamaChat.Emote.Style.NAT_BINGER = "salute|bow|point|gasp|laugh|cheer|victory|roar|wave|wink|applaud"
 OllamaChat.Emote.Style.NAT_BUTTERFLY = "wave|wave|hug|wink|flirt|kiss|dance|cheer|giggle|bounce|highfive|shimmy|charm"
 OllamaChat.Emote.Style.NAT_EXPERT = "point|point|nod|ponder|facepalm|sigh|eyebrow|golfclap|ready|salute"
+OllamaChat.Emote.Style.NAT_RUDE = "rude|rude|shrug|eyeroll|scoff|yawn|bored|no|spit"
+OllamaChat.Emote.Style.NAT_LONER = "nod|nod|shrug|wave|shy|sigh|yawn"
 
 #    OllamaChat.Emote.PetEmotes
 #        Emotes aimed at a player's pet or companion when they have one
@@ -2108,11 +2194,20 @@ OllamaChat.Personality.MaxReplyLength.NAT_EXPERT = 250
 #   "attack" and "summon" still work).
 #
 #   Party chat also reaches playerbots, which reads its own commands from it
-#   whatever this module does. A bare "go" is one of them -- every bot walks
-#   to the nearest creature -- so it is not a start phrase here; "ready" makes
-#   each bot whisper its food and potions, and with
-#   Playerbots.EnableAutoTradeOnItemMention = 1 a line with "back" or "food"
-#   in it opens trade windows (set it to 0 in playerbots.conf).
+#   unless Playerbots.CommandPrefix is set. A bare "go" is one of them --
+#   every bot walks to the nearest creature -- so it is only a start phrase
+#   (GoPhrases) with a CommandPrefix set; "ready" makes each bot whisper its
+#   food and potions, and with Playerbots.EnableAutoTradeOnItemMention = 1 a
+#   line with "back" or "food" in it opens trade windows (set it to 0 in
+#   playerbots.conf).
+#
+#   "dungeon" and "instance" are read right however they are typed, one
+#   slip off: "just start the dingeon" starts the run.
+#
+#   A question about the run -- "whats next?", "why are we waiting",
+#   "how many bosses left" (RunQuestionPhrases) -- is answered by the bot
+#   tank leading it, and by nobody else, unless the line names another bot.
+#   With no bot tank (you tank), anyone may answer as usual.
 #
 #   Only works when mod-dungeon-clear is part of the same build;
 #   .ollama status says whether it was found.
@@ -2132,10 +2227,27 @@ OllamaChat.PartyCommands.Enable = 1
 #    OllamaChat.PartyCommands.PausePhrases
 #    OllamaChat.PartyCommands.CancelPhrases
 #        Start or resume; pause; and lines that only look like a pause
-#        ("dont stop"). Do not add a bare "go": it is a playerbots command
-#        ("go" sends every bot to your target), so typing it in a dungeon
-#        drags the whole group onto whatever you have selected.
-OllamaChat.PartyCommands.StartPhrases = "=r|=begin|=start|=continue|=resume|=back|ready|rdy|gogo*|lets go|lets start|lets begin|lets do this|lets do it|lets roll|lets move|lets continue|lets carry on|carry on|im back|i am back|back now|good to go|start the run"
+#        ("dont stop"). Do not add a bare "go" here: without a
+#        Playerbots.CommandPrefix it is a playerbots command ("go" sends every
+#        bot to your target), so typing it in a dungeon drags the whole group
+#        onto whatever you have selected. GoPhrases are added for you when a
+#        CommandPrefix is set.
+OllamaChat.PartyCommands.StartPhrases = "=r|=begin|=start|=continue|=resume|=back|ready|rdy|gogo*|lets go|lets start|lets begin|lets do this|lets do it|lets roll|lets move|lets continue|lets carry on|carry on|im back|i am back|back now|good to go|start the run|start the dungeon|start dungeon|start the instance|start the clear|just start|=start it|lets get started|=get started|=start now|start already|=start pls|=start please|begin the run"
+
+#    OllamaChat.PartyCommands.GoPhrases
+#        Start phrases with "go" in them, added to StartPhrases only when
+#        Playerbots.CommandPrefix is set (then playerbots no longer reads a
+#        bare "go" as its own command).
+OllamaChat.PartyCommands.GoPhrases = "=go|=go go|=go go go|=ok go|=k go|=kk go|=go now|=go pls|=go please|=go ahead|=just go|=go for it|=you can go|=go then|=ok go then"
+
+#    OllamaChat.PartyCommands.RunQuestionPhrases
+#    OllamaChat.PartyCommands.RunQuestionMaxWords
+#        A party line of no more than RunQuestionMaxWords words with one of
+#        these in it, in a dungeon with a dungeon-clear bot tank, is a
+#        question about the run: the tank answers it, nobody else.
+#        Default: 14 words
+OllamaChat.PartyCommands.RunQuestionPhrases = "whats next|what next|what now|whats now|whos next|who is next|which boss|what boss|next boss|wheres the boss|where is the boss|whats the plan|what is the plan|whats our plan|what are we doing|what we doing|what r we doing|what are we waiting|what we waiting|why are we waiting|why we waiting|why are we stopped|why did we stop|why we stopped|why stop|why stopping|why are we not moving|why arent we|whats going on|what is going on|whats happening|what happened|where are we going|where we going|where to|where now|where next|which way|how many bosses|how many left|bosses left|whats left|what is left|anything left|are we done|we done|done yet|is that it|is that all|last boss|how far|status|progress|are you stuck|you stuck|why are you stuck|why stuck|whats wrong|what is wrong|whos leading|who is leading|whos tanking|who is tanking|are we pulling|next pull|next pack"
+OllamaChat.PartyCommands.RunQuestionMaxWords = 14
 OllamaChat.PartyCommands.PausePhrases = "mb|mana break|manabreak|need mana|need to drink|need a drink|need drink|drinking|=drink|oom|no mana|low mana|low on mana|out of mana|outta mana|wait|w8|=w|hold on|hold up|holdup|hang on|stop|pause|=sec|one sec|1 sec|a sec|one min|1 min|a min|brb|=afk|need a break|need a sec|gimme a sec|give me a sec|bio break|=bio|lets rest|need to rest|=rest|dont pull|stop pulling|stay here|stay there|stay back|stay put|hold position|hold here|dont move"
 OllamaChat.PartyCommands.CancelPhrases = "dont stop|do not stop|dont wait|do not wait|no need to wait|no need to stop|dont need to wait|keep going|no break|dont need a break|no need"
 
@@ -2218,6 +2330,18 @@ OllamaChat.PartyCommands.RecentAcksText = " You already said {lines} in this gro
 #        Added to every party and raid chat prompt inside a dungeon or raid,
 #        so "mb" reads as a mana break and not "my bad". Empty disables.
 OllamaChat.Party.DungeonGlossary = "In group chat here: mb means mana break (they need to drink, so wait for them), oom means out of mana, r or rdy means ready, brb means be right back, inc means enemies incoming, cc means crowd control, and pull means start the fight."
+
+#    OllamaChat.Party.DungeonAmbientPercent
+#    OllamaChat.Party.DungeonFocusText
+#        Inside a dungeon or raid people keep their mind on the run: a bot
+#        there starts a line of its own only this percent as often as it
+#        would outside (RandomChatterBotCommentChance), and its party prompt
+#        gets DungeonFocusText -- with the run's state, during a dungeon-clear
+#        run -- so what it does say is about the run, not "did you hear about
+#        the druid that got kicked?". Replies to someone are not affected.
+#        Default: 35, (below)
+OllamaChat.Party.DungeonAmbientPercent = 35
+OllamaChat.Party.DungeonFocusText = "You are in the middle of a dungeon run with your group. If you say anything, keep it to the run: the pulls, the bosses, the loot, someone low on health or mana, the place itself. No gossip, rumours or anything that has nothing to do with it."
 
 #    OllamaChat.Party.RunStateText
 #        Added to party and raid chat prompts while a dungeon-clear run is on,
@@ -2645,8 +2769,13 @@ OllamaChat.State.Staying = "Right now you are waiting where {player_name} told y
 #
 #   Only lines a bot sends as a whisper or in party or raid chat are looked
 #   at, and only whole lines: "Staying" is muted, "staying here till you
-#   are back" is not. What the model writes for a bot is never on the list,
-#   so it always goes through.
+#   are back" is not. What this module sends for a bot -- the model's lines,
+#   a canned "gz" -- is never muted, so "Hi" on the list mutes playerbots'
+#   stock "Hi" whisper on joining a group but never a bot's own "hi".
+#
+#   "Hello", "Hi", "Hello there!" and the rest are what playerbots whispers
+#   when a bot accepts an invite. With JOINING A GROUP (below) on, the bot
+#   says hello in party chat its own way instead.
 #
 #   Patterns are separated by ; (an item link starts with |, so | cannot
 #   be the separator here), compared ignoring case; * matches anything, so
@@ -2659,7 +2788,72 @@ OllamaChat.State.Staying = "Right now you are waiting where {player_name} told y
 OllamaChat.Mute.Enable = 1
 
 #    OllamaChat.Mute.Patterns
-OllamaChat.Mute.Patterns = "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;I don't know this dungeon, lead the way!;Staying;Following;Fleeing;Running away;Attacking;Releasing...;Meet me at the graveyard"
+OllamaChat.Mute.Patterns = "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;I don't know this dungeon, lead the way!;Staying;Following;Fleeing;Running away;Attacking;Releasing...;Meet me at the graveyard;Hello;Hello!;Hi;Hi!;Hello there!"
+
+###############################################################################
+#
+#   OLLAMA CHAT - JOINING A GROUP
+#
+#   Playerbots has a bot whisper "Hello" to whoever invited it, every time
+#   (muted above). What people do instead:
+#
+#     * Invited out of the blue, they say hi in party chat -- "hey, whats
+#       up?" and the like -- and of five invited at once, one says it
+#       (GroupCooldownSeconds), and not every time (GreetChance).
+#     * Invited after talking to them -- in General, in a whisper, out loud
+#       nearby, in the last ContinueMinutes -- they carry on from that in
+#       party chat ("right, deadmines then?") instead of saying hello to
+#       someone they were just talking to (ContinuePrompt, always).
+#
+#   Only for a group with a real player in it; never for battleground raids.
+#
+###############################################################################
+
+#    OllamaChat.Joined.Enable
+#        Default: 1
+OllamaChat.Joined.Enable = 1
+
+#    OllamaChat.Joined.GreetChance
+#        Percent of out-of-the-blue invites that get a hello at all.
+#        Default: 70
+OllamaChat.Joined.GreetChance = 70
+
+#    OllamaChat.Joined.GroupCooldownSeconds
+#        After one bot in a group said hi (or carried on), another invited
+#        within this long says nothing.
+#        Default: 60
+OllamaChat.Joined.GroupCooldownSeconds = 60
+
+#    OllamaChat.Joined.ContinueMinutes
+#        Talked with someone in the group this lately: carry on from it.
+#        Default: 10
+OllamaChat.Joined.ContinueMinutes = 10
+
+#    OllamaChat.Joined.CannedChance
+#    OllamaChat.Joined.GreetLines
+#        Percent of out-of-the-blue hellos typed straight from GreetLines
+#        (separated by |, {name} the one greeted) without the model; the rest
+#        come from GreetPrompt, in the bot's own chat style.
+#        Default: 50
+OllamaChat.Joined.CannedChance = 50
+OllamaChat.Joined.GreetLines = "hey|hey, whats up?|hey whats up|hey hey|hi|hiya|heya|yo|sup|hey all|hi all|o/|whats up|hey, whats the plan?|hey whats the plan"
+
+#    OllamaChat.Joined.GreetPrompt
+#    OllamaChat.Joined.ContinuePrompt
+#        The prompts. Placeholders: {bot_name} {bot_level} {bot_race}
+#        {bot_class} {bot_personality} {player_name} {player_level}
+#        {player_class}; ContinuePrompt also {where} ("in a whisper", "in
+#        General chat"), {player_line} (what they said) and {bot_line} (what
+#        the bot answered).
+OllamaChat.Joined.GreetPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} playing World of Warcraft. Your chat style: {bot_personality} {player_name}, a level {player_level} {player_class}, has just invited you to their group out of the blue, and you joined. Type the one short line you would say in party chat on joining, the way a real player does: 'hey, whats up?' or something like it, a few words, in your own style. Do not thank them for the invite, and do not guess what they want."
+OllamaChat.Joined.ContinuePrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} playing World of Warcraft. Your chat style: {bot_personality} A moment ago, {where}, {player_name} said to you: '{player_line}' and you answered: '{bot_line}'. Now they have invited you to their group, and you joined. Type the one short line you would say in party chat now, carrying on from that, the way a real player would: a few words, in your own style. You have been talking already, so no hello, and do not thank them for the invite."
+
+#    OllamaChat.Joined.DelayMinMs
+#    OllamaChat.Joined.DelayMaxMs
+#        How long after joining it speaks: the moment it takes to type.
+#        Default: 2000, 5000
+OllamaChat.Joined.DelayMinMs = 2000
+OllamaChat.Joined.DelayMaxMs = 5000
 
 ###############################################################################
 #
@@ -2793,12 +2987,23 @@ OllamaChat.Marks.InUseSeconds = 180
 
 #    OllamaChat.Marks.SapStealthWaitSeconds
 #    OllamaChat.Marks.SapApproachSeconds
+#    OllamaChat.Marks.SapWaitSeconds
 #        How long the rogue waits to go into stealth (Stealth cools down for
 #        10 seconds after it breaks), and then how long it may take to sneak
-#        round the mob and sap it, before it gives up.
-#        Default: 12, 25
+#        round the mob and sap it, before it gives up -- not counting up to
+#        SapWaitSeconds spent hanging back, out of sight, while a mob that
+#        wanders about is on the move.
+#
+#        How close it may come in front is worked out the way the core does
+#        it (the mob's level against the rogue's stealth): where its Sap
+#        reaches further than that, it goes straight in; otherwise round the
+#        side, out of sight, and in from behind, the side a mob never spots
+#        stealth from. Every sap's outcome is logged at INFO, with the
+#        distances, whatever OllamaChat.DebugEnabled says.
+#        Default: 12, 40, 20
 OllamaChat.Marks.SapStealthWaitSeconds = 12
-OllamaChat.Marks.SapApproachSeconds = 25
+OllamaChat.Marks.SapApproachSeconds = 40
+OllamaChat.Marks.SapWaitSeconds = 20
 
 #    OllamaChat.Marks.SayEnable
 #    OllamaChat.Marks.SayCooldownSeconds
@@ -2904,10 +3109,23 @@ OllamaChat.Bags.MaxGiftQuality = 2
 OllamaChat.Bags.MaxGiftCopper = 20000
 
 #    OllamaChat.Bags.PromptText
-#        The list, in a reply prompt. Placeholders: {spare} ("[Linen Cloth]
-#        x12 (just looted), [Ironspine's Eye] (a blue)"), {kept} ("[Wolf
-#        Meat] (you need it for the quest [Bounty on Wolves])"), {money}.
-OllamaChat.Bags.PromptText = "What you have on you (bring up only what fits what they said): you could spare {spare}; you are keeping {kept}; and you have {money}. Asked for something you can spare, you are happy to trade it over; asked for something you are keeping, say no and why. Never offer anything that is not listed here."
+#        The list, in a reply prompt: when the line is about items (TalkWords,
+#        or a link), or a trade window between the two is open. Placeholders:
+#        {spare} ("[Linen Cloth] x12 (just looted), [Ironspine's Eye] (a
+#        blue)"), {kept} ("[Wolf Meat] (you need it for the quest [Bounty on
+#        Wolves])"), {money}.
+#        Whatever spare thing the bot then names in its answer ("just have
+#        some [Ankh] if you want") counts as offered, the way a Needs offer
+#        does: "sure yes please", "trade it" or "can you trade me?" next takes
+#        it, and everything else that same line named.
+OllamaChat.Bags.PromptText = "What you have on you (bring up only what fits what they said): you could spare {spare}; you are keeping {kept}; and you have {money}. Asked for something you can spare, you are happy to let them have it; asked for something you are keeping, say no and why. Never offer anything that is not listed here, and name what you offer exactly, in square brackets."
+
+#    OllamaChat.Bags.HandoverText
+#        Added after the list, and on its own to the bot's replies for
+#        OfferSeconds after it was shown the list or while a trade window
+#        between the two is open: saying so hands nothing over, so it never
+#        claims to have put something in their bags. Empty: not added.
+OllamaChat.Bags.HandoverText = "Saying so hands nothing over: things only change hands in a trade window, and you are told when one is opening. So never say you have given, sent, traded or put anything in their bags; if they want something you can spare, just offer it."
 
 #    OllamaChat.Bags.TalkWords
 #        A line with one of these (or with a link) is about trading or what
@@ -2921,15 +3139,17 @@ OllamaChat.Bags.TalkWords = "trade|trading|tradeable|loot|looted|loots|drop|drop
 #    OllamaChat.Bags.NotWords
 #        Asking for something: an AskWords phrase plus the thing (linked,
 #        named, or a word only one thing it carries has: "the leggings").
-#        Right after a bot offered something (OllamaChat.Needs), a line made
-#        of nothing but YesWords that says yes somewhere (ClaimWords: "me",
-#        "yes please", "dibs", "go on then") claims it -- "ty" or "please"
-#        alone does not -- and so does an ask that points at it ("can I have
-#        it", "ill take the cloth"). Names do not count: "me Joanni" is a claim. A
-#        NotWords word ("dont", "no thanks") means it is not an ask.
+#        Right after a bot offered something (OllamaChat.Needs, or named it
+#        when asked what it has), a line made of nothing but YesWords that
+#        says yes somewhere (ClaimWords: "me", "yes please", "dibs", "go on
+#        then") claims it -- "ty" or "please" alone does not -- and so does an
+#        ask that points at it or names nothing else ("can I have it", "ill
+#        take the cloth", "trade it", "can you trade me?"). Names do not count:
+#        "me Joanni" is a claim. A NotWords word ("dont", "no thanks") means it
+#        is not an ask.
 OllamaChat.Bags.AskWords = "can i have|could i have|can i get|could i get|can i grab|can i take|may i have|give me|gimme|giv me|trade me|trade it|send me|send it|pass me|hand me|ill take|i will take|ill have|i will have|i want|id like|i would like|id love|can you trade|could you trade|can u trade|dibs"
-OllamaChat.Bags.YesWords = "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|please|pls|plz|plez|i|would|want|it|that|one|oh|ooh|too|do|go|on|then"
-OllamaChat.Bags.ClaimWords = "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|want|go on then|go on"
+OllamaChat.Bags.YesWords = "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|please|pls|plz|plez|i|would|want|it|that|one|oh|ooh|too|do|go|on|then|trade|ok|okay"
+OllamaChat.Bags.ClaimWords = "me|mee|meee|me2|mine|dibs|yes|yess|yeah|yea|ye|yep|yup|sure|want|go on then|go on|trade"
 OllamaChat.Bags.NotWords = "dont|do not|doesnt|not|no|nah|nope|never|cant|wont|didnt"
 
 #    OllamaChat.Bags.HintGive
@@ -2937,16 +3157,20 @@ OllamaChat.Bags.NotWords = "dont|do not|doesnt|not|no|nah|nope|never|cant|wont|d
 #    OllamaChat.Bags.HintKeep
 #    OllamaChat.Bags.HintNotHave
 #    OllamaChat.Bags.HintCant
+#    OllamaChat.Bags.HintAlready
 #        What the bot is told to answer with. Placeholders: {player_name},
-#        {item} ("[Linen Cloth] x12"), {when} ("now", "once they come over
-#        to you, since you are too far apart to trade"), {reason} (kept:
-#        "it is an upgrade you mean to put on"; cannot: "their bags are full,
-#        so they need to make room first").
+#        {item} ("[Linen Cloth] x12", "[Linen Cloth] x12 and [Ankh]"), {when}
+#        ("now", "once they come over to you, since you are too far apart to
+#        trade"), {reason} (kept: "it is an upgrade you mean to put on";
+#        cannot: "their bags are full, so they need to make room first").
+#        HintAlready: asked again ("sure", then "trade it") while it is going
+#        over already.
 OllamaChat.Bags.HintGive = "{player_name} asked for {item}, which you have no use for, so you are trading it over to them {when}. Say so in a few words, in your own way."
 OllamaChat.Bags.HintInvite = "{player_name} wants {item}, which you could spare, but you only trade with people in your group: tell them to invite you and you will trade it over."
 OllamaChat.Bags.HintKeep = "{player_name} asked for {item}, but you are keeping it: {reason}. Say no, and why, in your own way."
 OllamaChat.Bags.HintNotHave = "{player_name} asked for {item}, but you do not have one. Say so."
 OllamaChat.Bags.HintCant = "{player_name} asked for {item}, and you would give it to them, but you can't right now: {reason}. Say so."
+OllamaChat.Bags.HintAlready = "{player_name} asked again for {item}, which is going over to them already: it is in the trade window, or will be as soon as the window is open. Say so in a few words."
 
 ###############################################################################
 #
@@ -3031,6 +3255,22 @@ OllamaChat.Needs.PromptTemplate = "You are {bot_name}, a level {bot_level} {bot_
 #        Reason* below.
 OllamaChat.Needs.ReasonText = "A little while ago you asked something in chat because {reason}. If anyone asks about it or answers it, that is what it was about."
 
+#    OllamaChat.Needs.PlanText
+#    OllamaChat.Needs.PlanWords
+#    OllamaChat.Needs.PlanMaxQuests
+#        Asked what it is up to (a PlanWords phrase: "what you doing?",
+#        "going for yowler?"), or a line naming one of its quests or what one
+#        needs killed or brought, a bot's reply prompt gets what it is really
+#        doing: where it is, and up to PlanMaxQuests of its quests -- those
+#        the line names first -- with how far along it is. {doing}: "you are
+#        in Duskwood; your quests: [Wanted: Yowler] (kill Yowler 0/1), ...".
+#        So "you going to do yowler?" gets "yeah still need him", not "nah
+#        just chilling". Empty PlanText turns it off.
+#        Default: (below), 4
+OllamaChat.Needs.PlanText = "What you are actually doing right now: {doing}. Answer from that, never from anything made up: if they ask about one of these, you are on it; if they offer to help with one, that is useful to you."
+OllamaChat.Needs.PlanWords = "what you doing|what u doing|what are you doing|what r u doing|whatcha doing|watcha doing|wyd|what you up to|what u up to|what are you up to|you up to|you going|u going|going to do|gonna do|going for|you after|u after|plans|plan|heading|where you going|where u going|where are you going|wanna do|want to do|need help|need a hand|help with|group for|questing|quest|quests|working on|farming|you killing|u killing"
+OllamaChat.Needs.PlanMaxQuests = 4
+
 #    OllamaChat.Needs.AskQuest
 #    OllamaChat.Needs.AskDungeon
 #    OllamaChat.Needs.ReasonQuest
@@ -3107,8 +3347,9 @@ OllamaChat.Outlook.LevelBands = "1-9: Your character is only level {level}, bran
 #        the bot directly are exempt, and so is a phrase the line being
 #        answered used itself ("anyone for naxx?" -> "naxx? im only 12 lol").
 #        Matched on whole words; a trailing * matches any word starting with
-#        the rest. Empty disables.
-OllamaChat.Outlook.LevelPhrases = "[40+] repair bill|[40+] repair bills|[40+] repair costs|[70+] heroic|[70+] heroics|[70+] naxx|[70+] naxxramas|[75+] ulduar|[75+] icc|[75+] icecrown citadel|[75+] wintergrasp|[60+] gear score|[60+] gearscore|[80] emblems|[80] emblem of|[60+] epic flying"
+#        the rest. Outland and Northrend zones are on it too: a level 20 has
+#        no business talking about Sholazar. Empty disables.
+OllamaChat.Outlook.LevelPhrases = "[40+] repair bill|[40+] repair bills|[40+] repair costs|[70+] heroic|[70+] heroics|[70+] naxx|[70+] naxxramas|[75+] ulduar|[75+] icc|[75+] icecrown citadel|[75+] wintergrasp|[60+] gear score|[60+] gearscore|[80] emblems|[80] emblem of|[60+] epic flying|[55+] outland|[55+] hellfire|[55+] hellfire peninsula|[55+] zangarmarsh|[55+] terokkar|[55+] nagrand|[55+] blades edge|[55+] netherstorm|[55+] shadowmoon valley|[55+] shattrath|[55+] shatt|[65+] northrend|[65+] borean tundra|[65+] howling fjord|[65+] dragonblight|[65+] grizzly hills|[65+] zuldrak|[65+] zul drak|[65+] sholazar|[65+] sholazar basin|[65+] storm peaks|[65+] icecrown|[65+] crystalsong"
 
 #    OllamaChat.Outlook.ClassRoles
 #        Tell each bot which roles its class can fill (warrior and death

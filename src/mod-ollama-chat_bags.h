@@ -22,6 +22,9 @@ class Player;
 //   * Asked what it has ("got anything to trade?", "what did you loot?"),
 //     its reply prompt gets the list (Bags.PromptText): spare things as
 //     links, what it just looted first, and a few things it keeps, with why.
+//   * What it names in its answer -- "just have some [Ankh] if you want" --
+//     is offered, so the next "sure yes please", "trade it" or "can you
+//     trade me?" takes it (and everything else named in that same line).
 //   * Asked for something ("can I have your [Linen Cloth]", "ill take the
 //     leggings", or just "me!" after it offered one), a spare thing goes over
 //     in a trade -- the way a mage's water does -- and a kept one gets a no
@@ -29,6 +32,9 @@ class Player;
 //     outside it is told to invite the bot first. Only what a player would
 //     give away free counts as spare: not a blue, not a stack worth real
 //     gold (Bags.MaxGiftQuality, Bags.MaxGiftCopper).
+//   * Saying so hands nothing over, and a bot that has just talked about its
+//     bags, or has a trade window open with them, is told as much
+//     (Bags.HandoverText): no more "did you not see it go in your bag?".
 //
 // World thread only, except Bags_NoteLoot.
 // --------------------------------------------------------------------------
@@ -53,6 +59,13 @@ std::vector<BagEntry> Bags_Scan(Player* bot);
 // (OllamaChat.Bags.PromptText), or empty when there is nothing to say.
 std::string Bags_Describe(Player* bot);
 
+// The bag part of a reply prompt for `bot` answering `player`: the list when
+// the line is about items or a trade window between them is open, and then,
+// or just after it talked about its bags, that saying so hands nothing over
+// (Bags.HandoverText). Empty otherwise -- a list in every prompt is what a bot
+// would talk about. `spokenTo`: the line is to it, not overheard.
+std::string Bags_PromptFor(Player* bot, Player* player, const std::string& msg, bool spokenTo);
+
 // Is this line about trading or about what someone has ("anything to
 // trade?", "what did you loot", a linked item)?
 bool Bags_IsItemTalk(const std::string& msg);
@@ -64,6 +77,14 @@ void Bags_NoteLoot(Player* bot, uint32_t entry);
 // want [Linen Cloth]?", recorded when the line goes out): for a few minutes
 // "me!" there claims it.
 void Bags_NoteOffer(Player* bot, uint32_t entry, const std::string& scopeKey);
+
+// A bot's line to `targetGuid` went out. Just after it was shown its bags
+// for that real player, whatever spare thing it names -- linked in
+// `linkedText`, or by name in `plainText` -- counts as offered in `scopeKey`,
+// all of them together as one offer. Not its answer to an ask, and nothing
+// already going over to them.
+void Bags_NoteReply(Player* bot, const std::string& plainText, const std::string& linkedText,
+                    const std::string& scopeKey, uint64_t targetGuid);
 
 // A real player asking a bot for something it carries. True when it was
 // that and has been answered (and the trade started, where it could be).

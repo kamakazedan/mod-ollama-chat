@@ -63,6 +63,14 @@ void Needs_NoteAsked(Player* bot, const BotNeed& need);
 // (OllamaChat.Needs.ReasonText), or empty.
 std::string Needs_PromptFor(Player* bot);
 
+// For a reply prompt, when `line` asks what it is up to ("what you doing?",
+// "going for yowler?", Needs.PlanWords) or names one of its quests or what
+// one needs killed or collected: what it is really doing -- where it is, and
+// the quests in its log, those the line names first, with how far along it
+// is (Needs.PlanText). So "you going to do yowler?" gets "yeah, still need
+// him", not "nah just chilling". Empty otherwise.
+std::string Needs_PlanPromptFor(Player* bot, const std::string& line);
+
 void Needs_Update();   // maintenance tick
 
 struct NeedsStats
@@ -70,6 +78,7 @@ struct NeedsStats
     uint64_t asked[static_cast<size_t>(NeedKind::Count)] = {};
     uint64_t picked = 0;   // tries that found something to ask
     uint64_t none   = 0;   // tries that found nothing
+    uint64_t plans  = 0;   // replies told what it is really doing
 };
 NeedsStats Needs_GetStats();
 

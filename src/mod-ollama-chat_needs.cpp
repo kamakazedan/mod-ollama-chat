@@ -2,8 +2,12 @@
 #include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat-utilities.h"
+#include "mod-ollama-chat_context.h"
+#include "mod-ollama-chat_crowd.h"
 
 #include "Bag.h"
+#include "GameObjectData.h"
+#include "Group.h"
 #include "DBCStores.h"
 #include "Item.h"
 #include "Map.h"
@@ -377,6 +381,124 @@ std::string Needs_PromptFor(Player* bot)
         Clock::now() - it->second.reasonAt > std::chrono::minutes(g_NeedsRememberMinutes))
         return {};
     return Fmt(g_NeedsReasonText, fmt::arg("reason", it->second.reason));
+}
+
+std::string Needs_PlanPromptFor(Player* bot, const std::string& line)
+{
+    if (!g_NeedsEnable || !bot || g_NeedsPlanText.empty() || line.empty())
+        return {};
+    const std::vector<std::string> words = CrowdText::Words(Context_CleanText(line));
+    if (words.empty())
+        return {};
+    const bool asked = CrowdText::ContainsPhrase(words, g_NeedsPlanPhrases);
+
+    // Its quests: what each wants, how far along it is, and whether the line
+    // names it (its title, or what it needs killed or brought).
+    struct Entry
+    {
+        std::string text;
+        int         rank = 0;   // 0 named in the line, 1 here, 2 elsewhere
+    };
+    std::vector<Entry> entries;
+    // A quest by its whole title ("the fargodeep mine"); what it needs killed
+    // or brought by its name, or by a word of it that says something
+    // ("yowler", "bandit") -- not "young" or "large".
+    auto namedWhole = [&](const std::string& name)
+    {
+        const std::vector<std::string> nameWords = CrowdText::Words(name);
+        return !nameWords.empty() && CrowdText::ContainsPhrase(words, { nameWords });
+    };
+    auto named = [&](const std::string& name)
+    {
+        static const char* const kVague[] = { "young", "elder", "large", "small", "giant", "great", "lesser", "greater",
+                                              "ancient", "wild", "black", "white", "green", "brown", "dark", "shadow",
+                                              "fierce", "rabid", "mangy", "dire", "plain", "common", "minor", "major",
+                                              "crystal", "stone", "sample", "piece", "scrap", "fragment", "pouch" };
+        if (namedWhole(name))
+            return true;
+        for (const std::string& w : CrowdText::Words(name))
+            if (w.size() >= 5 && std::find(words.begin(), words.end(), w) != words.end() &&
+                std::none_of(std::begin(kVague), std::end(kVague), [&](const char* v) { return w == v; }))
+                return true;
+        return false;
+    };
+    for (auto const& [questId, status] : bot->getQuestStatusMap())
+    {
+        Quest const* quest = sObjectMgr->GetQuestTemplate(questId);
+        if (!quest || (status.Status != QUEST_STATUS_INCOMPLETE && status.Status != QUEST_STATUS_COMPLETE))
+            continue;
+        bool hit = namedWhole(quest->GetTitle());
+        std::vector<std::string> wants;
+        for (uint8 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
+        {
+            const int32 id = quest->RequiredNpcOrGo[i];
+            if (!id || !quest->RequiredNpcOrGoCount[i])
+                continue;
+            std::string what;
+            if (id > 0)
+            {
+                if (CreatureTemplate const* ct = sObjectMgr->GetCreatureTemplate(uint32(id)))
+                    what = ct->Name;
+            }
+            else if (GameObjectTemplate const* go = sObjectMgr->GetGameObjectTemplate(uint32(-id)))
+                what = go->name;
+            if (what.empty())
+                continue;
+            hit = hit || named(what);
+            wants.push_back(fmt::format("{} {} {}/{}", id > 0 ? "kill" : "use", what,
+                                        std::min<uint32_t>(status.CreatureOrGOCount[i], quest->RequiredNpcOrGoCount[i]),
+                                        quest->RequiredNpcOrGoCount[i]));
+        }
+        for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
+        {
+            if (!quest->RequiredItemId[i] || !quest->RequiredItemCount[i])
+                continue;
+            ItemTemplate const* proto = sObjectMgr->GetItemTemplate(quest->RequiredItemId[i]);
+            if (!proto)
+                continue;
+            hit = hit || named(proto->Name1);
+            wants.push_back(fmt::format("[{}] {}/{}", proto->Name1,
+                                        std::min<uint32_t>(status.ItemCount[i], quest->RequiredItemCount[i]),
+                                        quest->RequiredItemCount[i]));
+        }
+        const int32 zoneOrSort = quest->GetZoneOrSort();
+        const bool here = zoneOrSort > 0 && uint32(zoneOrSort) == bot->GetZoneId();
+        std::string text = "[" + quest->GetTitle() + "]";
+        if (status.Status == QUEST_STATUS_COMPLETE)
+            text += " (done, to hand in)";
+        else if (!wants.empty())
+        {
+            text += " (";
+            for (size_t i = 0; i < wants.size() && i < 3; ++i)
+                text += (i ? ", " : "") + wants[i];
+            text += ")";
+        }
+        if (!here && zoneOrSort > 0)
+        {
+            const std::string where = AreaName(uint32(zoneOrSort));
+            if (!where.empty())
+                text += " in " + where;
+        }
+        entries.push_back({ std::move(text), hit ? 0 : (here ? 1 : 2) });
+    }
+    const bool hit = std::any_of(entries.begin(), entries.end(), [](const Entry& e) { return e.rank == 0; });
+    if (!asked && !hit)
+        return {};
+
+    std::stable_sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b) { return a.rank < b.rank; });
+    std::string doing = "you are in " + AreaName(bot->GetZoneId());
+    if (Group* group = bot->GetGroup())
+        doing += group->GetMembersCount() > 1 ? ", in a group" : "";
+    if (entries.empty())
+        doing += ", with no quests on the go";
+    else
+    {
+        doing += "; your quests: ";
+        for (size_t i = 0; i < entries.size() && i < g_NeedsPlanMaxQuests; ++i)
+            doing += (i ? ", " : "") + entries[i].text;
+    }
+    ++g_stats.plans;
+    return Fmt(g_NeedsPlanText, fmt::arg("doing", doing));
 }
 
 void Needs_Update()
