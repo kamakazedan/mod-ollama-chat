@@ -2517,10 +2517,11 @@ OllamaChat.Party.GreetSituation = "The group has just come in and nobody has pul
 #        "mate", "lol") around it -- answers it and starts the run, the way
 #        "ready" or "lets go" always does: "yep", "sure", "go for it", "ok".
 #        "yes but wait", "yeah 2 min" and "not yet" do not. Phrases separated
-#        by |, matched on whole words.
-#        Default: (below), 300
+#        by |, matched on whole words. Later on, "ready" and the rest of
+#        StartPhrases still start it.
+#        Default: (below), 180
 OllamaChat.Party.ReadyYesPhrases = "yes|yep|yup|yeah|ye|ya|yea|y|sure|ok|okay|k|kk|aye|go|gogo|go go|of course|ofc|sure thing|why not|always|mhm|yes please|do it|lets do it|go for it|go ahead|go on|go on then|whenever|when you are|ready when you are|im good|all good|good|yes im ready|yeah im ready|yep im ready|born ready|yes lets go|yeah lets go|yep lets go|lets"
-OllamaChat.Party.ReadyWindowSeconds = 300
+OllamaChat.Party.ReadyWindowSeconds = 180
 
 #    OllamaChat.Party.TogetherText
 #        Added to every party and raid prompt inside a dungeon or raid: the

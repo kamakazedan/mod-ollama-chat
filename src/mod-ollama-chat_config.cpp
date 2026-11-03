@@ -507,7 +507,7 @@ uint32_t    g_EmoticonBotCooldownMinutes   = 20;
 uint32_t    g_EmoticonScopeLines           = 8;
 
 std::vector<std::vector<std::string>> g_PartyReadyYesPhrases;
-uint32_t    g_PartyReadyWindowSeconds      = 300;
+uint32_t    g_PartyReadyWindowSeconds      = 180;
 std::string g_PartyTogetherText;
 std::string g_JoinedLfgPrompt;
 
@@ -1068,7 +1068,7 @@ static void LoadNaturalChatV4Settings()
         "funniest hunter pet name you have seen|whether Arthas was always evil|whether Illidan was right all "
         "along|[80] the hardest boss in Naxxramas|[80] getting into Ulduar runs without much gear|what everyone "
         "is farming right now|the most pointless achievement|where Mankrik's wife could be|[68+] the best place "
-        "to level from 70 to 80|how expensive the auction house has got|guild drama|would you rather fight one huge murloc or a hundred tiny ones|the cutest companion pet|[75+] "
+        "to level from 70 to 80|how expensive the auction house has got|guild drama|the cutest companion pet|[75+] "
         "whether the Lich King fight will be any good|[15+] people who stand in fire|what you do on long flight "
         "paths|a name for a new alt|fishing: relaxing or the most boring thing in the game|[77+] the Argent "
         "Tournament dailies|whether gnomes or goblins make better engineers|[10+] whether {other_faction} is "
@@ -1877,7 +1877,7 @@ static void LoadNaturalChatV10Settings()
         "mhm|yes please|do it|lets do it|go for it|go ahead|go on|go on then|whenever|when you are|"
         "ready when you are|im good|all good|good|yes im ready|yeah im ready|yep im ready|born ready|yes lets go|"
         "yeah lets go|yep lets go|lets"));
-    g_PartyReadyWindowSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.ReadyWindowSeconds", 300);
+    g_PartyReadyWindowSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.ReadyWindowSeconds", 180);
     g_PartyTogetherText = sConfigMgr->GetOption<std::string>("OllamaChat.Party.TogetherText",
         "You and everyone in this group are inside {dungeon} together, doing it as one group{tank}. You are part of "
         "this run: never talk about it as if they were going without you, and anything you ask about or bring up "

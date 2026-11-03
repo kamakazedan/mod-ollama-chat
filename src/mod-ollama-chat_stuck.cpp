@@ -298,8 +298,9 @@ namespace
             ++g_stats.remarks;
     }
 
-    // `bot` has been getting on and off its mount on the spot.
-    void TakeTheHint(Player* bot, const Mounted& at, size_t times)
+    // `bot` has been getting on and off its mount on the spot. False when it
+    // was after nothing this can keep it off.
+    bool TakeTheHint(Player* bot, const Mounted& at, size_t times)
     {
         ++g_stats.stuck;
         PlayerbotAI* ai = AiOf(bot);
@@ -311,7 +312,7 @@ namespace
                      "[Ollama Chat] {} mounted {} times in {}s at ({:.1f}, {:.1f}, {:.1f}) on map {} ({}) with nothing "
                      "it is trying to loot: left to playerbots.",
                      bot->GetName(), times, g_StuckWindowSeconds, at.x, at.y, at.z, at.map, ZoneName(bot));
-            return;
+            return false;
         }
 
         ++g_stats.hinted;
@@ -346,6 +347,7 @@ namespace
                  g_StuckIgnoreMinutes);
 
         Remark(bot, ai, t);
+        return true;
     }
 
     void Look(uint64_t guid, Track& track, const Clock::time_point now)
@@ -372,7 +374,10 @@ namespace
         track.lastLook = now;
         const size_t times = track.recent.size();
         track.recent.clear();
-        TakeTheHint(bot, last, times);
+        // Nothing to keep it off: looked at again in ten minutes, not every
+        // minute, so a loop of some other kind is one log line, not a stream.
+        if (!TakeTheHint(bot, last, times))
+            track.lastLook = now + std::chrono::minutes(9);
     }
 }
 
