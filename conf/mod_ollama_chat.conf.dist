@@ -3136,9 +3136,13 @@ OllamaChat.Stuck.Enable = 1
 #    OllamaChat.Stuck.MountCount
 #    OllamaChat.Stuck.WindowSeconds
 #    OllamaChat.Stuck.Radius
-#        Default: 5, 60, 6
-OllamaChat.Stuck.MountCount = 5
-OllamaChat.Stuck.WindowSeconds = 60
+#        The loop goes round every few seconds when nothing else is going on,
+#        or every 16 or so when playerbots holds off retrying in between, so
+#        four times in a minute and a half catches both, and an ordinary bot
+#        never mounts that often on one spot.
+#        Default: 4, 90, 6
+OllamaChat.Stuck.MountCount = 4
+OllamaChat.Stuck.WindowSeconds = 90
 OllamaChat.Stuck.Radius = 6
 
 #    OllamaChat.Stuck.IgnoreMinutes

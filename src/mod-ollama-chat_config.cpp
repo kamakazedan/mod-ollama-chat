@@ -459,8 +459,8 @@ std::string g_PartyDoneSituation;
 // Natural chat v10
 // --------------------------------------------
 bool        g_StuckEnable                  = true;
-uint32_t    g_StuckMountCount              = 5;
-uint32_t    g_StuckWindowSeconds           = 60;
+uint32_t    g_StuckMountCount              = 4;
+uint32_t    g_StuckWindowSeconds           = 90;
 float       g_StuckRadius                  = 6.0f;
 uint32_t    g_StuckIgnoreMinutes           = 10;
 uint32_t    g_StuckRememberMinutes         = 10;
@@ -1765,8 +1765,8 @@ static void LoadNaturalChatV10Settings()
 {
     // --- stuck getting on and off a mount ----------------------------------------------
     g_StuckEnable          = sConfigMgr->GetOption<bool>("OllamaChat.Stuck.Enable", true);
-    g_StuckMountCount      = std::max<uint32_t>(3, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.MountCount", 5));
-    g_StuckWindowSeconds   = std::max<uint32_t>(10, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.WindowSeconds", 60));
+    g_StuckMountCount      = std::max<uint32_t>(3, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.MountCount", 4));
+    g_StuckWindowSeconds   = std::max<uint32_t>(10, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.WindowSeconds", 90));
     g_StuckRadius          = std::max(1.0f, sConfigMgr->GetOption<float>("OllamaChat.Stuck.Radius", 6.0f));
     g_StuckIgnoreMinutes   = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.IgnoreMinutes", 10));
     g_StuckRememberMinutes = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.RememberMinutes", 10));
