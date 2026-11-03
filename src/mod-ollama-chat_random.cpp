@@ -27,7 +27,10 @@
 #include "mod-ollama-chat_mute.h"
 #include "mod-ollama-chat_orders.h"
 #include "mod-ollama-chat_partycmd.h"
+#include "mod-ollama-chat_premises.h"
+#include "mod-ollama-chat_progress.h"
 #include "mod-ollama-chat_revive.h"
+#include "mod-ollama-chat_stuck.h"
 
 #include "CellImpl.h"
 #include "Channel.h"
@@ -244,15 +247,24 @@ namespace
         prompt += Expression_BuildGesturePrompt(bot);
 
         // Mid-run, the run is what is on its mind: what it is doing, and to
-        // keep to that (no "did you hear about the druid that got kicked?").
+        // keep to that (no "did you hear about the druid that got kicked?"),
+        // and it is one of the group doing it (no "good luck with the run").
         if ((source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL) && bot->GetMap() && bot->GetMap()->IsDungeon())
         {
+            const std::string together = PartyCmd_TogetherFor(bot, source);
+            if (!together.empty())
+                prompt += " " + together;
             const std::string runState = PartyCmd_RunStateFor(bot, source);
             if (!runState.empty())
                 prompt += " " + runState;
             if (!g_PartyDungeonFocusText.empty())
                 prompt += " " + g_PartyDungeonFocusText;
         }
+
+        // Now and then, a smiley would not go amiss.
+        const std::string smiley = Context_EmoticonNudgeFor(bot);
+        if (!smiley.empty())
+            prompt += " " + smiley;
 
         return prompt;
     }
@@ -363,19 +375,6 @@ namespace
         return partners[PickIndex(partners.size())];
     }
 
-    // A premise with its placeholders filled in for this bot.
-    std::string FormatPremise(const std::string& premise, Player* bot)
-    {
-        PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
-        AreaTableEntry const* zone = ai ? ai->GetCurrentZone() : nullptr;
-        const bool alliance = bot->GetTeamId() == TEAM_ALLIANCE;
-
-        std::string out = SafeFormat(premise,
-                                     fmt::arg("zone", zone ? PlayerbotAI::GetLocalizedAreaName(zone) : "town"),
-                                     fmt::arg("faction", alliance ? "the Alliance" : "the Horde"),
-                                     fmt::arg("other_faction", alliance ? "the Horde" : "the Alliance"));
-        return out == "[Format Error]" ? premise : out;
-    }
 }
 
 // --------------------------------------------------------------------------
@@ -412,6 +411,12 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 
     // A bot that just joined a group saying hi, or carrying on a conversation.
     Joined_Update();
+
+    // Bots getting on and off their mount on the spot take the hint.
+    Stuck_Update(diff);
+
+    // "that's all the boar meat": a quest's last kill or item, said in party.
+    Progress_Update(diff);
 
     // Orders carried out a tick after they were given; bots walking over to trade.
     Orders_Update(diff);
@@ -666,7 +671,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
         bool opener = false;
         uint64_t openerTarget = 0;
         std::string openerKey;
-        if (hub && !g_ConversationPremises.empty() && g_CityConversationStartChance > 0 &&
+        if (hub && (!g_ConversationPremises.empty() || !g_PremiseTemplates.empty()) && g_CityConversationStartChance > 0 &&
             Conversation_PlaceAllowed(source, channelId) &&
             urand(0, 99) < g_CityConversationStartChance)
         {
@@ -683,13 +688,13 @@ void OllamaBotRandomChatter::HandleRandomChatter()
                 }
 
                 // Only a premise this bot's level fits: no Ulduar from a
-                // level 12 ("[80] getting into Ulduar runs"). /say needs
-                // someone to talk to; a channel finds its people once the
-                // opening line is out.
-                const std::string picked = Outlook_PickPremise(g_ConversationPremises, bot->GetLevel());
-                if (!picked.empty() && (source != SRC_SAY_LOCAL || partner))
+                // level 12 ("[80] getting into Ulduar runs"), and not one
+                // the realm heard lately (mod-ollama-chat_premises). /say
+                // needs someone to talk to; a channel finds its people once
+                // the opening line is out.
+                const std::string premise = (source != SRC_SAY_LOCAL || partner) ? Premises_Pick(bot) : std::string();
+                if (!premise.empty())
                 {
-                    const std::string premise = FormatPremise(picked, bot);
                     const std::string& templ = (source == SRC_SAY_LOCAL) ? g_ConversationHintStartSay
                                                                          : g_ConversationHintStartChannel;
                     const std::string where = (source == SRC_SAY_LOCAL) ? std::string("/say")

@@ -1040,6 +1040,7 @@ namespace TextRules
             case BotIntent::Buff:    return "buff";
             case BotIntent::Pull:    return "pull";
             case BotIntent::Leave:   return "leave";
+            case BotIntent::Grind:   return "grind";
             default:                 return "none";
         }
     }
@@ -1521,6 +1522,14 @@ namespace TextRules
             const std::string tag = message.substr(i + 2, dataEnd - i - 2);
             link.type = tag.substr(0, tag.find(':'));
             link.name = message.substr(dataEnd + 3, nameEnd - 1 - (dataEnd + 3));
+            if (const size_t colon = tag.find(':'); colon != npos)
+            {
+                uint64_t id = 0;
+                size_t d = colon + 1;
+                while (d < tag.size() && std::isdigit(static_cast<unsigned char>(tag[d])) && id <= 0xFFFFFFFFull)
+                    id = id * 10 + uint64_t(tag[d++] - '0');
+                link.id = (d > colon + 1 && id <= 0xFFFFFFFFull) ? uint32_t(id) : 0;
+            }
 
             const size_t begin = (colourAt != npos && colourAt + 10 == i) ? colourAt : i;
             size_t end = nameEnd + 2;
@@ -1738,6 +1747,45 @@ namespace TextRules
         return true;
     }
 
+    bool IsBareYes(const std::vector<std::string>& words, const std::vector<std::vector<std::string>>& yes,
+                   const std::vector<std::vector<std::string>>& fillers)
+    {
+        if (words.empty())
+            return false;
+        std::vector<bool> covered(words.size(), false);
+        bool any = false;
+        for (const auto& [b, e] : Occurrences(words, yes))
+        {
+            any = true;
+            for (size_t i = b; i < e; ++i)
+                covered[i] = true;
+        }
+        if (!any)
+            return false;
+        for (const auto& [b, e] : Occurrences(words, fillers))
+            for (size_t i = b; i < e; ++i)
+                covered[i] = true;
+        return std::all_of(covered.begin(), covered.end(), [](bool c) { return c; });
+    }
+
+    bool HasPhraseUnless(const std::vector<std::string>& words, const std::vector<std::vector<std::string>>& phrases,
+                         const std::vector<std::vector<std::string>>& unless)
+    {
+        const std::vector<std::pair<size_t, size_t>> guards = Occurrences(words, unless);
+        for (const auto& [b, e] : Occurrences(words, phrases))
+        {
+            const bool spoiled = std::any_of(guards.begin(), guards.end(), [b = b, e = e](const std::pair<size_t, size_t>& g)
+            {
+                const bool overlaps = g.first < e && b < g.second;
+                const bool inside   = g.first >= b && g.second <= e;
+                return overlaps && !inside;
+            });
+            if (!spoiled)
+                return true;
+        }
+        return false;
+    }
+
     std::string FixKeyTypos(const std::string& text, const std::vector<std::string>& keys)
     {
         std::string out;
@@ -1765,6 +1813,376 @@ namespace TextRules
                 }
             out += fixed;
             i = j;
+        }
+        return out;
+    }
+
+    namespace
+    {
+        // Where the brace opened at `open` closes, counting the braces inside;
+        // npos when it does not.
+        size_t MatchingBrace(const std::string& text, size_t open)
+        {
+            int depth = 0;
+            for (size_t i = open; i < text.size(); ++i)
+            {
+                if (text[i] == '{')
+                    ++depth;
+                else if (text[i] == '}' && --depth == 0)
+                    return i;
+            }
+            return std::string::npos;
+        }
+    }
+
+    std::string ExpandChoices(const std::string& text, std::mt19937& rng)
+    {
+        std::string out;
+        out.reserve(text.size());
+        size_t from = 0;
+        for (;;)
+        {
+            const size_t open = text.find("{~", from);
+            if (open == std::string::npos)
+                break;
+            const size_t close = MatchingBrace(text, open);
+            if (close == std::string::npos)
+                break;   // unclosed: left as it is
+            out.append(text, from, open - from);
+
+            // The alternatives: split at the bars of this group, not at those
+            // of a group or slot inside one.
+            std::vector<std::string> options;
+            int depth = 0;
+            size_t at = open + 2;
+            for (size_t i = at; i < close; ++i)
+            {
+                if (text[i] == '{')
+                    ++depth;
+                else if (text[i] == '}' && depth > 0)
+                    --depth;
+                else if (text[i] == '|' && depth == 0)
+                {
+                    options.push_back(text.substr(at, i - at));
+                    at = i + 1;
+                }
+            }
+            options.push_back(text.substr(at, close - at));
+            const std::string& chosen = options[std::uniform_int_distribution<size_t>(0, options.size() - 1)(rng)];
+            out += chosen.find("{~") == std::string::npos ? chosen : ExpandChoices(chosen, rng);
+            from = close + 1;
+        }
+        out.append(text, from, std::string::npos);
+        return out;
+    }
+
+    std::vector<std::string> SplitBars(const std::string& text)
+    {
+        std::vector<std::string> out;
+        auto push = [&out](const std::string& part)
+        {
+            const size_t b = part.find_first_not_of(" \t\r\n");
+            if (b == std::string::npos)
+                return;
+            const size_t e = part.find_last_not_of(" \t\r\n");
+            out.push_back(part.substr(b, e - b + 1));
+        };
+        int depth = 0;
+        size_t at = 0;
+        for (size_t i = 0; i < text.size(); ++i)
+        {
+            if (text[i] == '{')
+                ++depth;
+            else if (text[i] == '}' && depth > 0)
+                --depth;
+            else if (text[i] == '|' && depth == 0)
+            {
+                push(text.substr(at, i - at));
+                at = i + 1;
+            }
+        }
+        push(text.substr(at));
+        return out;
+    }
+
+    std::string FillSlots(const std::string& templ,
+                          const std::function<std::string(const std::string&, const std::vector<std::string>&)>& pick)
+    {
+        std::string out;
+        out.reserve(templ.size() + 32);
+        std::vector<std::string> taken;
+        for (size_t i = 0; i < templ.size();)
+        {
+            if (templ[i] != '{')
+            {
+                out += templ[i++];
+                continue;
+            }
+            const size_t close = templ.find('}', i + 1);
+            if (close == std::string::npos)
+                return {};
+            std::string slot = templ.substr(i + 1, close - i - 1);
+            for (char& c : slot)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            while (!slot.empty() && std::isdigit(static_cast<unsigned char>(slot.back())))
+                slot.pop_back();
+            if (slot.empty() || slot.find_first_of("{ |~") != std::string::npos)
+                return {};
+            const std::string value = pick(slot, taken);
+            if (value.empty())
+                return {};
+            taken.push_back(value);
+            out += value;
+            i = close + 1;
+        }
+        return out;
+    }
+
+    std::string QuestText(const std::string& text, const std::string& name, const std::string& cls,
+                          const std::string& race, bool female, size_t maxLen)
+    {
+        auto lower = [](std::string s)
+        {
+            for (char& c : s)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            return s;
+        };
+
+        std::string raw;
+        raw.reserve(text.size());
+        for (size_t i = 0; i < text.size(); ++i)
+        {
+            const char c = text[i];
+            if (c != '$' || i + 1 >= text.size())
+            {
+                raw += c;
+                continue;
+            }
+            const char code = text[i + 1];
+            switch (code)
+            {
+                case 'B': case 'b': raw += ' ';         ++i; break;
+                case 'N':           raw += name;        ++i; break;
+                case 'n':           raw += name;        ++i; break;
+                case 'C':           raw += cls;         ++i; break;
+                case 'c':           raw += lower(cls);  ++i; break;
+                case 'R':           raw += race;        ++i; break;
+                case 'r':           raw += lower(race); ++i; break;
+                case 'G': case 'g':
+                {
+                    // $Glad:lass; -- the colon splits, the semicolon ends it.
+                    const size_t colon = text.find(':', i + 2);
+                    const size_t semi  = text.find(';', i + 2);
+                    if (colon == std::string::npos || semi == std::string::npos || colon > semi)
+                    {
+                        ++i;   // malformed: the code goes, the rest stays
+                        break;
+                    }
+                    raw += female ? text.substr(colon + 1, semi - colon - 1) : text.substr(i + 2, colon - i - 2);
+                    i = semi;
+                    break;
+                }
+                default:
+                    raw += c;
+                    break;
+            }
+        }
+
+        // One space between words, none at the ends.
+        std::string out;
+        out.reserve(raw.size());
+        for (char c : raw)
+        {
+            const bool space = c == ' ' || c == '\t' || c == '\r' || c == '\n';
+            if (space)
+            {
+                if (!out.empty() && out.back() != ' ')
+                    out += ' ';
+            }
+            else
+                out += c;
+        }
+        while (!out.empty() && out.back() == ' ')
+            out.pop_back();
+
+        if (maxLen == 0 || out.size() <= maxLen)
+            return out;
+
+        // A whole sentence where one ends in the second half; else up to a
+        // word, with "..." to say there is more.
+        std::string head = out.substr(0, maxLen);
+        size_t sentence = std::string::npos;
+        for (size_t i = head.size(); i > head.size() / 2; --i)
+        {
+            const char c = head[i - 1];
+            if ((c == '.' || c == '!' || c == '?') && (i == head.size() || head[i] == ' '))
+            {
+                sentence = i;
+                break;
+            }
+        }
+        if (sentence != std::string::npos)
+            return head.substr(0, sentence);
+        const size_t space = head.find_last_of(' ');
+        if (space != std::string::npos && space > head.size() / 2)
+            head.erase(space);
+        while (!head.empty() && (head.back() == ',' || head.back() == ';' || head.back() == ':' || head.back() == ' '))
+            head.pop_back();
+        return head + "...";
+    }
+
+    std::vector<Emoticon> FindEmoticons(const std::string& text, const std::vector<std::string>& known)
+    {
+        std::vector<Emoticon> out;
+        if (known.empty())
+            return out;
+        auto same = [](const std::string& a, const std::string& b)
+        {
+            if (a.size() != b.size())
+                return false;
+            for (size_t i = 0; i < a.size(); ++i)
+                if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i])))
+                    return false;
+            return true;
+        };
+        for (size_t i = 0; i < text.size();)
+        {
+            if (text[i] == ' ')
+            {
+                ++i;
+                continue;
+            }
+            size_t j = i;
+            while (j < text.size() && text[j] != ' ')
+                ++j;
+            std::string token = text.substr(i, j - i);
+            size_t end = j;
+            // "nice :)." and "lol :D," -- the punctuation after it is not part of it.
+            auto isKnown = [&](const std::string& t)
+            {
+                return std::any_of(known.begin(), known.end(), [&](const std::string& k) { return same(k, t); });
+            };
+            bool hit = isKnown(token);
+            if (!hit && token.size() > 2 && (token.back() == '.' || token.back() == ',' || token.back() == '!'))
+            {
+                const std::string trimmed = token.substr(0, token.size() - 1);
+                if (isKnown(trimmed))
+                {
+                    hit = true;
+                    token = trimmed;
+                    end = j - 1;
+                }
+            }
+            if (hit)
+                out.push_back({ i, end, token });
+            i = j;
+        }
+        return out;
+    }
+
+    std::string RemoveEmoticons(const std::string& text, const std::vector<Emoticon>& found,
+                                const std::vector<size_t>& drop)
+    {
+        std::vector<bool> cut(text.size(), false);
+        for (size_t d : drop)
+            if (d < found.size())
+                for (size_t i = found[d].begin; i < found[d].end && i < text.size(); ++i)
+                    cut[i] = true;
+
+        std::string kept;
+        kept.reserve(text.size());
+        for (size_t i = 0; i < text.size(); ++i)
+            if (!cut[i])
+                kept += text[i];
+
+        // Fold the spaces it left, and the comma or dash it left dangling.
+        std::string out;
+        out.reserve(kept.size());
+        for (char c : kept)
+        {
+            if (c == ' ' && (out.empty() || out.back() == ' '))
+                continue;
+            out += c;
+        }
+        auto edgeJunk = [](char c) { return c == ' ' || c == ',' || c == ';' || c == '-'; };
+        while (!out.empty() && edgeJunk(out.back()))
+            out.pop_back();
+        while (!out.empty() && edgeJunk(out.front()))
+            out.erase(out.begin());
+        // What was either side of it: "ok, :P, see you" is "ok, see you",
+        // "haha xD." is "haha.".
+        for (const char* pair : { " ,", " .", " !", " ?" })
+            for (size_t at = out.find(pair); at != std::string::npos; at = out.find(pair))
+                out.erase(at, 1);
+        for (size_t at = out.find(",,"); at != std::string::npos; at = out.find(",,"))
+            out.erase(at, 1);
+        for (size_t at = out.find(",."); at != std::string::npos; at = out.find(",."))
+            out.erase(at, 1);
+
+        const bool word = std::any_of(out.begin(), out.end(),
+                                      [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0; });
+        return word ? out : std::string();
+    }
+
+    std::vector<std::string> ContentGrams(const std::string& text, size_t n, const std::vector<std::string>& common)
+    {
+        std::vector<std::string> out;
+        if (n == 0)
+            return out;
+        // Runs of words between names: "[Look to the Stars]" ends one run and
+        // starts the next, and none of its words are in either.
+        std::vector<std::vector<std::string>> runs(1);
+        std::string cur;
+        bool inName = false;
+        auto flush = [&]()
+        {
+            if (!cur.empty())
+                runs.back().push_back(std::move(cur));
+            cur.clear();
+        };
+        for (char c : text)
+        {
+            const unsigned char u = static_cast<unsigned char>(c);
+            if (c == '[' && !inName)
+            {
+                flush();
+                inName = true;
+                if (!runs.back().empty())
+                    runs.emplace_back();
+            }
+            else if (c == ']' && inName)
+                inName = false;
+            else if (inName)
+                continue;
+            else if (std::isalnum(u))
+                cur += static_cast<char>(std::tolower(u));
+            else if (c == '\'')
+                continue;   // "don't" is "dont"
+            else
+                flush();
+        }
+        flush();
+
+        auto isCommon = [&](const std::string& w)
+        {
+            return std::find(common.begin(), common.end(), w) != common.end();
+        };
+        for (const std::vector<std::string>& words : runs)
+        {
+            for (size_t i = 0; i + n <= words.size(); ++i)
+            {
+                bool content = false;
+                std::string gram;
+                for (size_t j = i; j < i + n; ++j)
+                {
+                    content = content || !isCommon(words[j]);
+                    if (j > i)
+                        gram += ' ';
+                    gram += words[j];
+                }
+                if (content && std::find(out.begin(), out.end(), gram) == out.end())
+                    out.push_back(std::move(gram));
+            }
         }
         return out;
     }

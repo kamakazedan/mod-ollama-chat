@@ -1,5 +1,7 @@
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_personality.h"
+#include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
 
@@ -47,6 +49,9 @@ namespace
 
     // bot guid -> filler pattern -> when that bot last used it
     std::unordered_map<uint64_t, std::unordered_map<std::string, Clock::time_point>> g_fillerUse;
+
+    // bot guid -> when it last kept a smiley in a line
+    std::unordered_map<uint64_t, Clock::time_point> g_emoticonUse;
 
     constexpr size_t kMaxStoredPerSpace = 80;
     constexpr size_t kMaxLineChars      = 160;
@@ -693,6 +698,93 @@ std::string Context_RationFillers(Player* bot, ChatChannelSourceLocal source,
     return hasWord ? out : std::string();
 }
 
+std::string Context_RationEmoticons(Player* bot, ChatChannelSourceLocal source,
+                                    const std::string& channelName, const std::string& text)
+{
+    if (!bot || text.empty() || g_EmoticonTokens.empty())
+        return text;
+    const std::vector<TextRules::Emoticon> found = TextRules::FindEmoticons(text, g_EmoticonTokens);
+    if (found.empty())
+        return text;
+
+    const auto now = Clock::now();
+    const uint64_t botGuid = bot->GetGUID().GetRawValue();
+    bool allowed = g_EmoticonEnable;
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        if (allowed && g_EmoticonBotCooldownMinutes > 0)
+        {
+            auto use = g_emoticonUse.find(botGuid);
+            if (use != g_emoticonUse.end() &&
+                SecondsBetween(use->second, now) < double(g_EmoticonBotCooldownMinutes) * 60.0)
+                allowed = false;
+        }
+        const std::string key = SpaceKey(bot, source, channelName);
+        if (allowed && !key.empty() && g_EmoticonScopeLines > 0)
+        {
+            auto it = g_spaces.find(key);
+            if (it != g_spaces.end())
+            {
+                uint32_t seen = 0;
+                for (auto line = it->second.rbegin(); line != it->second.rend() && seen < g_EmoticonScopeLines; ++line)
+                {
+                    if (line->kind == ContextLineKind::Event || !VisibleTo(*line, bot))
+                        continue;
+                    ++seen;
+                    if (!TextRules::FindEmoticons(line->text, g_EmoticonTokens).empty())
+                    {
+                        allowed = false;
+                        break;
+                    }
+                }
+            }
+        }
+        // (The cooldown starts when the line is out: Context_NoteEmoticonSent.)
+    }
+
+    // One may stay, the last one (where it reads most naturally); the rest go.
+    std::vector<size_t> drop;
+    for (size_t i = 0; i < found.size(); ++i)
+        if (!allowed || i + 1 != found.size())
+            drop.push_back(i);
+    if (drop.empty())
+        return text;
+    return TextRules::RemoveEmoticons(text, found, drop);
+}
+
+void Context_NoteEmoticonSent(Player* bot, const std::string& text)
+{
+    if (!bot || text.empty() || !g_EmoticonEnable || g_EmoticonBotCooldownMinutes == 0 || g_EmoticonTokens.empty())
+        return;
+    if (TextRules::FindEmoticons(text, g_EmoticonTokens).empty())
+        return;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_emoticonUse[bot->GetGUID().GetRawValue()] = Clock::now();
+}
+
+std::string Context_EmoticonNudgeFor(Player* bot)
+{
+    if (!g_EmoticonEnable || !bot || g_EmoticonOffer.empty() || g_EmoticonNudgeText.empty())
+        return {};
+    std::string style = GetBotPersonality(bot);
+    for (char& c : style)
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    auto custom = g_EmoticonStyleChance.find(style);
+    const uint32_t chance = custom != g_EmoticonStyleChance.end() ? custom->second : g_EmoticonNudgeChance;
+    if (chance == 0 || urand(1, 100) > chance)
+        return {};
+
+    // Two of them to choose from, so it is not the same face every time.
+    const size_t a = urand(0, uint32(g_EmoticonOffer.size() - 1));
+    size_t b = urand(0, uint32(g_EmoticonOffer.size() - 1));
+    if (g_EmoticonOffer.size() > 1)
+        while (b == a)
+            b = urand(0, uint32(g_EmoticonOffer.size() - 1));
+    const std::string faces = a == b ? g_EmoticonOffer[a] : g_EmoticonOffer[a] + " or " + g_EmoticonOffer[b];
+    const std::string out = SafeFormat(g_EmoticonNudgeText, fmt::arg("emoticons", faces));
+    return out == "[Format Error]" ? std::string() : out;
+}
+
 std::string Context_CleanText(const std::string& text)
 {
     return CleanText(text);
@@ -723,12 +815,17 @@ void Context_Update()
 
         bot = uses.empty() ? g_fillerUse.erase(bot) : std::next(bot);
     }
+
+    const double emoticonAge = std::max<double>(60.0, double(g_EmoticonBotCooldownMinutes) * 60.0);
+    for (auto it = g_emoticonUse.begin(); it != g_emoticonUse.end(); )
+        it = (SecondsBetween(it->second, now) > emoticonAge) ? g_emoticonUse.erase(it) : std::next(it);
 }
 
 void Context_ForgetPlayer(uint64_t guid)
 {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_fillerUse.erase(guid);
+    g_emoticonUse.erase(guid);
 }
 
 void Context_Reset()
@@ -736,4 +833,5 @@ void Context_Reset()
     std::lock_guard<std::mutex> lock(g_mutex);
     g_spaces.clear();
     g_fillerUse.clear();
+    g_emoticonUse.clear();
 }

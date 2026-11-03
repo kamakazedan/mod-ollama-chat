@@ -50,6 +50,17 @@ PhraseCheck Phrases_Check(const std::string& text, const std::string& answering,
 // The line went out: its stock phrases start their cooldown now.
 void Phrases_NoteSaid(const std::string& text);
 
+// Echoes. Nobody can list every phrase a model falls back on, so they are
+// counted as they go out: a run of Echo.Words words that says something
+// (not only Echo.CommonWords) that Echo.Bots other bots have said in the last
+// Echo.WindowMinutes is an echo -- "fight one huge murloc" the fourth time
+// that hour, whoever says it. One the line being answered has is fair game.
+// `which` gets the phrase. World thread.
+bool Phrases_IsEcho(uint64_t botGuid, const std::string& text, const std::string& answering, std::string& which);
+
+// A bot's line went out: its phrases are counted.
+void Phrases_NoteEcho(uint64_t botGuid, const std::string& text);
+
 void Phrases_Update();   // forget cooldowns that have run out
 
 struct PhrasesStats
@@ -58,7 +69,9 @@ struct PhrasesStats
     uint64_t droppedOffLevel = 0;
     uint64_t droppedOverused = 0;
     uint64_t droppedRare     = 0;
+    uint64_t echoes          = 0;   // lines found to echo other bots
     uint32_t coolingDown     = 0;
+    uint32_t phrasesTracked  = 0;
 };
 PhrasesStats Phrases_GetStats();
 

@@ -14,6 +14,7 @@
 #include "mod-ollama-chat_mute.h"
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_roleplay.h"
+#include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat-utilities.h"
 #include <fmt/core.h>
@@ -456,6 +457,72 @@ bool        g_PartyDoneEnable              = true;
 std::string g_PartyDoneSituation;
 
 // --------------------------------------------
+// Natural chat v10
+// --------------------------------------------
+bool        g_StuckEnable                  = true;
+uint32_t    g_StuckMountCount              = 4;
+uint32_t    g_StuckWindowSeconds           = 90;
+float       g_StuckRadius                  = 6.0f;
+uint32_t    g_StuckIgnoreMinutes           = 10;
+uint32_t    g_StuckRememberMinutes         = 10;
+uint32_t    g_StuckRemarkChance            = 50;
+std::string g_StuckRemarkPrompt;
+std::string g_StuckStateText;
+
+bool        g_ProgressEnable               = true;
+uint32_t    g_ProgressCheckSeconds         = 2;
+uint32_t    g_ProgressDelaySeconds         = 3;
+uint32_t    g_ProgressGapSeconds           = 20;
+std::string g_ProgressPrompt;
+std::string g_ProgressKillText;
+std::string g_ProgressUseText;
+std::string g_ProgressItemText;
+std::string g_ProgressQuestText;
+
+bool        g_LinksDescribeEnable          = true;
+uint32_t    g_LinksDescribeMax             = 3;
+uint32_t    g_LinksDescribeQuestChars      = 180;
+std::string g_LinksDescribeText;
+
+std::vector<std::string> g_PremiseTemplates;
+uint32_t    g_PremiseTemplateChance        = 70;
+uint32_t    g_PremiseCooldownMinutes       = 120;
+uint32_t    g_PremiseValueMemory           = 8;
+std::unordered_map<std::string, std::vector<std::string>> g_PremisePools;
+
+bool        g_EchoEnable                   = true;
+uint32_t    g_EchoWords                    = 4;
+uint32_t    g_EchoBots                     = 3;
+uint32_t    g_EchoWindowMinutes            = 60;
+std::vector<std::string> g_EchoCommonWords;
+bool        g_ResponseRetryOwed            = true;
+std::string g_ResponseRetryNote;
+
+bool        g_EmoticonEnable               = true;
+std::vector<std::string> g_EmoticonTokens;
+std::vector<std::string> g_EmoticonOffer;
+uint32_t    g_EmoticonNudgeChance          = 4;
+std::unordered_map<std::string, uint32_t> g_EmoticonStyleChance;
+std::string g_EmoticonNudgeText;
+uint32_t    g_EmoticonBotCooldownMinutes   = 20;
+uint32_t    g_EmoticonScopeLines           = 8;
+
+std::vector<std::vector<std::string>> g_PartyReadyYesPhrases;
+uint32_t    g_PartyReadyWindowSeconds      = 180;
+std::string g_PartyTogetherText;
+std::string g_JoinedLfgPrompt;
+
+std::vector<std::vector<std::string>> g_BagsCancelPhrases;
+std::vector<std::vector<std::string>> g_BagsCancelNotPhrases;
+std::string g_BagsHintCancel;
+
+std::vector<std::vector<std::string>> g_OrdersNotDoneVerbs;
+std::string g_OrdersHintNotDone;
+
+uint32_t    g_PresenceExGroupMinutes       = 15;
+std::unordered_set<uint32_t> g_PresenceSkipEmotes;
+
+// --------------------------------------------
 // Topic engine
 // --------------------------------------------
 uint32_t g_TopicWeightPeople        = 30;
@@ -850,6 +917,13 @@ namespace
         return out;
     }
 
+    // The same, for lines that may hold "{~a|b}": a bar inside braces is part
+    // of its line.
+    std::vector<std::string> ReadChoiceList(const char* key, const char* def)
+    {
+        return TextRules::SplitBars(sConfigMgr->GetOption<std::string>(key, def));
+    }
+
     std::vector<uint32_t> ReadEmoteList(const std::string& raw, std::string* unknown = nullptr)
     {
         std::vector<uint32_t> out;
@@ -994,7 +1068,7 @@ static void LoadNaturalChatV4Settings()
     g_ConversationAllowTrade        = sConfigMgr->GetOption<bool>("OllamaChat.Conversation.AllowTrade", true);
     g_ConversationAllowSay          = sConfigMgr->GetOption<bool>("OllamaChat.Conversation.AllowSay", true);
     // A "[70+]" or "[10-39]" in front: only bots of those levels bring it up.
-    g_ConversationPremises = ReadPipeList("OllamaChat.Conversation.Premises",
+    g_ConversationPremises = ReadChoiceList("OllamaChat.Conversation.Premises",
         "which class is the most overpowered right now|whether death knights ruined everything now that every "
         "other player is one|[70+] the best tank class for heroics|whether ret paladins need a nerf|[15+] the "
         "worst wipe you ever had in a dungeon|[15+] a ninja looter who rolled need on everything in a pug|"
@@ -1003,7 +1077,7 @@ static void LoadNaturalChatV4Settings()
         "funniest hunter pet name you have seen|whether Arthas was always evil|whether Illidan was right all "
         "along|[80] the hardest boss in Naxxramas|[80] getting into Ulduar runs without much gear|what everyone "
         "is farming right now|the most pointless achievement|where Mankrik's wife could be|[68+] the best place "
-        "to level from 70 to 80|how expensive the auction house has got|guild drama|would you rather fight one huge murloc or a hundred tiny ones|the cutest companion pet|[75+] "
+        "to level from 70 to 80|how expensive the auction house has got|guild drama|the cutest companion pet|[75+] "
         "whether the Lich King fight will be any good|[15+] people who stand in fire|what you do on long flight "
         "paths|a name for a new alt|fishing: relaxing or the most boring thing in the game|[77+] the Argent "
         "Tournament dailies|whether gnomes or goblins make better engineers|[10+] whether {other_faction} is "
@@ -1306,7 +1380,9 @@ static void LoadNaturalChatV7Settings()
     g_ResponseInsultCooldownSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Response.InsultCooldownSeconds", 600);
     g_ResponseRarePhrases = phrases("OllamaChat.Response.RarePhrases",
         "40 man|40man|forty man|40 mans|old school|back in vanilla|back in the day|the old days|old days|"
-        "good old days|vanilla days|miss vanilla|miss the old|used to be better|way more epic back");
+        "good old days|vanilla days|miss vanilla|miss the old|used to be better|way more epic back|ur nan|your nan|"
+        "ur nans|your nans|ur mum|your mum|ur mums|your mums|ur mom|your mom|ur ma|yo mama|yo momma|ur sister|"
+        "your sister|ur gran|your gran|ur granny|your granny|ur dad|your dad");
     g_ResponseRareCooldownSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Response.RareCooldownSeconds", 3600);
 
     // --- thanks -----------------------------------------------------------------
@@ -1374,6 +1450,11 @@ static void LoadNaturalChatV7Settings()
     slot(BotIntent::Leave) = orders("OllamaChat.Orders.Leave",
         "leave the group|leave group|leave the party|leave party|you can leave|you can leave now|drop group|"
         "drop party");
+    slot(BotIntent::Grind) = orders("OllamaChat.Orders.Grind",
+        "=grind|grind mobs|grind some mobs|grind here|grind for a bit|grind a bit|start grinding|keep grinding|"
+        "you can grind|kill stuff|kill some stuff|kill some mobs|kill things|kill everything|kill everything here|"
+        "farm mobs|farm some mobs|=farm|go farm|go level|level up a bit|fight stuff|clear the area|clear this area|"
+        "clear the camp|spread out and grind|spread out and kill stuff");
     g_OrdersRules.fillers = phrases("OllamaChat.Orders.Fillers",
         "pls|plz|please|pleas|plox|now|right now|here|there|then|again|quick|quickly|asap|for now|for a sec|"
         "a sec|for a second|a second|a moment|for a moment|a minute|for a minute|a bit|for a bit|ok|okay|k|kk|"
@@ -1435,6 +1516,9 @@ static void LoadNaturalChatV7Settings()
     hint(BotIntent::Pull, "OllamaChat.Orders.HintPull",
         "{player_name} told you to pull, and you are pulling {target} now. Say so in two to five words, in your "
         "own chat style.");
+    hint(BotIntent::Grind, "OllamaChat.Orders.HintGrind",
+        "{player_name} told {who} to go off and grind, so you are going to fight whatever is around here for a "
+        "while. Say so in a few words, in your own chat style.");
     hint(BotIntent::Leave, "OllamaChat.Orders.HintLeave",
         "{player_name} said you can leave the group, so you are leaving now. Say a short goodbye, in your own "
         "chat style.");
@@ -1452,7 +1536,10 @@ static void LoadNaturalChatV7Settings()
         const std::string raw = sConfigMgr->GetOption<std::string>("OllamaChat.Mute.Patterns",
             "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;"
             "I don't know this dungeon, lead the way!;Staying;Following;Fleeing;Running away;Attacking;"
-            "Releasing...;Meet me at the graveyard;Hello;Hello!;Hi;Hi!;Hello there!");
+            "Releasing...;Meet me at the graveyard;Hello;Hello!;Hi;Hi!;Hello there!;"
+            "* */* |c*|Hquest:*;Quest completed |c*;I have accepted |c*;Grinding;Moving away from group;"
+            "Hello, I follow you!;Hello, lead the way!;Hi, lead the way!;Goodbye!;Bye bye!;See you later!;"
+            "Fair trade;Off with you;A pleasure doing business with you;Thanks;I am ready for the next flight");
         Mute_Publish(sConfigMgr->GetOption<bool>("OllamaChat.Mute.Enable", true), SplitString(raw, ';'));
     }
 
@@ -1570,14 +1657,15 @@ static void LoadNaturalChatV7Settings()
         "you killing|u killing"));
     g_NeedsPlanMaxQuests = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Needs.PlanMaxQuests", 4));
     g_NeedsAskQuest = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.AskQuest",
-        "You are on the quest {quest} in {where}{target}: {kind}, too much to do alone at your level. Ask if anyone "
-        "wants to group up for it, the way players looking for a group do.");
+        "You are on the quest {quest} in {where}{target}, {kind}, too much to do alone at your level. What it asks: "
+        "{objective} Ask if anyone wants to group up for it, the way players looking for a group do, saying what it "
+        "is you need a hand with.");
     g_NeedsAskDungeon = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.AskDungeon",
         "You have {quest}, a quest for {where}, in your log. Ask if anyone wants to run {where}, the way players "
         "looking for a dungeon group do.");
     g_NeedsReasonQuest = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.ReasonQuest",
-        "you are on {quest} in {where}{target}, {kind}, and need people for it; anyone who wants to come can invite "
-        "you");
+        "you are on {quest} in {where}{target}, {kind}, and need people for it (it asks: {objective}); anyone who "
+        "wants to come can invite you");
     g_NeedsAskErrand = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.AskErrand",
         "You are in {city} and {why}, so you want to know {what}. Ask, the way a player who is not sure where things "
         "are would.");
@@ -1647,8 +1735,10 @@ static void LoadNaturalChatV7Settings()
     g_PartyGreetEnable = sConfigMgr->GetOption<bool>("OllamaChat.Party.GreetEnable", true);
     g_PartyGreetDelaySeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.GreetDelaySeconds", 8);
     g_PartyGreetSituation = sConfigMgr->GetOption<std::string>("OllamaChat.Party.GreetSituation",
-        "The group has just come in and nobody has pulled anything yet. Tell everyone to let you know when they "
-        "are ready to start, in your own way.");
+        "The group has just come in and nobody has pulled anything yet. {~Ask everyone if they are ready to start|"
+        "Check everyone is ready before you start|Ask if they are ready for the first pull|Ask whether they are "
+        "ready for you to start pulling}, in your own way and your own words: a plain are-you-ready question, "
+        "not whether anyone needs anything.");
     g_PartyDoneEnable = sConfigMgr->GetOption<bool>("OllamaChat.Party.DoneEnable", true);
     g_PartyDoneSituation = sConfigMgr->GetOption<std::string>("OllamaChat.Party.DoneSituation",
         "Every boss in the dungeon is dead: the group has just finished the whole run. Tell everyone it is done, "
@@ -1659,6 +1749,206 @@ static void LoadNaturalChatV7Settings()
              "thank-yous answered {}% of the time.",
              g_ResponseDropVocatives.size(), g_ResponseRarePhrases.size(), g_ResponseRareCooldownSeconds,
              g_CrowdThanksReplyChance);
+}
+
+// "a|b|c" lists, and "KEY:N" pairs separated by spaces.
+static std::vector<std::string> ReadSpaceList(const char* key, const char* def)
+{
+    std::vector<std::string> out;
+    const std::string raw = sConfigMgr->GetOption<std::string>(key, def);
+    std::string cur;
+    for (char c : raw + " ")
+    {
+        if (c == ' ' || c == '\t')
+        {
+            if (!cur.empty())
+                out.push_back(cur);
+            cur.clear();
+        }
+        else
+            cur += c;
+    }
+    return out;
+}
+
+static void LoadNaturalChatV10Settings()
+{
+    // --- stuck getting on and off a mount ----------------------------------------------
+    g_StuckEnable          = sConfigMgr->GetOption<bool>("OllamaChat.Stuck.Enable", true);
+    g_StuckMountCount      = std::max<uint32_t>(3, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.MountCount", 4));
+    g_StuckWindowSeconds   = std::max<uint32_t>(10, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.WindowSeconds", 90));
+    g_StuckRadius          = std::max(1.0f, sConfigMgr->GetOption<float>("OllamaChat.Stuck.Radius", 6.0f));
+    g_StuckIgnoreMinutes   = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.IgnoreMinutes", 10));
+    g_StuckRememberMinutes = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.RememberMinutes", 10));
+    g_StuckRemarkChance    = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.RemarkChance", 50));
+    g_StuckRemarkPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Stuck.RemarkPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} For the "
+        "last minute you were stuck at {what}, getting on and off your mount over and over without managing to "
+        "{verb} it, and you have only just noticed and given up on it. Say it in {channel} in a few words, your own "
+        "way: fed up, embarrassed or laughing at yourself, whatever suits you.");
+    g_StuckStateText = sConfigMgr->GetOption<std::string>("OllamaChat.Stuck.StateText",
+        "A little while ago you were stuck for a minute at {what} in {zone}, getting on and off your mount on the "
+        "spot without managing to {verb} it, until you gave up on it and moved on. If someone asks whether you are "
+        "stuck or what you were doing, that is what happened.");
+
+    // --- quest progress in party, not whispered ---------------------------------------
+    g_ProgressEnable       = sConfigMgr->GetOption<bool>("OllamaChat.Progress.Enable", true);
+    g_ProgressCheckSeconds = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Progress.CheckSeconds", 2));
+    g_ProgressDelaySeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Progress.DelaySeconds", 3);
+    g_ProgressGapSeconds   = sConfigMgr->GetOption<uint32_t>("OllamaChat.Progress.GapSeconds", 20);
+    g_ProgressPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.Prompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, questing with your group. Your chat style: "
+        "{bot_personality} You have just got {done}. {~Tell the group|Let the group know|Say so} in party chat in a "
+        "few words, the way players do when a bit of a quest is done: no exclamation-mark hype, and nobody needs "
+        "every detail.");
+    g_ProgressKillText = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.KillText",
+        "the last of the {count} {what} you had to kill for {quest}");
+    g_ProgressUseText = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.UseText",
+        "the last of the {count} {what} you had to do for {quest}");
+    g_ProgressItemText = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.ItemText",
+        "the last of the {count} {what} that {quest} wants");
+    g_ProgressQuestText = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.QuestText",
+        "everything {quest} needs: it is ready to hand in to {ender}");
+
+    // --- what a named item or quest is -----------------------------------------------
+    g_LinksDescribeEnable     = sConfigMgr->GetOption<bool>("OllamaChat.Links.DescribeEnable", true);
+    g_LinksDescribeMax        = sConfigMgr->GetOption<uint32_t>("OllamaChat.Links.DescribeMax", 3);
+    g_LinksDescribeQuestChars = std::max<uint32_t>(40, sConfigMgr->GetOption<uint32_t>("OllamaChat.Links.DescribeQuestChars", 180));
+    g_LinksDescribeText = sConfigMgr->GetOption<std::string>("OllamaChat.Links.DescribeText",
+        "So you know what that is about: {things}. Talk about each as what it is.");
+
+    // --- premises with slots ------------------------------------------------------------
+    g_PremiseTemplates = ReadChoiceList("OllamaChat.Conversation.PremiseTemplates", "");
+    g_PremiseTemplateChance  = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.PremiseTemplateChance", 70));
+    g_PremiseCooldownMinutes = sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.PremiseCooldownMinutes", 120);
+    g_PremiseValueMemory     = sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.PremiseValueMemory", 8);
+    g_PremisePools.clear();
+    {
+        const std::string prefix = "OllamaChat.Conversation.Pool.";
+        for (const std::string& key : sConfigMgr->GetKeysByString(prefix))
+        {
+            std::string name = key.substr(prefix.size());
+            for (char& c : name)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            std::vector<std::string> values = ReadChoiceList(key.c_str(), "");
+            if (!name.empty() && !values.empty())
+                g_PremisePools[name] = std::move(values);
+        }
+    }
+
+    // --- the same phrase from bot after bot ---------------------------------------------
+    g_EchoEnable        = sConfigMgr->GetOption<bool>("OllamaChat.Echo.Enable", true);
+    g_EchoWords         = std::max<uint32_t>(3, sConfigMgr->GetOption<uint32_t>("OllamaChat.Echo.Words", 4));
+    g_EchoBots          = std::max<uint32_t>(2, sConfigMgr->GetOption<uint32_t>("OllamaChat.Echo.Bots", 3));
+    g_EchoWindowMinutes = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Echo.WindowMinutes", 60));
+    g_EchoCommonWords = ReadPipeList("OllamaChat.Echo.CommonWords",
+        "i|im|ive|ill|id|you|your|youre|ur|u|ya|the|a|an|to|of|in|on|at|for|with|and|or|but|so|it|its|is|are|was|"
+        "were|be|been|am|do|does|did|dont|doesnt|didnt|not|no|yes|yeah|yep|just|get|got|go|going|gonna|can|cant|"
+        "will|wont|would|could|should|what|how|why|where|when|who|that|this|there|here|they|them|we|us|me|my|he|"
+        "she|his|her|have|has|had|if|then|than|too|up|out|all|any|some|one|lol|haha|ok|okay|oh|ah|like|really|well|"
+        "now|anyone|someone|need|want|know|think|see|mean|sure|right|bit|lot|much|more|good|nice|thanks|ty|thx|"
+        "about|from|by|as|off|over|still|again|back|yet|never|always|maybe|might|let|lets|make|take|give|come|say|"
+        "said|thing|things|stuff|way|time|mate|guys|lads|man|though|tho|even|only|also");
+    g_ResponseRetryOwed = sConfigMgr->GetOption<bool>("OllamaChat.Response.RetryOwed", true);
+    g_ResponseRetryNote = sConfigMgr->GetOption<std::string>("OllamaChat.Response.RetryNote",
+        "Say it a different way this time, without '{phrase}'.");
+
+    // --- text emoticons ------------------------------------------------------------------
+    g_EmoticonEnable = sConfigMgr->GetOption<bool>("OllamaChat.Emoticons.Enable", true);
+    g_EmoticonTokens = ReadSpaceList("OllamaChat.Emoticons.Tokens",
+        ":) :-) :( :-( :D :-D xD :P :-P ;) ;-) :O o.O O.o o.o >.< >_< <3 ^^ ^_^ :/ D: :3 =) =D -_- T_T :S ;P :]");
+    g_EmoticonOffer = ReadSpaceList("OllamaChat.Emoticons.Offer", ":) :D xD :P ;) :O >.< <3 ^^ :( o.O -_- :/");
+    g_EmoticonNudgeChance = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Emoticons.NudgeChance", 4));
+    g_EmoticonStyleChance.clear();
+    for (const std::string& pair : ReadSpaceList("OllamaChat.Emoticons.StyleChance",
+             "NAT_EXCITABLE:15 NAT_BUTTERFLY:15 NAT_HYPE:12 NAT_REACTOR:12 NAT_SOCIAL:10 NAT_FRIENDLY:8 NAT_JOKER:8 "
+             "NAT_NEWBIE:8 NAT_PETLOVER:8 NAT_LOWERCASE:6 NAT_PRANKSTER:6 NAT_CHILL:5 NAT_BANTER:5 NAT_TERSE_VET:0 "
+             "NAT_PROPER:1 NAT_DEADPAN:1 NAT_GRUMBLER:1 NAT_RUDE:1 NAT_LONER:1 NAT_EXPERT:1 NAT_MINMAXER:1 NAT_QUIET:2"))
+    {
+        const size_t colon = pair.find(':');
+        if (colon == std::string::npos || colon == 0 || colon + 1 >= pair.size())
+            continue;
+        std::string key = pair.substr(0, colon);
+        for (char& c : key)
+            c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        const std::string num = pair.substr(colon + 1);
+        if (std::all_of(num.begin(), num.end(), [](unsigned char c) { return std::isdigit(c) != 0; }) && num.size() <= 3)
+            g_EmoticonStyleChance[key] = std::min<uint32_t>(100, uint32_t(std::stoul(num)));
+    }
+    g_EmoticonNudgeText = sConfigMgr->GetOption<std::string>("OllamaChat.Emoticons.NudgeText",
+        "Some people put a smiley in a line now and then. If it really fits this one, you can use {emoticons}; "
+        "most of the time you would not.");
+    g_EmoticonBotCooldownMinutes = sConfigMgr->GetOption<uint32_t>("OllamaChat.Emoticons.BotCooldownMinutes", 20);
+    g_EmoticonScopeLines         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Emoticons.ScopeLines", 8);
+
+    // --- dungeon start ---------------------------------------------------------------------
+    g_PartyReadyYesPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Party.ReadyYesPhrases",
+        "yes|yep|yup|yeah|ye|ya|yea|y|sure|aye|go|gogo|go go|of course|ofc|sure thing|why not|"
+        "mhm|yes please|do it|lets do it|go for it|go ahead|go on|go on then|whenever|when you are|"
+        "ready when you are|yes im ready|yeah im ready|yep im ready|born ready|yes lets go|"
+        "yeah lets go|yep lets go|lets"));
+    g_PartyReadyWindowSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.ReadyWindowSeconds", 180);
+    g_PartyTogetherText = sConfigMgr->GetOption<std::string>("OllamaChat.Party.TogetherText",
+        "You and everyone in this group are inside {dungeon} together, doing it as one group{tank}. You are part of "
+        "this run: never talk about it as if they were going without you, and anything you ask about or bring up "
+        "is about this place, not quests or groups somewhere else.");
+    g_JoinedLfgPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Joined.LfgPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} playing World of Warcraft. Your chat style: "
+        "{bot_personality} The dungeon finder has just put you in a group with {player_name} and a few others for a "
+        "dungeon. Type the one short line you would say in party chat as the group forms, the way people do in a "
+        "dungeon finder group: a quick hello at most, a few words, in your own style. You are all off to the same "
+        "dungeon and the tank will start it, so do not ask where you are going or what the plan is.");
+
+    // --- taking a gift back out of the window ----------------------------------------------
+    g_BagsCancelPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.CancelPhrases",
+        "take it out|take them out|take that out|take it back|take them back|take it away|actually no|actually nah|"
+        "no wait|nvm|nevermind|never mind|cancel|cancel it|cancel that|cancel the trade|you keep it|you keep them|"
+        "you can keep it|you can keep them|dont want it|dont want them|dont need it|dont need them|no thanks|no ty|"
+        "nah its fine|changed my mind|on second thought|forget it|no need for it|no need for them"));
+    g_BagsCancelNotPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.CancelNotPhrases",
+        "thank you|keep it up|keep it coming|keep them coming|keep em coming|dont take*|do not take*|dont cancel|"
+        "do not cancel|never cancel*"));
+    g_BagsHintCancel = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.HintCancel",
+        "{player_name} changed their mind about {item}, so you have taken it back out and closed the trade window. "
+        "Say so in a few words, in your own chat style, no fuss.");
+
+    // --- orders that did nothing -------------------------------------------------------------
+    g_OrdersNotDoneVerbs = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Orders.NotDoneVerbs",
+        "go|come|spread|kill|farm|grind|loot|sell|repair|mount|dismount|follow|stay|wait|attack|pull|heal|tank|run|"
+        "move|use|drink|eat|craft|mine|gather|pick|open|clear|fetch|bring|jump|dance|sit|stand|hurry|fight|stop|"
+        "leave|join|invite|buff|summon|accept|equip|wear|drop|destroy|learn|train|fly|ride|swim|hide|stealth|sap|"
+        "mark|focus|assist|reset|hearth|unstuck|release"));
+    g_OrdersHintNotDone = sConfigMgr->GetOption<std::string>("OllamaChat.Orders.HintNotDone",
+        "If {player_name} just told you to do something, you are not doing it: nothing in the game has made you. "
+        "So do not say you are on it or that you are doing it; say plainly you cannot from here, or answer it some "
+        "other way, in your own chat style.");
+
+    // --- presence --------------------------------------------------------------------------------
+    g_PresenceExGroupMinutes = sConfigMgr->GetOption<uint32_t>("OllamaChat.Presence.ExGroupMinutes", 15);
+    g_PresenceSkipEmotes.clear();
+    {
+        std::string unknown;
+        for (const std::string& name : ReadPipeList("OllamaChat.Presence.SkipEmotes",
+                 "rude|spit|threaten|insult|mock|taunt|chicken|rasp|fart|burp|belch|scoff|shakefist|crack|gloat|"
+                 "bored|yawn|glare|scowl|snarl|growl|pinch|slap"))
+        {
+            if (const uint32_t id = LookupTextEmoteId(name))
+                g_PresenceSkipEmotes.insert(id);
+            else
+                unknown += (unknown.empty() ? "" : ", ") + name;
+        }
+        if (!unknown.empty())
+            LOG_WARN("module.ollamachat", "[Ollama Chat] OllamaChat.Presence.SkipEmotes: not emotes: {}", unknown);
+    }
+
+    LOG_INFO("module.ollamachat",
+             "[Ollama Chat] Chat v10: stuck mounts {} ({} in {}s), quest progress in party {}, item and quest "
+             "descriptions {}, {} premise template(s) with {} pool(s), echoes {} ({} words, {} bots, {} min), "
+             "emoticons {}.",
+             g_StuckEnable ? "on" : "off", g_StuckMountCount, g_StuckWindowSeconds, g_ProgressEnable ? "on" : "off",
+             g_LinksDescribeEnable ? "on" : "off", g_PremiseTemplates.size(), g_PremisePools.size(),
+             g_EchoEnable ? "on" : "off", g_EchoWords, g_EchoBots, g_EchoWindowMinutes,
+             g_EmoticonEnable ? "on" : "off");
 }
 
 void LoadPersonalityExtras()
@@ -1677,15 +1967,31 @@ void LoadPersonalityExtras()
         for (char c : key)
             upper += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 
-        // "<percent>|<instruction>" or "<percent>|<instruction>|<otherwise>"
+        // "<percent>|<instruction>" or "<percent>|<instruction>|<otherwise>".
+        // A "{~a|b}" in an instruction is wording that changes each time:
+        // its bars do not split.
         const std::string nudge = sConfigMgr->GetOption<std::string>("OllamaChat.Personality.Nudge." + key, "", false);
         if (!nudge.empty())
         {
+            auto barAfter = [&nudge](size_t from) -> size_t
+            {
+                int depth = 0;
+                for (size_t i = from; i < nudge.size(); ++i)
+                {
+                    if (nudge[i] == '{')   // "{~a|b}", and any "{slot}" inside one
+                        ++depth;
+                    else if (nudge[i] == '}' && depth > 0)
+                        --depth;
+                    else if (nudge[i] == '|' && depth == 0)
+                        return i;
+                }
+                return std::string::npos;
+            };
             std::vector<std::string> parts;
             size_t start = 0;
             for (int i = 0; i < 2; ++i)
             {
-                const size_t bar = nudge.find('|', start);
+                const size_t bar = barAfter(start);
                 if (bar == std::string::npos)
                     break;
                 parts.push_back(nudge.substr(start, bar - start));
@@ -2171,6 +2477,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV5Settings();
     LoadNaturalChatV6Settings();
     LoadNaturalChatV7Settings();
+    LoadNaturalChatV10Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

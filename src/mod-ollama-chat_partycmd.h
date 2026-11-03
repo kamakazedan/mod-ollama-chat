@@ -70,6 +70,10 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
 // the next answer can be told not to copy it (PartyCommands.RecentAcks).
 void PartyCmd_NoteAck(Player* bot, const std::string& line);
 
+// The tank's "everyone ready?" went out: for Party.ReadyWindowSeconds a plain
+// "yep" or "sure" from the group answers it and starts the run.
+void PartyCmd_NoteReadyAsked(Player* bot);
+
 // The group-chat glossary for a bot answering in party or raid chat inside a
 // dungeon or raid (OllamaChat.Party.DungeonGlossary); empty elsewhere.
 std::string PartyCmd_GlossaryFor(Player* bot, ChatChannelSourceLocal source);
@@ -79,6 +83,13 @@ std::string PartyCmd_GlossaryFor(Player* bot, ChatChannelSourceLocal source);
 // right now (OllamaChat.Party.RunStateText), so it can answer "which boss is
 // next?" or "what are we waiting for?". Empty outside a run.
 std::string PartyCmd_RunStateFor(Player* bot, ChatChannelSourceLocal source);
+
+// For a party or raid prompt inside a dungeon: that the bot and everyone in
+// its group are doing this dungeon together, and who tanks it
+// (Party.TogetherText) -- so nobody says "good luck with the run" to the run
+// they are in, or asks for a group for a quest out in the world. Empty
+// anywhere else.
+std::string PartyCmd_TogetherFor(Player* bot, ChatChannelSourceLocal source);
 
 // The world tick, every couple of seconds: a bot tank leading a dungeon-clear
 // group greets it when it comes into a dungeon ("let me know when you're ready

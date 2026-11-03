@@ -60,6 +60,13 @@ void Orders_ReleaseStays(Player* player, bool (*held)(Player* bot) = nullptr);
 // waiting where you were told to"), or empty. OllamaChat.State.Staying.
 std::string Orders_StateTextFor(Player* bot);
 
+// For a bot's reply prompt: `msg`, from someone it takes orders from, reads
+// like telling it to do something ("spread out", "go sell your junk") and
+// nothing here carried it out, so it is not to say "on it"
+// (Orders.HintNotDone). Only with Playerbots.CommandPrefix set: then a plain
+// line is never a playerbots command either. Empty otherwise.
+std::string Orders_NotDoneHintFor(Player* bot, Player* player, const std::string& msg, ChatChannelSourceLocal source);
+
 struct OrdersStats
 {
     uint64_t orders  = 0;   // lines that were orders

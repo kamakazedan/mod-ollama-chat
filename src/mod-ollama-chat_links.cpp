@@ -1,8 +1,12 @@
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_textrules.h"
+#include "mod-ollama-chat-utilities.h"
 
 #include "Bag.h"
+#include "DBCStores.h"
+#include "ItemTemplate.h"
+#include "SharedDefines.h"
 #include "Hyperlinks.h"
 #include "Item.h"
 #include "Log.h"
@@ -11,6 +15,8 @@
 #include "QuestDef.h"
 
 #include "ChatHelper.h"
+
+#include <fmt/core.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -329,6 +335,343 @@ void Links_NoteSent(const LinkedLine& line)
 {
     g_linked     += line.linked;
     g_unresolved += line.unresolved;
+}
+
+// --------------------------------------------------------------------------
+// What a named thing is.
+// --------------------------------------------------------------------------
+
+namespace
+{
+    const char* QualityWord(uint32_t q)
+    {
+        switch (q)
+        {
+            case ITEM_QUALITY_POOR:      return "grey (junk)";
+            case ITEM_QUALITY_NORMAL:    return "white";
+            case ITEM_QUALITY_UNCOMMON:  return "green";
+            case ITEM_QUALITY_RARE:      return "blue";
+            case ITEM_QUALITY_EPIC:      return "epic";
+            case ITEM_QUALITY_LEGENDARY: return "legendary";
+            case ITEM_QUALITY_HEIRLOOM:  return "heirloom";
+            default:                     return "";
+        }
+    }
+
+    const char* SlotWords(uint32_t inv)
+    {
+        switch (inv)
+        {
+            case INVTYPE_HEAD:           return "worn on the head";
+            case INVTYPE_NECK:           return "a necklace";
+            case INVTYPE_SHOULDERS:      return "shoulders";
+            case INVTYPE_BODY:           return "a shirt";
+            case INVTYPE_CHEST:
+            case INVTYPE_ROBE:           return "worn on the chest";
+            case INVTYPE_WAIST:          return "a belt";
+            case INVTYPE_LEGS:           return "worn on the legs";
+            case INVTYPE_FEET:           return "boots, worn on the feet";
+            case INVTYPE_WRISTS:         return "bracers, worn on the wrists";
+            case INVTYPE_HANDS:          return "gloves";
+            case INVTYPE_FINGER:         return "a ring";
+            case INVTYPE_TRINKET:        return "a trinket";
+            case INVTYPE_WEAPON:         return "one-handed";
+            case INVTYPE_SHIELD:         return "a shield";
+            case INVTYPE_RANGED:
+            case INVTYPE_RANGEDRIGHT:    return "a ranged weapon";
+            case INVTYPE_CLOAK:          return "a cloak";
+            case INVTYPE_2HWEAPON:       return "two-handed";
+            case INVTYPE_BAG:            return "a bag";
+            case INVTYPE_TABARD:         return "a tabard";
+            case INVTYPE_WEAPONMAINHAND: return "main hand";
+            case INVTYPE_WEAPONOFFHAND:  return "off hand";
+            case INVTYPE_HOLDABLE:       return "held in the off hand";
+            case INVTYPE_AMMO:           return "ammo";
+            case INVTYPE_THROWN:         return "a throwing weapon";
+            case INVTYPE_QUIVER:         return "a quiver";
+            case INVTYPE_RELIC:          return "a relic";
+            default:                     return "";
+        }
+    }
+
+    const char* WeaponWords(uint32_t sub)
+    {
+        switch (sub)
+        {
+            case ITEM_SUBCLASS_WEAPON_AXE:
+            case ITEM_SUBCLASS_WEAPON_AXE2:         return "an axe";
+            case ITEM_SUBCLASS_WEAPON_BOW:          return "a bow";
+            case ITEM_SUBCLASS_WEAPON_GUN:          return "a gun";
+            case ITEM_SUBCLASS_WEAPON_MACE:
+            case ITEM_SUBCLASS_WEAPON_MACE2:        return "a mace";
+            case ITEM_SUBCLASS_WEAPON_POLEARM:      return "a polearm";
+            case ITEM_SUBCLASS_WEAPON_SWORD:
+            case ITEM_SUBCLASS_WEAPON_SWORD2:       return "a sword";
+            case ITEM_SUBCLASS_WEAPON_STAFF:        return "a staff";
+            case ITEM_SUBCLASS_WEAPON_FIST:         return "a fist weapon";
+            case ITEM_SUBCLASS_WEAPON_DAGGER:       return "a dagger";
+            case ITEM_SUBCLASS_WEAPON_THROWN:       return "a throwing weapon";
+            case ITEM_SUBCLASS_WEAPON_CROSSBOW:     return "a crossbow";
+            case ITEM_SUBCLASS_WEAPON_WAND:         return "a wand";
+            case ITEM_SUBCLASS_WEAPON_FISHING_POLE: return "a fishing pole";
+            default:                                return "a weapon";
+        }
+    }
+
+    const char* ArmorWords(uint32_t sub)
+    {
+        switch (sub)
+        {
+            case ITEM_SUBCLASS_ARMOR_CLOTH:   return "cloth armour";
+            case ITEM_SUBCLASS_ARMOR_LEATHER: return "leather armour";
+            case ITEM_SUBCLASS_ARMOR_MAIL:    return "mail armour";
+            case ITEM_SUBCLASS_ARMOR_PLATE:   return "plate armour";
+            case ITEM_SUBCLASS_ARMOR_SHIELD:  return "a shield";
+            case ITEM_SUBCLASS_ARMOR_LIBRAM:  return "a paladin libram";
+            case ITEM_SUBCLASS_ARMOR_IDOL:    return "a druid idol";
+            case ITEM_SUBCLASS_ARMOR_TOTEM:   return "a shaman totem";
+            case ITEM_SUBCLASS_ARMOR_SIGIL:   return "a death knight sigil";
+            default:                          return "";   // rings, necks, trinkets, cloaks: the slot says it
+        }
+    }
+
+    // What kind of thing it is, in a few words.
+    std::string KindOf(ItemTemplate const* p)
+    {
+        switch (p->Class)
+        {
+            case ITEM_CLASS_WEAPON:
+            {
+                std::string out = WeaponWords(p->SubClass);
+                const std::string slot = SlotWords(p->InventoryType);
+                if (p->InventoryType == INVTYPE_WEAPON || p->InventoryType == INVTYPE_2HWEAPON ||
+                    p->InventoryType == INVTYPE_WEAPONMAINHAND || p->InventoryType == INVTYPE_WEAPONOFFHAND)
+                    out = slot + " " + out.substr(out.find(' ') + 1);   // "a sword" -> "one-handed sword"
+                return out;
+            }
+            case ITEM_CLASS_ARMOR:
+            {
+                if (p->InventoryType == INVTYPE_CLOAK)
+                    return "a cloak";   // cloth by subclass, but nobody calls it cloth armour
+                const std::string kind = ArmorWords(p->SubClass);
+                const std::string slot = SlotWords(p->InventoryType);
+                if (kind.empty())
+                    return slot.empty() ? std::string("a piece of gear") : slot;
+                if (slot.empty() || p->SubClass >= ITEM_SUBCLASS_ARMOR_SHIELD)
+                    return kind;
+                return kind + ", " + slot;
+            }
+            case ITEM_CLASS_CONSUMABLE:
+                switch (p->SubClass)
+                {
+                    case 1:  return "a potion";
+                    case 2:  return "an elixir";
+                    case 3:  return "a flask";
+                    case 4:  return "a scroll";
+                    case 5:  return "food or drink";
+                    case 6:  return "something to enchant or improve gear with";
+                    case 7:  return "a bandage";
+                    default: return "something you use up";
+                }
+            case ITEM_CLASS_CONTAINER:  return p->ContainerSlots ? fmt::format("a {}-slot bag", p->ContainerSlots)
+                                                                 : std::string("a bag");
+            case ITEM_CLASS_GEM:        return "a gem for socketing gear";
+            case ITEM_CLASS_REAGENT:    return "a reagent for spells";
+            case ITEM_CLASS_PROJECTILE: return "ammo";
+            case ITEM_CLASS_TRADE_GOODS:
+                switch (p->SubClass)
+                {
+                    case 1:  return "an engineering part";
+                    case 2:  return "an explosive";
+                    case 3:  return "an engineering device";
+                    case 4:  return "a jewelcrafting material";
+                    case 5:  return "cloth";
+                    case 6:  return "leather";
+                    case 7:  return "ore, metal or stone";
+                    case 8:  return "meat for cooking";
+                    case 9:  return "a herb";
+                    case 10: return "an elemental material";
+                    case 12: return "an enchanting material";
+                    default: return "a crafting material";
+                }
+            case ITEM_CLASS_RECIPE:     return "a recipe that teaches a profession something";
+            case ITEM_CLASS_QUIVER:     return "a quiver or ammo pouch";
+            case ITEM_CLASS_QUEST:      return "a quest item";
+            case ITEM_CLASS_KEY:        return "a key";
+            case ITEM_CLASS_GLYPH:      return "a glyph";
+            case ITEM_CLASS_MISC:
+                switch (p->SubClass)
+                {
+                    case 0:  return p->Quality == ITEM_QUALITY_POOR ? "junk to sell" : "a miscellaneous item";
+                    case 2:  return "a companion pet";
+                    case 3:  return "a holiday item";
+                    case 5:  return "a mount";
+                    default: return "a miscellaneous item";
+                }
+            default:                    return "an item";
+        }
+    }
+
+    const char* QuestKind(Quest const* q)
+    {
+        switch (q->GetType())
+        {
+            case QUEST_TYPE_ELITE:   return "an elite quest";
+            case QUEST_TYPE_DUNGEON: return "a dungeon quest";
+            case QUEST_TYPE_HEROIC:  return "a heroic dungeon quest";
+            case QUEST_TYPE_RAID:
+            case QUEST_TYPE_RAID_10:
+            case QUEST_TYPE_RAID_25: return "a raid quest";
+            case QUEST_TYPE_PVP:     return "a PvP quest";
+            case QUEST_TYPE_ESCORT:  return "an escort quest";
+            default:                 return q->GetSuggestedPlayers() > 1 ? "a group quest" : "a quest";
+        }
+    }
+
+    std::string AreaOf(int32_t zoneOrSort)
+    {
+        if (zoneOrSort <= 0)
+            return {};
+        AreaTableEntry const* area = sAreaTableStore.LookupEntry(uint32(zoneOrSort));
+        return (area && area->area_name[0] && *area->area_name[0]) ? std::string(area->area_name[0]) : std::string();
+    }
+}
+
+std::string Links_DescribeItem(ItemTemplate const* p)
+{
+    if (!p)
+        return {};
+    std::string out = "[" + p->Name1 + "] is an item, not a person or a creature: ";
+    const char* quality = QualityWord(p->Quality);
+    const std::string kind = KindOf(p);
+    const bool gear = p->Class == ITEM_CLASS_WEAPON || p->Class == ITEM_CLASS_ARMOR;
+    out += (gear && *quality) ? std::string(quality) + " " + kind : kind;
+    if (gear && p->ItemLevel)
+        out += fmt::format(", item level {}", p->ItemLevel);
+    if (p->RequiredLevel > 1)
+        out += fmt::format(", for level {} and up", p->RequiredLevel);
+    if (gear && p->Bonding == BIND_WHEN_EQUIPPED)
+        out += ", binds when equipped";
+    else if (gear && p->Bonding == BIND_WHEN_PICKED_UP)
+        out += ", binds when picked up";
+    if (p->Class == ITEM_CLASS_QUEST && p->StartQuest)
+        if (Quest const* starts = sObjectMgr->GetQuestTemplate(p->StartQuest))
+            out += ", which starts the quest [" + starts->GetTitle() + "]";
+    return out;
+}
+
+std::string Links_QuestObjective(Quest const* quest, Player* reader, size_t maxLen)
+{
+    if (!quest)
+        return {};
+    std::string name, cls, race;
+    bool female = false;
+    if (reader)
+    {
+        name   = reader->GetName();
+        female = reader->getGender() == GENDER_FEMALE;
+        if (ChrClassesEntry const* c = sChrClassesStore.LookupEntry(reader->getClass()))
+            cls = c->name[0];
+        if (ChrRacesEntry const* r = sChrRacesStore.LookupEntry(reader->getRace()))
+            race = r->name[0];
+    }
+    const std::string& raw = quest->GetObjectives().empty() ? quest->GetDetails() : quest->GetObjectives();
+    return TextRules::QuestText(raw, name.empty() ? std::string("you") : name, cls, race, female, maxLen);
+}
+
+std::string Links_DescribeQuest(Quest const* quest, Player* reader)
+{
+    if (!quest)
+        return {};
+    std::string out = "[" + quest->GetTitle() + "] is " + QuestKind(quest);
+    const std::string where = AreaOf(quest->GetZoneOrSort());
+    if (!where.empty())
+        out += " in " + where;
+    if (quest->GetQuestLevel() > 0)
+        out += fmt::format(" for level {}", quest->GetQuestLevel());
+    const std::string what = Links_QuestObjective(quest, reader, g_LinksDescribeQuestChars);
+    if (!what.empty())
+        out += ", where you have to: " + what;
+    return out;
+}
+
+std::string Links_Describe(Player* bot, const std::string& line)
+{
+    if (!g_LinksDescribeEnable || !bot || line.empty() || g_LinksDescribeText.empty() || g_LinksDescribeMax == 0)
+        return {};
+
+    std::vector<std::string> parts;
+    std::vector<std::string> done;   // name keys already described
+    auto add = [&](const std::string& key, std::string text)
+    {
+        if (text.empty() || parts.size() >= g_LinksDescribeMax ||
+            std::find(done.begin(), done.end(), key) != done.end())
+            return;
+        done.push_back(key);
+        parts.push_back(std::move(text));
+    };
+
+    // Links carry the id itself.
+    for (const TextRules::ChatLink& link : TextRules::ExtractChatLinks(line))
+    {
+        const std::string key = TextRules::NameKey(link.name);
+        if (link.type == "item" && link.id)
+            add(key, Links_DescribeItem(sObjectMgr->GetItemTemplate(link.id)));
+        else if (link.type == "quest" && link.id)
+            add(key, Links_DescribeQuest(sObjectMgr->GetQuestTemplate(link.id), bot));
+    }
+
+    // Names in brackets: what the bot itself has first, then what posted
+    // links said, then the tables.
+    const std::string plain = TextRules::StripChatMarkup(line);
+    const time_t now = time(nullptr);
+    for (const TextRules::BracketName& n : TextRules::FindBracketNames(plain))
+    {
+        if (parts.size() >= g_LinksDescribeMax)
+            break;
+        const std::string key = TextRules::NameKey(n.name);
+        if (key.empty() || std::find(done.begin(), done.end(), key) != done.end())
+            continue;
+        if (Quest const* quest = QuestInLog(bot, key))
+        {
+            add(key, Links_DescribeQuest(quest, bot));
+            continue;
+        }
+        if (ItemTemplate const* proto = ItemCarried(bot, key))
+        {
+            add(key, Links_DescribeItem(proto));
+            continue;
+        }
+        auto seen = g_seen.find(key);
+        if (seen != g_seen.end() &&
+            (g_LinksRememberMinutes == 0 || now - seen->second.at <= time_t(g_LinksRememberMinutes) * 60))
+        {
+            const std::vector<TextRules::ChatLink> links = TextRules::ExtractChatLinks(seen->second.markup);
+            if (!links.empty() && links[0].id)
+            {
+                if (links[0].type == "item")
+                    add(key, Links_DescribeItem(sObjectMgr->GetItemTemplate(links[0].id)));
+                else if (links[0].type == "quest")
+                    add(key, Links_DescribeQuest(sObjectMgr->GetQuestTemplate(links[0].id), bot));
+                continue;
+            }
+        }
+        if (!g_LinksUseGameData)
+            continue;
+        BuildIndex();
+        if (ItemTemplate const* proto = BestItem(key, bot))
+            add(key, Links_DescribeItem(proto));
+        else if (Quest const* quest = BestQuest(key, bot))
+            add(key, Links_DescribeQuest(quest, bot));
+    }
+    if (parts.empty())
+        return {};
+
+    std::string things;
+    for (size_t i = 0; i < parts.size(); ++i)
+        things += (i ? "; " : "") + parts[i];
+    const std::string out = SafeFormat(g_LinksDescribeText, fmt::arg("things", things));
+    return out == "[Format Error]" ? std::string() : out;
 }
 
 void Links_Update()

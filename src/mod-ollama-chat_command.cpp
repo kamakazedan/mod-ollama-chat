@@ -24,7 +24,10 @@
 #include "mod-ollama-chat_needs.h"
 #include "mod-ollama-chat_mute.h"
 #include "mod-ollama-chat_orders.h"
+#include "mod-ollama-chat_premises.h"
+#include "mod-ollama-chat_progress.h"
 #include "mod-ollama-chat_revive.h"
+#include "mod-ollama-chat_stuck.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
 #include <thread>
@@ -663,6 +666,35 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              (unsigned long long)phrases.droppedOffEra,
                              (unsigned long long)phrases.droppedOffLevel,
                              phrases.coolingDown);
+    const PremiseStats premises = Premises_GetStats();
+    handler->PSendSysMessage("Echoes: {} - {} lines echoed other bots, {} phrases counted; {} owed lines asked for "
+                             "again   Premises: {} fixed, {} from templates ({} templates, {} pools), {} times none fitted",
+                             g_EchoEnable ? "on" : "off",
+                             (unsigned long long)phrases.echoes, phrases.phrasesTracked,
+                             (unsigned long long)dispatch.totalRetried,
+                             (unsigned long long)premises.fixed,
+                             (unsigned long long)premises.templated,
+                             g_PremiseTemplates.size(), g_PremisePools.size(),
+                             (unsigned long long)premises.none);
+    const StuckStats    stuck    = Stuck_GetStats();
+    const ProgressStats progress = Progress_GetStats();
+    handler->PSendSysMessage("Stuck on a mount: {} - {} mounts noted, {} bots stuck ({} kept off what they were "
+                             "after, {} with nothing to loot), {} said so, {} held off now",
+                             g_StuckEnable ? "on" : "off",
+                             (unsigned long long)stuck.mounts,
+                             (unsigned long long)stuck.stuck,
+                             (unsigned long long)stuck.hinted,
+                             (unsigned long long)stuck.nothing,
+                             (unsigned long long)stuck.remarks,
+                             stuck.holding);
+    handler->PSendSysMessage("Quest progress: {} - {} objectives and {} quests finished by grouped bots, {} said in "
+                             "party, {} left to whoever said it first, {} let go",
+                             g_ProgressEnable ? "on" : "off",
+                             (unsigned long long)progress.objectives,
+                             (unsigned long long)progress.quests,
+                             (unsigned long long)progress.said,
+                             (unsigned long long)progress.shared,
+                             (unsigned long long)progress.lapsed);
 
     handler->PSendSysMessage("Roleplay: {} (strictness {})   Emote reactions: {}",
                              g_RoleplayEnable ? "on" : "off",

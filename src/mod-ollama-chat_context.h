@@ -95,6 +95,24 @@ bool Context_IsPassReply(const std::string& text);
 std::string Context_RationFillers(Player* bot, ChatChannelSourceLocal source,
                                   const std::string& channelName, const std::string& text);
 
+// Text smileys -- ":)", ":D", "xD", ">.<", "<3" -- now and then. People use
+// them, but not in every line, and not all at once: a reply keeps at most
+// one (Emoticons.Tokens), and none when this bot used one in the last
+// Emoticons.BotCooldownMinutes or one is already among the last
+// Emoticons.ScopeLines lines where it is going. Returns the line as it may
+// go out; empty when nothing worth saying is left.
+std::string Context_RationEmoticons(Player* bot, ChatChannelSourceLocal source,
+                                    const std::string& channelName, const std::string& text);
+
+// A line went out: a smiley in it starts this bot's Emoticons.BotCooldownMinutes.
+// (Noted once delivered, so a line dropped after rationing costs it nothing.)
+void Context_NoteEmoticonSent(Player* bot, const std::string& text);
+
+// For a prompt, rarely: that a smiley would do in this one (Emoticons.NudgeText,
+// with a couple of Emoticons.Offer picked at random), by the bot's style's
+// chance (Emoticons.StyleChance, else Emoticons.NudgeChance). Usually empty.
+std::string Context_EmoticonNudgeFor(Player* bot);
+
 // The visible text of a chat line: item/quest/spell link markup reduced to
 // "[Name]", colour codes and line breaks removed, length capped.
 std::string Context_CleanText(const std::string& text);

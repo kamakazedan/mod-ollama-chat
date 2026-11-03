@@ -203,6 +203,7 @@ namespace TextRules
         Buff,      // "buff us", "buffs pls", "rebuff"
         Pull,      // "pull", "go ahead and pull"
         Leave,     // "leave the group", "you can leave now"
+        Grind,     // "go grind", "kill stuff", "farm some mobs"
         Count
     };
 
@@ -315,6 +316,7 @@ namespace TextRules
         std::string type;
         std::string name;
         std::string markup;
+        uint32_t    id = 0;   // the first number after the type ("item:2589:..." -> 2589); 0 when none
     };
     std::vector<ChatLink> ExtractChatLinks(const std::string& message);
 
@@ -356,6 +358,20 @@ namespace TextRules
                         const std::vector<std::vector<std::string>>& ack,
                         const std::function<bool(const std::string&)>& isName);
 
+    // The whole line is a yes -- one of `yes` ("yep", "go for it", "sure"),
+    // with nothing but `fillers` ("ok", "mate", "lol") around it: an answer
+    // to "everyone ready?". "yes but wait", "yeah 2 min" and "not yet" are not.
+    bool IsBareYes(const std::vector<std::string>& words, const std::vector<std::vector<std::string>>& yes,
+                   const std::vector<std::vector<std::string>>& fillers);
+
+    // One of `phrases` is in `words` where none of `unless` runs into it:
+    // "thank you, keep it up" holds "you keep it", but it is part of "thank
+    // you" and "keep it up"; "dont take it out" holds "take it out". One of
+    // `unless` wholly inside the phrase does not count against it ("no
+    // thanks" with "thanks" among `unless`).
+    bool HasPhraseUnless(const std::vector<std::string>& words, const std::vector<std::vector<std::string>>& phrases,
+                         const std::vector<std::vector<std::string>>& unless);
+
     // `text` with any word one slip off one of `keys` -- a letter wrong,
     // missing, extra or swapped: "dingeon", "dungen", "dugneon" -- written as
     // the key ("dungeon"). Only keys of six letters or more, where one slip
@@ -367,6 +383,64 @@ namespace TextRules
     // Replace {name} in a canned line; lowercase it about half the time, the
     // way players type names.
     std::string FormatCannedLine(const std::string& line, const std::string& name, std::mt19937& rng);
+
+    // `text` with every "{~a|b|c}" replaced by one of its alternatives, picked
+    // at random: a prompt that says the same thing a different way each time,
+    // so the line the model writes from it is not the same each time either.
+    // An alternative may be empty ("{~|really }"), and may hold a "{slot}" or
+    // another "{~...}" ("{~a joke about {creature}|{~a|one} rumour}"). An
+    // unclosed "{~" is left as it is. Run it before any fmt formatting.
+    std::string ExpandChoices(const std::string& text, std::mt19937& rng);
+
+    // `text` split at every "|" that is not inside braces, each part trimmed,
+    // empty parts dropped: a list of lines where a line may hold "{~a|b}".
+    std::vector<std::string> SplitBars(const std::string& text);
+
+    // A template's "{slot}"s filled in: `pick(pool, taken)` gives a value from
+    // the pool named by the slot without a number on the end ("{class2}" is
+    // pool "class"), not one of `taken` (what this template has used so far),
+    // or "" when it has none. Empty when any slot cannot be filled, or a "{"
+    // is not closed. Run ExpandChoices first.
+    std::string FillSlots(const std::string& templ,
+                          const std::function<std::string(const std::string&, const std::vector<std::string>&)>& pick);
+
+    // ---- quest text ---------------------------------------------------------
+
+    // Quest text the way the game shows it to someone: $N their name, $C their
+    // class, $R their race (lowercase $n/$c/$r lowercased), $B a line break
+    // (a space here), $Gmale:female; the one for their gender. Whitespace
+    // folded, and at most `maxLen` bytes (0: no limit), cut after a sentence
+    // where one ends late enough, else at a word with "..." after it.
+    std::string QuestText(const std::string& text, const std::string& name, const std::string& cls,
+                          const std::string& race, bool female, size_t maxLen);
+
+    // ---- emoticons -----------------------------------------------------------
+
+    // A text emoticon standing as a word of its own -- ":)", ":D", "xD",
+    // ">.<", "<3" -- one of `known` (case does not matter, nor a full stop or
+    // comma right after it). `begin`/`end` cover it in the text.
+    struct Emoticon
+    {
+        size_t      begin = 0;
+        size_t      end   = 0;
+        std::string token;
+    };
+    std::vector<Emoticon> FindEmoticons(const std::string& text, const std::vector<std::string>& known);
+
+    // `text` without the emoticons `drop` lists (indexes into `found`), spaces
+    // and stray commas tidied. Empty when nothing with a letter or digit is
+    // left.
+    std::string RemoveEmoticons(const std::string& text, const std::vector<Emoticon>& found,
+                                const std::vector<size_t>& drop);
+
+    // ---- echoes --------------------------------------------------------------
+
+    // Every run of `n` words in `text` -- lowercase, punctuation dropped, joined
+    // by single spaces -- that has at least one word not in `common`, each
+    // once: the phrases a line is made of, as opposed to its glue ("do you want
+    // to"). Fewer than `n` words: none. A name in brackets ("[Look to the
+    // Stars]") is game data, not wording: no run includes any of it.
+    std::vector<std::string> ContentGrams(const std::string& text, size_t n, const std::vector<std::string>& common);
 }
 
 #endif // MOD_OLLAMA_CHAT_TEXTRULES_H

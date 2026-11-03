@@ -56,6 +56,7 @@
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_presence.h"
+#include "mod-ollama-chat_stuck.h"
 #include <iomanip>
 #include <unordered_set>
 #include "SpellMgr.h"
@@ -1258,6 +1259,9 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // after a bot offered something: what it can spare goes over in a
         // trade, what it keeps gets a no and why. Before orders, so "trade me
         // the cloth" is about the cloth; "come trade me" is still an order.
+        // "actually no, take it out": a gift going over to them, called off.
+        if (!handled && Bags_HandleCancel(player, msg, sourceLocal, contextChannel, receiver, scopeKey, humanSeq))
+            handled = true;
         if (!handled && Bags_HandleHumanLine(player, msg, sourceLocal, contextChannel, receiver, scopeKey, humanSeq))
             handled = true;
 
@@ -2077,6 +2081,13 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
                                                contextSeq, replyHint);
         if (prompt.empty())
             continue;
+        // Nothing here carried out what the line told it to do: no "on it".
+        if (!senderIsBot)
+        {
+            const std::string notDone = Orders_NotDoneHintFor(bot, player, msg, sourceLocal);
+            if (!notDone.empty())
+                prompt += " " + notDone;
+        }
 
         OllamaChatRequest request;
         request.botGuid     = bot->GetGUID().GetRawValue();
@@ -3031,6 +3042,16 @@ bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
                                            excludeSeq, hint);
     if (prompt.empty())
         return false;
+    // An order or a favour is answered with its own instruction (slot.hint),
+    // which says what the bot did. Only a plain answer to a line that told it
+    // to do something nothing carried out is told not to say "on it".
+    if (slot.hint.empty() && !slot.replyBack && plan.kind != CrowdLineKind::Command &&
+        plan.kind != CrowdLineKind::Favor && plan.kind != CrowdLineKind::Order)
+    {
+        const std::string notDone = Orders_NotDoneHintFor(bot, speaker, message, plan.source);
+        if (!notDone.empty())
+            prompt += " " + notDone;
+    }
 
     const bool toPerson = OllamaIsRealPlayer(speaker);
 
@@ -3059,6 +3080,7 @@ bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
     // The tank's answer is slot 0; a mage answering "mb, water pls" after it
     // (mod-ollama-chat_conjure) is not an instruction ack.
     request.partyAck          = (plan.kind == CrowdLineKind::Command && index == 0);
+    request.noEcho            = request.partyAck;   // due now; PartyCommands.RecentAcks keeps it fresh
     request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
 
     if (!OllamaDispatch_Submit(std::move(request)))
@@ -3104,7 +3126,8 @@ static std::string OllamaPersonalityNote(const std::string& personality)
     if (nudge != g_PersonalityNudges.end())
     {
         const PersonalityNudge& n = nudge->second;
-        out = (n.percent > 0 && urand(1, 100) <= n.percent) ? n.yes : n.no;
+        static std::mt19937 rng{ std::random_device{}() };
+        out = TextRules::ExpandChoices((n.percent > 0 && urand(1, 100) <= n.percent) ? n.yes : n.no, rng);
     }
 
     // Only when it really is longer than everyone else's limit.
@@ -3141,6 +3164,8 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
 
     // What they typed, as it reads on screen: a link becomes its "[Name]".
     // The model never sees client markup, so it never echoes broken markup.
+    // (The links themselves still say which item or quest they are.)
+    const std::string sentMessage = playerMessage;
     playerMessage = TextRules::StripChatMarkup(playerMessage);
 
     AreaTableEntry const* botCurrentArea = botAI->GetCurrentArea();
@@ -3288,6 +3313,12 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     if (!glossary.empty())
         prompt += " " + glossary;
 
+    // ...and in a dungeon, that it is one of the group doing it: no "good
+    // luck with the run" to the run it is in.
+    const std::string together = PartyCmd_TogetherFor(bot, source);
+    if (!together.empty())
+        prompt += " " + together;
+
     // ...and in a dungeon-clear run, the bots know what the run is doing, so
     // "which boss is next?" gets a real answer.
     const std::string runState = PartyCmd_RunStateFor(bot, source);
@@ -3340,6 +3371,20 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
             prompt += " " + plans;
     }
 
+    // What the items and quests in the line are: a pair of boots is not a
+    // creature to fight, and a delivery quest is no call for a healer.
+    const std::string named = Links_Describe(bot, sentMessage);
+    if (!named.empty())
+        prompt += " " + named;
+
+    // Stuck getting on and off its mount a little while ago: it knows.
+    if (spokenTo)
+    {
+        const std::string stuck = Stuck_StateTextFor(bot);
+        if (!stuck.empty())
+            prompt += " " + stuck;
+    }
+
     // Someone from its own group, talking in General or guild chat: the answer
     // goes there too, so it is not party talk ("hey all" in General got "ready
     // to move?").
@@ -3359,6 +3404,11 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     const std::string styleNote = OllamaPersonalityNote(personality);
     if (!styleNote.empty())
         prompt += " " + styleNote;
+
+    // Now and then, a smiley would not go amiss.
+    const std::string smiley = Context_EmoticonNudgeFor(bot);
+    if (!smiley.empty())
+        prompt += " " + smiley;
 
     // Last, so it is the freshest instruction: is this bot being spoken to?
     if (!replyHint.empty() && g_ChatPromptTemplate.find("{reply_hint}") == std::string::npos)

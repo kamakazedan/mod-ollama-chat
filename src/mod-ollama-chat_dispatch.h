@@ -116,6 +116,19 @@ struct OllamaChatRequest
     // group remembers it, so the next answer is not a copy of this one.
     bool partyAck = false;
 
+    // The tank asking whether they are ready to start: once it is out, a plain
+    // "yep" in the next Party.ReadyWindowSeconds answers it (mod-ollama-chat_partycmd).
+    bool readyAsk = false;
+
+    // A bot telling its group it finished something (mod-ollama-chat_progress):
+    // once the line is out, the others who finished it too stay quiet.
+    uint64_t progressKey = 0;
+
+    // Not checked against what other bots have been saying (Echo.*): a line
+    // that has to go out when it is due (the tank's answers, which are kept
+    // from repeating themselves by Party.RecentAcks instead).
+    bool noEcho = false;
+
     // A bot offering something it carries (mod-ollama-chat_needs): once the
     // line is out, "me!" where it was said claims this item.
     uint32_t offerEntry = 0;
@@ -124,6 +137,14 @@ struct OllamaChatRequest
     // (OllamaChat.Personality.MaxReplyLength.<KEY>); 0 for the usual one.
     // Resolved on the world thread at submit time, like everything above.
     uint32_t maxReplyLength = 0;
+
+    // Second go at a line owed to someone, after the first came back with a
+    // stock phrase or an echo (OllamaChat.Response.RetryOwed): no third.
+    bool retried = false;
+
+    // Said to a stranger (a passer-by): no rude or gross gesture goes with it
+    // (OllamaChat.Presence.SkipEmotes), whatever the model picked.
+    bool gentle = false;
 };
 
 // Submit a request. Returns false when the queue is at MaxQueueDepth, in which
@@ -169,6 +190,7 @@ struct OllamaDispatchStats
     uint64_t totalDroppedGovernor;
     uint64_t totalDroppedPassed;      // the bot chose not to reply (pass token)
     uint64_t totalDroppedPhrase;      // a stock phrase said lately, or one Wrath never had
+    uint64_t totalRetried;            // owed lines asked for again without a stock phrase
     uint64_t totalFailed;
     std::string lastError;
 };

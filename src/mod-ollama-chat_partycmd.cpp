@@ -24,9 +24,11 @@
 
 #include <fmt/core.h>
 
+#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <optional>
+#include <random>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -76,6 +78,34 @@ namespace
     {
         Group* group = player ? player->GetGroup() : nullptr;
         return group ? group->GetGUID().GetCounter() : 0;
+    }
+
+    // When the tank last asked the group whether it is ready (the greeting as
+    // they come in), by group: for a few minutes after, a plain "yes" or
+    // "sure" answers it and starts the run.
+    std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> g_readyAsked;
+
+    bool AnswersReadyAsk(Player* player, const std::string& clean)
+    {
+        if (g_PartyReadyYesPhrases.empty() || g_PartyReadyWindowSeconds == 0)
+            return false;
+        auto it = g_readyAsked.find(GroupKey(player));
+        if (it == g_readyAsked.end() ||
+            std::chrono::steady_clock::now() - it->second > std::chrono::seconds(g_PartyReadyWindowSeconds))
+            return false;
+
+        // "yep Gruk": the names in the group are not part of the answer.
+        std::vector<std::string> nameWords;
+        if (Group* group = player->GetGroup())
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                if (Player* member = ref->GetSource())
+                    for (std::string& w : CrowdText::Words(member->GetName()))
+                        nameWords.push_back(std::move(w));
+        std::vector<std::string> words;
+        for (std::string& w : CrowdText::Words(clean))
+            if (std::find(nameWords.begin(), nameWords.end(), w) == nameWords.end())
+                words.push_back(std::move(w));
+        return TextRules::IsBareYes(words, g_PartyReadyYesPhrases, g_PartyCmdRules.resumeFillers);
     }
 
     // " You already said "on it", "lets go" in this group, ..." -- or empty.
@@ -391,7 +421,10 @@ PartyCmdLine PartyCmd_Classify(Player* player, const std::string& msg, ChatChann
     if (!map || !map->IsDungeon())   // dungeons and raids
         return PartyCmdLine::None;
 
-    const TextRules::PartyIntent intent = TextRules::MatchPartyIntent(clean, g_PartyCmdRules);
+    TextRules::PartyIntent intent = TextRules::MatchPartyIntent(clean, g_PartyCmdRules);
+    if (intent == TextRules::PartyIntent::None && AnswersReadyAsk(player, clean) &&
+        !DcLeaderSignal::FindRunOwner(player))
+        intent = TextRules::PartyIntent::Start;   // "yep", to the tank's "everyone ready?"
     if (intent == TextRules::PartyIntent::None)
         return PartyCmdLine::None;
 
@@ -427,7 +460,10 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
         return false;
 
     const std::string clean = TextRules::FixKeyTypos(Context_CleanText(msg), kTypoKeys);
-    const TextRules::PartyIntent intent = TextRules::MatchPartyIntent(clean, g_PartyCmdRules);
+    TextRules::PartyIntent intent = TextRules::MatchPartyIntent(clean, g_PartyCmdRules);
+    if (intent == TextRules::PartyIntent::None && AnswersReadyAsk(player, clean) &&
+        !DcLeaderSignal::FindRunOwner(player))
+        intent = TextRules::PartyIntent::Start;   // "yep", to the tank's "everyone ready?"
     if (intent == TextRules::PartyIntent::None)
         return false;
 
@@ -497,6 +533,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
             return false;
         }
         ++g_stats.started;
+        g_readyAsked.erase(GroupKey(player));   // answered
         ReleaseStaysFor(player);
         Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Started, std::string());
     }
@@ -505,6 +542,20 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
         LOG_INFO("module.ollamachat", "[Ollama Chat] {} {} the dungeon clear: '{}'", player->GetName(),
                  paused ? "resumed" : "started", clean);
     return true;
+#endif
+}
+
+void PartyCmd_NoteReadyAsked(Player* bot)
+{
+#if OLLAMA_CHAT_DUNGEON_CLEAR
+    const uint32_t key = GroupKey(bot);
+    if (!key || g_PartyReadyWindowSeconds == 0)
+        return;
+    if (g_readyAsked.size() > 500)
+        g_readyAsked.clear();
+    g_readyAsked[key] = std::chrono::steady_clock::now();
+#else
+    (void)bot;
 #endif
 }
 
@@ -535,6 +586,24 @@ std::string PartyCmd_GlossaryFor(Player* bot, ChatChannelSourceLocal source)
     if (!map || !map->IsDungeon())
         return "";
     return g_PartyDungeonGlossary;
+}
+
+std::string PartyCmd_TogetherFor(Player* bot, ChatChannelSourceLocal source)
+{
+    if (!bot || g_PartyTogetherText.empty() || (source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL))
+        return {};
+    Map* map = bot->GetMap();
+    if (!map || !map->IsDungeon() || map->IsBattlegroundOrArena() || !bot->GetGroup())
+        return {};
+    std::string tank;
+#if OLLAMA_CHAT_DUNGEON_CLEAR
+    if (DcModule::IsEnabled())
+        if (Player* t = DcLeaderSignal::FindLeaderTank(bot))
+            tank = (t == bot) ? std::string(", with you tanking") : ", with " + t->GetName() + " tanking";
+#endif
+    const std::string out = SafeFormat(g_PartyTogetherText, fmt::arg("dungeon", std::string(map->GetMapName())),
+                                       fmt::arg("tank", tank));
+    return out == "[Format Error]" ? std::string() : out;
 }
 
 std::string PartyCmd_RunStateFor(Player* bot, ChatChannelSourceLocal source)
@@ -630,7 +699,7 @@ namespace
 
     // The tank says something to the whole group without being asked, in its
     // own chat style: OllamaChat.Party.AnnouncePrompt around `situation`.
-    bool SubmitTankLine(Player* tank, const std::string& situation)
+    bool SubmitTankLine(Player* tank, const std::string& situation, bool readyAsk = false)
     {
         if (!tank || situation.empty() || g_PartyAnnouncePrompt.empty())
             return false;
@@ -674,6 +743,8 @@ namespace
         request.directAddress     = true;    // nobody else is talking: no pacing cooldown
         request.triggerBotReplies = false;
         request.partyAck          = true;    // remembered, so the next one is worded differently
+        request.readyAsk          = readyAsk;
+        request.noEcho            = true;    // due now, and kept fresh by the line above instead
         request.maxReplyLength    = OllamaMaxReplyLengthFor(tank);
         return OllamaDispatch_Submit(std::move(request));
     }
@@ -757,9 +828,12 @@ void PartyCmd_Update(uint32_t diff)
                      tank->IsAlive() && !tank->IsInCombat() && !player->IsInCombat())
             {
                 // A tank that spoke a moment ago gets a little longer, then
-                // the moment has passed.
-                if (SubmitTankLine(tank, g_PartyGreetSituation) ||
-                    now - w.firstSeen >= std::chrono::seconds(g_PartyGreetDelaySeconds + 30))
+                // the moment has passed. It asks whether they are ready: once
+                // that is out, a plain "yes" answers it (PartyCmd_NoteReadyAsked).
+                static std::mt19937 rng{ std::random_device{}() };
+                if (SubmitTankLine(tank, TextRules::ExpandChoices(g_PartyGreetSituation, rng), true))
+                    w.greeted = true;
+                else if (now - w.firstSeen >= std::chrono::seconds(g_PartyGreetDelaySeconds + 30))
                     w.greeted = true;
             }
         }
@@ -775,6 +849,9 @@ void PartyCmd_Update(uint32_t diff)
 
     for (auto it = g_watches.begin(); it != g_watches.end();)
         it = (now - it->second.lastSeen > std::chrono::minutes(30)) ? g_watches.erase(it) : std::next(it);
+    for (auto it = g_readyAsked.begin(); it != g_readyAsked.end();)
+        it = (now - it->second > std::chrono::seconds(g_PartyReadyWindowSeconds)) ? g_readyAsked.erase(it)
+                                                                                  : std::next(it);
 #endif
 }
 

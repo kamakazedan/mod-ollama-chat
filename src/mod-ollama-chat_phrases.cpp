@@ -2,7 +2,9 @@
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_textrules.h"
 
+#include <algorithm>
 #include <ctime>
+#include <deque>
 #include <iterator>
 #include <unordered_map>
 
@@ -16,6 +18,16 @@ namespace
     uint64_t g_offLevel = 0;
     uint64_t g_overused = 0;
     uint64_t g_rare     = 0;
+    uint64_t g_echoes   = 0;
+
+    // phrase -> who said it when, oldest first
+    struct Use
+    {
+        time_t   at  = 0;
+        uint64_t bot = 0;
+    };
+    std::unordered_map<std::string, std::deque<Use>> g_grams;
+    constexpr size_t kMaxGrams = 60000;
 }
 
 PhraseCheck Phrases_Check(const std::string& text, const std::string& answering, bool directAddress,
@@ -90,6 +102,55 @@ void Phrases_NoteSaid(const std::string& text)
             g_lastRare[TextRules::PhraseKey(g_ResponseRarePhrases[i])] = now;
 }
 
+bool Phrases_IsEcho(uint64_t botGuid, const std::string& text, const std::string& answering, std::string& which)
+{
+    which.clear();
+    if (!g_EchoEnable || text.empty() || g_grams.empty())
+        return false;
+    const std::vector<std::string> grams = TextRules::ContentGrams(text, g_EchoWords, g_EchoCommonWords);
+    if (grams.empty())
+        return false;
+    const std::vector<std::string> theirs = answering.empty()
+                                                ? std::vector<std::string>()
+                                                : TextRules::ContentGrams(answering, g_EchoWords, g_EchoCommonWords);
+    const time_t cutoff = time(nullptr) - time_t(g_EchoWindowMinutes) * 60;
+    for (const std::string& gram : grams)
+    {
+        if (std::find(theirs.begin(), theirs.end(), gram) != theirs.end())
+            continue;
+        auto it = g_grams.find(gram);
+        if (it == g_grams.end())
+            continue;
+        std::vector<uint64_t> others;
+        for (const Use& u : it->second)
+            if (u.at >= cutoff && u.bot != botGuid && std::find(others.begin(), others.end(), u.bot) == others.end())
+                others.push_back(u.bot);
+        if (others.size() >= g_EchoBots)
+        {
+            which = gram;
+            ++g_echoes;
+            return true;
+        }
+    }
+    return false;
+}
+
+void Phrases_NoteEcho(uint64_t botGuid, const std::string& text)
+{
+    if (!g_EchoEnable || text.empty())
+        return;
+    if (g_grams.size() > kMaxGrams)
+        g_grams.clear();   // a flood: start counting again rather than grow without end
+    const time_t now = time(nullptr);
+    for (const std::string& gram : TextRules::ContentGrams(text, g_EchoWords, g_EchoCommonWords))
+    {
+        std::deque<Use>& uses = g_grams[gram];
+        uses.push_back({ now, botGuid });
+        while (uses.size() > 32)
+            uses.pop_front();
+    }
+}
+
 void Phrases_Update()
 {
     const time_t now = time(nullptr);
@@ -99,6 +160,14 @@ void Phrases_Update()
     const time_t rareCutoff = now - static_cast<time_t>(g_ResponseRareCooldownSeconds);
     for (auto it = g_lastRare.begin(); it != g_lastRare.end(); )
         it = (it->second < rareCutoff) ? g_lastRare.erase(it) : std::next(it);
+    const time_t echoCutoff = now - static_cast<time_t>(g_EchoWindowMinutes) * 60;
+    for (auto it = g_grams.begin(); it != g_grams.end(); )
+    {
+        std::deque<Use>& uses = it->second;
+        while (!uses.empty() && uses.front().at < echoCutoff)
+            uses.pop_front();
+        it = uses.empty() ? g_grams.erase(it) : std::next(it);
+    }
 }
 
 PhrasesStats Phrases_GetStats()
@@ -108,6 +177,8 @@ PhrasesStats Phrases_GetStats()
     s.droppedOffLevel = g_offLevel;
     s.droppedOverused = g_overused;
     s.droppedRare     = g_rare;
+    s.echoes          = g_echoes;
+    s.phrasesTracked  = static_cast<uint32_t>(g_grams.size());
     s.coolingDown     = static_cast<uint32_t>(g_lastSaid.size() + g_lastRare.size());
     return s;
 }

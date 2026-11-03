@@ -47,6 +47,10 @@ namespace
     std::unordered_map<uint64_t, Clock::time_point> g_botNext;
     std::unordered_map<uint64_t, Clock::time_point> g_pairNext;
 
+    // Bot and real player who were in a group together, until when that
+    // still counts: the group they have just left is not passing them by.
+    std::unordered_map<uint64_t, Clock::time_point> g_wereGrouped;
+
     PresenceStats g_stats;
     uint32_t      g_timer = 0;
     uint32_t      g_pruneTimer = 0;
@@ -144,6 +148,7 @@ namespace
         request.botName           = bot->GetName();
         request.kind              = OllamaRequestKind::RandomChatter;
         request.triggerBotReplies = true;
+        request.gentle            = true;   // a stranger: nothing rude goes with it
 
         if (OllamaDispatch_Submit(std::move(request)))
             ++g_stats.remarks;
@@ -231,10 +236,22 @@ void Presence_Update(uint32_t diff)
         Prune(g_playerNext, now);
         Prune(g_botNext, now);
         Prune(g_pairNext, now);
+        Prune(g_wereGrouped, now);
     }
 
     OllamaWorldSnapshot world;
     world.Build();
+
+    // Who is grouped with whom, every look: once they part, the bots of that
+    // group leave them be for a while (no rude gesture as they go).
+    if (g_PresenceExGroupMinutes > 0)
+        for (Player* real : world.realPlayers)
+            if (Group* group = real ? real->GetGroup() : nullptr)
+                for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                    if (Player* member = ref->GetSource())
+                        if (member != real && OllamaIsBotPlayer(member))
+                            g_wereGrouped[PairKey(member->GetGUID().GetRawValue(), real->GetGUID().GetRawValue())] =
+                                now + std::chrono::minutes(g_PresenceExGroupMinutes);
 
     for (Player* real : world.realPlayers)
     {
@@ -271,6 +288,8 @@ void Presence_Update(uint32_t diff)
             const uint64_t botKey = p->GetGUID().GetRawValue();
             if (!Due(g_botNext, botKey, now) || !Due(g_pairNext, PairKey(botKey, realKey), now))
                 continue;
+            if (!Due(g_wereGrouped, PairKey(botKey, realKey), now))
+                continue;   // their group a moment ago: not a stranger walking by
             if (!p->IsWithinLOSInMap(real))
                 continue;
             bots.push_back(p);
@@ -296,9 +315,13 @@ void Presence_Update(uint32_t diff)
         ObjectGuid petGuid;
         const std::string observation = Presence_Describe(real, bot, &petGuid);
 
+        // Nothing rude or gross at a stranger (Presence.SkipEmotes): another
+        // of its style's emotes, or none.
         bool petEmote = false;
-        const uint32_t emote = Expression_PickStyleEmote(bot, !petGuid.IsEmpty(), &petEmote);
-        if (!emote)
+        uint32_t emote = Expression_PickStyleEmote(bot, !petGuid.IsEmpty(), &petEmote);
+        for (int tries = 0; emote && g_PresenceSkipEmotes.count(emote) && tries < 6; ++tries)
+            emote = Expression_PickStyleEmote(bot, !petGuid.IsEmpty(), &petEmote);
+        if (!emote || g_PresenceSkipEmotes.count(emote))
             continue;
 
         const ObjectGuid target = (petEmote && !petGuid.IsEmpty()) ? petGuid : real->GetGUID();
@@ -327,6 +350,7 @@ void Presence_Reset()
     g_playerNext.clear();
     g_botNext.clear();
     g_pairNext.clear();
+    g_wereGrouped.clear();
 }
 
 PresenceStats Presence_GetStats()
