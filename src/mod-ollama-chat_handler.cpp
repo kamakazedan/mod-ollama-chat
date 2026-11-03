@@ -56,6 +56,7 @@
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_presence.h"
+#include "mod-ollama-chat_stuck.h"
 #include <iomanip>
 #include <unordered_set>
 #include "SpellMgr.h"
@@ -1258,6 +1259,9 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // after a bot offered something: what it can spare goes over in a
         // trade, what it keeps gets a no and why. Before orders, so "trade me
         // the cloth" is about the cloth; "come trade me" is still an order.
+        // "actually no, take it out": a gift going over to them, called off.
+        if (!handled && Bags_HandleCancel(player, msg, sourceLocal, contextChannel, receiver, scopeKey, humanSeq))
+            handled = true;
         if (!handled && Bags_HandleHumanLine(player, msg, sourceLocal, contextChannel, receiver, scopeKey, humanSeq))
             handled = true;
 
@@ -3104,7 +3108,8 @@ static std::string OllamaPersonalityNote(const std::string& personality)
     if (nudge != g_PersonalityNudges.end())
     {
         const PersonalityNudge& n = nudge->second;
-        out = (n.percent > 0 && urand(1, 100) <= n.percent) ? n.yes : n.no;
+        static std::mt19937 rng{ std::random_device{}() };
+        out = TextRules::ExpandChoices((n.percent > 0 && urand(1, 100) <= n.percent) ? n.yes : n.no, rng);
     }
 
     // Only when it really is longer than everyone else's limit.
@@ -3288,6 +3293,12 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     if (!glossary.empty())
         prompt += " " + glossary;
 
+    // ...and in a dungeon, that it is one of the group doing it: no "good
+    // luck with the run" to the run it is in.
+    const std::string together = PartyCmd_TogetherFor(bot, source);
+    if (!together.empty())
+        prompt += " " + together;
+
     // ...and in a dungeon-clear run, the bots know what the run is doing, so
     // "which boss is next?" gets a real answer.
     const std::string runState = PartyCmd_RunStateFor(bot, source);
@@ -3340,6 +3351,25 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
             prompt += " " + plans;
     }
 
+    // What the items and quests in the line are: a pair of boots is not a
+    // creature to fight, and a delivery quest is no call for a healer.
+    const std::string named = Links_Describe(bot, playerMessage);
+    if (!named.empty())
+        prompt += " " + named;
+
+    if (spokenTo)
+    {
+        // Stuck getting on and off its mount a little while ago: it knows.
+        const std::string stuck = Stuck_StateTextFor(bot);
+        if (!stuck.empty())
+            prompt += " " + stuck;
+
+        // Told to do something that nothing here carried out: no "on it".
+        const std::string notDone = Orders_NotDoneHintFor(bot, player, playerMessage, source);
+        if (!notDone.empty())
+            prompt += " " + notDone;
+    }
+
     // Someone from its own group, talking in General or guild chat: the answer
     // goes there too, so it is not party talk ("hey all" in General got "ready
     // to move?").
@@ -3359,6 +3389,11 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     const std::string styleNote = OllamaPersonalityNote(personality);
     if (!styleNote.empty())
         prompt += " " + styleNote;
+
+    // Now and then, a smiley would not go amiss.
+    const std::string smiley = Context_EmoticonNudgeFor(bot);
+    if (!smiley.empty())
+        prompt += " " + smiley;
 
     // Last, so it is the freshest instruction: is this bot being spoken to?
     if (!replyHint.empty() && g_ChatPromptTemplate.find("{reply_hint}") == std::string::npos)

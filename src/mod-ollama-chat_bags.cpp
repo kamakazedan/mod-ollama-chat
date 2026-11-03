@@ -792,6 +792,75 @@ void Bags_NoteReply(Player* bot, const std::string& plainText, const std::string
         LOG_INFO("module.ollamachat", "[Ollama Chat] {} offered {} in {}.", bot->GetName(), said, scopeKey);
 }
 
+bool Bags_HandleCancel(Player* player, const std::string& msg, ChatChannelSourceLocal source,
+                       const std::string& channelName, Player* receiver, const std::string& scopeKey, uint64_t seq)
+{
+    if (!g_BagsEnable || !player || msg.empty() || g_BagsCancelPhrases.empty() || OllamaIsBotPlayer(player) ||
+        !player->IsInWorld())
+        return false;
+    if (source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL && source != SRC_WHISPER_LOCAL && source != SRC_SAY_LOCAL)
+        return false;
+    const std::vector<std::string> words = CrowdText::Words(Context_CleanText(msg));
+    if (words.empty() || words.size() > 12 || !CrowdText::ContainsPhrase(words, g_BagsCancelPhrases))
+        return false;
+
+    // Who is handing them something: the bot named or whispered, else
+    // whoever in the group is.
+    bool person = false;
+    Player* named = NamedBot(player, msg, source, receiver, person);
+    if (person)
+        return false;
+    auto giving = [&](Player* b) { return b && b->IsInWorld() && OllamaIsBotPlayer(b) && Conjure_IsGiving(b, player, 0); };
+    Player* bot = nullptr;
+    if (named)
+        bot = giving(named) ? named : nullptr;
+    else if (Group* group = player->GetGroup())
+        for (GroupReference* ref = group->GetFirstMember(); ref && !bot; ref = ref->next())
+            if (giving(ref->GetSource()))
+                bot = ref->GetSource();
+
+    std::vector<std::pair<uint32_t, uint32_t>> items;
+    if (bot)
+    {
+        items = Conjure_GivingItems(bot, player);
+        if (!Conjure_CancelGift(bot, player))
+            return false;
+    }
+    else
+    {
+        // Promised once they invited it: that is called off too.
+        const uint64_t who = player->GetGUID().GetRawValue();
+        auto promise = std::find_if(g_promises.begin(), g_promises.end(), [&](const Promise& p)
+                                    { return p.player == who && (!named || p.bot == named->GetGUID().GetRawValue()); });
+        if (promise == g_promises.end())
+            return false;
+        bot = Find(promise->bot);
+        items = promise->items;
+        g_promises.erase(promise);
+        if (!bot || !bot->IsInWorld())
+            return true;   // nothing to say it with, but nothing is coming either
+    }
+
+    std::vector<std::string> names;
+    for (const auto& [entry, count] : items)
+        if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(entry))
+            names.push_back(count > 1 ? fmt::format("[{}] x{}", proto->Name1, count) : fmt::format("[{}]", proto->Name1));
+    if (!seq)
+    {
+        Governor_NoteHumanMessage(scopeKey);
+        seq = Context_RecordLine(player, source, channelName, msg, ContextLineKind::Human);
+    }
+    DropOffers(bot->GetGUID().GetRawValue());
+    g_quiet[bot->GetGUID().GetRawValue()] = Clock::now() + kQuietAfterAnswer;
+    OllamaBotAnswer(player, bot, msg, source, scopeKey, seq,
+                    Hint(g_BagsHintCancel, player, names.empty() ? std::string("it") : JoinWords(names)),
+                    CrowdLineKind::Favor);
+    if (g_DebugEnabled)
+        LOG_INFO("module.ollamachat", "[Ollama Chat] {} called off what {} was handing them: '{}'", player->GetName(),
+                 bot->GetName(), Context_CleanText(msg));
+    return true;
+}
+
 bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSourceLocal source,
                           const std::string& channelName, Player* receiver, const std::string& scopeKey,
                           uint64_t seq)

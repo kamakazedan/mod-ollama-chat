@@ -86,6 +86,13 @@ void Bags_NoteOffer(Player* bot, uint32_t entry, const std::string& scopeKey);
 void Bags_NoteReply(Player* bot, const std::string& plainText, const std::string& linkedText,
                     const std::string& scopeKey, uint64_t targetGuid);
 
+// "actually no, take it out", "nvm", "keep it": a real player calling off
+// what a bot is handing them -- a spare thing or a mage's water, offered,
+// waiting or already in the window (Bags.CancelPhrases). The window is
+// closed, and the bot says so. True when that was it.
+bool Bags_HandleCancel(Player* player, const std::string& msg, ChatChannelSourceLocal source,
+                       const std::string& channelName, Player* receiver, const std::string& scopeKey, uint64_t seq);
+
 // A real player asking a bot for something it carries. True when it was
 // that and has been answered (and the trade started, where it could be).
 // `seq` is the line's transcript number, 0 when it is not recorded yet.

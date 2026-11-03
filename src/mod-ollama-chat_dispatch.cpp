@@ -103,6 +103,7 @@ namespace
     std::atomic<uint64_t> g_droppedGovernor{ 0 };
     std::atomic<uint64_t> g_droppedPassed{ 0 };
     std::atomic<uint64_t> g_droppedPhrase{ 0 };
+    std::atomic<uint64_t> g_retried{ 0 };
     std::atomic<uint64_t> g_totalFailed{ 0 };
 
     std::mutex  g_errorMutex;
@@ -501,6 +502,23 @@ namespace
                      bot->GetName(), c.text, rationed);
         c.text = rationed;
 
+        // :) and <3 now and then, not in every line, nor in every bot's.
+        {
+            const std::string faces = Context_RationEmoticons(bot, c.request.source, c.request.channelName, c.text);
+            if (faces.empty())
+            {
+                ++g_droppedEmpty;
+                if (g_DebugEnabled)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} reply was only a smiley: '{}'",
+                             bot->GetName(), c.text);
+                return;
+            }
+            if (g_DebugEnabled && faces != c.text)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} smiley rationed: '{}' -> '{}'", bot->GetName(),
+                         c.text, faces);
+            c.text = faces;
+        }
+
         // Players do not offer help like a help desk ("How can I help you?").
         if (!g_ResponseAssistantPhrases.empty())
         {
@@ -604,6 +622,31 @@ namespace
             c.text = gz;
         }
 
+        // A line owed to someone that came back with a stock phrase gets one
+        // more go, told what to leave out, rather than leaving them without an
+        // answer. Its crowd slot or conversation place waits for the second go.
+        auto retry = [&](const std::string& phrase) -> bool
+        {
+            if (!g_ResponseRetryOwed || !directAddress || c.request.retried || c.request.prompt.empty() ||
+                !c.request.fixedText.empty() || g_ResponseRetryNote.empty())
+                return false;
+            const std::string note = SafeFormat(g_ResponseRetryNote, fmt::arg("phrase", phrase));
+            if (note.empty() || note == "[Format Error]")
+                return false;
+            OllamaChatRequest again = c.request;
+            again.retried = true;
+            again.prompt += " " + note;
+            if (!OllamaDispatch_Submit(std::move(again)))
+                return false;
+            crowdReport.done  = true;   // the second go reports, however it goes
+            openerReport.done = true;
+            ++g_retried;
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} asked again without '{}': '{}'", bot->GetName(),
+                         phrase, c.text);
+            return true;
+        };
+
         // Wrath has no keystones, a level 6 has no repair bills, and nobody
         // needs to hear "this is taking forever" from a different bot every
         // few minutes.
@@ -621,7 +664,27 @@ namespace
                            : verdict == PhraseCheck::Rare     ? "hobby horse said lately:"
                                                               : "said lately:",
                              which, c.text);
+                retry(which);
                 return;
+            }
+        }
+
+        // The same phrase from bot after bot, all over the realm: an ambient
+        // line goes, one owed to someone gets another go.
+        {
+            std::string echo;
+            if (Phrases_IsEcho(botGuid.GetRawValue(), c.text, origin, echo))
+            {
+                if (directAddress && !c.request.retried && retry(echo))
+                    return;
+                if (!directAddress)
+                {
+                    ++g_droppedPhrase;
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} reply dropped, echoes other bots ('{}'): '{}'",
+                                 bot->GetName(), echo, c.text);
+                    return;
+                }
             }
         }
 
@@ -694,6 +757,7 @@ namespace
             Bags_NoteReply(bot, plain, line.text, c.request.scopeKey, c.request.targetGuid);
         Governor_RecordUtterance(botGuid, c.request.scopeKey, plain);
         Phrases_NoteSaid(plain);
+        Phrases_NoteEcho(botGuid.GetRawValue(), plain);
         if (c.request.partyAck)
             PartyCmd_NoteAck(bot, plain);
         if (c.request.noSelfDing)   // a "gz": the one it is for hears it, and thanks once for the lot
@@ -733,6 +797,9 @@ namespace
         }
 
         // Body language. Safe here and only here: this is the world thread.
+        // A passer-by gets nothing rude or gross with it.
+        if (c.request.gentle && g_PresenceSkipEmotes.count(c.emoteId))
+            c.emoteId = 0;
         ScheduleBotExpression(bot, ObjectGuid(c.request.targetGuid), c.emoteId,
                               g_BotExpressionDelayMs);
 
@@ -1034,6 +1101,7 @@ OllamaDispatchStats OllamaDispatch_GetStats()
     stats.totalDroppedGovernor  = g_droppedGovernor.load();
     stats.totalDroppedPassed    = g_droppedPassed.load();
     stats.totalDroppedPhrase    = g_droppedPhrase.load();
+    stats.totalRetried          = g_retried.load();
     stats.totalFailed           = g_totalFailed.load();
 
     return stats;

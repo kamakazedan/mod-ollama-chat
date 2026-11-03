@@ -590,6 +590,83 @@ extern std::string g_PartyDoneSituation;
 void LoadPersonalityExtras();
 
 // --------------------------------------------
+// Natural chat v10
+// --------------------------------------------
+// Bots stuck getting on and off their mount (mod-ollama-chat_stuck)
+extern bool        g_StuckEnable;
+extern uint32_t    g_StuckMountCount;        // mounted this often...
+extern uint32_t    g_StuckWindowSeconds;     // ...in this long...
+extern float       g_StuckRadius;            // ...without leaving this many yards
+extern uint32_t    g_StuckIgnoreMinutes;     // kept off what it was stuck on for this long
+extern uint32_t    g_StuckRememberMinutes;   // knows it was stuck, if asked, for this long
+extern uint32_t    g_StuckRemarkChance;
+extern std::string g_StuckRemarkPrompt;
+extern std::string g_StuckStateText;
+
+// Quest progress said in party, not whispered (mod-ollama-chat_progress)
+extern bool        g_ProgressEnable;
+extern uint32_t    g_ProgressCheckSeconds;
+extern uint32_t    g_ProgressDelaySeconds;   // after it is done, before it is said
+extern uint32_t    g_ProgressGapSeconds;     // one such line per group in this long
+extern std::string g_ProgressPrompt;
+extern std::string g_ProgressKillText;
+extern std::string g_ProgressUseText;
+extern std::string g_ProgressItemText;
+extern std::string g_ProgressQuestText;
+
+// What a named item or quest is (mod-ollama-chat_links)
+extern bool        g_LinksDescribeEnable;
+extern uint32_t    g_LinksDescribeMax;
+extern uint32_t    g_LinksDescribeQuestChars;
+extern std::string g_LinksDescribeText;
+
+// Conversation premises with slots, and how often any one comes round (mod-ollama-chat_premises)
+extern std::vector<std::string> g_PremiseTemplates;
+extern uint32_t    g_PremiseTemplateChance;    // % of openers from a template rather than the fixed list
+extern uint32_t    g_PremiseCooldownMinutes;   // one premise, realm-wide, at most once in this long
+extern uint32_t    g_PremiseValueMemory;       // a pool's last this-many picks are not picked again
+// Pools by name: OllamaChat.Conversation.Pool.<name>, each entry optionally level-tagged.
+extern std::unordered_map<std::string, std::vector<std::string>> g_PremisePools;
+
+// The same phrase from bot after bot (mod-ollama-chat_phrases)
+extern bool        g_EchoEnable;
+extern uint32_t    g_EchoWords;          // phrases this many words long
+extern uint32_t    g_EchoBots;           // said by this many different bots...
+extern uint32_t    g_EchoWindowMinutes;  // ...in this long: an echo
+extern std::vector<std::string> g_EchoCommonWords;
+// A line owed to someone and dropped for a stock phrase gets one more try.
+extern bool        g_ResponseRetryOwed;
+extern std::string g_ResponseRetryNote;
+
+// Text emoticons, now and then (mod-ollama-chat_context)
+extern bool        g_EmoticonEnable;
+extern std::vector<std::string> g_EmoticonTokens;   // what counts as one, at delivery
+extern std::vector<std::string> g_EmoticonOffer;    // what a nudge suggests
+extern uint32_t    g_EmoticonNudgeChance;           // % of prompts, for styles without their own
+extern std::unordered_map<std::string, uint32_t> g_EmoticonStyleChance;   // personality key (upper) -> %
+extern std::string g_EmoticonNudgeText;
+extern uint32_t    g_EmoticonBotCooldownMinutes;
+extern uint32_t    g_EmoticonScopeLines;
+
+// Dungeon start: the tank asks if everyone is ready; a plain yes starts it
+extern std::vector<std::vector<std::string>> g_PartyReadyYesPhrases;
+extern uint32_t    g_PartyReadyWindowSeconds;
+extern std::string g_PartyTogetherText;
+extern std::string g_JoinedLfgPrompt;
+
+// Taking a gift back out of the trade window
+extern std::vector<std::vector<std::string>> g_BagsCancelPhrases;
+extern std::string g_BagsHintCancel;
+
+// Orders that did nothing: not "on it" (Playerbots.CommandPrefix set)
+extern std::vector<std::vector<std::string>> g_OrdersNotDoneVerbs;
+extern std::string g_OrdersHintNotDone;
+
+// Presence: not the group they just left, and nothing rude at strangers
+extern uint32_t    g_PresenceExGroupMinutes;
+extern std::unordered_set<uint32_t> g_PresenceSkipEmotes;
+
+// --------------------------------------------
 // Topic engine
 // --------------------------------------------
 extern uint32_t g_TopicWeightPeople;

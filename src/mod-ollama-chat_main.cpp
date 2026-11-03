@@ -8,6 +8,7 @@
 #include "mod-ollama-chat_conjure.h"
 #include "mod-ollama-chat_mute.h"
 #include "mod-ollama-chat_joined.h"
+#include "mod-ollama-chat_stuck.h"
 #include "Log.h"
 
 void Addmod_ollama_chatScripts()
@@ -47,4 +48,7 @@ void Addmod_ollama_chatScripts()
 
     // A bot joining a group says hi in party chat, or carries on from what was said.
     new OllamaChatJoinScript();
+
+    // Bots stuck getting on and off their mount on the spot: noted as they mount.
+    new OllamaChatStuckScript();
 }

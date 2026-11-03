@@ -50,6 +50,37 @@ LinkedLine Links_Resolve(Player* bot, const std::string& text);
 // The line went out: count it in the stats.
 void Links_NoteSent(const LinkedLine& line);
 
+// --------------------------------------------------------------------------
+// What a named thing is.
+//
+// "anyone seen [Dusty Mining Boots]?" was answered with how to kill the
+// boots, and "need a healer for [Look To The Stars]" was a delivery quest.
+// The model only sees a name in brackets. For a reply prompt, these say what
+// the items and quests a line names really are: an item's kind, slot, quality
+// and level, a quest's zone, kind and what it asks for (its objectives, as
+// the quest log has them).
+// --------------------------------------------------------------------------
+
+struct ItemTemplate;
+class Quest;
+
+// "[Linen Cloth] is an item: cloth for tailoring and first aid, ..."; empty
+// for nullptr.
+std::string Links_DescribeItem(ItemTemplate const* proto);
+
+// "[The Fargodeep Mine] is a quest in Elwynn Forest, for level 7: Explore ...";
+// `reader` fills in the quest text's $N, $C, $R.
+std::string Links_DescribeQuest(Quest const* quest, Player* reader);
+
+// The quest text a quest log shows for `quest`, as `reader` would read it, at
+// most `maxLen` bytes: its objectives (else the start of its details).
+std::string Links_QuestObjective(Quest const* quest, Player* reader, size_t maxLen);
+
+// For a reply prompt: what the items and quests `line` names are -- links
+// first, then names in square brackets that match something real -- at most
+// Links.DescribeMax of them, in Links.DescribeText. Empty when it names none.
+std::string Links_Describe(Player* bot, const std::string& line);
+
 void Links_Update();   // forget links not seen for Links.RememberMinutes
 
 struct LinksStats

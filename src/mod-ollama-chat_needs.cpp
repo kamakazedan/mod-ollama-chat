@@ -4,6 +4,7 @@
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_crowd.h"
+#include "mod-ollama-chat_links.h"
 
 #include "Bag.h"
 #include "GameObjectData.h"
@@ -134,11 +135,26 @@ namespace
             if (Cooling(state, key, now))
                 continue;
 
+            // A group is for a fight. Something to kill -- or a quest item,
+            // which comes off something killed -- or nobody needs one: a
+            // bronze tube to fetch is not a job for a healer.
             std::string target;
-            for (uint8 i = 0; i < QUEST_OBJECTIVES_COUNT && target.empty(); ++i)
-                if (quest->RequiredNpcOrGo[i] > 0)
+            bool fight = false;
+            for (uint8 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
+                if (quest->RequiredNpcOrGo[i] > 0 && quest->RequiredNpcOrGoCount[i])
                     if (CreatureTemplate const* ct = sObjectMgr->GetCreatureTemplate(uint32(quest->RequiredNpcOrGo[i])))
-                        target = ct->Name;
+                    {
+                        fight = true;
+                        if (target.empty() || ct->rank != CREATURE_ELITE_NORMAL)
+                            target = ct->Name;   // the elite one, if there is one
+                    }
+            for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT && !fight; ++i)
+                if (quest->RequiredItemId[i] && quest->RequiredItemCount[i])
+                    if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(quest->RequiredItemId[i]))
+                        fight = proto->Class == ITEM_CLASS_QUEST;
+            if (!dungeon && !fight)
+                continue;
+            const std::string objective = Links_QuestObjective(quest, bot, 160);
 
             const std::string questName = "[" + quest->GetTitle() + "]";
             const std::string kind = dungeon ? std::string("a dungeon quest")
@@ -153,16 +169,19 @@ namespace
             const std::string targetText = target.empty() ? std::string()
                                                           : fmt::format(" (you have to kill {})", target);
             const std::string whereText = where.empty() ? std::string("around here") : where;
+            const std::string objectiveText = objective.empty() ? std::string("finish it") : objective;
             n.ask = Fmt(askTempl,
                         fmt::arg("quest", questName),
                         fmt::arg("target", targetText),
                         fmt::arg("where", whereText),
-                        fmt::arg("kind", kind));
+                        fmt::arg("kind", kind),
+                        fmt::arg("objective", objectiveText));
             n.reason = Fmt(g_NeedsReasonQuest,
                            fmt::arg("quest", questName),
                            fmt::arg("target", targetText),
                            fmt::arg("where", whereText),
-                           fmt::arg("kind", kind));
+                           fmt::arg("kind", kind),
+                           fmt::arg("objective", objectiveText));
             if (!n.ask.empty())
                 out.push_back(std::move(n));
         }
@@ -266,6 +285,10 @@ namespace
             n.party     = true;
             n.ask = Fmt(g_NeedsAskSpare, fmt::arg("item", item),
                         fmt::arg("looted", e.recent ? std::string(", which you just looted,") : std::string()));
+            // What it is, so the offer is not a guess from its name.
+            if (!n.ask.empty() && g_LinksDescribeEnable)
+                if (const std::string what = Links_DescribeItem(proto); !what.empty())
+                    n.ask += " (" + what + ".)";
             n.reason = Fmt(g_NeedsReasonSpare, fmt::arg("item", item));
             if (!n.ask.empty())
                 out.push_back(std::move(n));

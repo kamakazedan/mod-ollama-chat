@@ -24,9 +24,11 @@
 
 #include <fmt/core.h>
 
+#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <optional>
+#include <random>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -76,6 +78,34 @@ namespace
     {
         Group* group = player ? player->GetGroup() : nullptr;
         return group ? group->GetGUID().GetCounter() : 0;
+    }
+
+    // When the tank last asked the group whether it is ready (the greeting as
+    // they come in), by group: for a few minutes after, a plain "yes" or
+    // "sure" answers it and starts the run.
+    std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> g_readyAsked;
+
+    bool AnswersReadyAsk(Player* player, const std::string& clean)
+    {
+        if (g_PartyReadyYesPhrases.empty() || g_PartyReadyWindowSeconds == 0)
+            return false;
+        auto it = g_readyAsked.find(GroupKey(player));
+        if (it == g_readyAsked.end() ||
+            std::chrono::steady_clock::now() - it->second > std::chrono::seconds(g_PartyReadyWindowSeconds))
+            return false;
+
+        // "yep Gruk": the names in the group are not part of the answer.
+        std::vector<std::string> nameWords;
+        if (Group* group = player->GetGroup())
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                if (Player* member = ref->GetSource())
+                    for (std::string& w : CrowdText::Words(member->GetName()))
+                        nameWords.push_back(std::move(w));
+        std::vector<std::string> words;
+        for (std::string& w : CrowdText::Words(clean))
+            if (std::find(nameWords.begin(), nameWords.end(), w) == nameWords.end())
+                words.push_back(std::move(w));
+        return TextRules::IsBareYes(words, g_PartyReadyYesPhrases, g_PartyCmdRules.resumeFillers);
     }
 
     // " You already said "on it", "lets go" in this group, ..." -- or empty.
@@ -391,7 +421,10 @@ PartyCmdLine PartyCmd_Classify(Player* player, const std::string& msg, ChatChann
     if (!map || !map->IsDungeon())   // dungeons and raids
         return PartyCmdLine::None;
 
-    const TextRules::PartyIntent intent = TextRules::MatchPartyIntent(clean, g_PartyCmdRules);
+    TextRules::PartyIntent intent = TextRules::MatchPartyIntent(clean, g_PartyCmdRules);
+    if (intent == TextRules::PartyIntent::None && AnswersReadyAsk(player, clean) &&
+        !DcLeaderSignal::FindRunOwner(player))
+        intent = TextRules::PartyIntent::Start;   // "yep", to the tank's "everyone ready?"
     if (intent == TextRules::PartyIntent::None)
         return PartyCmdLine::None;
 
@@ -427,7 +460,10 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
         return false;
 
     const std::string clean = TextRules::FixKeyTypos(Context_CleanText(msg), kTypoKeys);
-    const TextRules::PartyIntent intent = TextRules::MatchPartyIntent(clean, g_PartyCmdRules);
+    TextRules::PartyIntent intent = TextRules::MatchPartyIntent(clean, g_PartyCmdRules);
+    if (intent == TextRules::PartyIntent::None && AnswersReadyAsk(player, clean) &&
+        !DcLeaderSignal::FindRunOwner(player))
+        intent = TextRules::PartyIntent::Start;   // "yep", to the tank's "everyone ready?"
     if (intent == TextRules::PartyIntent::None)
         return false;
 
@@ -497,6 +533,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
             return false;
         }
         ++g_stats.started;
+        g_readyAsked.erase(GroupKey(player));   // answered
         ReleaseStaysFor(player);
         Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Started, std::string());
     }
@@ -535,6 +572,24 @@ std::string PartyCmd_GlossaryFor(Player* bot, ChatChannelSourceLocal source)
     if (!map || !map->IsDungeon())
         return "";
     return g_PartyDungeonGlossary;
+}
+
+std::string PartyCmd_TogetherFor(Player* bot, ChatChannelSourceLocal source)
+{
+    if (!bot || g_PartyTogetherText.empty() || (source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL))
+        return {};
+    Map* map = bot->GetMap();
+    if (!map || !map->IsDungeon() || map->IsBattlegroundOrArena() || !bot->GetGroup())
+        return {};
+    std::string tank;
+#if OLLAMA_CHAT_DUNGEON_CLEAR
+    if (DcModule::IsEnabled())
+        if (Player* t = DcLeaderSignal::FindLeaderTank(bot))
+            tank = (t == bot) ? std::string(", with you tanking") : ", with " + t->GetName() + " tanking";
+#endif
+    const std::string out = SafeFormat(g_PartyTogetherText, fmt::arg("dungeon", std::string(map->GetMapName())),
+                                       fmt::arg("tank", tank));
+    return out == "[Format Error]" ? std::string() : out;
 }
 
 std::string PartyCmd_RunStateFor(Player* bot, ChatChannelSourceLocal source)
@@ -757,9 +812,15 @@ void PartyCmd_Update(uint32_t diff)
                      tank->IsAlive() && !tank->IsInCombat() && !player->IsInCombat())
             {
                 // A tank that spoke a moment ago gets a little longer, then
-                // the moment has passed.
-                if (SubmitTankLine(tank, g_PartyGreetSituation) ||
-                    now - w.firstSeen >= std::chrono::seconds(g_PartyGreetDelaySeconds + 30))
+                // the moment has passed. It asks whether they are ready: a
+                // plain "yes" from now on answers it.
+                static std::mt19937 rng{ std::random_device{}() };
+                if (SubmitTankLine(tank, TextRules::ExpandChoices(g_PartyGreetSituation, rng)))
+                {
+                    w.greeted = true;
+                    g_readyAsked[key] = now;
+                }
+                else if (now - w.firstSeen >= std::chrono::seconds(g_PartyGreetDelaySeconds + 30))
                     w.greeted = true;
             }
         }
@@ -775,6 +836,9 @@ void PartyCmd_Update(uint32_t diff)
 
     for (auto it = g_watches.begin(); it != g_watches.end();)
         it = (now - it->second.lastSeen > std::chrono::minutes(30)) ? g_watches.erase(it) : std::next(it);
+    for (auto it = g_readyAsked.begin(); it != g_readyAsked.end();)
+        it = (now - it->second > std::chrono::seconds(g_PartyReadyWindowSeconds)) ? g_readyAsked.erase(it)
+                                                                                  : std::next(it);
 #endif
 }
 

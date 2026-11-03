@@ -80,6 +80,13 @@ std::string PartyCmd_GlossaryFor(Player* bot, ChatChannelSourceLocal source);
 // next?" or "what are we waiting for?". Empty outside a run.
 std::string PartyCmd_RunStateFor(Player* bot, ChatChannelSourceLocal source);
 
+// For a party or raid prompt inside a dungeon: that the bot and everyone in
+// its group are doing this dungeon together, and who tanks it
+// (Party.TogetherText) -- so nobody says "good luck with the run" to the run
+// they are in, or asks for a group for a quest out in the world. Empty
+// anywhere else.
+std::string PartyCmd_TogetherFor(Player* bot, ChatChannelSourceLocal source);
+
 // The world tick, every couple of seconds: a bot tank leading a dungeon-clear
 // group greets it when it comes into a dungeon ("let me know when you're ready
 // to start", OllamaChat.Party.Greet*) and says so in party when every boss is

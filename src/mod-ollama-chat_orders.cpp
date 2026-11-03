@@ -83,6 +83,7 @@ namespace
             case BotIntent::Buff:   return "rebuff";   // "buff" is playerbots' list of buff potions
             case BotIntent::Pull:   return "pull";
             case BotIntent::Leave:  return "leave";
+            case BotIntent::Grind:  return "grind";
             default:                return "";
         }
     }
@@ -103,6 +104,7 @@ namespace
             case BotIntent::Buff:    return "buff them";
             case BotIntent::Pull:    return "pull";
             case BotIntent::Leave:   return "leave the group";
+            case BotIntent::Grind:   return "go and grind";
             default:                 return "do something";
         }
     }
@@ -315,6 +317,8 @@ namespace
                 return !ai->HasStrategy("stay", BOT_STATE_NON_COMBAT) && ai->HasStrategy("follow", BOT_STATE_NON_COMBAT);
             case BotIntent::Flee:
                 return ai->HasStrategy("passive", BOT_STATE_COMBAT);
+            case BotIntent::Grind:
+                return ai->HasStrategy("grind", BOT_STATE_NON_COMBAT);
             default:
                 known = false;
                 return true;
@@ -506,6 +510,10 @@ namespace
             case BotIntent::Leave:
                 if (!bot->GetGroup())
                     return "you are not in a group";
+                break;
+            case BotIntent::Grind:
+                if (bot->GetMap() && bot->GetMap()->Instanceable())
+                    return "you are in a dungeon, where you fight what the group pulls, not whatever you like";
                 break;
             default:
                 break;
@@ -963,6 +971,37 @@ std::string Orders_StateTextFor(Player* bot)
     const std::string out = SafeFormat(g_StateStayingText,
                                        fmt::arg("player_name", master && master != bot ? master->GetName()
                                                                                          : std::string("your group")));
+    return out == "[Format Error]" ? std::string() : out;
+}
+
+std::string Orders_NotDoneHintFor(Player* bot, Player* player, const std::string& msg, ChatChannelSourceLocal source)
+{
+    if (!g_OrdersEnable || g_OrdersHintNotDone.empty() || g_OrdersNotDoneVerbs.empty() || !bot || !player ||
+        sPlayerbotAIConfig.CommandPrefix.empty() || OllamaIsBotPlayer(player))
+        return {};
+    if (source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL && source != SRC_WHISPER_LOCAL)
+        return {};
+    if (msg.find('?') != std::string::npos || !TakesOrders(bot, player))
+        return {};
+
+    std::vector<std::string> nameWords;
+    if (Group* group = player->GetGroup())
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            if (Player* member = ref->GetSource())
+                for (std::string& w : CrowdText::Words(member->GetName()))
+                    nameWords.push_back(std::move(w));
+    std::vector<std::string> words;
+    for (std::string& w : CrowdText::Words(Context_CleanText(msg)))
+        if (std::find(nameWords.begin(), nameWords.end(), w) == nameWords.end())
+            words.push_back(std::move(w));
+    if (words.empty() || words.size() > 8)
+        return {};
+    // "go on then", "go for it": a yes, not an order.
+    if (TextRules::IsBareYes(words, g_PartyReadyYesPhrases, g_PartyCmdRules.resumeFillers))
+        return {};
+    if (!CrowdText::ContainsPhrase({ words.front() }, g_OrdersNotDoneVerbs))
+        return {};
+    const std::string out = SafeFormat(g_OrdersHintNotDone, fmt::arg("player_name", player->GetName()));
     return out == "[Format Error]" ? std::string() : out;
 }
 

@@ -1,5 +1,6 @@
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
@@ -444,8 +445,11 @@ namespace
 
     void GatherActivity(Player* bot, std::vector<Candidate>& out)
     {
-        // What they are actually trying to do right now.
+        // What they are actually trying to do right now. Inside a dungeon,
+        // only what is for this dungeon: nobody in the Stockade asks who
+        // wants to group for a quest out in the world.
         std::vector<std::pair<std::string, std::string>> active;   // title, objective
+        const bool instance = bot->GetMap() && bot->GetMap()->Instanceable();
 
         for (auto const& qs : bot->getQuestStatusMap())
         {
@@ -455,7 +459,10 @@ namespace
             Quest const* quest = sObjectMgr->GetQuestTemplate(qs.first);
             if (!quest)
                 continue;
+            if (instance && (quest->GetZoneOrSort() <= 0 || uint32(quest->GetZoneOrSort()) != bot->GetZoneId()))
+                continue;
 
+            // What the quest log says it wants, not a guess from its title.
             std::string objective;
             for (uint32 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
             {
@@ -466,10 +473,11 @@ namespace
                 }
             }
             if (objective.empty())
-                objective = quest->GetDetails().empty() ? "finish what you started"
-                                                        : "see it through";
+                objective = Links_QuestObjective(quest, bot, 140);
+            if (objective.empty())
+                objective = "see it through";
 
-            active.emplace_back(quest->GetTitle(), objective);
+            active.emplace_back("[" + quest->GetTitle() + "]", objective);
         }
 
         if (!active.empty())
@@ -489,8 +497,8 @@ namespace
                                fmt::arg("quest_name", q.first)));
         }
 
-        // Where the bot could go questing next.
-        if (!g_EnvCommentQuestArea.empty())
+        // Where the bot could go questing next -- not from inside a dungeon.
+        if (!g_EnvCommentQuestArea.empty() && !instance)
         {
             PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
             if (ai)

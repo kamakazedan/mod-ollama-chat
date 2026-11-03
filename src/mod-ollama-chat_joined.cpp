@@ -141,6 +141,11 @@ namespace
         PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
         if (!ai || !ai->GetChatHelper())
             return;
+        // The dungeon finder put them together: nobody invited anyone, and
+        // the tank's "everyone ready?" inside is its hello.
+        const bool lfg = group->isLFGGroup();
+        if (lfg && PlayerbotAI::IsTank(bot))
+            return;
 
         // Who it is talking to: the one it was just talking with, else the
         // leader who invited it, else anyone real in the group.
@@ -200,8 +205,11 @@ namespace
         else
         {
             request.kind = OllamaRequestKind::EventChatter;
-            if (!g_RoleplayEnable && !g_JoinedGreetLines.empty() && g_JoinedCannedChance > 0 &&
-                urand(1, 100) <= g_JoinedCannedChance)
+            if (lfg)
+                request.prompt = Fill(g_JoinedLfgPrompt.empty() ? g_JoinedGreetPrompt : g_JoinedLfgPrompt, bot, ai,
+                                      player, nullptr);
+            else if (!g_RoleplayEnable && !g_JoinedGreetLines.empty() && g_JoinedCannedChance > 0 &&
+                     urand(1, 100) <= g_JoinedCannedChance)
                 request.fixedText = TextRules::FormatCannedLine(
                     g_JoinedGreetLines[std::uniform_int_distribution<size_t>(0, g_JoinedGreetLines.size() - 1)(Rng())],
                     player->GetName(), Rng());

@@ -1124,6 +1124,24 @@ std::vector<std::pair<uint32_t, uint32_t>> Conjure_GivingItems(Player* bot, Play
     return out;
 }
 
+bool Conjure_CancelGift(Player* bot, Player* player)
+{
+    if (!bot || !player)
+        return false;
+    const uint64_t botGuid = bot->GetGUID().GetRawValue();
+    const uint64_t reqGuid = player->GetGUID().GetRawValue();
+    auto it = std::find_if(g_gifts.begin(), g_gifts.end(),
+                           [&](const Gift& g) { return g.botGuid == botGuid && g.requesterGuid == reqGuid; });
+    if (it == g_gifts.end())
+        return false;
+    if (bot->GetTrader() == player)
+        bot->TradeCancel(true);
+    g_gifts.erase(it);
+    ++g_stats.takenBack;
+    CountWatched();
+    return true;
+}
+
 ConjureStats Conjure_GetStats()
 {
     ConjureStats s = g_stats;

@@ -57,6 +57,7 @@ struct ConjureStats
     uint64_t waited    = 0;   // had to wait for a fight, mana or range first
     uint64_t refused   = 0;   // could not, and said why
     uint64_t lapsed    = 0;   // declined, cancelled, or not taken in time
+    uint64_t takenBack = 0;   // they said to take it back out
     uint32_t pending   = 0;
 };
 ConjureStats Conjure_GetStats();
@@ -76,6 +77,11 @@ bool Conjure_IsGiving(Player* bot, Player* player, uint32_t entry);
 
 // What `bot` is handing `player` right now, (entry, count); empty when nothing.
 std::vector<std::pair<uint32_t, uint32_t>> Conjure_GivingItems(Player* bot, Player* player);
+
+// "actually no, take it out": the gift is dropped, and a trade window open
+// between them for it is closed (which hands back anything either side put
+// in). False when `bot` was not handing `player` anything. World thread.
+bool Conjure_CancelGift(Player* bot, Player* player);
 
 // Notices when a trade window opens for someone a mage is giving food or
 // water to -- the one the mage offered, or one they opened with the mage

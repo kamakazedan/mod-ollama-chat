@@ -253,8 +253,9 @@ std::string StripMarkdown(const std::string& text)
 
         if (atLineStart)
         {
-            // Leading heading markers, blockquotes and bullets.
-            if (c == '#' || c == '>')
+            // Leading heading markers, blockquotes and bullets -- but not the
+            // ">" of a ">.<" or ">_<" someone typed.
+            if (c == '#' || (c == '>' && !(i + 1 < s.size() && (s[i + 1] == '.' || s[i + 1] == '_' || s[i + 1] == '<'))))
                 continue;
             if ((c == '-' || c == '*' || c == '+') &&
                 i + 1 < s.size() && s[i + 1] == ' ')
@@ -273,8 +274,21 @@ std::string StripMarkdown(const std::string& text)
             continue;
         }
 
-        // Emphasis and inline code markers.
-        if (c == '*' || c == '_' || c == '`' || c == '~')
+        // Emphasis and inline code markers. An underscore only where it opens
+        // or closes a word (_this_): inside one it is a face, "-_-" or "^_^".
+        if (c == '_')
+        {
+            size_t k = i;
+            while (k < s.size() && s[k] == '_')
+                ++k;
+            const bool before = i > 0 && !IsSpace(static_cast<unsigned char>(s[i - 1]));
+            const bool after  = k < s.size() && !IsSpace(static_cast<unsigned char>(s[k]));
+            if (before && after)
+                out.append(s, i, k - i);
+            i = k - 1;
+            continue;
+        }
+        if (c == '*' || c == '`' || c == '~')
             continue;
 
         out.push_back(c);
