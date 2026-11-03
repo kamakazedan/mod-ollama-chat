@@ -5,6 +5,7 @@
 
 #include "Bag.h"
 #include "DBCStores.h"
+#include "Formulas.h"
 #include "ItemTemplate.h"
 #include "SharedDefines.h"
 #include "Hyperlinks.h"
@@ -595,74 +596,156 @@ std::string Links_DescribeQuest(Quest const* quest, Player* reader)
     return out;
 }
 
+namespace
+{
+    // What a line names, item or quest, as `bot` would take it: links by
+    // their id, then names in square brackets -- what the bot itself has,
+    // what posted links said, then the tables. At most `max`, each once.
+    struct Named
+    {
+        std::string         key;
+        ItemTemplate const* item  = nullptr;
+        Quest const*        quest = nullptr;
+    };
+
+    std::vector<Named> NamedIn(Player* bot, const std::string& line, size_t max)
+    {
+        std::vector<Named> out;
+        auto add = [&](const std::string& key, ItemTemplate const* item, Quest const* quest)
+        {
+            if ((!item && !quest) || out.size() >= max)
+                return;
+            for (const Named& n : out)
+                if (n.key == key)
+                    return;
+            out.push_back(Named{ key, item, quest });
+        };
+
+        for (const TextRules::ChatLink& link : TextRules::ExtractChatLinks(line))
+        {
+            const std::string key = TextRules::NameKey(link.name);
+            if (link.type == "item" && link.id)
+                add(key, sObjectMgr->GetItemTemplate(link.id), nullptr);
+            else if (link.type == "quest" && link.id)
+                add(key, nullptr, sObjectMgr->GetQuestTemplate(link.id));
+        }
+
+        const std::string plain = TextRules::StripChatMarkup(line);
+        const time_t now = time(nullptr);
+        for (const TextRules::BracketName& n : TextRules::FindBracketNames(plain))
+        {
+            if (out.size() >= max)
+                break;
+            const std::string key = TextRules::NameKey(n.name);
+            if (key.empty() || std::any_of(out.begin(), out.end(), [&](const Named& d) { return d.key == key; }))
+                continue;
+            if (Quest const* quest = QuestInLog(bot, key))
+            {
+                add(key, nullptr, quest);
+                continue;
+            }
+            if (ItemTemplate const* proto = ItemCarried(bot, key))
+            {
+                add(key, proto, nullptr);
+                continue;
+            }
+            auto seen = g_seen.find(key);
+            if (seen != g_seen.end() &&
+                (g_LinksRememberMinutes == 0 || now - seen->second.at <= time_t(g_LinksRememberMinutes) * 60))
+            {
+                const std::vector<TextRules::ChatLink> links = TextRules::ExtractChatLinks(seen->second.markup);
+                if (!links.empty() && links[0].id)
+                {
+                    if (links[0].type == "item")
+                        add(key, sObjectMgr->GetItemTemplate(links[0].id), nullptr);
+                    else if (links[0].type == "quest")
+                        add(key, nullptr, sObjectMgr->GetQuestTemplate(links[0].id));
+                    continue;
+                }
+            }
+            if (!g_LinksUseGameData)
+                continue;
+            BuildIndex();
+            if (ItemTemplate const* proto = BestItem(key, bot))
+                add(key, proto, nullptr);
+            else if (Quest const* quest = BestQuest(key, bot))
+                add(key, nullptr, quest);
+        }
+        return out;
+    }
+
+    // " (you are level 12, far too low for it: ...)", or nothing.
+    std::string FitNote(const std::string& templ, Player* bot)
+    {
+        if (templ.empty())
+            return {};
+        const std::string out = SafeFormat(templ, fmt::arg("bot_level", bot->GetLevel()));
+        return (out.empty() || out == "[Format Error]") ? std::string() : " " + out;
+    }
+
+    std::string QuestNote(Player* bot, Quest const* quest)
+    {
+        switch (Links_QuestFitFor(bot, quest))
+        {
+            case QuestFit::TooHigh: return FitNote(g_LinksQuestTooHighText, bot);
+            case QuestFit::Easy:    return FitNote(g_LinksQuestEasyText, bot);
+            default:                return {};
+        }
+    }
+
+    std::string ItemNote(Player* bot, ItemTemplate const* proto)
+    {
+        return (proto && proto->RequiredLevel > bot->GetLevel()) ? FitNote(g_LinksItemTooHighText, bot) : std::string();
+    }
+}
+
+QuestFit Links_QuestFitFor(Player* bot, Quest const* quest)
+{
+    if (!bot || !quest)
+        return QuestFit::Fits;
+    const uint32_t level = bot->GetLevel();
+    // A quest level of -1 goes with whoever does it.
+    const uint32_t questLevel = quest->GetQuestLevel() > 0 ? uint32_t(quest->GetQuestLevel()) : level;
+    if (level < quest->GetMinLevel() || questLevel > level + g_LinksQuestLevelsAbove)
+        return QuestFit::TooHigh;
+    if (questLevel <= Acore::XP::GetGrayLevel(uint8_t(std::min<uint32_t>(level, 255))))
+        return QuestFit::Easy;
+    return QuestFit::Fits;
+}
+
+std::vector<Quest const*> Links_QuestsNamed(Player* speaker, const std::string& line)
+{
+    std::vector<Quest const*> out;
+    if (!speaker || line.find('[') == std::string::npos)
+        return out;
+    for (const Named& n : NamedIn(speaker, line, 4))
+        if (n.quest)
+            out.push_back(n.quest);
+    return out;
+}
+
+bool Links_AllTooHighFor(Player* bot, const std::vector<Quest const*>& quests)
+{
+    if (!bot || quests.empty())
+        return false;
+    for (Quest const* quest : quests)
+        if (Links_QuestFitFor(bot, quest) != QuestFit::TooHigh)
+            return false;
+    return true;
+}
+
 std::string Links_Describe(Player* bot, const std::string& line)
 {
     if (!g_LinksDescribeEnable || !bot || line.empty() || g_LinksDescribeText.empty() || g_LinksDescribeMax == 0)
         return {};
 
     std::vector<std::string> parts;
-    std::vector<std::string> done;   // name keys already described
-    auto add = [&](const std::string& key, std::string text)
+    for (const Named& n : NamedIn(bot, line, g_LinksDescribeMax))
     {
-        if (text.empty() || parts.size() >= g_LinksDescribeMax ||
-            std::find(done.begin(), done.end(), key) != done.end())
-            return;
-        done.push_back(key);
-        parts.push_back(std::move(text));
-    };
-
-    // Links carry the id itself.
-    for (const TextRules::ChatLink& link : TextRules::ExtractChatLinks(line))
-    {
-        const std::string key = TextRules::NameKey(link.name);
-        if (link.type == "item" && link.id)
-            add(key, Links_DescribeItem(sObjectMgr->GetItemTemplate(link.id)));
-        else if (link.type == "quest" && link.id)
-            add(key, Links_DescribeQuest(sObjectMgr->GetQuestTemplate(link.id), bot));
-    }
-
-    // Names in brackets: what the bot itself has first, then what posted
-    // links said, then the tables.
-    const std::string plain = TextRules::StripChatMarkup(line);
-    const time_t now = time(nullptr);
-    for (const TextRules::BracketName& n : TextRules::FindBracketNames(plain))
-    {
-        if (parts.size() >= g_LinksDescribeMax)
-            break;
-        const std::string key = TextRules::NameKey(n.name);
-        if (key.empty() || std::find(done.begin(), done.end(), key) != done.end())
-            continue;
-        if (Quest const* quest = QuestInLog(bot, key))
-        {
-            add(key, Links_DescribeQuest(quest, bot));
-            continue;
-        }
-        if (ItemTemplate const* proto = ItemCarried(bot, key))
-        {
-            add(key, Links_DescribeItem(proto));
-            continue;
-        }
-        auto seen = g_seen.find(key);
-        if (seen != g_seen.end() &&
-            (g_LinksRememberMinutes == 0 || now - seen->second.at <= time_t(g_LinksRememberMinutes) * 60))
-        {
-            const std::vector<TextRules::ChatLink> links = TextRules::ExtractChatLinks(seen->second.markup);
-            if (!links.empty() && links[0].id)
-            {
-                if (links[0].type == "item")
-                    add(key, Links_DescribeItem(sObjectMgr->GetItemTemplate(links[0].id)));
-                else if (links[0].type == "quest")
-                    add(key, Links_DescribeQuest(sObjectMgr->GetQuestTemplate(links[0].id), bot));
-                continue;
-            }
-        }
-        if (!g_LinksUseGameData)
-            continue;
-        BuildIndex();
-        if (ItemTemplate const* proto = BestItem(key, bot))
-            add(key, Links_DescribeItem(proto));
-        else if (Quest const* quest = BestQuest(key, bot))
-            add(key, Links_DescribeQuest(quest, bot));
+        std::string text = n.quest ? Links_DescribeQuest(n.quest, bot) + QuestNote(bot, n.quest)
+                                   : Links_DescribeItem(n.item) + ItemNote(bot, n.item);
+        if (!text.empty())
+            parts.push_back(std::move(text));
     }
     if (parts.empty())
         return {};

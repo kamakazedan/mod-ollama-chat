@@ -841,6 +841,11 @@ void ChatOnEmote::OnPlayerTextEmote(Player* player, uint32 textEmote,
     if (g_DisableRepliesInCombat && bot->IsInCombat())
         return;
 
+    // AFK (hanging out in a city, mod-ollama-chat_hangout): nobody at the
+    // keyboard to see it. The flag only -- this hook is no place for more.
+    if (bot->isAFK())
+        return;
+
     if (player->GetMapId() != bot->GetMapId())
         return;
     if (g_SayDistance > 0.0f && bot->GetDistance(player) > g_SayDistance)

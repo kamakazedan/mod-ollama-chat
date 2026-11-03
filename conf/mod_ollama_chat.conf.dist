@@ -2133,6 +2133,142 @@ OllamaChat.City.ConversationBoost = 2
 
 ###############################################################################
 #
+#   OLLAMA CHAT - CITY HANGOUTS
+#
+#   On a real server everyone parks in the same places: the Trade District,
+#   the Commons, the Valley of Strength, outside the bank in Dalaran --
+#   mounted on their best mount, sat on a bench, or stood there AFK.
+#   Playerbots never sends a bot anywhere in particular: one with nothing to
+#   do in a city walks from NPC to NPC, and its "rest" is 30 seconds sat
+#   wherever it happens to be.
+#
+#   Every CheckSeconds, each spot with room may take one more (RecruitChance)
+#   of the idle random bots within RecruitRange of it, in its zone and on its
+#   level of it (not up in the Ruins of Lordaeron over the Undercity, or down
+#   in Crystalsong under Dalaran): not grouped, not queued for a dungeon or a
+#   battleground, not questing, flying, gathering or fighting, not one a real
+#   player has targeted, and not one that hung out in the last
+#   CooldownMinutes. It walks over (playerbots' own
+#   "go camp") to a place of its own in the spot -- on the ground within
+#   HeightTolerance of the middle's height, in sight of the middle, out of the
+#   water, and one you can walk to, so not the top of a market stall -- and
+#   stays StayMinutesMin to StayMinutesMax:
+#
+#     * on a free bench within BenchRange, in sight of the middle
+#       (BenchChance, when there is one; a seat whose name has one of
+#       BenchWords);
+#     * mounted (MountedChance), if it can ride and it is outdoors --
+#       playerbots puts an idle random bot on its best mount anyway;
+#     * sat on the ground (SitChance), or else just standing about;
+#     * and, AfkChance of the time, AFK: the flag, so it shows <AFK>. An AFK
+#       bot says nothing and reacts to nothing until someone talks to it --
+#       a whisper, a line that names it -- and then it is back, and knows it
+#       had stepped away (AwayText).
+#
+#   Once it is there its playerbots AI is held, the way a parked player does
+#   nothing -- otherwise playerbots stands a sitting bot up and takes its AFK
+#   off on its very next tick. An invite (group, guild, arena team), a trade,
+#   a duel, a queue or a fight lets it go at once, as does being moved off
+#   the spot. When its time is up it stands and goes about its business.
+#   Switching hangouts or the module off lets everyone go at once; if the
+#   module stopped running altogether, the hold would run out by itself
+#   within five seconds. Nothing happens while no real player is online, and
+#   bots only gather where one is about: playerbots keeps bots far from any
+#   player mostly idle (and AFK).
+#
+#   With a debug log on, each one is logged as it heads over, settles and
+#   leaves; ".ollama status" counts them.
+#
+###############################################################################
+
+#    OllamaChat.Hangout.Enable
+#        Default: 1
+OllamaChat.Hangout.Enable = 1
+
+#    OllamaChat.Hangout.CheckSeconds
+#    OllamaChat.Hangout.RecruitChance
+#    OllamaChat.Hangout.RecruitRange
+#        How often each spot may take one more bot (at most 20 seconds), the
+#        chance it does, and how far from the spot (yards) its bots come from.
+#        Default: 5, 50, 300
+OllamaChat.Hangout.CheckSeconds = 5
+OllamaChat.Hangout.RecruitChance = 50
+OllamaChat.Hangout.RecruitRange = 300
+
+#    OllamaChat.Hangout.StayMinutesMin
+#    OllamaChat.Hangout.StayMinutesMax
+#    OllamaChat.Hangout.CooldownMinutes
+#    OllamaChat.Hangout.TravelSeconds
+#        How long a bot stays (at most 60 minutes), how long before it hangs
+#        out again, and how long it has to get there before it gives up.
+#        Default: 5, 20, 45, 180
+OllamaChat.Hangout.StayMinutesMin = 5
+OllamaChat.Hangout.StayMinutesMax = 20
+OllamaChat.Hangout.CooldownMinutes = 45
+OllamaChat.Hangout.TravelSeconds = 180
+
+#    OllamaChat.Hangout.BenchChance
+#    OllamaChat.Hangout.MountedChance
+#    OllamaChat.Hangout.SitChance
+#    OllamaChat.Hangout.AfkChance
+#        How it spends it, tried in this order: a bench (when one is free),
+#        mounted (when it can ride there), sat on the ground, else standing.
+#        AfkChance is on top of any of them.
+#        Default: 60, 45, 35, 35
+OllamaChat.Hangout.BenchChance = 60
+OllamaChat.Hangout.MountedChance = 45
+OllamaChat.Hangout.SitChance = 35
+OllamaChat.Hangout.AfkChance = 35
+
+#    OllamaChat.Hangout.BenchRange
+#    OllamaChat.Hangout.BenchWords
+#    OllamaChat.Hangout.HeightTolerance
+#        How far from where it arrives (yards) a bench may be; what counts as
+#        a bench (part of a seat's name, separated by |: "Bench", "Stone
+#        Bench" and "Wooden Bench" all have "bench"; chairs are mostly
+#        indoors); and how far up or down from a spot's middle (yards) a
+#        place in it may be.
+#        Default: 25, "bench", 6
+OllamaChat.Hangout.BenchRange = 25
+OllamaChat.Hangout.BenchWords = "bench"
+OllamaChat.Hangout.HeightTolerance = 6
+
+#    OllamaChat.Hangout.StateText
+#    OllamaChat.Hangout.AwayText
+#        Added to the reply prompt of a bot that is hanging out ({spot}: the
+#        spot's name; {doing}: "sitting on a bench", "sat on your mount",
+#        "sitting on the ground", "standing about"), and, when it was AFK,
+#        that it has just come back.
+OllamaChat.Hangout.StateText = "Right now you are hanging around {spot}, {doing}, with nowhere in particular to be."
+OllamaChat.Hangout.AwayText = "You had stepped away from your keyboard there (AFK) and have only just come back to it."
+
+#    OllamaChat.Hangout.Spot.<Name>
+#        Where people hang out: "map x y z radius capacity name". x y z is
+#        the middle (a place a player can stand: these are taken from a
+#        mailbox, a teleport point, a flight master); radius (3-60 yards)
+#        how far from it a place may be; capacity how many bots at most;
+#        name what bots call it ("the Trade District in Stormwind"). Add as
+#        many as you like, one key each; capacity 0 turns one off. With no
+#        Spot keys at all, these are the defaults.
+#        Maps: 0 Eastern Kingdoms, 1 Kalimdor, 530 Outland and the Blood
+#        Elf and Draenei lands, 571 Northrend.
+OllamaChat.Hangout.Spot.StormwindTrade = "0 -8833.4 628.6 94.0 22 14 the Trade District in Stormwind"
+OllamaChat.Hangout.Spot.StormwindBank = "0 -8914.0 621.5 99.6 14 8 the bank in Stormwind"
+OllamaChat.Hangout.Spot.IronforgeCommons = "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge"
+OllamaChat.Hangout.Spot.OrgrimmarValley = "1 1657.9 -4433.0 17.5 22 10 the Valley of Strength in Orgrimmar"
+OllamaChat.Hangout.Spot.OrgrimmarBank = "1 1615.6 -4391.6 10.3 14 6 outside the bank in Orgrimmar"
+OllamaChat.Hangout.Spot.UndercityTrade = "0 1584.1 240.3 -52.2 16 10 the Trade Quarter in the Undercity"
+OllamaChat.Hangout.Spot.ThunderBluffBank = "1 -1263.3 44.5 127.5 16 8 outside the bank in Thunder Bluff"
+OllamaChat.Hangout.Spot.DarnassusBank = "1 9943.0 2497.7 1317.7 16 8 outside the bank in Darnassus"
+OllamaChat.Hangout.Spot.ExodarHall = "530 -3965.7 -11653.6 -138.8 18 8 the main hall of the Exodar"
+OllamaChat.Hangout.Spot.SilvermoonExchange = "530 9744.0 -7466.1 13.5 22 10 the Royal Exchange in Silvermoon"
+OllamaChat.Hangout.Spot.ShattrathTerrace = "530 -1863.7 5430.0 -9.6 24 12 the Terrace of Light in Shattrath"
+OllamaChat.Hangout.Spot.DalaranBank = "571 5958.1 617.3 650.6 18 12 outside the bank in Dalaran"
+OllamaChat.Hangout.Spot.DalaranKrasus = "571 5813.4 453.4 658.8 16 8 Krasus' Landing in Dalaran"
+OllamaChat.Hangout.Spot.DalaranMerchants = "571 5654.9 682.2 652.0 14 8 outside the Merchants' Bank in Dalaran"
+
+###############################################################################
+#
 #   OLLAMA CHAT - PRESENCE
 #
 #   Bots noticing the real players around them. A bot walking past a real
@@ -3775,6 +3911,32 @@ OllamaChat.Links.DescribeEnable = 1
 OllamaChat.Links.DescribeMax = 3
 OllamaChat.Links.DescribeQuestChars = 180
 OllamaChat.Links.DescribeText = "So you know what that is about: {things}. Talk about each as what it is."
+
+#    OllamaChat.Links.QuestLevelsAbove
+#    OllamaChat.Links.QuestTooHighText
+#    OllamaChat.Links.QuestEasyText
+#    OllamaChat.Links.ItemTooHighText
+#        Each thing described says how it sits against the bot's own level,
+#        so a level 12 does not offer to help with a level 26 quest. A quest
+#        is too high for a bot when it is more than QuestLevelsAbove levels
+#        above it (playerbots itself takes quests up to 3 above), or the bot
+#        cannot take it yet; easy when it is grey to the bot. An item is too
+#        high when it needs a higher level. Each text goes after the thing it
+#        is about ({bot_level}); empty leaves it out.
+#        Default: 3, (below)
+OllamaChat.Links.QuestLevelsAbove = 3
+OllamaChat.Links.QuestTooHighText = "(you are level {bot_level}, far too low for it: you could not do it or help anyone with it, so you would not offer to)"
+OllamaChat.Links.QuestEasyText = "(you are level {bot_level}, so it would be easy for you)"
+OllamaChat.Links.ItemTooHighText = "(you are level {bot_level}, too low to use it yet)"
+
+#    OllamaChat.Links.QuietWhenTooLow
+#        "LFG [Wanted: Gath'Ilzogg]" in General: bots far too low for every
+#        quest a line names have nothing to offer and stay out of it, the way
+#        people do, unless the line names them. Lines said in public (say,
+#        yell, channels, guild), with crowd replies on (Crowd.Enable); party
+#        and raid chat answer as before, with the level note above.
+#        Default: 1
+OllamaChat.Links.QuietWhenTooLow = 1
 
 ###############################################################################
 #

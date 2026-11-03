@@ -10,6 +10,7 @@
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_governor.h"
+#include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_memory.h"
@@ -465,6 +466,17 @@ namespace
         // time in ProcessChat, where the Group was live to consult.
         const bool directAddress = c.request.directAddress;
 
+        // Away from the keyboard, hanging out in a city (mod-ollama-chat_hangout):
+        // nothing to say unless someone talks to it -- and then it is back.
+        if (Hangout_IsAway(bot) && !directAddress && c.request.source != SRC_WHISPER_LOCAL)
+        {
+            ++g_droppedPassed;
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} is AFK; line dropped: '{}'", bot->GetName(),
+                         c.text);
+            return;
+        }
+
         // The model never writes real chat markup; whatever looks like it is
         // noise, and a stray '|' would be read by the client. Taken out first,
         // so every check below reads words, and the only links that go out are
@@ -733,6 +745,8 @@ namespace
         const LinkedLine line = Links_Resolve(bot, c.text);
         c.text = line.text;
         const std::string& plain = line.plain;
+
+        Hangout_ComeBack(bot);   // AFK and talked to: back at the keyboard, so no <AFK> on the line
 
         Channel* channel = nullptr;
         bool routed = false;

@@ -5,6 +5,8 @@
 #include <cctype>
 #include <cstddef>
 #include <cstring>
+#include <cmath>
+#include <sstream>
 
 namespace
 {
@@ -1874,6 +1876,26 @@ namespace TextRules
         }
         out.append(text, from, std::string::npos);
         return out;
+    }
+
+    bool ParseSpotLine(const std::string& text, SpotLine& out)
+    {
+        std::istringstream in(text);
+        SpotLine line;
+        long long map = -1, capacity = -1;
+        if (!(in >> map >> line.x >> line.y >> line.z >> line.radius >> capacity) || map < 0 || capacity < 0 ||
+            !std::isfinite(line.x) || !std::isfinite(line.y) || !std::isfinite(line.z) || !std::isfinite(line.radius))
+            return false;
+        line.map      = static_cast<uint32_t>(map);
+        line.capacity = static_cast<uint32_t>(std::min<long long>(capacity, 200));
+        line.radius   = std::clamp(line.radius, 3.0f, 60.0f);
+        std::string rest;
+        std::getline(in, rest);
+        const size_t b = rest.find_first_not_of(" \t\r\n");
+        if (b != std::string::npos)
+            line.name = rest.substr(b, rest.find_last_not_of(" \t\r\n") - b + 1);
+        out = std::move(line);
+        return true;
     }
 
     std::vector<std::string> SplitBars(const std::string& text)

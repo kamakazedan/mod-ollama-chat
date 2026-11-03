@@ -28,6 +28,7 @@
 #include "mod-ollama-chat_progress.h"
 #include "mod-ollama-chat_revive.h"
 #include "mod-ollama-chat_stuck.h"
+#include "mod-ollama-chat_hangout.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
 #include <thread>
@@ -695,6 +696,17 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              (unsigned long long)progress.said,
                              (unsigned long long)progress.shared,
                              (unsigned long long)progress.lapsed);
+    const HangoutStats hangout = Hangout_GetStats();
+    handler->PSendSysMessage("City hangouts: {} - {} hanging out ({} AFK) and {} on their way, {} spots; {} sent, "
+                             "{} settled, {} never got there, {} moved on, {} cut short, {} back from AFK to talk",
+                             g_HangoutEnable ? "on" : "off",
+                             hangout.hanging, hangout.away, hangout.onTheWay, hangout.spots,
+                             (unsigned long long)hangout.sent,
+                             (unsigned long long)hangout.settled,
+                             (unsigned long long)hangout.gaveUp,
+                             (unsigned long long)hangout.movedOn,
+                             (unsigned long long)hangout.cutShort,
+                             (unsigned long long)hangout.cameBack);
 
     handler->PSendSysMessage("Roleplay: {} (strictness {})   Emote reactions: {}",
                              g_RoleplayEnable ? "on" : "off",

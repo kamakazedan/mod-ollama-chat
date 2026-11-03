@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 class Player;
 
@@ -78,8 +79,30 @@ std::string Links_QuestObjective(Quest const* quest, Player* reader, size_t maxL
 
 // For a reply prompt: what the items and quests `line` names are -- links
 // first, then names in square brackets that match something real -- at most
-// Links.DescribeMax of them, in Links.DescribeText. Empty when it names none.
+// Links.DescribeMax of them, in Links.DescribeText, each with how it sits
+// against `bot`'s level (a quest far above it, an item it cannot use yet, a
+// quest that would be easy). Empty when it names none.
 std::string Links_Describe(Player* bot, const std::string& line);
+
+// How a quest sits against `bot`'s level: too high when it is more than
+// Links.QuestLevelsAbove levels above the bot or the bot cannot take it yet;
+// easy when it is grey to the bot.
+enum class QuestFit : uint8_t
+{
+    Fits,
+    TooHigh,
+    Easy
+};
+QuestFit Links_QuestFitFor(Player* bot, Quest const* quest);
+
+// The quests `line` names -- links by id, names in square brackets as
+// `speaker` would mean them -- at most 4. Worked out once per line.
+std::vector<Quest const*> Links_QuestsNamed(Player* speaker, const std::string& line);
+
+// "anyone want to group for [Wanted: Gath'Ilzogg]?" to a level 12: every one
+// of `quests` (and there is at least one) is too high for `bot`. A bot like
+// that has nothing to offer about it (Links.QuietWhenTooLow).
+bool Links_AllTooHighFor(Player* bot, const std::vector<Quest const*>& quests);
 
 void Links_Update();   // forget links not seen for Links.RememberMinutes
 
