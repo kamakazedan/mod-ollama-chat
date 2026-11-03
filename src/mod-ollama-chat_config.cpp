@@ -2015,8 +2015,11 @@ static void LoadNaturalChatV11Settings()
     g_HangoutRecruitRange    = std::max(20.0f, sConfigMgr->GetOption<float>("OllamaChat.Hangout.RecruitRange", 300.0f));
     g_HangoutRecruitChance   = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.RecruitChance", 50));
     g_HangoutStayMinutesMin  = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.StayMinutesMin", 5));
-    g_HangoutStayMinutesMax  = std::max<uint32_t>(g_HangoutStayMinutesMin,
-                                                  sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.StayMinutesMax", 20));
+    // At most an hour: a parked bot's AI is held, and what playerbots queues
+    // for it (emotes in range) waits until it goes.
+    g_HangoutStayMinutesMin  = std::min<uint32_t>(g_HangoutStayMinutesMin, 60);
+    g_HangoutStayMinutesMax  = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.StayMinutesMax", 20),
+                                                    g_HangoutStayMinutesMin, 60);
     g_HangoutCooldownMinutes = sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.CooldownMinutes", 45);
     g_HangoutTravelSeconds   = std::max<uint32_t>(30, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.TravelSeconds", 180));
     g_HangoutMountedChance   = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.MountedChance", 45));

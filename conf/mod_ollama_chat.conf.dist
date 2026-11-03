@@ -2145,9 +2145,10 @@ OllamaChat.City.ConversationBoost = 2
 #   Every CheckSeconds, each spot with room may take one more (RecruitChance)
 #   of the idle random bots within RecruitRange of it, in its zone and on its
 #   level of it (not up in the Ruins of Lordaeron over the Undercity, or down
-#   in Crystalsong under Dalaran): not grouped, not questing, flying,
-#   gathering or fighting, not one a real player has targeted, and not one
-#   that hung out in the last CooldownMinutes. It walks over (playerbots' own
+#   in Crystalsong under Dalaran): not grouped, not queued for a dungeon or a
+#   battleground, not questing, flying, gathering or fighting, not one a real
+#   player has targeted, and not one that hung out in the last
+#   CooldownMinutes. It walks over (playerbots' own
 #   "go camp") to a place of its own in the spot -- on the ground within
 #   HeightTolerance of the middle's height, in sight of the middle, out of the
 #   water, and one you can walk to, so not the top of a market stall -- and
@@ -2166,8 +2167,9 @@ OllamaChat.City.ConversationBoost = 2
 #
 #   Once it is there its playerbots AI is held, the way a parked player does
 #   nothing -- otherwise playerbots stands a sitting bot up and takes its AFK
-#   off on its very next tick. An invite, a trade, a duel or a fight lets it
-#   go at once, as does being moved off the spot. When its time is up it
+#   off on its very next tick. An invite (group, guild, arena team), a trade,
+#   a duel, a queue or a fight lets it go at once, as does being moved off
+#   the spot. When its time is up it
 #   stands and goes about its business. If the module stops (Enable = 0, a
 #   reload), the hold runs out by itself within a second. Nothing happens
 #   while no real player is online, and bots only gather where one is about:
@@ -2196,8 +2198,8 @@ OllamaChat.Hangout.RecruitRange = 300
 #    OllamaChat.Hangout.StayMinutesMax
 #    OllamaChat.Hangout.CooldownMinutes
 #    OllamaChat.Hangout.TravelSeconds
-#        How long a bot stays, how long before it hangs out again, and how
-#        long it has to get there before it gives up.
+#        How long a bot stays (at most 60 minutes), how long before it hangs
+#        out again, and how long it has to get there before it gives up.
 #        Default: 5, 20, 45, 180
 OllamaChat.Hangout.StayMinutesMin = 5
 OllamaChat.Hangout.StayMinutesMax = 20

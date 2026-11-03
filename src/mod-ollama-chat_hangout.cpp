@@ -8,6 +8,7 @@
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "Group.h"
+#include "LFGMgr.h"
 #include "Log.h"
 #include "Map.h"
 #include "MapMgr.h"
@@ -42,7 +43,7 @@ namespace
 
     constexpr float    kTwoPi      = 6.2831853f;
     constexpr uint32_t kPointId    = 0x48474F;   // MovePoint id for the last few steps
-    constexpr uint32_t kHoldMs     = 1000;       // the bot's own AI waits this long; renewed every tick
+    constexpr uint32_t kHoldMs     = 5000;       // the bot's own AI waits this long; renewed every tick, so a slow tick is no gap
     constexpr float    kMaxClimb   = 30.0f;      // a bot this far above or below a spot is on another level
     constexpr auto     kMountGrace = std::chrono::seconds(10);
 
@@ -84,6 +85,7 @@ namespace
         bool              holding  = false;   // its playerbots AI is held: nothing undoes the sitting or the AFK
         ObjectGuid        bench;              // a bench it is going to, or sat on
         float             bx = 0.0f, by = 0.0f, bz = 0.0f;
+        uint8_t           seat = 0;           // the stand state sitting left it in (a chair's is its own)
         Clock::time_point started{};
         Clock::time_point approachStart{};
         Clock::time_point settledAt{};
@@ -187,10 +189,12 @@ namespace
             PathGenerator path(bot);
             path.CalculatePath(s.x, s.y, s.z, x, y, z, false);
             const uint32_t type = path.GetPathType();
-            if (!(type & PATHFIND_NORMAL) || (type & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_SHORTCUT)))
+            if (!(type & PATHFIND_NORMAL) ||
+                (type & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_SHORTCUT | PATHFIND_NOT_USING_PATH)))
                 continue;
-            G3D::Vector3 const& end = path.GetEndPosition();
-            if (std::hypot(end.x - x, end.y - y) > 1.0f || std::fabs(end.z - z) > 1.5f)
+            // Where the path really ends: beside a crate, not on it.
+            G3D::Vector3 const& end = path.GetActualEndPosition();
+            if (std::hypot(end.x - x, end.y - y) > 1.0f || std::fabs(end.z - z) > 0.5f)
                 continue;
             outX = x;
             outY = y;
@@ -266,12 +270,21 @@ namespace
         }
     }
 
-    // Something wants the bot's own AI right now: an invite to answer, a
-    // trade, a duel, a fight. A held AI would see none of it.
+    // In a queue (a dungeon, a battleground): a proposal or an invite could
+    // come at any moment, and its AI has to answer it.
+    bool Queued(Player* bot)
+    {
+        return bot->InBattlegroundQueue() || sLFGMgr->GetState(bot->GetGUID()) != lfg::LFG_STATE_NONE;
+    }
+
+    // Something wants the bot's own AI right now: an invite to answer (a
+    // group, a guild, an arena team), a trade, a duel, a queue, a fight. A
+    // held AI would see none of it.
     bool Wanted(Player* bot)
     {
         return !bot->IsAlive() || bot->IsInCombat() || bot->GetGroup() || bot->GetGroupInvite() ||
-               bot->GetTradeData() || bot->duel;
+               bot->GetTradeData() || bot->duel || bot->GetGuildIdInvited() || bot->GetArenaTeamIdInvited() ||
+               Queued(bot);
     }
 
     // Done with it: whatever this changed goes back, and its AI runs again
@@ -390,6 +403,8 @@ namespace
             if (cool != g_cooldown.end() && now < cool->second)
                 continue;
             PlayerbotAI* ai = AiOf(bot);
+            // Wanted() covers a queue too: one waiting on a dungeon or a
+            // battleground is not parked where it cannot answer the call.
             if (!ai || !ai->IsBotAI() || ai->GetMaster() || !sRandomPlayerbotMgr.IsRandomBot(bot) ||
                 !ai->HasStrategy("new rpg", BOT_STATE_NON_COMBAT) || !IdleInRpg(ai) || Wanted(bot))
                 continue;
@@ -509,6 +524,7 @@ namespace
         }
         if (v.posture == Posture::Sit)
             bot->SetStandState(UNIT_STAND_STATE_SIT);
+        v.seat = bot->getStandState();
         if (v.posture != Posture::Bench)
         {
             // Facing the middle, more or less: people stand about facing each other.
@@ -577,6 +593,16 @@ namespace
                 v.afkSet = bot->isAFK();
             }
         }
+        else
+        {
+            // A world tick long enough for its AI to slip through once stands
+            // it up and takes its AFK off: both go back.
+            if ((v.posture == Posture::Sit || v.posture == Posture::Bench) && !bot->IsSitState() && !bot->isMoving() &&
+                v.seat)
+                bot->SetStandState(v.seat);
+            if (v.afkSet && !bot->isAFK())
+                bot->ToggleAFK();
+        }
         ai->SetNextCheckDelay(kHoldMs);
         return true;
     }
@@ -584,8 +610,10 @@ namespace
     // Every Hangout.CheckSeconds while it is there. False: it is done here.
     bool Stay(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
     {
-        const bool moved = bot->GetMapId() != v.map ||
-                           (bot->GetExactDist2d(v.cx, v.cy) > v.radius + 15.0f && bot->GetExactDist2d(v.x, v.y) > 10.0f);
+        const bool  onBench = v.posture == Posture::Bench;
+        const float fromOwn = onBench ? bot->GetExactDist2d(v.bx, v.by) : bot->GetExactDist2d(v.x, v.y);
+        const bool  moved   = bot->GetMapId() != v.map ||
+                              (bot->GetExactDist2d(v.cx, v.cy) > v.radius + 15.0f && fromOwn > 10.0f);
         if (moved || !std::holds_alternative<NewRpgInfo::Rest>(ai->rpgInfo.data))
         {
             ++g_stats.cutShort;
