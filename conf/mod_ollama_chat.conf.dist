@@ -2143,14 +2143,15 @@ OllamaChat.City.ConversationBoost = 2
 #   wherever it happens to be.
 #
 #   Every CheckSeconds, each spot with room may take one more (RecruitChance)
-#   of the idle random bots within RecruitRange of it on the same map: not
-#   grouped, not questing, flying, gathering or fighting, not one a real
-#   player has targeted, and not one that hung out in the last
-#   CooldownMinutes. It walks over (playerbots' own "go camp"), takes a place
-#   of its own in the spot -- on the ground within HeightTolerance of the
-#   middle's height, in sight of the middle, out of the water -- and stays
-#   StayMinutesMin to StayMinutesMax, while its playerbots "rest" is kept
-#   going:
+#   of the idle random bots within RecruitRange of it, in its zone and on its
+#   level of it (not up in the Ruins of Lordaeron over the Undercity, or down
+#   in Crystalsong under Dalaran): not grouped, not questing, flying,
+#   gathering or fighting, not one a real player has targeted, and not one
+#   that hung out in the last CooldownMinutes. It walks over (playerbots' own
+#   "go camp") to a place of its own in the spot -- on the ground within
+#   HeightTolerance of the middle's height, in sight of the middle, out of the
+#   water, and one you can walk to, so not the top of a market stall -- and
+#   stays StayMinutesMin to StayMinutesMax:
 #
 #     * on a free bench within BenchRange, in sight of the middle
 #       (BenchChance, when there is one; a seat whose name has one of
@@ -2163,11 +2164,14 @@ OllamaChat.City.ConversationBoost = 2
 #       a whisper, a line that names it -- and then it is back, and knows it
 #       had stepped away (AwayText).
 #
-#   A bot sitting or standing has playerbots' "mount" strategy taken off
-#   while it is there, so it is not put back on its horse. When its time is
-#   up it stands, gets that back, and goes about its business. Joining a
-#   group, a fight, dying, or being moved off the spot ends it at once.
-#   Nothing happens while no real player is online.
+#   Once it is there its playerbots AI is held, the way a parked player does
+#   nothing -- otherwise playerbots stands a sitting bot up and takes its AFK
+#   off on its very next tick. An invite, a trade, a duel or a fight lets it
+#   go at once, as does being moved off the spot. When its time is up it
+#   stands and goes about its business. If the module stops (Enable = 0, a
+#   reload), the hold runs out by itself within a second. Nothing happens
+#   while no real player is online, and bots only gather where one is about:
+#   playerbots keeps bots far from any player mostly idle (and AFK).
 #
 #   With a debug log on, each one is logged as it heads over, settles and
 #   leaves; ".ollama status" counts them.
@@ -2181,9 +2185,8 @@ OllamaChat.Hangout.Enable = 1
 #    OllamaChat.Hangout.CheckSeconds
 #    OllamaChat.Hangout.RecruitChance
 #    OllamaChat.Hangout.RecruitRange
-#        How often each spot may take one more bot (at most 20 seconds: a
-#        bot's rest is renewed on these checks), the chance it does, and how
-#        far from the spot (yards) its bots come from.
+#        How often each spot may take one more bot (at most 20 seconds), the
+#        chance it does, and how far from the spot (yards) its bots come from.
 #        Default: 5, 50, 300
 OllamaChat.Hangout.CheckSeconds = 5
 OllamaChat.Hangout.RecruitChance = 50

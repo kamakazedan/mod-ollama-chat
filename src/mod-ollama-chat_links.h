@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 class Player;
 
@@ -94,10 +95,14 @@ enum class QuestFit : uint8_t
 };
 QuestFit Links_QuestFitFor(Player* bot, Quest const* quest);
 
-// "anyone want to group for [Wanted: Gath'Ilzogg]?" to a level 12: the line
-// names at least one quest, and every quest it names is too high for `bot`.
-// A bot like that has nothing to offer about it (Links.QuietWhenTooLow).
-bool Links_QuestsTooHighFor(Player* bot, const std::string& line);
+// The quests `line` names -- links by id, names in square brackets as
+// `speaker` would mean them -- at most 4. Worked out once per line.
+std::vector<Quest const*> Links_QuestsNamed(Player* speaker, const std::string& line);
+
+// "anyone want to group for [Wanted: Gath'Ilzogg]?" to a level 12: every one
+// of `quests` (and there is at least one) is too high for `bot`. A bot like
+// that has nothing to offer about it (Links.QuietWhenTooLow).
+bool Links_AllTooHighFor(Player* bot, const std::vector<Quest const*>& quests);
 
 void Links_Update();   // forget links not seen for Links.RememberMinutes
 

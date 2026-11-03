@@ -391,7 +391,10 @@ OllamaBotRandomChatter::OllamaBotRandomChatter() : WorldScript("OllamaBotRandomC
 void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 {
     if (!g_Enable)
+    {
+        Hangout_Update(diff);   // lets everyone hanging out go, sat down or AFK as they are
         return;
+    }
 
     // The module's world tick. These run before any feature toggle can return
     // early, because pending replies still have to be delivered even when

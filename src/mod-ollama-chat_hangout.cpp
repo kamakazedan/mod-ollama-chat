@@ -10,9 +10,11 @@
 #include "Group.h"
 #include "Log.h"
 #include "Map.h"
+#include "MapMgr.h"
 #include "MotionMaster.h"
 #include "MoveSpline.h"
 #include "ObjectAccessor.h"
+#include "PathGenerator.h"
 #include "Player.h"
 #include "SpellAuraDefines.h"
 #include "Timer.h"
@@ -38,8 +40,15 @@ namespace
 {
     using Clock = std::chrono::steady_clock;
 
-    constexpr float    kTwoPi   = 6.2831853f;
-    constexpr uint32_t kPointId = 0x48474F;   // MovePoint id for the last few steps
+    constexpr float    kTwoPi      = 6.2831853f;
+    constexpr uint32_t kPointId    = 0x48474F;   // MovePoint id for the last few steps
+    constexpr uint32_t kHoldMs     = 1000;       // the bot's own AI waits this long; renewed every tick
+    constexpr float    kMaxClimb   = 30.0f;      // a bot this far above or below a spot is on another level
+    constexpr auto     kMountGrace = std::chrono::seconds(10);
+
+    // Set while a bench is used here, so the module's own "used an object"
+    // event chatter (mod-ollama-chat_events) leaves it alone.
+    thread_local bool t_usingBench = false;
 
     enum class Posture : uint8_t
     {
@@ -61,29 +70,41 @@ namespace
         std::string       spotKey;
         std::string       spotName;
         uint32_t          map    = 0;
-        float             x      = 0.0f;   // its place (a bench's, for a bench)
+        float             x      = 0.0f;   // its place in the spot
         float             y      = 0.0f;
         float             z      = 0.0f;
         float             cx     = 0.0f;   // the spot's middle
         float             cy     = 0.0f;
         float             cz     = 0.0f;
         float             radius = 0.0f;
-        Phase             phase      = Phase::Travel;
-        Posture           posture    = Posture::Stand;
-        bool              wantsAfk   = false;
-        bool              afkSet     = false;   // the AFK flag is this module's
-        bool              mountTaken = false;   // this took playerbots' "mount" strategy off
-        ObjectGuid        bench;
+        Phase             phase    = Phase::Travel;
+        Posture           posture  = Posture::Stand;
+        bool              wantsAfk = false;
+        bool              afkSet   = false;   // the AFK flag is this module's
+        bool              holding  = false;   // its playerbots AI is held: nothing undoes the sitting or the AFK
+        ObjectGuid        bench;              // a bench it is going to, or sat on
+        float             bx = 0.0f, by = 0.0f, bz = 0.0f;
         Clock::time_point started{};
         Clock::time_point approachStart{};
+        Clock::time_point settledAt{};
         Clock::time_point until{};
         Clock::time_point nextLook{};
-        Clock::time_point cameBack{};           // was AFK, then talked to
+        Clock::time_point cameBack{};         // was AFK, then talked to
     };
 
     std::unordered_map<uint64_t, Visit>             g_visits;     // by bot guid
     std::unordered_map<uint64_t, Clock::time_point> g_cooldown;   // bot -> may hang out again from
     HangoutStats                                    g_stats;
+
+    // Which zone each spot is in, worked out once from the map.
+    struct SpotZone
+    {
+        uint32_t map  = 0;
+        float    x    = 0.0f;
+        float    y    = 0.0f;
+        uint32_t zone = 0;
+    };
+    std::unordered_map<std::string, SpotZone> g_spotZones;
 
     std::mt19937& Rng()
     {
@@ -114,6 +135,19 @@ namespace
         return nullptr;
     }
 
+    // The zone a spot is in (the Undercity, not the Ruins of Lordaeron over
+    // it; Dalaran, not Crystalsong under it). 0 while its map is not up.
+    uint32_t ZoneOf(const HangoutSpotConfig& s)
+    {
+        SpotZone& known = g_spotZones[s.key];
+        if (known.zone && known.map == s.map && known.x == s.x && known.y == s.y)
+            return known.zone;
+        Map* map = sMapMgr->FindBaseMap(s.map);
+        const uint32_t zone = map ? map->GetZoneId(PHASEMASK_NORMAL, s.x, s.y, s.z) : 0;
+        known = SpotZone{ s.map, s.x, s.y, zone };
+        return zone;
+    }
+
     // Two bots on one spot of ground would stand inside each other.
     bool Taken(const std::string& spotKey, float x, float y, float minDist)
     {
@@ -125,10 +159,14 @@ namespace
 
     // A place within the spot: on the ground near the middle's height, in
     // sight of the middle (so not inside a building or behind a wall), out
-    // of the water, and not where another bot stands.
-    bool PickPlace(Map* map, uint32_t phaseMask, const HangoutSpotConfig& s, float& outX, float& outY, float& outZ)
+    // of the water, not where another bot stands -- and one you can walk to
+    // from the middle, so not the top of a crate or a market stall.
+    bool PickPlace(Player* bot, const HangoutSpotConfig& s, float& outX, float& outY, float& outZ)
     {
-        for (int tries = 0; tries < 16; ++tries)
+        Map* map = bot->GetMap();
+        const uint32_t phaseMask = bot->GetPhaseMask();
+        int paths = 0;
+        for (int tries = 0; tries < 16 && paths < 4; ++tries)
         {
             const float angle = Frand(0.0f, kTwoPi);
             const float dist  = s.radius * std::sqrt(Frand(0.0f, 1.0f));
@@ -143,6 +181,16 @@ namespace
                                       VMAP::ModelIgnoreFlags::Nothing))
                 continue;
             if (Taken(s.key, x, y, 2.5f))
+                continue;
+
+            ++paths;
+            PathGenerator path(bot);
+            path.CalculatePath(s.x, s.y, s.z, x, y, z, false);
+            const uint32_t type = path.GetPathType();
+            if (!(type & PATHFIND_NORMAL) || (type & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_SHORTCUT)))
+                continue;
+            G3D::Vector3 const& end = path.GetEndPosition();
+            if (std::hypot(end.x - x, end.y - y) > 1.0f || std::fabs(end.z - z) > 1.5f)
                 continue;
             outX = x;
             outY = y;
@@ -218,41 +266,40 @@ namespace
         }
     }
 
-    // Done with it: whatever this changed goes back. `moveOn`: its time there
-    // is up, so it goes and does something else now.
+    // Something wants the bot's own AI right now: an invite to answer, a
+    // trade, a duel, a fight. A held AI would see none of it.
+    bool Wanted(Player* bot)
+    {
+        return !bot->IsAlive() || bot->IsInCombat() || bot->GetGroup() || bot->GetGroupInvite() ||
+               bot->GetTradeData() || bot->duel;
+    }
+
+    // Done with it: whatever this changed goes back, and its AI runs again
+    // now. `moveOn`: its time there is up, so it goes and does something else.
     void Let(Player* bot, PlayerbotAI* ai, Visit& v, bool moveOn, const Clock::time_point now)
     {
-        if (bot)
+        if (!bot)
+            return;
+        if (v.afkSet && bot->isAFK())
+            bot->ToggleAFK();
+        v.afkSet = false;
+        if (v.phase == Phase::Settled && (v.posture == Posture::Sit || v.posture == Posture::Bench) &&
+            bot->IsSitState())
+            bot->SetStandState(UNIT_STAND_STATE_STAND);
+        if (ai)
         {
-            if (v.afkSet && bot->isAFK())
-                bot->ToggleAFK();
-            v.afkSet = false;
-            if (ai && v.mountTaken && !ai->HasStrategy("mount", BOT_STATE_NON_COMBAT))
-                ai->ChangeStrategy("+mount", BOT_STATE_NON_COMBAT);
-            v.mountTaken = false;
-            if (v.phase == Phase::Settled && (v.posture == Posture::Sit || v.posture == Posture::Bench) &&
-                bot->IsSitState())
-                bot->SetStandState(UNIT_STAND_STATE_STAND);
-            if (ai && moveOn)
+            if (v.holding || v.phase != Phase::Travel)
+                ai->SetNextCheckDelay(0);
+            if (moveOn)
             {
                 NewRpgInfo& info = ai->rpgInfo;
-                const bool ours = std::holds_alternative<NewRpgInfo::Rest>(info.data) ||
-                                  std::holds_alternative<NewRpgInfo::GoCamp>(info.data);
-                if (ours)
+                if (std::holds_alternative<NewRpgInfo::Rest>(info.data) ||
+                    std::holds_alternative<NewRpgInfo::GoCamp>(info.data))
                     info.ChangeToIdle();
             }
         }
-        if (bot)
-            g_cooldown[bot->GetGUID().GetRawValue()] = now + std::chrono::minutes(g_HangoutCooldownMinutes);
-    }
-
-    // On a map with no real player anywhere, nobody would see it.
-    bool AnyRealPlayer(std::vector<Player*>& real)
-    {
-        for (auto const& [guid, p] : ObjectAccessor::GetPlayers())
-            if (p && p->IsInWorld() && OllamaIsRealPlayer(p))
-                real.push_back(p);
-        return !real.empty();
+        v.holding = false;
+        g_cooldown[bot->GetGUID().GetRawValue()] = now + std::chrono::minutes(g_HangoutCooldownMinutes);
     }
 
     bool IdleInRpg(PlayerbotAI* ai)
@@ -262,7 +309,7 @@ namespace
                std::holds_alternative<NewRpgInfo::WanderNpc>(data);
     }
 
-    void Send(Player* bot, PlayerbotAI* ai, const HangoutSpotConfig& s, const Clock::time_point now)
+    bool Send(Player* bot, PlayerbotAI* ai, const HangoutSpotConfig& s, const Clock::time_point now)
     {
         Visit v;
         v.spotKey  = s.key;
@@ -273,16 +320,8 @@ namespace
         v.cz       = s.z;
         v.radius   = s.radius;
         v.started  = now;
-        v.x = s.x;
-        v.y = s.y;
-        v.z = s.z;
-        if (!PickPlace(bot->GetMap(), bot->GetPhaseMask(), s, v.x, v.y, v.z))
-        {
-            // Nowhere checks out: the middle, a step or two off it.
-            v.x = s.x + Frand(-2.0f, 2.0f);
-            v.y = s.y + Frand(-2.0f, 2.0f);
-            v.z = s.z;
-        }
+        if (!PickPlace(bot, s, v.x, v.y, v.z))
+            return false;   // nowhere that checks out just now: another time
 
         if (bot->IsSitState())
             bot->SetStandState(UNIT_STAND_STATE_STAND);
@@ -291,19 +330,32 @@ namespace
         ++g_stats.sent;
         if (g_DebugEnabled)
             LOG_INFO("module.ollamachat", "[Ollama Chat] {} heads over to hang out at {}.", bot->GetName(), s.name);
+        return true;
     }
 
     void Recruit(const Clock::time_point now)
     {
         if (g_HangoutSpots.empty())
             return;
+
+        // Nobody online to see it: nothing to do.
         std::vector<Player*> real;
-        if (!AnyRealPlayer(real))
+        for (auto const& [guid, p] : ObjectAccessor::GetPlayers())
+            if (p && p->IsInWorld() && OllamaIsRealPlayer(p))
+                real.push_back(p);
+        if (real.empty())
             return;
 
         std::unordered_map<std::string, uint32_t> there;   // spot -> bots there or on the way
         for (const auto& [guid, v] : g_visits)
             ++there[v.spotKey];
+        std::vector<std::pair<HangoutSpotConfig const*, uint32_t>> open;   // spots with room, and their zone
+        for (const HangoutSpotConfig& s : g_HangoutSpots)
+            if (s.capacity > there[s.key])
+                if (const uint32_t zone = ZoneOf(s))
+                    open.emplace_back(&s, zone);
+        if (open.empty())
+            return;
 
         std::unordered_map<std::string, std::vector<Player*>> willing;
         for (auto const& [guid, bot] : ObjectAccessor::GetPlayers())
@@ -312,35 +364,34 @@ namespace
                 bot->IsInFlight() || bot->GetVehicle() || bot->IsBeingTeleported() || bot->isAFK() ||
                 bot->InBattleground() || bot->InArena())
                 continue;
+
+            // The nearest spot with room, in this zone and on this level of it.
+            HangoutSpotConfig const* best = nullptr;
+            float bestDist = g_HangoutRecruitRange;
+            for (const auto& [s, zone] : open)
+            {
+                if (s->map != bot->GetMapId() || zone != bot->GetZoneId() ||
+                    std::fabs(bot->GetPositionZ() - s->z) > kMaxClimb)
+                    continue;
+                const float d = bot->GetExactDist2d(s->x, s->y);
+                if (d < bestDist)
+                {
+                    bestDist = d;
+                    best = s;
+                }
+            }
+            if (!best)
+                continue;
+
             const uint64_t raw = bot->GetGUID().GetRawValue();
             if (g_visits.count(raw))
                 continue;
             auto cool = g_cooldown.find(raw);
             if (cool != g_cooldown.end() && now < cool->second)
                 continue;
-
-            // The nearest spot with room, on this map.
-            HangoutSpotConfig const* best = nullptr;
-            float bestDist = g_HangoutRecruitRange;
-            for (const HangoutSpotConfig& s : g_HangoutSpots)
-            {
-                if (s.map != bot->GetMapId() || s.capacity == 0 || there[s.key] >= s.capacity)
-                    continue;
-                const float d = bot->GetExactDist2d(s.x, s.y);
-                if (d < bestDist)
-                {
-                    bestDist = d;
-                    best = &s;
-                }
-            }
-            if (!best)
-                continue;
-
-            Map* map = bot->GetMap();
             PlayerbotAI* ai = AiOf(bot);
-            if (!map || map->Instanceable() || !ai || !ai->IsBotAI() || ai->GetMaster() ||
-                !sRandomPlayerbotMgr.IsRandomBot(bot) || !ai->HasStrategy("new rpg", BOT_STATE_NON_COMBAT) ||
-                !IdleInRpg(ai))
+            if (!ai || !ai->IsBotAI() || ai->GetMaster() || !sRandomPlayerbotMgr.IsRandomBot(bot) ||
+                !ai->HasStrategy("new rpg", BOT_STATE_NON_COMBAT) || !IdleInRpg(ai) || Wanted(bot))
                 continue;
             // Someone has it targeted: they may be about to talk to it.
             if (std::any_of(real.begin(), real.end(), [&](Player* p) { return p->GetTarget() == bot->GetGUID(); }))
@@ -353,25 +404,27 @@ namespace
             HangoutSpotConfig const* s = SpotByKey(key);
             if (!s || bots.empty() || !Roll(g_HangoutRecruitChance))
                 continue;
-            Player* bot = bots[std::uniform_int_distribution<size_t>(0, bots.size() - 1)(Rng())];
-            Send(bot, AiOf(bot), *s, now);
+            std::shuffle(bots.begin(), bots.end(), Rng());
+            for (size_t i = 0; i < bots.size() && i < 3; ++i)   // the first that has somewhere to stand
+                if (Send(bots[i], AiOf(bots[i]), *s, now))
+                    break;
         }
     }
 
     // Still a bot that may be hanging out at all.
     bool StillFree(Player* bot, const Visit& v)
     {
-        return bot->IsAlive() && !bot->IsInCombat() && !bot->GetGroup() && bot->GetMapId() == v.map &&
-               !bot->IsInFlight() && !bot->GetVehicle();
+        return !Wanted(bot) && bot->GetMapId() == v.map && !bot->IsInFlight() && !bot->GetVehicle();
     }
 
     // On its way. False: it is not going there after all.
     bool Travel(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
     {
-        if (!StillFree(bot, v) || now - v.started > std::chrono::seconds(g_HangoutTravelSeconds))
+        const bool free = StillFree(bot, v);
+        if (!free || now - v.started > std::chrono::seconds(g_HangoutTravelSeconds))
         {
             ++g_stats.gaveUp;
-            Let(bot, ai, v, StillFree(bot, v), now);   // timed out: on with something else
+            Let(bot, ai, v, free, now);   // timed out: on with something else
             return false;
         }
 
@@ -401,17 +454,18 @@ namespace
         if (!there)
             return true;
 
-        // Here. It rests (for as long as it hangs out), and how it spends it
-        // is settled now, where it can see the place.
+        // Here. It rests for as long as it hangs out, its own AI held from now
+        // on, and how it spends it is settled where it can see the place.
         ai->rpgInfo.ChangeToRest();
+        ai->SetNextCheckDelay(kHoldMs);
         GameObject* bench = Roll(g_HangoutBenchChance) ? FindBench(bot, v) : nullptr;
         if (bench)
         {
             v.posture = Posture::Bench;
             v.bench   = bench->GetGUID();
-            v.x       = bench->GetPositionX();
-            v.y       = bench->GetPositionY();
-            v.z       = bench->GetPositionZ();
+            v.bx      = bench->GetPositionX();
+            v.by      = bench->GetPositionY();
+            v.bz      = bench->GetPositionZ();
         }
         else if (CanRide(bot, ai) && Roll(g_HangoutMountedChance))
             v.posture = Posture::Mounted;
@@ -422,34 +476,35 @@ namespace
         v.wantsAfk      = Roll(g_HangoutAfkChance);
         v.phase         = Phase::Approach;
         v.approachStart = now;
-        bot->GetMotionMaster()->MovePoint(kPointId, v.x, v.y, v.z);
+        if (v.posture == Posture::Bench)
+            bot->GetMotionMaster()->MovePoint(kPointId, v.bx, v.by, v.bz);
+        else
+            bot->GetMotionMaster()->MovePoint(kPointId, v.x, v.y, v.z);
         return true;
     }
 
     void Settle(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
     {
-        if (v.posture != Posture::Mounted)
-        {
-            // Off the horse, and kept off it while it sits or stands here:
-            // playerbots puts an idle random bot back on its mount.
-            if (ai->HasStrategy("mount", BOT_STATE_NON_COMBAT))
-            {
-                ai->ChangeStrategy("-mount", BOT_STATE_NON_COMBAT);
-                v.mountTaken = true;
-            }
-            if (bot->IsMounted())
-                bot->RemoveAurasByType(SPELL_AURA_MOUNTED);
-        }
+        if (v.posture != Posture::Mounted && bot->IsMounted())
+            bot->RemoveAurasByType(SPELL_AURA_MOUNTED);   // off the horse: it is sitting or standing here
 
         if (v.posture == Posture::Bench)
         {
             GameObject* go = ObjectAccessor::GetGameObject(*bot, v.bench);
             if (go && go->isSpawned() && bot->GetExactDist2d(go) < 6.0f)
+            {
+                t_usingBench = true;
                 go->Use(bot);   // the nearest free seat, the way the client does it
+                t_usingBench = false;
+            }
             if (!bot->IsSitState())
             {
-                v.posture = Posture::Sit;   // every seat taken: the ground will do
-                v.bench   = ObjectGuid::Empty;
+                // Every seat taken after all: back to its own place, to sit there.
+                v.posture       = Posture::Sit;
+                v.bench         = ObjectGuid::Empty;
+                v.approachStart = now;
+                bot->GetMotionMaster()->MovePoint(kPointId, v.x, v.y, v.z);
+                return;
             }
         }
         if (v.posture == Posture::Sit)
@@ -461,23 +516,20 @@ namespace
                                                                      : Frand(0.0f, kTwoPi);
             bot->SetFacingTo(angle);
         }
-        if (v.wantsAfk && !bot->isAFK())
-        {
-            bot->ToggleAFK();
-            v.afkSet = bot->isAFK();
-        }
 
+        ai->rpgInfo.startT = getMSTime();
         const uint32_t lo = g_HangoutStayMinutesMin * 60, hi = std::max(lo, g_HangoutStayMinutesMax * 60);
-        v.phase    = Phase::Settled;
-        v.until    = now + std::chrono::seconds(std::uniform_int_distribution<uint32_t>(lo, hi)(Rng()));
-        v.nextLook = now + std::chrono::seconds(g_HangoutCheckSeconds);
+        v.phase     = Phase::Settled;
+        v.settledAt = now;
+        v.until     = now + std::chrono::seconds(std::uniform_int_distribution<uint32_t>(lo, hi)(Rng()));
+        v.nextLook  = now + std::chrono::seconds(g_HangoutCheckSeconds);
         ++g_stats.settled;
         if (g_DebugEnabled)
             LOG_INFO("module.ollamachat", "[Ollama Chat] {} hangs out at {}, {}{}.", bot->GetName(), v.spotName,
-                     Doing(v, bot), v.afkSet ? ", AFK" : "");
+                     Doing(v, bot), v.wantsAfk ? ", going AFK" : "");
     }
 
-    // The last steps. False: something else came up.
+    // The last steps, its AI held. False: something else came up.
     bool Approach(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
     {
         if (!StillFree(bot, v) || !std::holds_alternative<NewRpgInfo::Rest>(ai->rpgInfo.data))
@@ -486,24 +538,60 @@ namespace
             Let(bot, ai, v, false, now);
             return false;
         }
-        const float reach   = v.posture == Posture::Bench ? 3.0f : 1.5f;
+        ai->SetNextCheckDelay(kHoldMs);
+        ai->rpgInfo.startT = getMSTime();
+        const bool  toBench = v.posture == Posture::Bench;
+        const float reach   = toBench ? 3.0f : 1.5f;
         const auto  elapsed = now - v.approachStart;
         const bool  stopped = elapsed > std::chrono::seconds(2) && (!bot->movespline || bot->movespline->Finalized());
-        if (bot->GetExactDist2d(v.x, v.y) <= reach || stopped || elapsed > std::chrono::seconds(12))
+        const float dist    = toBench ? bot->GetExactDist2d(v.bx, v.by) : bot->GetExactDist2d(v.x, v.y);
+        if (dist <= reach || stopped || elapsed > std::chrono::seconds(12))
             Settle(bot, ai, v, now);
+        return true;
+    }
+
+    // Every world tick once it is there: its AI held, so playerbots does not
+    // stand it up, take its AFK off, or put it back on its horse. Let go at
+    // once for anything its AI has to answer. False: it is done here.
+    bool Hold(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        if (Wanted(bot))
+        {
+            ++g_stats.cutShort;
+            Let(bot, ai, v, false, now);
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] {} stops hanging out at {}: wanted.", bot->GetName(),
+                         v.spotName);
+            return false;
+        }
+        if (!v.holding)
+        {
+            // Mounted is left to playerbots, which puts an idle random bot on
+            // its best mount; held once it is up there.
+            if (v.posture == Posture::Mounted && !bot->IsMounted() && now - v.settledAt < kMountGrace)
+                return true;
+            v.holding = true;
+            if (v.wantsAfk && !bot->isAFK() && v.cameBack == Clock::time_point{})
+            {
+                bot->ToggleAFK();
+                v.afkSet = bot->isAFK();
+            }
+        }
+        ai->SetNextCheckDelay(kHoldMs);
         return true;
     }
 
     // Every Hangout.CheckSeconds while it is there. False: it is done here.
     bool Stay(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
     {
-        const bool moved = bot->GetExactDist2d(v.cx, v.cy) > v.radius + 15.0f && bot->GetExactDist2d(v.x, v.y) > 10.0f;
-        if (!StillFree(bot, v) || moved || !std::holds_alternative<NewRpgInfo::Rest>(ai->rpgInfo.data))
+        const bool moved = bot->GetMapId() != v.map ||
+                           (bot->GetExactDist2d(v.cx, v.cy) > v.radius + 15.0f && bot->GetExactDist2d(v.x, v.y) > 10.0f);
+        if (moved || !std::holds_alternative<NewRpgInfo::Rest>(ai->rpgInfo.data))
         {
             ++g_stats.cutShort;
             Let(bot, ai, v, false, now);
             if (g_DebugEnabled)
-                LOG_INFO("module.ollamachat", "[Ollama Chat] {} stops hanging out at {}: something came up.",
+                LOG_INFO("module.ollamachat", "[Ollama Chat] {} stops hanging out at {}: moved or busy.",
                          bot->GetName(), v.spotName);
             return false;
         }
@@ -516,12 +604,7 @@ namespace
                          v.spotName);
             return false;
         }
-        // Playerbots' rest is 30 seconds: kept going while it is here.
-        ai->rpgInfo.startT = getMSTime();
-        // Back on its mount after all (strategies reset): so be it, rather
-        // than pull it off again and again.
-        if (v.posture != Posture::Mounted && bot->IsMounted())
-            v.posture = Posture::Mounted;
+        ai->rpgInfo.startT = getMSTime();   // playerbots' rest is 30 seconds; it is still resting
         return true;
     }
 
@@ -547,24 +630,22 @@ void Hangout_Update(uint32_t /*diff*/)
         return;
     }
 
-    // Every tick for the ones on their way: playerbots turns an arrival into
-    // wandering between NPCs on the bot's next AI tick, which runs between
-    // these. The ones settled are looked at every Hangout.CheckSeconds.
     for (auto it = g_visits.begin(); it != g_visits.end();)
     {
         Visit& v = it->second;
-        if (v.phase == Phase::Settled && now < v.nextLook)
-        {
-            ++it;
-            continue;
-        }
         Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(it->first));
-        PlayerbotAI* ai = (bot && bot->IsInWorld()) ? AiOf(bot) : nullptr;
+        PlayerbotAI* ai = bot ? AiOf(bot) : nullptr;
         if (!ai)
         {
             it = g_visits.erase(it);   // logged out: nothing to put back
             continue;
         }
+        if (!bot->IsInWorld() || bot->IsBeingTeleported())
+        {
+            ++it;   // between maps: looked at again once it lands
+            continue;
+        }
+
         bool keep = SpotByKey(v.spotKey) != nullptr;   // a spot taken out of the conf: everyone there goes
         if (!keep)
             Let(bot, ai, v, true, now);
@@ -574,8 +655,12 @@ void Hangout_Update(uint32_t /*diff*/)
             keep = Approach(bot, ai, v, now);
         else
         {
-            v.nextLook = now + std::chrono::seconds(g_HangoutCheckSeconds);
-            keep = Stay(bot, ai, v, now);
+            keep = Hold(bot, ai, v, now);
+            if (keep && now >= v.nextLook)
+            {
+                v.nextLook = now + std::chrono::seconds(g_HangoutCheckSeconds);
+                keep = Stay(bot, ai, v, now);
+            }
         }
         it = keep ? std::next(it) : g_visits.erase(it);
     }
@@ -597,9 +682,9 @@ bool Hangout_IsAway(Player* bot)
     auto it = g_visits.find(bot->GetGUID().GetRawValue());
     if (it == g_visits.end() || !it->second.afkSet)
         return false;
-    if (bot->GetGroup())
+    if (Wanted(bot))
     {
-        // Invited: back at the keyboard, and done hanging out.
+        // Invited, traded with, attacked: back at the keyboard, and done here.
         ++g_stats.cutShort;
         Let(bot, AiOf(bot), it->second, false, Clock::now());
         g_visits.erase(it);
@@ -622,6 +707,11 @@ void Hangout_ComeBack(Player* bot)
     ++g_stats.cameBack;
 }
 
+bool Hangout_UsingBench()
+{
+    return t_usingBench;
+}
+
 std::string Hangout_StateTextFor(Player* bot)
 {
     if (!bot || g_visits.empty() || g_HangoutStateText.empty())
@@ -633,7 +723,7 @@ std::string Hangout_StateTextFor(Player* bot)
     std::string out = SafeFormat(g_HangoutStateText, fmt::arg("spot", v.spotName), fmt::arg("doing", Doing(v, bot)));
     if (out == "[Format Error]")
         out.clear();
-    const bool away = v.afkSet && bot->isAFK();
+    const bool away     = v.afkSet && bot->isAFK();
     const bool justBack = v.cameBack != Clock::time_point{} && Clock::now() - v.cameBack < std::chrono::minutes(3);
     if ((away || justBack) && !g_HangoutAwayText.empty())
         out += (out.empty() ? "" : " ") + g_HangoutAwayText;

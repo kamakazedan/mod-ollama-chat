@@ -713,20 +713,25 @@ QuestFit Links_QuestFitFor(Player* bot, Quest const* quest)
     return QuestFit::Fits;
 }
 
-bool Links_QuestsTooHighFor(Player* bot, const std::string& line)
+std::vector<Quest const*> Links_QuestsNamed(Player* speaker, const std::string& line)
 {
-    if (!bot || line.find('[') == std::string::npos)
+    std::vector<Quest const*> out;
+    if (!speaker || line.find('[') == std::string::npos)
+        return out;
+    for (const Named& n : NamedIn(speaker, line, 4))
+        if (n.quest)
+            out.push_back(n.quest);
+    return out;
+}
+
+bool Links_AllTooHighFor(Player* bot, const std::vector<Quest const*>& quests)
+{
+    if (!bot || quests.empty())
         return false;
-    bool any = false;
-    for (const Named& n : NamedIn(bot, line, 4))
-    {
-        if (!n.quest)
-            continue;
-        if (Links_QuestFitFor(bot, n.quest) != QuestFit::TooHigh)
+    for (Quest const* quest : quests)
+        if (Links_QuestFitFor(bot, quest) != QuestFit::TooHigh)
             return false;
-        any = true;
-    }
-    return any;
+    return true;
 }
 
 std::string Links_Describe(Player* bot, const std::string& line)

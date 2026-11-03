@@ -2294,9 +2294,12 @@ namespace
                                    const std::vector<Player*>& candidates, const std::string& msg)
     {
         // Said in public about a quest: the bots far too low for it have
-        // nothing to offer, and say nothing, the way people do.
-        const bool aboutQuests = g_LinksQuietWhenTooLow && source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL &&
-                                 msg.find('[') != std::string::npos;
+        // nothing to offer, and say nothing, the way people do. The quests
+        // are worked out once, as the speaker means them.
+        const std::vector<Quest const*> quests =
+            (g_LinksQuietWhenTooLow && source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL)
+                ? Links_QuestsNamed(speaker, msg)
+                : std::vector<Quest const*>();
         std::vector<Player*> pool;
         pool.reserve(candidates.size());
         for (Player* bot : candidates)
@@ -2313,7 +2316,7 @@ namespace
             // Away from the keyboard in a city (mod-ollama-chat_hangout), or
             // far below every quest the line asks about: quiet, unless the
             // line names it.
-            if ((Hangout_IsAway(bot) || (aboutQuests && Links_QuestsTooHighFor(bot, msg))) &&
+            if ((Hangout_IsAway(bot) || Links_AllTooHighFor(bot, quests)) &&
                 OllamaFindBotNameMention(msg, bot->GetName()) == std::string::npos)
                 continue;
             pool.push_back(bot);

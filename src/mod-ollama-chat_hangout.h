@@ -16,23 +16,26 @@ class Player;
 // from NPC to NPC, and a "rest" is 30 seconds sat wherever it happens to be.
 //
 // Every Hangout.CheckSeconds, a spot (OllamaChat.Hangout.Spot.*) with room
-// may take one more of the idle random bots near it -- not grouped, not
-// questing, flying or fighting, not one a real player has targeted. It walks
-// over (playerbots' own "go camp" movement), finds a free spot within the
-// radius (on the ground, in sight of the middle, out of the water), and
-// settles there for Hangout.StayMinutesMin..Max:
+// may take one more of the idle random bots in its zone (and on its level of
+// it) -- not grouped, not questing, flying or fighting, not one a real player
+// has targeted. It walks over (playerbots' own "go camp" movement) to a free
+// place within the radius (on the ground, in sight of the middle, out of the
+// water, one you can walk to), and settles there for StayMinutesMin..Max:
 //
-//   * mounted, if it can ride and it is outdoors (playerbots puts an idle
-//     random bot on its best mount anyway);
 //   * on a bench within Hangout.BenchRange that is free;
+//   * mounted, if it can ride and it is outdoors (playerbots puts an idle
+//     random bot on its best mount);
 //   * sat on the ground, or just standing about;
 //   * and now and then AFK (the flag, so it shows <AFK>): it stays quiet,
 //     and when someone talks to it, it is back.
 //
-// While it is there, its playerbots "rest" is kept going. When its time is
-// up it stands, gets back on its horse and goes about its business, and it
-// does not hang out again for Hangout.CooldownMinutes. Joining a group, a
-// fight, dying or being moved off the spot ends it at once.
+// From the moment it gets there its playerbots AI is held (renewed every
+// world tick, as marks and orders do), the way a parked player does nothing:
+// otherwise playerbots stands a sitting bot up and takes its AFK off on its
+// very next tick. An invite, a trade, a duel or a fight lets it go at once.
+// When its time is up it stands and goes about its business, and does not
+// hang out again for Hangout.CooldownMinutes. If this stops running, the
+// hold runs out by itself within a second.
 //
 // World thread only: Hangout_Update runs in OnWorldUpdate, while the map
 // threads (and every bot's AI) are idle.
@@ -46,6 +49,11 @@ bool Hangout_IsAway(Player* bot);
 
 // Someone talked to it, or it is about to talk: back at the keyboard.
 void Hangout_ComeBack(Player* bot);
+
+// True while a hanging-out bot is sitting down on a bench here, so the
+// module's "used an object" event chatter does not take it for news. Any
+// thread (it is thread_local: only the world thread ever sets it).
+bool Hangout_UsingBench();
 
 // For a reply prompt: where it is hanging out and how ("sitting on a bench
 // in the Trade District"), and that it has just come back if it was AFK.

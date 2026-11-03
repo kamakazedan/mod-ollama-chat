@@ -1,5 +1,6 @@
 #include "mod-ollama-chat_events.h"
 #include "mod-ollama-chat_bags.h"
+#include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
@@ -674,7 +675,8 @@ ChatOnGameObjectUse::ChatOnGameObjectUse() : AllGameObjectScript("ChatOnGameObje
 
 bool ChatOnGameObjectUse::CanGameObjectGossipHello(Player* player, GameObject* go)
 {
-    if (player && go && go->GetGOInfo())
+    // A hanging-out bot sitting down on a bench is not news (mod-ollama-chat_hangout).
+    if (player && go && go->GetGOInfo() && !Hangout_UsingBench())
         eventChatter.DispatchGameEvent(player, g_EventTypeUsedObject, go->GetGOInfo()->name);
 
     // false = we did not handle the interaction; normal processing continues.
