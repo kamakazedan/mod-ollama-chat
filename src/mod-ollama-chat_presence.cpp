@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_presence.h"
+#include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_expression.h"
@@ -282,6 +283,9 @@ void Presence_Update(uint32_t diff)
             if (!p || p == real || !p->IsInWorld() || !OllamaIsBotPlayer(p))
                 continue;
             if (p->IsInCombat() || p->IsInFlight() || p->IsBeingTeleported())
+                continue;
+            // AFK, or sat down (a bench, the ground): not waving at anyone.
+            if (Hangout_IsAway(p) || p->IsSitState())
                 continue;
             if (realGroup && p->GetGroup() == realGroup)
                 continue;   // their own party is not passing by

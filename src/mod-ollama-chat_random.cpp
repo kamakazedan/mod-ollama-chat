@@ -31,6 +31,7 @@
 #include "mod-ollama-chat_progress.h"
 #include "mod-ollama-chat_revive.h"
 #include "mod-ollama-chat_stuck.h"
+#include "mod-ollama-chat_hangout.h"
 
 #include "CellImpl.h"
 #include "Channel.h"
@@ -366,7 +367,7 @@ namespace
                 continue;
             if (p->GetTeamId() != bot->GetTeamId() || (g_DisableRepliesInCombat && p->IsInCombat()))
                 continue;
-            if (!world.RealPlayerWithin(p, g_SayDistance))
+            if (!world.RealPlayerWithin(p, g_SayDistance) || Hangout_IsAway(p))
                 continue;
             partners.push_back(p);
         }
@@ -417,6 +418,10 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 
     // "that's all the boar meat": a quest's last kill or item, said in party.
     Progress_Update(diff);
+
+    // Idle bots in a capital gathering where players do: the Trade District,
+    // the Commons, the Valley of Strength.
+    Hangout_Update(diff);
 
     // Orders carried out a tick after they were given; bots walking over to trade.
     Orders_Update(diff);
@@ -528,6 +533,10 @@ void OllamaBotRandomChatter::HandleRandomChatter()
             continue;
 
         if (g_DisableRepliesInCombat && bot->IsInCombat())
+            continue;
+
+        // Away from the keyboard, hanging out in a city: nothing to say.
+        if (Hangout_IsAway(bot))
             continue;
 
         const uint64_t rawGuid = bot->GetGUID().GetRawValue();

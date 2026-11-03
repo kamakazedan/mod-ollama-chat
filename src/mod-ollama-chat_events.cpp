@@ -296,7 +296,7 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
                 continue;
 
             PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(player);
-            if (ai && ai->IsBotAI())
+            if (ai && ai->IsBotAI() && !player->isAFK())
                 candidateBots.push_back(player);
         }
     }
@@ -308,8 +308,10 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
             if (!player || !player->IsWithinDist(source, g_EventChatterRealPlayerDistance, false))
                 continue;
 
+            // AFK (hanging out in a city, mod-ollama-chat_hangout): did not see
+            // it. The flag, not the hangout state: this can run on a map thread.
             PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(player);
-            if (ai && ai->IsBotAI())
+            if (ai && ai->IsBotAI() && !player->isAFK())
                 candidateBots.push_back(player);
         }
     }

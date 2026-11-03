@@ -522,6 +522,31 @@ std::string g_OrdersHintNotDone;
 uint32_t    g_PresenceExGroupMinutes       = 15;
 std::unordered_set<uint32_t> g_PresenceSkipEmotes;
 
+uint32_t    g_LinksQuestLevelsAbove        = 3;
+bool        g_LinksQuietWhenTooLow         = true;
+std::string g_LinksQuestTooHighText;
+std::string g_LinksQuestEasyText;
+std::string g_LinksItemTooHighText;
+
+bool        g_HangoutEnable                = true;
+std::vector<HangoutSpotConfig> g_HangoutSpots;
+uint32_t    g_HangoutCheckSeconds          = 5;
+float       g_HangoutRecruitRange          = 300.0f;
+uint32_t    g_HangoutRecruitChance         = 50;
+uint32_t    g_HangoutStayMinutesMin        = 5;
+uint32_t    g_HangoutStayMinutesMax        = 20;
+uint32_t    g_HangoutCooldownMinutes       = 45;
+uint32_t    g_HangoutTravelSeconds         = 180;
+uint32_t    g_HangoutMountedChance         = 45;
+uint32_t    g_HangoutBenchChance           = 60;
+uint32_t    g_HangoutSitChance             = 35;
+uint32_t    g_HangoutAfkChance             = 35;
+float       g_HangoutBenchRange            = 25.0f;
+float       g_HangoutHeightTolerance       = 6.0f;
+std::vector<std::string> g_HangoutBenchWords;
+std::string g_HangoutStateText;
+std::string g_HangoutAwayText;
+
 // --------------------------------------------
 // Topic engine
 // --------------------------------------------
@@ -1951,6 +1976,111 @@ static void LoadNaturalChatV10Settings()
              g_EmoticonEnable ? "on" : "off");
 }
 
+// Where people stand about in each capital: "map x y z radius capacity name".
+// Used when the conf has no OllamaChat.Hangout.Spot.* keys at all.
+static const std::pair<const char*, const char*> kDefaultHangoutSpots[] = {
+    { "StormwindTrade",     "0 -8833.4 628.6 94.0 22 14 the Trade District in Stormwind" },
+    { "StormwindBank",      "0 -8914.0 621.5 99.6 14 8 the bank in Stormwind" },
+    { "IronforgeCommons",   "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge" },
+    { "OrgrimmarValley",    "1 1657.9 -4433.0 17.5 22 10 the Valley of Strength in Orgrimmar" },
+    { "OrgrimmarBank",      "1 1615.6 -4391.6 10.3 14 6 outside the bank in Orgrimmar" },
+    { "UndercityTrade",     "0 1584.1 240.3 -52.2 16 10 the Trade Quarter in the Undercity" },
+    { "ThunderBluffBank",   "1 -1263.3 44.5 127.5 16 8 outside the bank in Thunder Bluff" },
+    { "DarnassusBank",      "1 9943.0 2497.7 1317.7 16 8 outside the bank in Darnassus" },
+    { "ExodarHall",         "530 -3965.7 -11653.6 -138.8 18 8 the main hall of the Exodar" },
+    { "SilvermoonExchange", "530 9744.0 -7466.1 13.5 22 10 the Royal Exchange in Silvermoon" },
+    { "ShattrathTerrace",   "530 -1863.7 5430.0 -9.6 24 12 the Terrace of Light in Shattrath" },
+    { "DalaranBank",        "571 5958.1 617.3 650.6 18 12 outside the bank in Dalaran" },
+    { "DalaranKrasus",      "571 5813.4 453.4 658.8 16 8 Krasus' Landing in Dalaran" },
+    { "DalaranMerchants",   "571 5654.9 682.2 652.0 14 8 outside the Merchants' Bank in Dalaran" },
+};
+
+static void LoadNaturalChatV11Settings()
+{
+    // --- how a named quest or item sits against the bot's level ------------------------
+    g_LinksQuestLevelsAbove = sConfigMgr->GetOption<uint32_t>("OllamaChat.Links.QuestLevelsAbove", 3);
+    g_LinksQuietWhenTooLow  = sConfigMgr->GetOption<bool>("OllamaChat.Links.QuietWhenTooLow", true);
+    g_LinksQuestTooHighText = sConfigMgr->GetOption<std::string>("OllamaChat.Links.QuestTooHighText",
+        "(you are level {bot_level}, far too low for it: you could not do it or help anyone with it, so you would "
+        "not offer to)");
+    g_LinksQuestEasyText = sConfigMgr->GetOption<std::string>("OllamaChat.Links.QuestEasyText",
+        "(you are level {bot_level}, so it would be easy for you)");
+    g_LinksItemTooHighText = sConfigMgr->GetOption<std::string>("OllamaChat.Links.ItemTooHighText",
+        "(you are level {bot_level}, too low to use it yet)");
+
+    // --- city hangouts -------------------------------------------------------------------
+    g_HangoutEnable          = sConfigMgr->GetOption<bool>("OllamaChat.Hangout.Enable", true);
+    // At most 20: a hanging-out bot's playerbots "rest" (30 s) is renewed on these checks.
+    g_HangoutCheckSeconds    = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.CheckSeconds", 5), 1, 20);
+    g_HangoutRecruitRange    = std::max(20.0f, sConfigMgr->GetOption<float>("OllamaChat.Hangout.RecruitRange", 300.0f));
+    g_HangoutRecruitChance   = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.RecruitChance", 50));
+    g_HangoutStayMinutesMin  = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.StayMinutesMin", 5));
+    g_HangoutStayMinutesMax  = std::max<uint32_t>(g_HangoutStayMinutesMin,
+                                                  sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.StayMinutesMax", 20));
+    g_HangoutCooldownMinutes = sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.CooldownMinutes", 45);
+    g_HangoutTravelSeconds   = std::max<uint32_t>(30, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.TravelSeconds", 180));
+    g_HangoutMountedChance   = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.MountedChance", 45));
+    g_HangoutBenchChance     = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.BenchChance", 60));
+    g_HangoutSitChance       = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.SitChance", 35));
+    g_HangoutAfkChance       = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.AfkChance", 35));
+    g_HangoutBenchRange      = std::max(0.0f, sConfigMgr->GetOption<float>("OllamaChat.Hangout.BenchRange", 25.0f));
+    g_HangoutHeightTolerance = std::max(1.0f, sConfigMgr->GetOption<float>("OllamaChat.Hangout.HeightTolerance", 6.0f));
+    g_HangoutBenchWords.clear();
+    for (std::string word : ReadPipeList("OllamaChat.Hangout.BenchWords", "bench"))
+    {
+        for (char& c : word)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        g_HangoutBenchWords.push_back(std::move(word));
+    }
+    g_HangoutStateText = sConfigMgr->GetOption<std::string>("OllamaChat.Hangout.StateText",
+        "Right now you are hanging around {spot}, {doing}, with nowhere in particular to be.");
+    g_HangoutAwayText = sConfigMgr->GetOption<std::string>("OllamaChat.Hangout.AwayText",
+        "You had stepped away from your keyboard there (AFK) and have only just come back to it.");
+
+    g_HangoutSpots.clear();
+    std::string bad;
+    auto addSpot = [&bad](const std::string& key, const std::string& value)
+    {
+        TextRules::SpotLine line;
+        if (!TextRules::ParseSpotLine(value, line))
+        {
+            bad += (bad.empty() ? "" : ", ") + key;
+            return;
+        }
+        HangoutSpotConfig spot;
+        spot.key      = key;
+        spot.name     = line.name.empty() ? key : line.name;
+        spot.map      = line.map;
+        spot.x        = line.x;
+        spot.y        = line.y;
+        spot.z        = line.z;
+        spot.radius   = line.radius;
+        spot.capacity = line.capacity;
+        g_HangoutSpots.push_back(std::move(spot));
+    };
+    {
+        const std::string prefix = "OllamaChat.Hangout.Spot.";
+        const std::vector<std::string> keys = sConfigMgr->GetKeysByString(prefix);
+        if (keys.empty())
+            for (const auto& [key, value] : kDefaultHangoutSpots)
+                addSpot(key, value);
+        for (const std::string& key : keys)
+            addSpot(key.substr(prefix.size()), sConfigMgr->GetOption<std::string>(key, ""));
+    }
+    if (!bad.empty())
+        LOG_ERROR("server.loading", "[Ollama Chat] OllamaChat.Hangout.Spot: could not read {} (want \"map x y z "
+                  "radius capacity name\").", bad);
+
+    uint32_t places = 0;
+    for (const HangoutSpotConfig& spot : g_HangoutSpots)
+        places += spot.capacity;
+    LOG_INFO("module.ollamachat",
+             "[Ollama Chat] Chat v11: city hangouts {} ({} spots, room for {}), quest level fit {} levels, "
+             "quiet when too low {}.",
+             g_HangoutEnable ? "on" : "off", g_HangoutSpots.size(), places, g_LinksQuestLevelsAbove,
+             g_LinksQuietWhenTooLow ? "on" : "off");
+}
+
 void LoadPersonalityExtras()
 {
     g_PersonalityNudges.clear();
@@ -2478,6 +2608,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV6Settings();
     LoadNaturalChatV7Settings();
     LoadNaturalChatV10Settings();
+    LoadNaturalChatV11Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

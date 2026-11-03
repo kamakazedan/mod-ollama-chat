@@ -57,6 +57,7 @@
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_presence.h"
 #include "mod-ollama-chat_stuck.h"
+#include "mod-ollama-chat_hangout.h"
 #include <iomanip>
 #include <unordered_set>
 #include "SpellMgr.h"
@@ -2290,8 +2291,12 @@ namespace
 
     // Bots that could answer this line at all.
     std::vector<Player*> CrowdPool(Player* speaker, ChatChannelSourceLocal source,
-                                   const std::vector<Player*>& candidates)
+                                   const std::vector<Player*>& candidates, const std::string& msg)
     {
+        // Said in public about a quest: the bots far too low for it have
+        // nothing to offer, and say nothing, the way people do.
+        const bool aboutQuests = g_LinksQuietWhenTooLow && source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL &&
+                                 msg.find('[') != std::string::npos;
         std::vector<Player*> pool;
         pool.reserve(candidates.size());
         for (Player* bot : candidates)
@@ -2304,6 +2309,12 @@ namespace
             // be the most immersion-breaking thing the module could do.
             if ((source == SRC_SAY_LOCAL || source == SRC_YELL_LOCAL) &&
                 Roleplay_IsLanguageBarrier(speaker, bot))
+                continue;
+            // Away from the keyboard in a city (mod-ollama-chat_hangout), or
+            // far below every quest the line asks about: quiet, unless the
+            // line names it.
+            if ((Hangout_IsAway(bot) || (aboutQuests && Links_QuestsTooHighFor(bot, msg))) &&
+                OllamaFindBotNameMention(msg, bot->GetName()) == std::string::npos)
                 continue;
             pool.push_back(bot);
         }
@@ -2511,7 +2522,7 @@ static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
                                   const ContextAddressee& addressee,
                                   const std::vector<Player*>& candidates)
 {
-    const std::vector<Player*> pool = CrowdPool(player, source, candidates);
+    const std::vector<Player*> pool = CrowdPool(player, source, candidates, msg);
     if (pool.empty())
         return;
 
@@ -2817,7 +2828,7 @@ static void HandleCrowdBotLine(Player* bot, const std::string& msg,
     if (Crowd_Find(key) || Conversation_IsActiveNear(key, bot))
         return;
 
-    const std::vector<Player*> pool = CrowdPool(bot, source, candidates);
+    const std::vector<Player*> pool = CrowdPool(bot, source, candidates, msg);
     if (pool.empty())
         return;
 
@@ -3377,12 +3388,16 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     if (!named.empty())
         prompt += " " + named;
 
-    // Stuck getting on and off its mount a little while ago: it knows.
     if (spokenTo)
     {
+        // Stuck getting on and off its mount a little while ago: it knows.
         const std::string stuck = Stuck_StateTextFor(bot);
         if (!stuck.empty())
             prompt += " " + stuck;
+        // Hanging out in a city, maybe AFK until just now.
+        const std::string hangout = Hangout_StateTextFor(bot);
+        if (!hangout.empty())
+            prompt += " " + hangout;
     }
 
     // Someone from its own group, talking in General or guild chat: the answer

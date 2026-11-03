@@ -667,6 +667,44 @@ extern std::string g_OrdersHintNotDone;
 extern uint32_t    g_PresenceExGroupMinutes;
 extern std::unordered_set<uint32_t> g_PresenceSkipEmotes;
 
+// How a named quest or item sits against the bot's level (mod-ollama-chat_links)
+extern uint32_t    g_LinksQuestLevelsAbove;   // a quest more than this many levels above the bot is too high for it
+extern bool        g_LinksQuietWhenTooLow;    // public lines: bots far too low for every quest named stay out of it
+extern std::string g_LinksQuestTooHighText;
+extern std::string g_LinksQuestEasyText;
+extern std::string g_LinksItemTooHighText;
+
+// City hangouts: idle bots in a capital gather where players do (mod-ollama-chat_hangout)
+struct HangoutSpotConfig
+{
+    std::string key;        // OllamaChat.Hangout.Spot.<key>
+    std::string name;       // "the Trade District in Stormwind"
+    uint32_t    map      = 0;
+    float       x        = 0.0f;
+    float       y        = 0.0f;
+    float       z        = 0.0f;
+    float       radius   = 15.0f;
+    uint32_t    capacity = 0;
+};
+extern bool        g_HangoutEnable;
+extern std::vector<HangoutSpotConfig> g_HangoutSpots;
+extern uint32_t    g_HangoutCheckSeconds;
+extern float       g_HangoutRecruitRange;      // bots this close to a spot (same map) may go to it
+extern uint32_t    g_HangoutRecruitChance;     // % per spot per check that one more bot heads over
+extern uint32_t    g_HangoutStayMinutesMin;
+extern uint32_t    g_HangoutStayMinutesMax;
+extern uint32_t    g_HangoutCooldownMinutes;   // before the same bot hangs out again
+extern uint32_t    g_HangoutTravelSeconds;     // to get there, or it gives up
+extern uint32_t    g_HangoutMountedChance;
+extern uint32_t    g_HangoutBenchChance;
+extern uint32_t    g_HangoutSitChance;
+extern uint32_t    g_HangoutAfkChance;
+extern float       g_HangoutBenchRange;
+extern float       g_HangoutHeightTolerance;
+extern std::vector<std::string> g_HangoutBenchWords;   // lowercase; a seat whose name has one is a bench
+extern std::string g_HangoutStateText;
+extern std::string g_HangoutAwayText;
+
 // --------------------------------------------
 // Topic engine
 // --------------------------------------------
