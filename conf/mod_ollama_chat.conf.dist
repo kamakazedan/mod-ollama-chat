@@ -3256,24 +3256,29 @@ OllamaChat.Progress.QuestText = "everything {quest} needs: it is ready to hand i
 #
 #   OLLAMA CHAT - STUCK ON A MOUNT
 #
-#   A bot after something it cannot open -- a mining vein another bot has
-#   hold of, a herb its loot code keeps failing on -- is dismounted to open
-#   it, gets nowhere, is put back on its mount by the mount check, and
-#   dismounted again, a few seconds apart, for as long as nothing gives. Two
-#   or three bots on one vein do it together. Playerbots never writes the
-#   thing off: an attempt that only dismounted the bot does not count as a
-#   failed one.
+#   Playerbots' loot code gets a mounted bot down before it opens something.
+#   When the opening then fails -- a mining vein another bot has hold of, a
+#   herb two bots went for at once, a body it cannot get close to -- the
+#   thing is put off for a second, then two, four, up to sixteen, and never
+#   written off while the bot is near it. In that pause the mount check --
+#   once a second, for a random bot with nothing to fight -- puts it back on
+#   its mount, so the next try starts with another dismount: the bot gets on
+#   and off on the spot, every few seconds, for as long as nothing gives. (A
+#   try that only got the bot down does not count as a failed one.)
 #
 #   A bot that mounts MountCount times in WindowSeconds without leaving
 #   Radius yards of where it started, out of any fight, takes the hint: what
 #   it was trying to loot -- its loot target, else the gathering node it is
 #   out for, else a chest-like object at its feet -- is out of its reach for
 #   IgnoreMinutes (not its loot target, held off in its loot list, written
-#   off as a gathering node), so it goes and does something else. For
-#   RememberMinutes it knows it was stuck, if asked (StateText); grouped with
-#   a real player, or with one in earshot, it may laugh it off
-#   (RemarkChance, half that in /say). Every one is logged at INFO with where
-#   it happened -- and one with nothing to loot is logged and left alone.
+#   off as a gathering node), so it goes and does something else. A random
+#   bot on its own also goes on foot for WalkMinutes, so it does not start
+#   again at the next herb. For RememberMinutes it knows it was stuck, if
+#   asked (StateText); grouped with a real player, or with one in earshot, it
+#   may laugh it off (RemarkChance, half that in /say). Every one is logged
+#   at INFO with where it happened, who the bot was with and anyone else at
+#   the same thing. One with nothing to loot is only logged (and, if it is on
+#   its own, kept on foot).
 #
 ###############################################################################
 
@@ -3298,6 +3303,25 @@ OllamaChat.Stuck.Radius = 6
 #        Default: 10, 10
 OllamaChat.Stuck.IgnoreMinutes = 10
 OllamaChat.Stuck.RememberMinutes = 10
+
+#    OllamaChat.Stuck.WalkMinutes
+#        How long a random bot on its own (no group, no master, not in a
+#        battleground) that was caught at it stays on foot. Playerbots puts a
+#        bot on its mount only while it has the "mount" strategy, so that is
+#        taken off it, and given back when the time is up -- at once if it
+#        joins a group or gets a master, or Stuck.Enable or the module is
+#        switched off. On foot, the loot code's get-down-and-wait never
+#        starts: it walks to the next herb and picks it, the way a player
+#        would, and when the time is up it rides again. A bot in a group, or
+#        with a master, keeps its mount so it keeps up. Nothing is saved:
+#        a bot that logs out gets its strategies afresh when it logs in --
+#        unless someone gives it a strategy command ("nc +..." / "co -...")
+#        or an outfit command while it is on foot, when playerbots saves its
+#        strategies as they are, and it would come back without its mount
+#        until it is next randomised ("nc +mount" puts it right). 0 leaves
+#        every bot its mount, as before. At most 120.
+#        Default: 10
+OllamaChat.Stuck.WalkMinutes = 10
 
 #    OllamaChat.Stuck.RemarkChance
 #    OllamaChat.Stuck.RemarkPrompt

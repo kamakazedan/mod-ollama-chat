@@ -9,6 +9,7 @@
 #include "mod-ollama-chat-utilities.h"
 
 #include "CellImpl.h"
+#include "DBCStores.h"
 #include "GameObject.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
@@ -17,6 +18,7 @@
 #include "Map.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
+#include "SharedDefines.h"
 #include "SpellAuraDefines.h"
 #include "SpellAuras.h"
 #include "SpellInfo.h"
@@ -27,11 +29,13 @@
 #include "NewRpgInfo.h"
 #include "PlayerbotAI.h"
 #include "PlayerbotMgr.h"
+#include "RandomPlayerbotMgr.h"
 
 #include <fmt/core.h>
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <deque>
 #include <list>
 #include <mutex>
@@ -86,6 +90,10 @@ namespace
     };
     std::unordered_map<uint64_t, Memory> g_memory;
 
+    // Bots kept on foot: playerbots' "mount" strategy taken off them, given
+    // back at this time (or as soon as they join a group or get a master).
+    std::unordered_map<uint64_t, Clock::time_point> g_walkers;
+
     StuckStats g_stats;
 
     PlayerbotAI* AiOf(Player* p)
@@ -115,6 +123,24 @@ namespace
         const char c = static_cast<char>(std::tolower(static_cast<unsigned char>(name[0])));
         const bool vowel = c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u';
         return (vowel ? "an " : "a ") + name;
+    }
+
+    // "mine", "pick" or "open": what the lock on it asks for. (A LootObject
+    // only works its skill out when asked whether this bot can open it, so
+    // it cannot say.)
+    std::string VerbFor(GameObject* go)
+    {
+        GameObjectTemplate const* info = go ? go->GetGOInfo() : nullptr;
+        if (LockEntry const* lock = info ? sLockStore.LookupEntry(info->GetLockId()) : nullptr)
+            for (uint8 i = 0; i < MAX_LOCK_CASE; ++i)
+                if (lock->Type[i] == LOCK_KEY_SKILL)
+                    switch (SkillByLockType(LockType(lock->Index[i])))
+                    {
+                        case SKILL_MINING:    return "mine";
+                        case SKILL_HERBALISM: return "pick";
+                        default:              break;
+                    }
+        return "open";
     }
 
     // The thing a bot getting on and off on the spot is after: its loot
@@ -191,15 +217,113 @@ namespace
             out.pos  = bot->GetPosition();
         }
 
-        LootObject loot(bot, guid);
-        switch (loot.skillId)
+        if (go)
+            out.verb = VerbFor(go);
+        else
         {
-            case SKILL_MINING:    out.verb = "mine";  break;
-            case SKILL_HERBALISM: out.verb = "pick";  break;
-            case SKILL_SKINNING:  out.verb = "skin";  break;
-            default:              out.verb = go ? "open" : "loot"; break;
+            // A body: a LootObject does work out the skill for one.
+            LootObject loot(bot, guid);
+            switch (loot.skillId)
+            {
+                case SKILL_MINING:    out.verb = "mine"; break;
+                case SKILL_HERBALISM: out.verb = "pick"; break;
+                case SKILL_SKINNING:  out.verb = "skin"; break;
+                default:              out.verb = "loot"; break;
+            }
         }
         return true;
+    }
+
+    // Who it is with, for the log.
+    const char* CompanyOf(Player* bot, PlayerbotAI* ai)
+    {
+        if (bot->GetGroup())
+            return OllamaGroupHasRealPlayer(bot) ? "grouped with a player" : "in a group of bots";
+        if (ai->GetMaster() && ai->GetMaster() != bot)
+            return "with a master";
+        return "on its own";
+    }
+
+    // Someone else right at the thing it was after -- two bots that went for
+    // one herb at once -- for the log. Empty when nobody is.
+    std::string OtherAt(Player* bot, const Position& pos)
+    {
+        std::list<Player*> found;
+        Acore::AnyPlayerInObjectRangeCheck check(bot, 15.0f, true, true);
+        Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(bot, found, check);
+        Cell::VisitObjects(bot, searcher, 15.0f);
+        Player* nearest = nullptr;
+        float best = 6.0f;
+        for (Player* p : found)
+        {
+            if (!p || p == bot || !p->IsInWorld())
+                continue;
+            const float d = p->GetExactDist(pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ());
+            if (d < best)
+            {
+                best = d;
+                nearest = p;
+            }
+        }
+        return nearest ? fmt::format(", {} at it too", nearest->GetName()) : std::string();
+    }
+
+    // Playerbots puts a bot on its mount only while it has the "mount"
+    // strategy (the mount check is not even tried without it, unless the bot
+    // is mounted already -- then it can still get down). Taking it off keeps
+    // a bot on foot, and with it the loot code's dismount-and-wait loop never
+    // gets going: it opens the next thing on foot, the way a player would.
+    //
+    // Only a random bot on its own: one in a group, or with a master, has to
+    // keep up with them, so it keeps its mount.
+    bool CanGoOnFoot(Player* bot, PlayerbotAI* ai)
+    {
+        return g_StuckWalkMinutes > 0 && ai->IsBotAI() && !ai->GetMaster() && !bot->GetGroup() &&
+               !bot->InBattleground() && !bot->InArena() && sRandomPlayerbotMgr.IsRandomBot(bot) &&
+               ai->HasStrategy("mount", BOT_STATE_NON_COMBAT);
+    }
+
+    bool GoOnFoot(Player* bot, PlayerbotAI* ai, Clock::time_point now)
+    {
+        if (!CanGoOnFoot(bot, ai))
+            return false;
+        ai->ChangeStrategy("-mount", BOT_STATE_NON_COMBAT);
+        g_walkers[bot->GetGUID().GetRawValue()] = now + std::chrono::minutes(g_StuckWalkMinutes);
+        ++g_stats.walked;
+        return true;
+    }
+
+    // Its mount back -- unless something has already sorted its strategies
+    // out afresh (accepting an invite, joining a battleground, logging in:
+    // they all reset them), in which case there is nothing to give back.
+    void GiveMountBack(Player* bot, PlayerbotAI* ai)
+    {
+        if (!bot->InBattleground() && !bot->InArena() && !ai->HasStrategy("mount", BOT_STATE_NON_COMBAT))
+            ai->ChangeStrategy("+mount", BOT_STATE_NON_COMBAT);
+    }
+
+    // The bots on foot whose time is up, or who have joined a group or got a
+    // master since, get their mount back; with letAllGo, all of them.
+    void UpdateWalkers(Clock::time_point now, bool letAllGo)
+    {
+        for (auto it = g_walkers.begin(); it != g_walkers.end();)
+        {
+            Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(it->first));
+            PlayerbotAI* ai = AiOf(bot);
+            if (!ai)
+            {
+                // Logged out: it gets its strategies afresh when it logs in.
+                it = g_walkers.erase(it);
+                continue;
+            }
+            if (letAllGo || now >= it->second || bot->GetGroup() || ai->GetMaster())
+            {
+                GiveMountBack(bot, ai);
+                it = g_walkers.erase(it);
+                continue;
+            }
+            ++it;
+        }
     }
 
     // Keeps `bot` off `hold` for now: not its loot target, not to be tried
@@ -304,19 +428,24 @@ namespace
     {
         ++g_stats.stuck;
         PlayerbotAI* ai = AiOf(bot);
+        if (!ai)
+            return false;
+        const auto now = Clock::now();
+        const char* company = CompanyOf(bot, ai);
+        const bool onFoot = GoOnFoot(bot, ai, now);
         Target t;
-        if (!ai || !FindTarget(bot, ai, t))
+        if (!FindTarget(bot, ai, t))
         {
             ++g_stats.nothing;
             LOG_INFO("module.ollamachat",
-                     "[Ollama Chat] {} mounted {} times in {}s at ({:.1f}, {:.1f}, {:.1f}) on map {} ({}) with nothing "
-                     "it is trying to loot: left to playerbots.",
-                     bot->GetName(), times, g_StuckWindowSeconds, at.x, at.y, at.z, at.map, ZoneName(bot));
+                     "[Ollama Chat] {} mounted {} times in {}s at ({:.1f}, {:.1f}, {:.1f}) on map {} ({}), {}, with "
+                     "nothing it is trying to loot: {}.",
+                     bot->GetName(), times, g_StuckWindowSeconds, at.x, at.y, at.z, at.map, ZoneName(bot), company,
+                     onFoot ? fmt::format("on foot for {} min", g_StuckWalkMinutes) : std::string("left to playerbots"));
             return false;
         }
 
         ++g_stats.hinted;
-        const auto now = Clock::now();
         Hold hold;
         hold.object  = t.guid;
         hold.spawnId = t.spawnId;
@@ -342,9 +471,10 @@ namespace
 
         LOG_INFO("module.ollamachat",
                  "[Ollama Chat] {} was stuck getting on and off its mount at {} ({}, {} times in {}s) at "
-                 "({:.1f}, {:.1f}, {:.1f}) on map {} ({}): keeping it off that for {} min.",
+                 "({:.1f}, {:.1f}, {:.1f}) on map {} ({}), {}{}: keeping it off that for {} min{}.",
                  bot->GetName(), t.what, t.verb, times, g_StuckWindowSeconds, at.x, at.y, at.z, at.map, m.zone,
-                 g_StuckIgnoreMinutes);
+                 company, OtherAt(bot, t.pos), g_StuckIgnoreMinutes,
+                 onFoot ? fmt::format(", and on foot for {} min", g_StuckWalkMinutes) : std::string());
 
         Remark(bot, ai, t);
         return true;
@@ -406,8 +536,12 @@ void OllamaChatStuckScript::OnAuraApply(Unit* unit, Aura* aura)
 
 void Stuck_Update(uint32_t /*diff*/)
 {
-    if (!g_StuckEnable)
+    // Also called with the whole module switched off, so the bots on foot get
+    // their mounts back.
+    if (!g_Enable || !g_StuckEnable)
     {
+        if (!g_walkers.empty())
+            UpdateWalkers(Clock::now(), true);
         if (!g_holds.empty() || !g_tracks.empty())
         {
             g_holds.clear();
@@ -424,6 +558,16 @@ void Stuck_Update(uint32_t /*diff*/)
         fresh.swap(g_noted);
     }
     const auto now = Clock::now();
+
+    // Once a second: the bots on foot whose time is up (all of them, with
+    // WalkMinutes set to 0 by a reload) get their mounts back.
+    static Clock::time_point nextWalkCheck{};
+    if (!g_walkers.empty() && now >= nextWalkCheck)
+    {
+        nextWalkCheck = now + std::chrono::seconds(1);
+        UpdateWalkers(now, g_StuckWalkMinutes == 0);
+    }
+
     for (const Mounted& m : fresh)
     {
         ++g_stats.mounts;
@@ -493,5 +637,6 @@ StuckStats Stuck_GetStats()
     StuckStats s = g_stats;
     for (const auto& [guid, holds] : g_holds)
         s.holding += uint32_t(holds.size());
+    s.walking = uint32_t(g_walkers.size());
     return s;
 }

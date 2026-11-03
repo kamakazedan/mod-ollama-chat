@@ -393,6 +393,7 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
     if (!g_Enable)
     {
         Hangout_Update(diff);   // lets everyone hanging out go, sat down or AFK as they are
+        Stuck_Update(diff);     // gives the bots kept on foot their mounts back
         return;
     }
 

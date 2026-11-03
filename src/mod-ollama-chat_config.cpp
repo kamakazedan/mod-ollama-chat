@@ -464,6 +464,7 @@ uint32_t    g_StuckMountCount              = 4;
 uint32_t    g_StuckWindowSeconds           = 90;
 float       g_StuckRadius                  = 6.0f;
 uint32_t    g_StuckIgnoreMinutes           = 10;
+uint32_t    g_StuckWalkMinutes             = 10;
 uint32_t    g_StuckRememberMinutes         = 10;
 uint32_t    g_StuckRemarkChance            = 50;
 std::string g_StuckRemarkPrompt;
@@ -1804,6 +1805,7 @@ static void LoadNaturalChatV10Settings()
     g_StuckWindowSeconds   = std::max<uint32_t>(10, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.WindowSeconds", 90));
     g_StuckRadius          = std::max(1.0f, sConfigMgr->GetOption<float>("OllamaChat.Stuck.Radius", 6.0f));
     g_StuckIgnoreMinutes   = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.IgnoreMinutes", 10));
+    g_StuckWalkMinutes     = std::min<uint32_t>(120, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.WalkMinutes", 10));
     g_StuckRememberMinutes = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.RememberMinutes", 10));
     g_StuckRemarkChance    = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.RemarkChance", 50));
     g_StuckRemarkPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Stuck.RemarkPrompt",
@@ -1967,10 +1969,11 @@ static void LoadNaturalChatV10Settings()
     }
 
     LOG_INFO("module.ollamachat",
-             "[Ollama Chat] Chat v10: stuck mounts {} ({} in {}s), quest progress in party {}, item and quest "
-             "descriptions {}, {} premise template(s) with {} pool(s), echoes {} ({} words, {} bots, {} min), "
-             "emoticons {}.",
-             g_StuckEnable ? "on" : "off", g_StuckMountCount, g_StuckWindowSeconds, g_ProgressEnable ? "on" : "off",
+             "[Ollama Chat] Chat v10: stuck mounts {} ({} in {}s, on foot {} min), quest progress in party {}, item "
+             "and quest descriptions {}, {} premise template(s) with {} pool(s), echoes {} ({} words, {} bots, {} "
+             "min), emoticons {}.",
+             g_StuckEnable ? "on" : "off", g_StuckMountCount, g_StuckWindowSeconds, g_StuckWalkMinutes,
+             g_ProgressEnable ? "on" : "off",
              g_LinksDescribeEnable ? "on" : "off", g_PremiseTemplates.size(), g_PremisePools.size(),
              g_EchoEnable ? "on" : "off", g_EchoWords, g_EchoBots, g_EchoWindowMinutes,
              g_EmoticonEnable ? "on" : "off");

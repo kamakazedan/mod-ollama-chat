@@ -598,6 +598,7 @@ extern uint32_t    g_StuckMountCount;        // mounted this often...
 extern uint32_t    g_StuckWindowSeconds;     // ...in this long...
 extern float       g_StuckRadius;            // ...without leaving this many yards
 extern uint32_t    g_StuckIgnoreMinutes;     // kept off what it was stuck on for this long
+extern uint32_t    g_StuckWalkMinutes;       // a random bot on its own kept on foot this long (0 = never)
 extern uint32_t    g_StuckRememberMinutes;   // knows it was stuck, if asked, for this long
 extern uint32_t    g_StuckRemarkChance;
 extern std::string g_StuckRemarkPrompt;

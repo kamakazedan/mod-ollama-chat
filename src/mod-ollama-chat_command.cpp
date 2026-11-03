@@ -680,14 +680,17 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
     const StuckStats    stuck    = Stuck_GetStats();
     const ProgressStats progress = Progress_GetStats();
     handler->PSendSysMessage("Stuck on a mount: {} - {} mounts noted, {} bots stuck ({} kept off what they were "
-                             "after, {} with nothing to loot), {} said so, {} held off now",
+                             "after, {} with nothing to loot, {} kept on foot), {} said so, {} held off now, {} on "
+                             "foot now",
                              g_StuckEnable ? "on" : "off",
                              (unsigned long long)stuck.mounts,
                              (unsigned long long)stuck.stuck,
                              (unsigned long long)stuck.hinted,
                              (unsigned long long)stuck.nothing,
+                             (unsigned long long)stuck.walked,
                              (unsigned long long)stuck.remarks,
-                             stuck.holding);
+                             stuck.holding,
+                             stuck.walking);
     handler->PSendSysMessage("Quest progress: {} - {} objectives and {} quests finished by grouped bots, {} said in "
                              "party, {} left to whoever said it first, {} let go",
                              g_ProgressEnable ? "on" : "off",
