@@ -2081,6 +2081,13 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
                                                contextSeq, replyHint);
         if (prompt.empty())
             continue;
+        // Nothing here carried out what the line told it to do: no "on it".
+        if (!senderIsBot)
+        {
+            const std::string notDone = Orders_NotDoneHintFor(bot, player, msg, sourceLocal);
+            if (!notDone.empty())
+                prompt += " " + notDone;
+        }
 
         OllamaChatRequest request;
         request.botGuid     = bot->GetGUID().GetRawValue();
@@ -3035,6 +3042,16 @@ bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
                                            excludeSeq, hint);
     if (prompt.empty())
         return false;
+    // An order or a favour is answered with its own instruction (slot.hint),
+    // which says what the bot did. Only a plain answer to a line that told it
+    // to do something nothing carried out is told not to say "on it".
+    if (slot.hint.empty() && !slot.replyBack && plan.kind != CrowdLineKind::Command &&
+        plan.kind != CrowdLineKind::Favor && plan.kind != CrowdLineKind::Order)
+    {
+        const std::string notDone = Orders_NotDoneHintFor(bot, speaker, message, plan.source);
+        if (!notDone.empty())
+            prompt += " " + notDone;
+    }
 
     const bool toPerson = OllamaIsRealPlayer(speaker);
 
@@ -3063,6 +3080,7 @@ bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
     // The tank's answer is slot 0; a mage answering "mb, water pls" after it
     // (mod-ollama-chat_conjure) is not an instruction ack.
     request.partyAck          = (plan.kind == CrowdLineKind::Command && index == 0);
+    request.noEcho            = request.partyAck;   // due now; PartyCommands.RecentAcks keeps it fresh
     request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
 
     if (!OllamaDispatch_Submit(std::move(request)))
@@ -3146,6 +3164,8 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
 
     // What they typed, as it reads on screen: a link becomes its "[Name]".
     // The model never sees client markup, so it never echoes broken markup.
+    // (The links themselves still say which item or quest they are.)
+    const std::string sentMessage = playerMessage;
     playerMessage = TextRules::StripChatMarkup(playerMessage);
 
     AreaTableEntry const* botCurrentArea = botAI->GetCurrentArea();
@@ -3353,21 +3373,16 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
 
     // What the items and quests in the line are: a pair of boots is not a
     // creature to fight, and a delivery quest is no call for a healer.
-    const std::string named = Links_Describe(bot, playerMessage);
+    const std::string named = Links_Describe(bot, sentMessage);
     if (!named.empty())
         prompt += " " + named;
 
+    // Stuck getting on and off its mount a little while ago: it knows.
     if (spokenTo)
     {
-        // Stuck getting on and off its mount a little while ago: it knows.
         const std::string stuck = Stuck_StateTextFor(bot);
         if (!stuck.empty())
             prompt += " " + stuck;
-
-        // Told to do something that nothing here carried out: no "on it".
-        const std::string notDone = Orders_NotDoneHintFor(bot, player, playerMessage, source);
-        if (!notDone.empty())
-            prompt += " " + notDone;
     }
 
     // Someone from its own group, talking in General or guild chat: the answer

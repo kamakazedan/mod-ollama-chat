@@ -70,6 +70,10 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
 // the next answer can be told not to copy it (PartyCommands.RecentAcks).
 void PartyCmd_NoteAck(Player* bot, const std::string& line);
 
+// The tank's "everyone ready?" went out: for Party.ReadyWindowSeconds a plain
+// "yep" or "sure" from the group answers it and starts the run.
+void PartyCmd_NoteReadyAsked(Player* bot);
+
 // The group-chat glossary for a bot answering in party or raid chat inside a
 // dungeon or raid (OllamaChat.Party.DungeonGlossary); empty elsewhere.
 std::string PartyCmd_GlossaryFor(Player* bot, ChatChannelSourceLocal source);

@@ -110,7 +110,7 @@ std::string Premises_Pick(Player* bot)
         {
             std::vector<std::pair<std::string, std::string>> picked;
             const std::string expanded = TextRules::ExpandChoices(cands[i].second, Rng());
-            const std::string filled = TextRules::FillSlots(expanded,
+            std::string filled = TextRules::FillSlots(expanded,
                 [&](const std::string& slot, const std::vector<std::string>& taken) -> std::string
                 {
                     if (slot == "zone")
@@ -123,6 +123,8 @@ std::string Premises_Pick(Player* bot)
                 });
             if (filled.empty())
                 continue;
+            if (filled.find("{~") != std::string::npos)   // a pool value with wording of its own
+                filled = TextRules::ExpandChoices(filled, Rng());
             g_used[cands[i].first] = now;
             for (const auto& [pool, value] : picked)
             {

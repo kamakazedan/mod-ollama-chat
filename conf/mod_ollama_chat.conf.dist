@@ -1350,8 +1350,11 @@ OllamaChat.Response.RetryNote = "Say it a different way this time, without '{phr
 #        last WindowMinutes is an echo: "fight one huge murloc" the fourth time
 #        that hour, whoever says it, wherever. A line that echoes is dropped,
 #        or, when owed to someone, asked for again (RetryOwed). A phrase the
-#        line being answered has is fair game. CommonWords: single words,
-#        separated by |, the glue a phrase is not made of.
+#        line being answered has is fair game, and a name in brackets ("[Look
+#        to the Stars]") is no phrase at all: no run counts any of its words.
+#        The tank's answers in a dungeon are not looked at (they are kept from
+#        repeating themselves by PartyCommands.RecentAcks). CommonWords:
+#        single words, separated by |, the glue a phrase is not made of.
 #        Default: 1, 4, 3, 60, (below)
 OllamaChat.Echo.Enable = 1
 OllamaChat.Echo.Words = 4
@@ -1717,7 +1720,7 @@ OllamaChat.Context.FillerBotCooldownSeconds = 900
 #       the time, or its chat style's own share in StyleChance (an excitable
 #       or bubbly style more, a terse veteran never);
 #     * whatever the model writes, a line keeps at most one (any of Tokens),
-#       and none when the bot kept one in the last BotCooldownMinutes, or one
+#       and none when the bot sent one in the last BotCooldownMinutes, or one
 #       is among the last ScopeLines lines where it is going.
 #
 #   SystemPrompt still says no emoji: these are typed faces, not pictures.
@@ -2502,25 +2505,29 @@ OllamaChat.Party.RunStateText = "About this dungeon run: {tank} leads it, {progr
 #        party, in its own chat style, whether everyone is ready to start --
 #        once, GreetDelaySeconds after it and a real player are both inside,
 #        and not when the run is under way already. "{~this|that}" is one or
-#        the other, picked each time, so the ask is put a different way. (The
+#        the other, picked each time, so the ask is put a different way. Keep
+#        it a plain are-you-ready question: "need anything before we start?"
+#        gets "im good", which ReadyYesPhrases does not take as a yes. (The
 #        stock "I don't know this dungeon, lead the way!" whisper is muted:
 #        MUTED BOT LINES below.)
 #        Default: 1, 8, (below)
 OllamaChat.Party.GreetEnable = 1
 OllamaChat.Party.GreetDelaySeconds = 8
-OllamaChat.Party.GreetSituation = "The group has just come in and nobody has pulled anything yet. {~Ask everyone if they are ready to start|Check everyone is ready before you start|Ask the group if they are good to go|Ask whether anyone needs anything before the first pull, and if they are ready}, in your own way and your own words."
+OllamaChat.Party.GreetSituation = "The group has just come in and nobody has pulled anything yet. {~Ask everyone if they are ready to start|Check everyone is ready before you start|Ask if they are ready for the first pull|Ask whether they are ready for you to start pulling}, in your own way and your own words: a plain are-you-ready question, not whether anyone needs anything."
 
 #    OllamaChat.Party.ReadyYesPhrases
 #    OllamaChat.Party.ReadyWindowSeconds
-#        For ReadyWindowSeconds after the tank asked, a line that is nothing
-#        but a yes -- one of these, with names and ResumeFillers ("ok",
-#        "mate", "lol") around it -- answers it and starts the run, the way
-#        "ready" or "lets go" always does: "yep", "sure", "go for it", "ok".
-#        "yes but wait", "yeah 2 min" and "not yet" do not. Phrases separated
-#        by |, matched on whole words. Later on, "ready" and the rest of
-#        StartPhrases still start it.
+#        Once the tank has asked whether they are ready (the line is out, not
+#        just asked for), for ReadyWindowSeconds a line that is nothing but a
+#        yes -- one of these, with names and ResumeFillers ("ok", "mate",
+#        "lol") around it -- answers it and starts the run, the way "ready" or
+#        "lets go" always does: "yep", "sure", "ok go for it". "yes but wait",
+#        "yeah 2 min" and "not yet" do not, and neither does "ok", "good" or
+#        "im good" on its own: those answer too many other things ("need
+#        water?" "im good"). Phrases separated by |, matched on whole words.
+#        Later on, "ready" and the rest of StartPhrases still start it.
 #        Default: (below), 180
-OllamaChat.Party.ReadyYesPhrases = "yes|yep|yup|yeah|ye|ya|yea|y|sure|ok|okay|k|kk|aye|go|gogo|go go|of course|ofc|sure thing|why not|always|mhm|yes please|do it|lets do it|go for it|go ahead|go on|go on then|whenever|when you are|ready when you are|im good|all good|good|yes im ready|yeah im ready|yep im ready|born ready|yes lets go|yeah lets go|yep lets go|lets"
+OllamaChat.Party.ReadyYesPhrases = "yes|yep|yup|yeah|ye|ya|yea|y|sure|aye|go|gogo|go go|of course|ofc|sure thing|why not|mhm|yes please|do it|lets do it|go for it|go ahead|go on|go on then|whenever|when you are|ready when you are|yes im ready|yeah im ready|yep im ready|born ready|yes lets go|yeah lets go|yep lets go|lets"
 OllamaChat.Party.ReadyWindowSeconds = 180
 
 #    OllamaChat.Party.TogetherText
@@ -2931,7 +2938,9 @@ OllamaChat.Orders.FleeRecoverSeconds = 8
 #        a whisper, no question mark) that starts with one of NotDoneVerbs
 #        and is none of the orders above has not been carried out, so the
 #        bot's reply is told not to say it is on it (HintNotDone,
-#        {player_name}). Only with Playerbots.CommandPrefix set: without one,
+#        {player_name}). Only for a plain reply: a line anything here acted
+#        on (an order, a favour, the run) is answered with what was done
+#        instead. Only with Playerbots.CommandPrefix set: without one,
 #        playerbots may have read the line as a command of its own. A plain
 #        yes ("go on then", Party.ReadyYesPhrases) is not an order. Single
 #        words, separated by |. Empty disables.
@@ -2971,6 +2980,8 @@ OllamaChat.State.Staying = "Right now you are waiting where {player_name} told y
 #   "Kobold Vermin 3/10 [Kobold Camp Cleanup]" (the "* */* |c*|Hquest:*"
 #   pattern), and "Quest completed [...]". With QUEST PROGRESS IN PARTY on,
 #   a bot says in party when one is done instead, and nobody hears 1 of 6.
+#   They stay muted with it off too, and then nothing is said about quest
+#   progress at all: take those two patterns out to have the whispers back.
 #   The trade, taxi and goodbye lines ("A pleasure doing business with you",
 #   "I am ready for the next flight", "Bye bye!") go too.
 #
@@ -3070,7 +3081,8 @@ OllamaChat.Joined.DelayMaxMs = 5000
 #   Only for bots in a group with a real player. DelaySeconds pass first, so
 #   the kill that finishes the quest as well as the objective gets one line,
 #   not two; when several bots finish the same thing together (kill credit is
-#   shared), one says it; and a group hears at most one of these in
+#   shared), one says it -- the others wait to see it go out, and one of them
+#   says it if it never does; and a group hears at most one of these in
 #   GapSeconds -- the rest wait their turn for up to a minute, then lapse.
 #   The quest logs of those bots are read every CheckSeconds.
 #
@@ -3481,15 +3493,23 @@ OllamaChat.Bags.HintCant = "{player_name} asked for {item}, and you would give i
 OllamaChat.Bags.HintAlready = "{player_name} asked again for {item}, which is going over to them already: it is in the trade window, or will be as soon as the window is open. Say so in a few words."
 
 #    OllamaChat.Bags.CancelPhrases
+#    OllamaChat.Bags.CancelNotPhrases
 #    OllamaChat.Bags.HintCancel
-#        "actually no, take it out", "nvm", "keep it": while a bot is handing
-#        a real player something -- a spare thing, a mage's water, offered,
-#        waiting or already in the window, or promised once they invite it --
-#        a line with one of CancelPhrases (whole words, separated by |) calls
-#        it off: the trade window is closed, and the bot says so (HintCancel,
-#        {player_name}, {item}). Empty CancelPhrases turns it off.
+#        "actually no, take it out", "nvm", "you keep it": while a bot is
+#        handing a real player something -- a spare thing, a mage's water,
+#        offered, waiting or already in the window, or promised once they
+#        invite it -- a line with one of CancelPhrases (whole words, separated
+#        by |) calls it off: the trade window is closed, and the bot says so
+#        (HintCancel, {player_name}, {item}). Not where one of
+#        CancelNotPhrases runs into it: "thank you, keep it up" holds "you
+#        keep it" and "dont take it out" holds "take it out", and neither is
+#        calling anything off. (One wholly inside the cancel phrase does not
+#        count: "no thanks" is still a no.) A bare "keep it" or "no need" is
+#        not in the list: "ill keep it", "no need to thank me". Empty
+#        CancelPhrases turns it off.
 #        Default: (below)
-OllamaChat.Bags.CancelPhrases = "take it out|take them out|take that out|take it back|take them back|take it away|actually no|actually nah|no wait|nvm|nevermind|never mind|cancel|cancel it|cancel that|cancel the trade|keep it|keep them|you keep it|you can keep it|dont want it|dont want them|dont need it|dont need them|no thanks|no ty|nah its fine|changed my mind|on second thought|forget it|no need"
+OllamaChat.Bags.CancelPhrases = "take it out|take them out|take that out|take it back|take them back|take it away|actually no|actually nah|no wait|nvm|nevermind|never mind|cancel|cancel it|cancel that|cancel the trade|you keep it|you keep them|you can keep it|you can keep them|dont want it|dont want them|dont need it|dont need them|no thanks|no ty|nah its fine|changed my mind|on second thought|forget it|no need for it|no need for them"
+OllamaChat.Bags.CancelNotPhrases = "thank you|keep it up|keep it coming|keep them coming|keep em coming|dont take*|do not take*|dont cancel|do not cancel|never cancel*"
 OllamaChat.Bags.HintCancel = "{player_name} changed their mind about {item}, so you have taken it back out and closed the trade window. Say so in a few words, in your own chat style, no fuss."
 
 ###############################################################################

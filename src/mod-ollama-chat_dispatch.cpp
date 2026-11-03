@@ -17,6 +17,7 @@
 #include "mod-ollama-chat_partycmd.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_phrases.h"
+#include "mod-ollama-chat_progress.h"
 #include "mod-ollama-chat_response.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_sentiment.h"
@@ -671,6 +672,7 @@ namespace
 
         // The same phrase from bot after bot, all over the realm: an ambient
         // line goes, one owed to someone gets another go.
+        if (!c.request.noEcho)
         {
             std::string echo;
             if (Phrases_IsEcho(botGuid.GetRawValue(), c.text, origin, echo))
@@ -758,8 +760,13 @@ namespace
         Governor_RecordUtterance(botGuid, c.request.scopeKey, plain);
         Phrases_NoteSaid(plain);
         Phrases_NoteEcho(botGuid.GetRawValue(), plain);
+        Context_NoteEmoticonSent(bot, plain);
         if (c.request.partyAck)
             PartyCmd_NoteAck(bot, plain);
+        if (c.request.readyAsk)   // "everyone ready?" is out: a "yep" now answers it
+            PartyCmd_NoteReadyAsked(bot);
+        if (c.request.progressKey)
+            Progress_NoteDelivered(c.request.progressKey);
         if (c.request.noSelfDing)   // a "gz": the one it is for hears it, and thanks once for the lot
             Congrats_NoteBotCongrats(bot, c.request.congratsName, c.request.source,
                                      channel ? channel->GetName() : c.request.channelName, c.request.channelId,

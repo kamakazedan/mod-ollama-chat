@@ -545,6 +545,20 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
 #endif
 }
 
+void PartyCmd_NoteReadyAsked(Player* bot)
+{
+#if OLLAMA_CHAT_DUNGEON_CLEAR
+    const uint32_t key = GroupKey(bot);
+    if (!key || g_PartyReadyWindowSeconds == 0)
+        return;
+    if (g_readyAsked.size() > 500)
+        g_readyAsked.clear();
+    g_readyAsked[key] = std::chrono::steady_clock::now();
+#else
+    (void)bot;
+#endif
+}
+
 void PartyCmd_NoteAck(Player* bot, const std::string& line)
 {
 #if OLLAMA_CHAT_DUNGEON_CLEAR
@@ -685,7 +699,7 @@ namespace
 
     // The tank says something to the whole group without being asked, in its
     // own chat style: OllamaChat.Party.AnnouncePrompt around `situation`.
-    bool SubmitTankLine(Player* tank, const std::string& situation)
+    bool SubmitTankLine(Player* tank, const std::string& situation, bool readyAsk = false)
     {
         if (!tank || situation.empty() || g_PartyAnnouncePrompt.empty())
             return false;
@@ -729,6 +743,8 @@ namespace
         request.directAddress     = true;    // nobody else is talking: no pacing cooldown
         request.triggerBotReplies = false;
         request.partyAck          = true;    // remembered, so the next one is worded differently
+        request.readyAsk          = readyAsk;
+        request.noEcho            = true;    // due now, and kept fresh by the line above instead
         request.maxReplyLength    = OllamaMaxReplyLengthFor(tank);
         return OllamaDispatch_Submit(std::move(request));
     }
@@ -812,14 +828,11 @@ void PartyCmd_Update(uint32_t diff)
                      tank->IsAlive() && !tank->IsInCombat() && !player->IsInCombat())
             {
                 // A tank that spoke a moment ago gets a little longer, then
-                // the moment has passed. It asks whether they are ready: a
-                // plain "yes" from now on answers it.
+                // the moment has passed. It asks whether they are ready: once
+                // that is out, a plain "yes" answers it (PartyCmd_NoteReadyAsked).
                 static std::mt19937 rng{ std::random_device{}() };
-                if (SubmitTankLine(tank, TextRules::ExpandChoices(g_PartyGreetSituation, rng)))
-                {
+                if (SubmitTankLine(tank, TextRules::ExpandChoices(g_PartyGreetSituation, rng), true))
                     w.greeted = true;
-                    g_readyAsked[key] = now;
-                }
                 else if (now - w.firstSeen >= std::chrono::seconds(g_PartyGreetDelaySeconds + 30))
                     w.greeted = true;
             }

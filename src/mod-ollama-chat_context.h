@@ -104,6 +104,10 @@ std::string Context_RationFillers(Player* bot, ChatChannelSourceLocal source,
 std::string Context_RationEmoticons(Player* bot, ChatChannelSourceLocal source,
                                     const std::string& channelName, const std::string& text);
 
+// A line went out: a smiley in it starts this bot's Emoticons.BotCooldownMinutes.
+// (Noted once delivered, so a line dropped after rationing costs it nothing.)
+void Context_NoteEmoticonSent(Player* bot, const std::string& text);
+
 // For a prompt, rarely: that a smiley would do in this one (Emoticons.NudgeText,
 // with a couple of Emoticons.Offer picked at random), by the bot's style's
 // chance (Emoticons.StyleChance, else Emoticons.NudgeChance). Usually empty.

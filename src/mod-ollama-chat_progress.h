@@ -25,6 +25,11 @@
 
 void Progress_Update(uint32_t diff);
 
+// A line about something finished went out (OllamaChatRequest::progressKey):
+// the rest of the group who finished it too need not say it. Until it is out,
+// they wait; if it never goes out, one of them says it instead.
+void Progress_NoteDelivered(uint64_t key);
+
 struct ProgressStats
 {
     uint64_t objectives = 0;   // a quest's last kill or item, seen

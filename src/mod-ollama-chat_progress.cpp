@@ -59,7 +59,19 @@ namespace
     std::vector<Done> g_due;
 
     std::unordered_map<uint32_t, Clock::time_point> g_groupLast;   // group -> its last line about this
-    std::unordered_map<uint64_t, Clock::time_point> g_said;        // group and what -> said, by anyone
+
+    // Group and what -> asked for, by anyone, and whether it went out yet.
+    struct SaidMark
+    {
+        Clock::time_point at{};
+        bool              out = false;
+    };
+    std::unordered_map<uint64_t, SaidMark> g_said;
+
+    // A line asked for and not out after this long is not coming (the model
+    // failed, or delivery dropped it): someone else may say it. (A busy model
+    // can take a while: the queue, the answer, then the typing delay.)
+    constexpr auto kPendingFor = std::chrono::seconds(60);
 
     ProgressStats g_stats;
 
@@ -212,7 +224,7 @@ namespace
             it = inLog.count(it->first) ? std::next(it) : seen.quests.erase(it);
     }
 
-    bool Say(Player* bot, const Done& d)
+    bool Say(Player* bot, const Done& d, uint64_t key)
     {
         PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
         Group* group = bot->GetGroup();
@@ -249,8 +261,18 @@ namespace
         request.directAddress     = true;    // paced here, by the group's gap
         request.triggerBotReplies = false;   // the rest of the group need not answer it
         request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
+        request.progressKey       = key;     // out: nobody else need say it
         return OllamaDispatch_Submit(std::move(request));
     }
+}
+
+void Progress_NoteDelivered(uint64_t key)
+{
+    if (!key)
+        return;
+    SaidMark& mark = g_said[key];
+    mark.at  = Clock::now();
+    mark.out = true;
 }
 
 void Progress_Update(uint32_t diff)
@@ -304,9 +326,21 @@ void Progress_Update(uint32_t diff)
         }
         const uint64_t key = SaidKey(d.group, d.questId, d.part);
         auto said = g_said.find(key);
-        if (said != g_said.end() && now - said->second < std::chrono::minutes(2))
+        if (said != g_said.end() && said->second.out && now - said->second.at < std::chrono::minutes(2))
         {
             ++g_stats.shared;   // someone in the group said it already
+            continue;
+        }
+        if (said != g_said.end() && !said->second.out && now - said->second.at < kPendingFor)
+        {
+            // Someone is saying it: wait and see that it goes out.
+            if (now - d.first > std::chrono::seconds(120))
+                ++g_stats.lapsed;
+            else
+            {
+                d.due = now + std::chrono::seconds(5);
+                later.push_back(std::move(d));
+            }
             continue;
         }
         auto last = g_groupLast.find(d.group);
@@ -324,14 +358,14 @@ void Progress_Update(uint32_t diff)
 
         Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(d.bot));
         Group* group = bot && bot->IsInWorld() ? bot->GetGroup() : nullptr;
-        if (!group || group->GetGUID().GetCounter() != d.group || !bot->IsAlive() || !Say(bot, d))
+        if (!group || group->GetGUID().GetCounter() != d.group || !bot->IsAlive() || !Say(bot, d, key))
         {
             ++g_stats.lapsed;
             continue;
         }
         ++g_stats.said;
         g_groupLast[d.group] = now;
-        g_said[key] = now;
+        g_said[key] = SaidMark{ now, false };
         if (g_DebugEnabled)
             LOG_INFO("module.ollamachat", "[Ollama Chat] {} tells the group it finished something: {}", bot->GetName(),
                      d.text);
@@ -342,7 +376,7 @@ void Progress_Update(uint32_t diff)
     if (g_said.size() > 256 || g_groupLast.size() > 256)
     {
         for (auto it = g_said.begin(); it != g_said.end();)
-            it = (now - it->second > std::chrono::minutes(2)) ? g_said.erase(it) : std::next(it);
+            it = (now - it->second.at > std::chrono::minutes(2)) ? g_said.erase(it) : std::next(it);
         for (auto it = g_groupLast.begin(); it != g_groupLast.end();)
             it = (now - it->second > gap) ? g_groupLast.erase(it) : std::next(it);
     }

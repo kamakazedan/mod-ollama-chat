@@ -116,6 +116,19 @@ struct OllamaChatRequest
     // group remembers it, so the next answer is not a copy of this one.
     bool partyAck = false;
 
+    // The tank asking whether they are ready to start: once it is out, a plain
+    // "yep" in the next Party.ReadyWindowSeconds answers it (mod-ollama-chat_partycmd).
+    bool readyAsk = false;
+
+    // A bot telling its group it finished something (mod-ollama-chat_progress):
+    // once the line is out, the others who finished it too stay quiet.
+    uint64_t progressKey = 0;
+
+    // Not checked against what other bots have been saying (Echo.*): a line
+    // that has to go out when it is due (the tank's answers, which are kept
+    // from repeating themselves by Party.RecentAcks instead).
+    bool noEcho = false;
+
     // A bot offering something it carries (mod-ollama-chat_needs): once the
     // line is out, "me!" where it was said claims this item.
     uint32_t offerEntry = 0;

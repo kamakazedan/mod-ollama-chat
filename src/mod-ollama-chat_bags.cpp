@@ -800,8 +800,10 @@ bool Bags_HandleCancel(Player* player, const std::string& msg, ChatChannelSource
         return false;
     if (source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL && source != SRC_WHISPER_LOCAL && source != SRC_SAY_LOCAL)
         return false;
+    // "thank you, keep it up" and "dont take it out" call nothing off.
     const std::vector<std::string> words = CrowdText::Words(Context_CleanText(msg));
-    if (words.empty() || words.size() > 12 || !CrowdText::ContainsPhrase(words, g_BagsCancelPhrases))
+    if (words.empty() || words.size() > 12 ||
+        !TextRules::HasPhraseUnless(words, g_BagsCancelPhrases, g_BagsCancelNotPhrases))
         return false;
 
     // Who is handing them something: the bot named or whispered, else

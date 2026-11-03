@@ -364,6 +364,14 @@ namespace TextRules
     bool IsBareYes(const std::vector<std::string>& words, const std::vector<std::vector<std::string>>& yes,
                    const std::vector<std::vector<std::string>>& fillers);
 
+    // One of `phrases` is in `words` where none of `unless` runs into it:
+    // "thank you, keep it up" holds "you keep it", but it is part of "thank
+    // you" and "keep it up"; "dont take it out" holds "take it out". One of
+    // `unless` wholly inside the phrase does not count against it ("no
+    // thanks" with "thanks" among `unless`).
+    bool HasPhraseUnless(const std::vector<std::string>& words, const std::vector<std::vector<std::string>>& phrases,
+                         const std::vector<std::vector<std::string>>& unless);
+
     // `text` with any word one slip off one of `keys` -- a letter wrong,
     // missing, extra or swapped: "dingeon", "dungen", "dugneon" -- written as
     // the key ("dungeon"). Only keys of six letters or more, where one slip
@@ -379,9 +387,14 @@ namespace TextRules
     // `text` with every "{~a|b|c}" replaced by one of its alternatives, picked
     // at random: a prompt that says the same thing a different way each time,
     // so the line the model writes from it is not the same each time either.
-    // An alternative may be empty ("{~|really }"). Groups do not nest; an
+    // An alternative may be empty ("{~|really }"), and may hold a "{slot}" or
+    // another "{~...}" ("{~a joke about {creature}|{~a|one} rumour}"). An
     // unclosed "{~" is left as it is. Run it before any fmt formatting.
     std::string ExpandChoices(const std::string& text, std::mt19937& rng);
+
+    // `text` split at every "|" that is not inside braces, each part trimmed,
+    // empty parts dropped: a list of lines where a line may hold "{~a|b}".
+    std::vector<std::string> SplitBars(const std::string& text);
 
     // A template's "{slot}"s filled in: `pick(pool, taken)` gives a value from
     // the pool named by the slot without a number on the end ("{class2}" is
@@ -425,7 +438,8 @@ namespace TextRules
     // Every run of `n` words in `text` -- lowercase, punctuation dropped, joined
     // by single spaces -- that has at least one word not in `common`, each
     // once: the phrases a line is made of, as opposed to its glue ("do you want
-    // to"). Fewer than `n` words: none.
+    // to"). Fewer than `n` words: none. A name in brackets ("[Look to the
+    // Stars]") is game data, not wording: no run includes any of it.
     std::vector<std::string> ContentGrams(const std::string& text, size_t n, const std::vector<std::string>& common);
 }
 

@@ -656,6 +656,7 @@ extern std::string g_JoinedLfgPrompt;
 
 // Taking a gift back out of the trade window
 extern std::vector<std::vector<std::string>> g_BagsCancelPhrases;
+extern std::vector<std::vector<std::string>> g_BagsCancelNotPhrases;
 extern std::string g_BagsHintCancel;
 
 // Orders that did nothing: not "on it" (Playerbots.CommandPrefix set)

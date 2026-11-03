@@ -1768,6 +1768,24 @@ namespace TextRules
         return std::all_of(covered.begin(), covered.end(), [](bool c) { return c; });
     }
 
+    bool HasPhraseUnless(const std::vector<std::string>& words, const std::vector<std::vector<std::string>>& phrases,
+                         const std::vector<std::vector<std::string>>& unless)
+    {
+        const std::vector<std::pair<size_t, size_t>> guards = Occurrences(words, unless);
+        for (const auto& [b, e] : Occurrences(words, phrases))
+        {
+            const bool spoiled = std::any_of(guards.begin(), guards.end(), [b = b, e = e](const std::pair<size_t, size_t>& g)
+            {
+                const bool overlaps = g.first < e && b < g.second;
+                const bool inside   = g.first >= b && g.second <= e;
+                return overlaps && !inside;
+            });
+            if (!spoiled)
+                return true;
+        }
+        return false;
+    }
+
     std::string FixKeyTypos(const std::string& text, const std::vector<std::string>& keys)
     {
         std::string out;
@@ -1799,6 +1817,24 @@ namespace TextRules
         return out;
     }
 
+    namespace
+    {
+        // Where the brace opened at `open` closes, counting the braces inside;
+        // npos when it does not.
+        size_t MatchingBrace(const std::string& text, size_t open)
+        {
+            int depth = 0;
+            for (size_t i = open; i < text.size(); ++i)
+            {
+                if (text[i] == '{')
+                    ++depth;
+                else if (text[i] == '}' && --depth == 0)
+                    return i;
+            }
+            return std::string::npos;
+        }
+    }
+
     std::string ExpandChoices(const std::string& text, std::mt19937& rng)
     {
         std::string out;
@@ -1809,28 +1845,63 @@ namespace TextRules
             const size_t open = text.find("{~", from);
             if (open == std::string::npos)
                 break;
-            const size_t close = text.find('}', open + 2);
+            const size_t close = MatchingBrace(text, open);
             if (close == std::string::npos)
                 break;   // unclosed: left as it is
             out.append(text, from, open - from);
 
+            // The alternatives: split at the bars of this group, not at those
+            // of a group or slot inside one.
             std::vector<std::string> options;
+            int depth = 0;
             size_t at = open + 2;
-            for (;;)
+            for (size_t i = at; i < close; ++i)
             {
-                const size_t bar = text.find('|', at);
-                if (bar == std::string::npos || bar > close)
+                if (text[i] == '{')
+                    ++depth;
+                else if (text[i] == '}' && depth > 0)
+                    --depth;
+                else if (text[i] == '|' && depth == 0)
                 {
-                    options.push_back(text.substr(at, close - at));
-                    break;
+                    options.push_back(text.substr(at, i - at));
+                    at = i + 1;
                 }
-                options.push_back(text.substr(at, bar - at));
-                at = bar + 1;
             }
-            out += options[std::uniform_int_distribution<size_t>(0, options.size() - 1)(rng)];
+            options.push_back(text.substr(at, close - at));
+            const std::string& chosen = options[std::uniform_int_distribution<size_t>(0, options.size() - 1)(rng)];
+            out += chosen.find("{~") == std::string::npos ? chosen : ExpandChoices(chosen, rng);
             from = close + 1;
         }
         out.append(text, from, std::string::npos);
+        return out;
+    }
+
+    std::vector<std::string> SplitBars(const std::string& text)
+    {
+        std::vector<std::string> out;
+        auto push = [&out](const std::string& part)
+        {
+            const size_t b = part.find_first_not_of(" \t\r\n");
+            if (b == std::string::npos)
+                return;
+            const size_t e = part.find_last_not_of(" \t\r\n");
+            out.push_back(part.substr(b, e - b + 1));
+        };
+        int depth = 0;
+        size_t at = 0;
+        for (size_t i = 0; i < text.size(); ++i)
+        {
+            if (text[i] == '{')
+                ++depth;
+            else if (text[i] == '}' && depth > 0)
+                --depth;
+            else if (text[i] == '|' && depth == 0)
+            {
+                push(text.substr(at, i - at));
+                at = i + 1;
+            }
+        }
+        push(text.substr(at));
         return out;
     }
 
@@ -2058,18 +2129,32 @@ namespace TextRules
         std::vector<std::string> out;
         if (n == 0)
             return out;
-        std::vector<std::string> words;
+        // Runs of words between names: "[Look to the Stars]" ends one run and
+        // starts the next, and none of its words are in either.
+        std::vector<std::vector<std::string>> runs(1);
         std::string cur;
+        bool inName = false;
         auto flush = [&]()
         {
             if (!cur.empty())
-                words.push_back(std::move(cur));
+                runs.back().push_back(std::move(cur));
             cur.clear();
         };
         for (char c : text)
         {
             const unsigned char u = static_cast<unsigned char>(c);
-            if (std::isalnum(u))
+            if (c == '[' && !inName)
+            {
+                flush();
+                inName = true;
+                if (!runs.back().empty())
+                    runs.emplace_back();
+            }
+            else if (c == ']' && inName)
+                inName = false;
+            else if (inName)
+                continue;
+            else if (std::isalnum(u))
                 cur += static_cast<char>(std::tolower(u));
             else if (c == '\'')
                 continue;   // "don't" is "dont"
@@ -2077,26 +2162,27 @@ namespace TextRules
                 flush();
         }
         flush();
-        if (words.size() < n)
-            return out;
 
         auto isCommon = [&](const std::string& w)
         {
             return std::find(common.begin(), common.end(), w) != common.end();
         };
-        for (size_t i = 0; i + n <= words.size(); ++i)
+        for (const std::vector<std::string>& words : runs)
         {
-            bool content = false;
-            std::string gram;
-            for (size_t j = i; j < i + n; ++j)
+            for (size_t i = 0; i + n <= words.size(); ++i)
             {
-                content = content || !isCommon(words[j]);
-                if (j > i)
-                    gram += ' ';
-                gram += words[j];
+                bool content = false;
+                std::string gram;
+                for (size_t j = i; j < i + n; ++j)
+                {
+                    content = content || !isCommon(words[j]);
+                    if (j > i)
+                        gram += ' ';
+                    gram += words[j];
+                }
+                if (content && std::find(out.begin(), out.end(), gram) == out.end())
+                    out.push_back(std::move(gram));
             }
-            if (content && std::find(out.begin(), out.end(), gram) == out.end())
-                out.push_back(std::move(gram));
         }
         return out;
     }

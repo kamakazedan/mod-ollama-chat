@@ -360,8 +360,8 @@ namespace
         if (track.lastLook != Clock::time_point{} && now - track.lastLook < window)
             return;   // dealt with this one already
 
-        // All on the spot, none in a fight.
-        const Mounted& last = track.recent.back();
+        // All on the spot, none in a fight. A copy: the deque is cleared below.
+        const Mounted last = track.recent.back();
         for (const Mounted& m : track.recent)
             if (m.combat || m.map != last.map || Distance(m, last) > g_StuckRadius)
                 return;

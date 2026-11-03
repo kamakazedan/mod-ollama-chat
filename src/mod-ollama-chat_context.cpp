@@ -739,8 +739,7 @@ std::string Context_RationEmoticons(Player* bot, ChatChannelSourceLocal source,
                 }
             }
         }
-        if (allowed)
-            g_emoticonUse[botGuid] = now;
+        // (The cooldown starts when the line is out: Context_NoteEmoticonSent.)
     }
 
     // One may stay, the last one (where it reads most naturally); the rest go.
@@ -751,6 +750,16 @@ std::string Context_RationEmoticons(Player* bot, ChatChannelSourceLocal source,
     if (drop.empty())
         return text;
     return TextRules::RemoveEmoticons(text, found, drop);
+}
+
+void Context_NoteEmoticonSent(Player* bot, const std::string& text)
+{
+    if (!bot || text.empty() || !g_EmoticonEnable || g_EmoticonBotCooldownMinutes == 0 || g_EmoticonTokens.empty())
+        return;
+    if (TextRules::FindEmoticons(text, g_EmoticonTokens).empty())
+        return;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_emoticonUse[bot->GetGUID().GetRawValue()] = Clock::now();
 }
 
 std::string Context_EmoticonNudgeFor(Player* bot)
