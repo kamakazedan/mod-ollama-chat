@@ -32,10 +32,11 @@ class Player;
 // From the moment it gets there its playerbots AI is held (renewed every
 // world tick, as marks and orders do), the way a parked player does nothing:
 // otherwise playerbots stands a sitting bot up and takes its AFK off on its
-// very next tick. An invite, a trade, a duel or a fight lets it go at once.
-// When its time is up it stands and goes about its business, and does not
-// hang out again for Hangout.CooldownMinutes. If this stops running, the
-// hold runs out by itself within a second.
+// very next tick. An invite (group, guild, arena team), a trade, a duel, a
+// queue or a fight lets it go at once. When its time is up it stands and
+// goes about its business, and does not hang out again for
+// Hangout.CooldownMinutes. Switching it off lets everyone go at once; if this
+// stopped running altogether, the hold would run out within five seconds.
 //
 // World thread only: Hangout_Update runs in OnWorldUpdate, while the map
 // threads (and every bot's AI) are idle.

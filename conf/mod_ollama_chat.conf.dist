@@ -2169,11 +2169,12 @@ OllamaChat.City.ConversationBoost = 2
 #   nothing -- otherwise playerbots stands a sitting bot up and takes its AFK
 #   off on its very next tick. An invite (group, guild, arena team), a trade,
 #   a duel, a queue or a fight lets it go at once, as does being moved off
-#   the spot. When its time is up it
-#   stands and goes about its business. If the module stops (Enable = 0, a
-#   reload), the hold runs out by itself within a second. Nothing happens
-#   while no real player is online, and bots only gather where one is about:
-#   playerbots keeps bots far from any player mostly idle (and AFK).
+#   the spot. When its time is up it stands and goes about its business.
+#   Switching hangouts or the module off lets everyone go at once; if the
+#   module stopped running altogether, the hold would run out by itself
+#   within five seconds. Nothing happens while no real player is online, and
+#   bots only gather where one is about: playerbots keeps bots far from any
+#   player mostly idle (and AFK).
 #
 #   With a debug log on, each one is logged as it heads over, settles and
 #   leaves; ".ollama status" counts them.
