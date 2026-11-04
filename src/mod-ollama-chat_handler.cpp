@@ -1235,6 +1235,9 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
 
         const PartyCmdLine partyLine = PartyCmd_Classify(player, msg, sourceLocal);
 
+        // After a run: "wait, can you help me with..." keeps the group together.
+        PartyCmd_NoteHumanPartyLine(player, msg, sourceLocal);
+
         // "dc on", "dc pause": mod-dungeon-clear answers those itself.
         if (partyLine == PartyCmdLine::DcCommand)
             return;
@@ -3338,6 +3341,11 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     const std::string runState = PartyCmd_RunStateFor(bot, source);
     if (!runState.empty())
         prompt += " " + runState;
+
+    // ...and once it is over, that it is over, and whether they are all off.
+    const std::string doneState = PartyCmd_DoneStateFor(bot, source);
+    if (!doneState.empty())
+        prompt += " " + doneState;
 
     // General, Trade, guild chat: everyone there reads it, not only the group.
     const bool publicLine = source == SRC_GENERAL_LOCAL || source == SRC_GUILD_LOCAL || source == SRC_OFFICER_LOCAL;

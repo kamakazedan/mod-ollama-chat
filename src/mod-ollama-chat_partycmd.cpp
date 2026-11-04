@@ -12,6 +12,7 @@
 #include "mod-ollama-chat-utilities.h"
 
 #include "Group.h"
+#include "GroupMgr.h"
 #include "Log.h"
 #include "Map.h"
 #include "ObjectAccessor.h"
@@ -21,12 +22,14 @@
 #include "Event.h"
 #include "PlayerbotAI.h"
 #include "PlayerbotMgr.h"
+#include "RandomPlayerbotMgr.h"
 
 #include <fmt/core.h>
 
 #include <algorithm>
 #include <chrono>
 #include <deque>
+#include <mutex>
 #include <optional>
 #include <random>
 #include <unordered_map>
@@ -65,6 +68,34 @@
 namespace
 {
     PartyCmdStats g_stats;
+
+    // Members a group got while it was a dungeon-finder group, by group, and
+    // who last invited whom into a group (the group's leader at the time),
+    // by invitee. Raw guids. Written by the group hooks on any thread.
+    struct Invite
+    {
+        uint64_t                              by = 0;
+        std::chrono::steady_clock::time_point at{};
+    };
+    std::mutex g_finderMutex;
+    std::unordered_map<uint64_t, std::unordered_set<uint64_t>> g_finderJoins;
+    std::unordered_map<uint64_t, Invite>                        g_invites;
+
+    // A bot the finder matched into this group -- not one somebody in it
+    // invited lately and queued with (the finder rebuilds a part group around
+    // the players it adds, so they all join it afresh).
+    bool JoinedThroughFinder(Group* group, ObjectGuid member)
+    {
+        std::lock_guard<std::mutex> lock(g_finderMutex);
+        auto it = g_finderJoins.find(group->GetGUID().GetRawValue());
+        if (it == g_finderJoins.end() || !it->second.count(member.GetRawValue()))
+            return false;
+        auto inv = g_invites.find(member.GetRawValue());
+        if (inv != g_invites.end() && std::chrono::steady_clock::now() - inv->second.at < std::chrono::hours(6) &&
+            group->IsMember(ObjectGuid(inv->second.by)))
+            return false;   // invited by someone it is still grouped with
+        return true;
+    }
 
     // "just start the dingeon": the words a line about the run hangs on,
     // read right however they are typed.
@@ -694,12 +725,22 @@ namespace
         bool                   announced = false;
         bool                   moving    = false;   // run under way and not paused
         bool                   unstay    = false;   // staying bots still to take along
+        WatchClock::time_point doneTried{};             // the end of the run first tried to call
     };
     std::unordered_map<uint32_t, RunWatch> g_watches;   // by the group's guid counter
 
+    // What a line that has to say something carries besides its situation.
+    struct MustSay
+    {
+        std::vector<std::vector<std::string>> phrases;   // one of these in the model's line...
+        std::string                           fallback;  // ...or this goes out instead
+        bool                                  doneCall = false;
+    };
+
     // The tank says something to the whole group without being asked, in its
     // own chat style: OllamaChat.Party.AnnouncePrompt around `situation`.
-    bool SubmitTankLine(Player* tank, const std::string& situation, bool readyAsk = false)
+    bool SubmitTankLine(Player* tank, const std::string& situation, bool readyAsk = false,
+                        MustSay const* must = nullptr)
     {
         if (!tank || situation.empty() || g_PartyAnnouncePrompt.empty())
             return false;
@@ -746,7 +787,224 @@ namespace
         request.readyAsk          = readyAsk;
         request.noEcho            = true;    // due now, and kept fresh by the line above instead
         request.maxReplyLength    = OllamaMaxReplyLengthFor(tank);
+        if (must)
+        {
+            request.mustSay      = must->phrases;
+            request.fallbackText = must->fallback;
+            request.doneCall     = must->doneCall;
+        }
         return OllamaDispatch_Submit(std::move(request));
+    }
+
+    // ---- the end of a run ----------------------------------------------------------
+
+    std::mt19937& WrapRng()
+    {
+        static std::mt19937 rng{ std::random_device{}() };
+        return rng;
+    }
+
+    uint32_t Between(uint32_t lo, uint32_t hi)
+    {
+        return std::uniform_int_distribution<uint32_t>(lo, std::max(lo, hi))(WrapRng());
+    }
+
+    // "all 6 bosses are down", "the boss is down".
+    std::string BossesText(uint32_t killed)
+    {
+        return killed > 1 ? fmt::format("all {} bosses are down", killed) : std::string("the boss is down");
+    }
+
+    // One group's end of a run, in one copy of a dungeon.
+    struct Wrapup
+    {
+        uint32_t               map        = 0;
+        uint32_t               instanceId = 0;
+        uint64_t               tank       = 0;
+        std::string            dungeon;
+        WatchClock::time_point calledAt{};
+        WatchClock::time_point nextLeave{};   // the next one goes then; zero while nobody is to go
+        bool                   cheered    = false;
+        bool                   stay       = false;   // asked to stay
+        std::vector<uint64_t>  leavers;              // the random bots that came in through the finder
+    };
+    std::unordered_map<uint32_t, Wrapup> g_wrapups;   // by the group's guid counter
+
+    // The tank calls it: in its own words if they say the dungeon is cleared
+    // (Party.DoneWords, or the dungeon's name), else in stock ones.
+    bool SubmitDoneCall(Player* tank, Map* map, uint32_t killed)
+    {
+        const std::string dungeon = map ? std::string(map->GetMapName()) : std::string("the dungeon");
+        const std::string bosses  = BossesText(killed);
+        std::string situation = SafeFormat(g_PartyDoneSituation, fmt::arg("dungeon", dungeon), fmt::arg("bosses", bosses));
+        if (situation.empty() || situation == "[Format Error]")
+            situation = g_PartyDoneSituation;
+
+        MustSay must;
+        must.doneCall = true;
+        must.phrases  = g_PartyDoneWords;
+        if (std::vector<std::string> name = CrowdText::Words(dungeon); !name.empty())
+            must.phrases.push_back(std::move(name));
+        if (!g_PartyDoneLines.empty())
+        {
+            const std::string& pick = g_PartyDoneLines[Between(0, uint32_t(g_PartyDoneLines.size() - 1))];
+            must.fallback = SafeFormat(pick, fmt::arg("dungeon", dungeon), fmt::arg("bosses", bosses));
+            if (must.fallback == "[Format Error]")
+                must.fallback.clear();
+        }
+        return SubmitTankLine(tank, situation, false, &must);
+    }
+
+    // The tank has called it: who is to leave (the random bots, in a group the
+    // dungeon finder made), and from when.
+    void StartWrapup(Player* tank, Group* group, Map* map, uint32_t key, WatchClock::time_point now)
+    {
+        Wrapup& w   = g_wrapups[key];
+        w           = Wrapup{};
+        w.map        = map->GetId();
+        w.instanceId = map->GetInstanceId();
+        w.tank       = tank->GetGUID().GetRawValue();
+        w.dungeon    = map->GetMapName();
+        w.calledAt   = now;
+        if (!g_PartyDoneLeave || !group->isLFGGroup())
+            return;
+        // Only the random bots the finder matched: not ones invited before the
+        // group queued together, nor anyone's own bots (nor the bots
+        // mod-dungeon-clear's queue fill logs in for a player, which it sees
+        // out itself).
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            if (Player* member = ref->GetSource())
+                if (member->IsInWorld() && member->GetMap() == map && OllamaIsBotPlayer(member) &&
+                    sRandomPlayerbotMgr.IsRandomBot(member) && JoinedThroughFinder(group, member->GetGUID()))
+                    w.leavers.push_back(member->GetGUID().GetRawValue());
+        std::shuffle(w.leavers.begin(), w.leavers.end(), WrapRng());
+        if (!w.leavers.empty())
+            w.nextLeave = now + std::chrono::seconds(g_PartyDoneLeaveSeconds);
+    }
+
+    std::string CheerPrompt(Player* bot, PlayerbotAI* ai, const Wrapup& w, const std::string& tankName)
+    {
+        if (g_PartyCheerPrompt.empty() || !ai->GetChatHelper())
+            return "";
+        std::string prompt = SafeFormat(g_PartyCheerPrompt,
+                                        fmt::arg("bot_name", bot->GetName()),
+                                        fmt::arg("bot_level", bot->GetLevel()),
+                                        fmt::arg("bot_race", ai->GetChatHelper()->FormatRace(bot->getRace())),
+                                        fmt::arg("bot_class", ai->GetChatHelper()->FormatClass(bot->getClass())),
+                                        fmt::arg("bot_personality", GetPersonalityPromptAddition(GetBotPersonality(bot))),
+                                        fmt::arg("dungeon", w.dungeon),
+                                        fmt::arg("tank", tankName));
+        if (prompt.empty() || prompt == "[Format Error]")
+            return "";
+        return prompt + Roleplay_BuildVoicePrompt(bot);
+    }
+
+    // Everyone but the tank says gg, once each, a moment apart, to nobody in
+    // particular: no bot answers another's.
+    void Cheer(Player* tank, Wrapup& w)
+    {
+        w.cheered = true;
+        if (!tank || !g_PartyCheerEnable || g_PartyCheerChance == 0)
+            return;
+        Group* group = tank->GetGroup();
+        if (!group)
+            return;
+        const ChatChannelSourceLocal source = group->isRaidGroup() ? SRC_RAID_LOCAL : SRC_PARTY_LOCAL;
+        const std::string scopeKey = Governor_MakeScopeKey(ChatChannelSourceLocalStr[source], 0, std::string(), 0,
+                                                           group->GetGUID().GetCounter());
+
+        std::vector<Player*> bots;
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            if (Player* member = ref->GetSource())
+                if (member != tank && member->IsInWorld() && member->GetMap() == tank->GetMap() &&
+                    OllamaIsBotPlayer(member))
+                    bots.push_back(member);
+        std::shuffle(bots.begin(), bots.end(), WrapRng());
+
+        // Typed ones never twice in a group; none in roleplay, where a bare
+        // "gg" would break character.
+        std::vector<std::string> typed = g_RoleplayEnable ? std::vector<std::string>() : g_PartyCheerLines;
+        std::shuffle(typed.begin(), typed.end(), WrapRng());
+        size_t   nextTyped = 0;
+        uint32_t delay     = 0;
+        for (Player* bot : bots)
+        {
+            PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
+            if (!ai || Between(1, 100) > g_PartyCheerChance)
+                continue;
+            delay += Between(1200, 4500);
+
+            OllamaChatRequest request;
+            request.botGuid           = bot->GetGUID().GetRawValue();
+            request.source            = source;
+            request.chainDepth        = 0;
+            request.scopeKey          = scopeKey;
+            request.botName           = bot->GetName();
+            request.kind              = OllamaRequestKind::EventChatter;
+            request.directAddress     = true;    // a moment everyone speaks at: no pacing cooldown
+            request.triggerBotReplies = false;   // nobody answers a gg
+            request.noEcho            = true;    // "gg" from everyone is the point
+            request.extraDelayMs      = delay;
+            request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
+            if (nextTyped < typed.size() && Between(1, 100) <= g_PartyCheerCannedChance)
+                request.fixedText = typed[nextTyped++];
+            else
+            {
+                request.prompt = CheerPrompt(bot, ai, w, tank->GetName());
+                if (request.prompt.empty())
+                {
+                    if (nextTyped >= typed.size())
+                        continue;
+                    request.fixedText = typed[nextTyped++];
+                }
+            }
+            if (OllamaDispatch_Submit(std::move(request)))
+                ++g_stats.cheers;
+        }
+    }
+
+    // Every couple of seconds: the gg, if the tank's call never got out, and
+    // the next one to leave.
+    void UpdateWrapups(WatchClock::time_point now)
+    {
+        for (auto it = g_wrapups.begin(); it != g_wrapups.end();)
+        {
+            Wrapup& w = it->second;
+            if (!w.cheered && now - w.calledAt > std::chrono::seconds(25))
+                Cheer(ObjectAccessor::FindConnectedPlayer(ObjectGuid(w.tank)), w);
+
+            bool over = now - w.calledAt > std::chrono::minutes(30);
+            if (!over && !w.stay && w.nextLeave != WatchClock::time_point{} && now >= w.nextLeave)
+            {
+                w.nextLeave = WatchClock::time_point{};
+                while (!w.leavers.empty())
+                {
+                    const uint64_t raw = w.leavers.back();
+                    w.leavers.pop_back();
+                    Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(raw));
+                    Group* group = bot ? bot->GetGroup() : nullptr;
+                    PlayerbotAI* ai = bot ? PlayerbotsMgr::instance().GetPlayerbotAI(bot) : nullptr;
+                    if (!group || group->GetGUID().GetCounter() != it->first || !ai || !bot->IsInWorld())
+                        continue;   // gone already
+                    if (bot->IsInCombat())
+                    {
+                        w.leavers.push_back(raw);   // not in the middle of a fight
+                        w.nextLeave = now + std::chrono::seconds(5);
+                        break;
+                    }
+                    ai->LeaveOrDisbandGroup();
+                    ++g_stats.left;
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] {} leaves the group: {} is cleared.",
+                                 bot->GetName(), w.dungeon);
+                    w.nextLeave = now + std::chrono::seconds(Between(3, 9));
+                    break;
+                }
+                if (w.leavers.empty() && w.nextLeave == WatchClock::time_point{})
+                    over = true;   // everyone who was going has gone
+            }
+            it = over ? g_wrapups.erase(it) : std::next(it);
+        }
     }
 }
 #endif
@@ -838,13 +1096,38 @@ void PartyCmd_Update(uint32_t diff)
             }
         }
 
-        // Every boss down: the tank says they are done.
+        // Every boss down: the tank says they are done -- plainly -- and the
+        // rest of the end of a run follows from that (UpdateWrapups). A call
+        // that cannot go out just now is tried again for a minute.
         if (!w.announced && g_PartyDoneEnable && killed > 0 && left == 0 && (w.fresh || w.sawRun) &&
             tank->IsAlive() && !tank->IsInCombat() && !player->IsInCombat())
         {
-            SubmitTankLine(tank, g_PartyDoneSituation);
-            w.announced = true;
+            if (w.doneTried == WatchClock::time_point{})
+                w.doneTried = now;
+            if (SubmitDoneCall(tank, map, killed))
+            {
+                w.announced = true;
+                ++g_stats.done;
+                StartWrapup(tank, group, map, key, now);
+            }
+            else if (now - w.doneTried > std::chrono::seconds(60))
+                w.announced = true;
         }
+    }
+
+    UpdateWrapups(now);
+
+    // Now and then: the finder groups that are gone (bots' own come and go).
+    static WatchClock::time_point nextSweep{};
+    if (now >= nextSweep)
+    {
+        nextSweep = now + std::chrono::minutes(5);
+        std::lock_guard<std::mutex> lock(g_finderMutex);
+        for (auto it = g_finderJoins.begin(); it != g_finderJoins.end();)
+            it = sGroupMgr->GetGroupByGUID(ObjectGuid(it->first).GetCounter()) ? std::next(it)
+                                                                                 : g_finderJoins.erase(it);
+        for (auto it = g_invites.begin(); it != g_invites.end();)
+            it = (now - it->second.at > std::chrono::hours(6)) ? g_invites.erase(it) : std::next(it);
     }
 
     for (auto it = g_watches.begin(); it != g_watches.end();)
@@ -855,7 +1138,106 @@ void PartyCmd_Update(uint32_t diff)
 #endif
 }
 
+void PartyCmd_NoteDoneCalled(Player* bot)
+{
+#if OLLAMA_CHAT_DC_RUN_STATE
+    Group* group = bot ? bot->GetGroup() : nullptr;
+    if (!group)
+        return;
+    auto it = g_wrapups.find(group->GetGUID().GetCounter());
+    if (it != g_wrapups.end() && !it->second.cheered)
+        Cheer(bot, it->second);
+#else
+    (void)bot;
+#endif
+}
+
+void PartyCmd_NoteHumanPartyLine(Player* player, const std::string& msg, ChatChannelSourceLocal source)
+{
+#if OLLAMA_CHAT_DC_RUN_STATE
+    if (g_wrapups.empty() || !player || (source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL))
+        return;
+    Group* group = player->GetGroup();
+    auto it = group ? g_wrapups.find(group->GetGUID().GetCounter()) : g_wrapups.end();
+    if (it == g_wrapups.end())
+        return;
+    Wrapup& w = it->second;
+    if (w.leavers.empty())
+        return;   // nobody was going anyway
+    // An ask ("ty for that - can you help me with one more?") keeps them
+    // even with a goodbye in the same line; the stay list holds only asks,
+    // so "gg, thanks for the help" or "bye, see you next time" keeps nobody.
+    const std::vector<std::string> words = CrowdText::Words(msg);
+    const bool stays = CrowdText::ContainsPhrase(words, g_PartyDoneStayWords);
+    const bool goes  = !stays && CrowdText::ContainsPhrase(words, g_PartyDoneGoWords);
+    if (!w.stay && stays)
+    {
+        w.stay = true;
+        ++g_stats.stayed;
+        if (g_DebugEnabled)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] {} asked the group to stay after {}: '{}'.",
+                     player->GetName(), w.dungeon, msg);
+    }
+    else if (w.stay && goes)
+    {
+        w.stay      = false;
+        w.nextLeave = WatchClock::now() + std::chrono::seconds(Between(4, 10));
+        if (g_DebugEnabled)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] {} let the group go after {}: '{}'.", player->GetName(),
+                     w.dungeon, msg);
+    }
+#else
+    (void)player; (void)msg; (void)source;
+#endif
+}
+
+std::string PartyCmd_DoneStateFor(Player* bot, ChatChannelSourceLocal source)
+{
+#if OLLAMA_CHAT_DC_RUN_STATE
+    if (g_wrapups.empty() || !bot || g_PartyDoneStateText.empty() ||
+        (source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL))
+        return "";
+    Group* group = bot->GetGroup();
+    auto it = group ? g_wrapups.find(group->GetGUID().GetCounter()) : g_wrapups.end();
+    if (it == g_wrapups.end())
+        return "";
+    const Wrapup& w = it->second;
+    Map* map = bot->GetMap();
+    if (!map || map->GetId() != w.map || map->GetInstanceId() != w.instanceId)
+        return "";   // a run since, or somewhere else
+    const std::string plan = w.stay ? g_PartyDoneStayingText
+                                    : (!w.leavers.empty() ? g_PartyDoneLeavingText : std::string());
+    const std::string out = SafeFormat(g_PartyDoneStateText, fmt::arg("dungeon", w.dungeon), fmt::arg("plan", plan));
+    return out == "[Format Error]" ? std::string() : out;
+#else
+    (void)bot; (void)source;
+    return "";
+#endif
+}
+
 PartyCmdStats PartyCmd_GetStats()
 {
     return g_stats;
+}
+
+void OllamaChatFinderJoinScript::OnInviteMember(Group* group, ObjectGuid guid)
+{
+    // Any thread: note it, nothing more.
+    if (!group || !guid.IsPlayer() || group->isLFGGroup() || group->isBGGroup() || group->isBFGroup())
+        return;
+    std::lock_guard<std::mutex> lock(g_finderMutex);
+    if (g_invites.size() > 20000)
+        g_invites.clear();   // only if the sweep has stopped running
+    g_invites[guid.GetRawValue()] = Invite{ group->GetLeaderGUID().GetRawValue(), std::chrono::steady_clock::now() };
+}
+
+void OllamaChatFinderJoinScript::OnAddMember(Group* group, ObjectGuid guid)
+{
+    // Any thread: note it, nothing more.
+    if (!group || !guid.IsPlayer() || !group->isLFGGroup())
+        return;
+    std::lock_guard<std::mutex> lock(g_finderMutex);
+    if (g_finderJoins.size() > 20000)
+        g_finderJoins.clear();   // only if the sweep below has stopped running
+    g_finderJoins[group->GetGUID().GetRawValue()].insert(guid.GetRawValue());
 }

@@ -29,6 +29,16 @@ class Player;
 //   * and now and then AFK (the flag, so it shows <AFK>): it stays quiet,
 //     and when someone talks to it, it is back.
 //
+// The idle bots already in a city run out half an hour or so into a session
+// (playerbots sends few bots to the capitals), so a spot short of
+// Hangout.BringInFill of its room also gets bots fetched from elsewhere: random
+// bots of the city's side and level, out in the world on their own, with no
+// real player near enough to see them go. While someone is in the city one
+// arrives at an inn near the spot (the nearest friendly one, within
+// Hangout.ArrivalRange) and walks over; while nobody is, it is put down in the
+// middle of the spot, and when it is done it goes back where it came from if
+// nobody would see. Hangout.BringInPerMinute caps them, all spots together.
+//
 // From the moment it gets there its playerbots AI is held (renewed every
 // world tick, as marks and orders do), the way a parked player does nothing:
 // otherwise playerbots stands a sitting bot up and takes its AFK off on its
@@ -69,10 +79,13 @@ struct HangoutStats
     uint64_t movedOn   = 0;   // time up, off again
     uint64_t cutShort  = 0;   // a group, a fight, moved away...
     uint64_t cameBack  = 0;   // AFK, then talked to
+    uint64_t broughtIn = 0;   // fetched from elsewhere (Hangout.BringIn)
+    uint64_t sentBack  = 0;   // ...and gone back there when done
     uint32_t hanging   = 0;   // there now
     uint32_t away      = 0;   // ...of whom AFK
     uint32_t onTheWay  = 0;
     uint32_t spots     = 0;
+    uint32_t withInn   = 0;   // spots with an inn their fetched bots arrive at (of those looked at so far)
 };
 HangoutStats Hangout_GetStats();
 

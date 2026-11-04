@@ -585,6 +585,24 @@ extern std::string g_PartyGreetSituation;
 extern bool        g_PartyDoneEnable;
 extern std::string g_PartyDoneSituation;
 
+// The end of a dungeon-clear run (mod-ollama-chat_partycmd): the tank's call
+// has to say the dungeon is cleared, the rest say gg, and the bots that came
+// in through the dungeon finder leave unless asked to stay. World thread only.
+extern std::vector<std::vector<std::string>> g_PartyDoneWords;   // the tank's call has one of these, or...
+extern std::vector<std::string> g_PartyDoneLines;                 // ...one of these goes out instead
+extern bool        g_PartyCheerEnable;
+extern uint32_t    g_PartyCheerChance;         // each other bot says gg this often
+extern uint32_t    g_PartyCheerCannedChance;   // ...typed (CheerLines) rather than written by the model
+extern std::vector<std::string> g_PartyCheerLines;
+extern std::string g_PartyCheerPrompt;
+extern bool        g_PartyDoneLeave;
+extern uint32_t    g_PartyDoneLeaveSeconds;    // the first one leaves this long after the call
+extern std::vector<std::vector<std::string>> g_PartyDoneStayWords;   // "wait", "can you help": they stay
+extern std::vector<std::vector<std::string>> g_PartyDoneGoWords;     // "ok bye": then they go after all
+extern std::string g_PartyDoneStateText;
+extern std::string g_PartyDoneLeavingText;
+extern std::string g_PartyDoneStayingText;
+
 // Read OllamaChat.Personality.Nudge.<KEY> and .MaxReplyLength.<KEY> for every
 // personality loaded from the database. Called right after LoadEmoteStyles.
 void LoadPersonalityExtras();
@@ -705,6 +723,11 @@ extern float       g_HangoutHeightTolerance;
 extern std::vector<std::string> g_HangoutBenchWords;   // lowercase; a seat whose name has one is a bench
 extern std::string g_HangoutStateText;
 extern std::string g_HangoutAwayText;
+extern bool        g_HangoutBringIn;           // a spot short of bots gets them from elsewhere...
+extern uint32_t    g_HangoutBringInFill;       // ...up to this percent of its capacity...
+extern uint32_t    g_HangoutBringInPerMinute;  // ...at most this many a minute, all spots together
+extern uint32_t    g_HangoutBringInMinLevel;
+extern float       g_HangoutArrivalRange;      // an inn this close to a spot is where its bots arrive
 
 // --------------------------------------------
 // Topic engine

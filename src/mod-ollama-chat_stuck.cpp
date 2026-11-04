@@ -66,6 +66,7 @@ namespace
     {
         std::deque<Mounted> recent;
         Clock::time_point   lastLook{};   // stuck already dealt with (or looked into) at this time
+        Clock::time_point   lastFight{};  // last seen in a fight (looked at once a second)
     };
     std::unordered_map<uint64_t, Track> g_tracks;
 
@@ -496,6 +497,12 @@ namespace
             if (m.combat || m.map != last.map || Distance(m, last) > g_StuckRadius)
                 return;
 
+        // A fight in between: a bot grinding where the mobs stand close
+        // together kills one, loots it, gets on its mount and straight off
+        // again for the next -- on the spot, but not stuck.
+        if (track.lastFight != Clock::time_point{} && track.lastFight >= track.recent.front().when)
+            return;
+
         Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid));
         if (!bot || !bot->IsInWorld() || !OllamaIsBotPlayer(bot) || !bot->IsAlive() || bot->IsInCombat() ||
             bot->InBattleground() || bot->InArena() || bot->GetVehicle() || bot->IsInFlight())
@@ -566,6 +573,19 @@ void Stuck_Update(uint32_t /*diff*/)
     {
         nextWalkCheck = now + std::chrono::seconds(1);
         UpdateWalkers(now, g_StuckWalkMinutes == 0);
+    }
+
+    // Once a second: which of the bots that got on a mount lately is in a
+    // fight. Fights last longer than that, so none is missed.
+    static Clock::time_point nextFightLook{};
+    if (!g_tracks.empty() && now >= nextFightLook)
+    {
+        nextFightLook = now + std::chrono::seconds(1);
+        for (auto& [guid, track] : g_tracks)
+            if (!track.recent.empty())
+                if (Player* p = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid)))
+                    if (p->IsInWorld() && p->IsInCombat())
+                        track.lastFight = now;
     }
 
     for (const Mounted& m : fresh)

@@ -7,6 +7,7 @@
 #include "ObjectGuid.h"
 #include <string>
 #include <cstdint>
+#include <vector>
 
 class Player;
 class Channel;
@@ -145,6 +146,18 @@ struct OllamaChatRequest
     // Said to a stranger (a passer-by): no rude or gross gesture goes with it
     // (OllamaChat.Presence.SkipEmotes), whatever the model picked.
     bool gentle = false;
+
+    // A line that has to go out, and has to say something in particular (the
+    // tank calling the end of a dungeon): the model's line must have one of
+    // `mustSay` (CrowdText phrases) in it. When it does not -- or the model
+    // passed, failed, or its line was dropped as a stock phrase --
+    // `fallbackText` goes out instead.
+    std::vector<std::vector<std::string>> mustSay;
+    std::string fallbackText;
+
+    // The tank calling the end of a dungeon-clear run (mod-ollama-chat_partycmd):
+    // once it is out, the rest of the group says gg.
+    bool doneCall = false;
 };
 
 // Submit a request. Returns false when the queue is at MaxQueueDepth, in which

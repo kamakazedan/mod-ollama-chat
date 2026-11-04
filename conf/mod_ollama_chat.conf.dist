@@ -2172,9 +2172,36 @@ OllamaChat.City.ConversationBoost = 2
 #   the spot. When its time is up it stands and goes about its business.
 #   Switching hangouts or the module off lets everyone go at once; if the
 #   module stopped running altogether, the hold would run out by itself
-#   within five seconds. Nothing happens while no real player is online, and
-#   bots only gather where one is about: playerbots keeps bots far from any
-#   player mostly idle (and AFK).
+#   within five seconds. Nothing happens while no real player is online.
+#
+#   The idle bots already in a city are seldom enough: playerbots sends only
+#   a few bots to the capitals (Playerbots.ProbTeleToBankers of its random
+#   teleports, every two to eight hours a bot), so after the first half hour
+#   or so of a session there is nobody left there to recruit. So a spot with
+#   fewer than BringInFill percent of its room taken also gets bots fetched
+#   from elsewhere (BringIn), up to BringInPerMinute a minute in all, the
+#   cities someone is in first: random bots of the city's side, of
+#   BringInMinLevel or more (58 for Shattrath, 68 for Dalaran), out in the
+#   open world on their own, not wanted by anyone, and with no real player
+#   within 150 yards to see them go.
+#
+#     * While someone is in that city, a fetched bot comes in at an inn
+#       within ArrivalRange of the spot, the way people hearth in -- the
+#       nearest one friendly to its side, so never the other side's inn in
+#       Dalaran -- and walks over from there; no more than one every eight
+#       seconds in a city, whichever of its spots it is for. A spot with no
+#       inn in reach only gets bots while nobody is in its city.
+#     * While nobody is, it is put down in the middle of the spot and walks
+#       to its place, so the spot is already busy when someone gets there.
+#       Once it is done, it goes back to where it was fetched from, so long
+#       as nobody would see it vanish or turn up there; otherwise it stays
+#       and goes about its business like any other bot in town.
+#
+#   Wherever a bot ends up, it is on the spot's own floor: every place is
+#   checked to be on the ground within HeightTolerance of the middle's
+#   height, in sight of the middle and reachable on foot from it -- so never
+#   under the city, on a roof or inside a wall -- and the inns it arrives at
+#   are where their innkeepers stand.
 #
 #   With a debug log on, each one is logged as it heads over, settles and
 #   leaves; ".ollama status" counts them.
@@ -2194,6 +2221,24 @@ OllamaChat.Hangout.Enable = 1
 OllamaChat.Hangout.CheckSeconds = 5
 OllamaChat.Hangout.RecruitChance = 50
 OllamaChat.Hangout.RecruitRange = 300
+
+#    OllamaChat.Hangout.BringIn
+#    OllamaChat.Hangout.BringInFill
+#    OllamaChat.Hangout.BringInPerMinute
+#    OllamaChat.Hangout.BringInMinLevel
+#    OllamaChat.Hangout.ArrivalRange
+#        Fetching bots from elsewhere for spots short of them (see above): on
+#        or off; how full (percent of each spot's room) it keeps them; how
+#        many bots a minute it may fetch, all spots together (at most 120);
+#        the lowest level it fetches; and how far from a spot (yards) an inn
+#        may be for its bots to arrive at while someone is in the city. A spot
+#        can still fill all the way up with bots already in town.
+#        Default: 1, 75, 15, 10, 400
+OllamaChat.Hangout.BringIn = 1
+OllamaChat.Hangout.BringInFill = 75
+OllamaChat.Hangout.BringInPerMinute = 15
+OllamaChat.Hangout.BringInMinLevel = 10
+OllamaChat.Hangout.ArrivalRange = 400
 
 #    OllamaChat.Hangout.StayMinutesMin
 #    OllamaChat.Hangout.StayMinutesMax
@@ -2678,10 +2723,82 @@ OllamaChat.Party.TogetherText = "You and everyone in this group are inside {dung
 #    OllamaChat.Party.DoneEnable
 #    OllamaChat.Party.DoneSituation
 #        When every boss the run means to kill is dead, the tank says in party
-#        that the dungeon is done.
+#        that the dungeon is cleared. DoneSituation: {dungeon} ("Razorfen
+#        Kraul"), {bosses} ("all 6 bosses are down", "the boss is down").
 #        Default: 1, (below)
 OllamaChat.Party.DoneEnable = 1
-OllamaChat.Party.DoneSituation = "Every boss in the dungeon is dead: the group has just finished the whole run. Tell everyone it is done, in your own way: pleased, relieved or joking, whatever suits you."
+OllamaChat.Party.DoneSituation = "Every boss in {dungeon} is dead: the group has cleared the whole dungeon and the run is over. Say that plainly first - {dungeon} is cleared, {bosses} - so nobody can miss that it is done, then celebrate it your own way: gg, thanks, nice work, whatever suits you."
+
+#    OllamaChat.Party.DoneWords
+#    OllamaChat.Party.DoneLines
+#        The tank's call has to make it plain the dungeon is done: its line
+#        must have one of DoneWords in it (or the dungeon's name). When it
+#        does not -- "finally, my arms are tired" -- or the model passes,
+#        fails or cannot be reached, one of DoneLines goes out instead
+#        ({dungeon}, {bosses} as above), so the call is never lost.
+#        Default: (below)
+OllamaChat.Party.DoneWords = "clear|cleared|full clear|complete|completed|finished|all bosses|all the bosses|every boss|all done|run done|dungeon done|were done|we are done|thats it|that is it"
+OllamaChat.Party.DoneLines = "{dungeon} cleared, gg all|That's {dungeon} done, full clear. gg everyone|Full clear of {dungeon}! nice work all|And that's {dungeon} cleared, every boss down. gg|{dungeon} complete, gg and ty all|Every boss in {dungeon} is down, that's the clear done. gg"
+
+#    OllamaChat.Party.CheerEnable
+#    OllamaChat.Party.CheerChance
+#    OllamaChat.Party.CheerCannedChance
+#    OllamaChat.Party.CheerLines
+#    OllamaChat.Party.CheerPrompt
+#        Once the tank has called it, every other bot in the group says
+#        something to end the run on -- "gg", "ty all", "good run" -- each
+#        with CheerChance, once, a second or few apart. CheerCannedChance of
+#        them type one of CheerLines (never the same one twice in a group);
+#        the rest have the model write one in their own style (CheerPrompt:
+#        {bot_name} {bot_level} {bot_race} {bot_class} {bot_personality}
+#        {dungeon} {tank}). Nobody answers anybody's gg. In roleplay mode
+#        every line is the model's.
+#        Default: 1, 85, 60, (below)
+OllamaChat.Party.CheerEnable = 1
+OllamaChat.Party.CheerChance = 85
+OllamaChat.Party.CheerCannedChance = 60
+OllamaChat.Party.CheerLines = "gg|gg all|gg ty|gg everyone|gj all|ty all|thanks all|thx all|good run|nice run|gg wp|ty for the group|great run|gg thanks all|ty gg"
+OllamaChat.Party.CheerPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in a dungeon group. Your chat style: {bot_personality} Your group has just cleared {dungeon} - every boss is dead and the run is over - and {tank} has just said so. Say a quick end-of-run line in party chat, 1 to 6 words, the way players do before they leave: gg, gj, ty all, good run, thanks for the group, or something like it in your own words. No quotes, no name in front."
+
+#    OllamaChat.Party.DoneLeave
+#    OllamaChat.Party.DoneLeaveSeconds
+#    OllamaChat.Party.DoneStayWords
+#    OllamaChat.Party.DoneGoWords
+#        In a dungeon-finder group, the random bots the finder matched leave
+#        once it is done, the way people do: the first DoneLeaveSeconds after
+#        the tank's call, the rest a few seconds apart (and the dungeon finder
+#        takes each one back out to where it came from). Bots you (or anyone
+#        still in the group) invited in the last six hours -- even if you then
+#        queued together -- a group you made without the finder, your own
+#        bots, and the ones mod-dungeon-clear's queue fill logs in for you (it
+#        sees those out itself) all stay.
+#        A party line from you with one of DoneStayWords in it -- "wait",
+#        "hang on", "can you help me with...", "one more?" -- keeps them all;
+#        after that, one with DoneGoWords -- "ok bye", "you can go" -- lets
+#        them go after all. DoneStayWords holds only asks, so an ask keeps
+#        them even with a goodbye in the same line ("ty - can you help me with
+#        one more thing?"), while "gg, thanks for the help" keeps nobody.
+#        Words are matched whole, case and apostrophes aside.
+#        DoneLeaveSeconds: 10 to 600.
+#        Default: 1, 30, (below)
+OllamaChat.Party.DoneLeave = 1
+OllamaChat.Party.DoneLeaveSeconds = 30
+OllamaChat.Party.DoneStayWords = "wait|hang on|hold on|one sec|1 sec|sec|brb|dont leave|dont go|not yet|pls stay|please stay|stay a bit|stay for|can you stay|stay pls|stay please|help me|need help|help with|help us|can you|could you|can someone|can anyone|anyone up|anyone want|anyone fancy|quest|one more|another run|another dungeon|go again|run it again|do it again|run it back|next one|next run|next dungeon"
+OllamaChat.Party.DoneGoWords = "bye|cya|see ya|see you|you can go|u can go|you can leave|u can leave|ok go|thats all|thats it|im done|we are done|were done|done now|all good|thanks for the help|ty for the help|thx for the help|stay safe|take care"
+
+#    OllamaChat.Party.DoneStateText
+#    OllamaChat.Party.DoneLeavingText
+#    OllamaChat.Party.DoneStayingText
+#        For a bot answering in party once the run is over, so "can you help
+#        me with one more thing?" is answered knowing that: DoneStateText
+#        ({dungeon}, {plan}), where {plan} is DoneLeavingText while the
+#        finder's bots are about to go, DoneStayingText once someone asked
+#        them to stay, and nothing in a group nobody leaves. Empty leaves it
+#        out.
+#        Default: (below)
+OllamaChat.Party.DoneStateText = "The run is over: every boss in {dungeon} is dead and the group has cleared the dungeon.{plan}"
+OllamaChat.Party.DoneLeavingText = " Everyone who came in through the dungeon finder is about to leave the group, the way people do after a run, unless someone asks them to stay."
+OllamaChat.Party.DoneStayingText = " Someone asked everyone to stick around, so you are all staying in the group for now."
 
 #    OllamaChat.Party.AnnouncePrompt
 #        The prompt for those two lines. Placeholders: {bot_name},
@@ -3289,13 +3406,15 @@ OllamaChat.Stuck.Enable = 1
 #    OllamaChat.Stuck.MountCount
 #    OllamaChat.Stuck.WindowSeconds
 #    OllamaChat.Stuck.Radius
-#        The loop goes round every few seconds when nothing else is going on,
-#        or every 16 or so when playerbots holds off retrying in between, so
-#        four times in a minute and a half catches both, and an ordinary bot
-#        never mounts that often on one spot.
-#        Default: 4, 90, 6
+#        A stuck bot goes round every two or three seconds at first (the
+#        pauses in between grow later), so four times in half a minute
+#        catches it early. A bot that was in a fight at any time since the
+#        first of those mounts does not count: one grinding mobs that stand
+#        close together kills one, loots it, gets on its mount and straight
+#        off again for the next, on the spot but not stuck.
+#        Default: 4, 30, 6
 OllamaChat.Stuck.MountCount = 4
-OllamaChat.Stuck.WindowSeconds = 90
+OllamaChat.Stuck.WindowSeconds = 30
 OllamaChat.Stuck.Radius = 6
 
 #    OllamaChat.Stuck.IgnoreMinutes

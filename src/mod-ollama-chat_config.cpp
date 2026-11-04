@@ -455,13 +455,27 @@ uint32_t    g_PartyGreetDelaySeconds       = 8;
 std::string g_PartyGreetSituation;
 bool        g_PartyDoneEnable              = true;
 std::string g_PartyDoneSituation;
+std::vector<std::vector<std::string>> g_PartyDoneWords;
+std::vector<std::string> g_PartyDoneLines;
+bool        g_PartyCheerEnable             = true;
+uint32_t    g_PartyCheerChance             = 85;
+uint32_t    g_PartyCheerCannedChance       = 60;
+std::vector<std::string> g_PartyCheerLines;
+std::string g_PartyCheerPrompt;
+bool        g_PartyDoneLeave               = true;
+uint32_t    g_PartyDoneLeaveSeconds        = 30;
+std::vector<std::vector<std::string>> g_PartyDoneStayWords;
+std::vector<std::vector<std::string>> g_PartyDoneGoWords;
+std::string g_PartyDoneStateText;
+std::string g_PartyDoneLeavingText;
+std::string g_PartyDoneStayingText;
 
 // --------------------------------------------
 // Natural chat v10
 // --------------------------------------------
 bool        g_StuckEnable                  = true;
 uint32_t    g_StuckMountCount              = 4;
-uint32_t    g_StuckWindowSeconds           = 90;
+uint32_t    g_StuckWindowSeconds           = 30;
 float       g_StuckRadius                  = 6.0f;
 uint32_t    g_StuckIgnoreMinutes           = 10;
 uint32_t    g_StuckWalkMinutes             = 10;
@@ -547,6 +561,11 @@ float       g_HangoutHeightTolerance       = 6.0f;
 std::vector<std::string> g_HangoutBenchWords;
 std::string g_HangoutStateText;
 std::string g_HangoutAwayText;
+bool        g_HangoutBringIn               = true;
+uint32_t    g_HangoutBringInFill           = 75;
+uint32_t    g_HangoutBringInPerMinute      = 15;
+uint32_t    g_HangoutBringInMinLevel       = 10;
+float       g_HangoutArrivalRange          = 400.0f;
 
 // --------------------------------------------
 // Topic engine
@@ -1767,8 +1786,9 @@ static void LoadNaturalChatV7Settings()
         "not whether anyone needs anything.");
     g_PartyDoneEnable = sConfigMgr->GetOption<bool>("OllamaChat.Party.DoneEnable", true);
     g_PartyDoneSituation = sConfigMgr->GetOption<std::string>("OllamaChat.Party.DoneSituation",
-        "Every boss in the dungeon is dead: the group has just finished the whole run. Tell everyone it is done, "
-        "in your own way: pleased, relieved or joking, whatever suits you.");
+        "Every boss in {dungeon} is dead: the group has cleared the whole dungeon and the run is over. Say that "
+        "plainly first - {dungeon} is cleared, {bosses} - so nobody can miss that it is done, then celebrate it "
+        "your own way: gg, thanks, nice work, whatever suits you.");
 
     LOG_INFO("module.ollamachat",
              "[Ollama Chat] Replies: {} word(s) dropped as forms of address, {} rare phrase(s) once per {} s; "
@@ -1802,7 +1822,7 @@ static void LoadNaturalChatV10Settings()
     // --- stuck getting on and off a mount ----------------------------------------------
     g_StuckEnable          = sConfigMgr->GetOption<bool>("OllamaChat.Stuck.Enable", true);
     g_StuckMountCount      = std::max<uint32_t>(3, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.MountCount", 4));
-    g_StuckWindowSeconds   = std::max<uint32_t>(10, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.WindowSeconds", 90));
+    g_StuckWindowSeconds   = std::max<uint32_t>(10, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.WindowSeconds", 30));
     g_StuckRadius          = std::max(1.0f, sConfigMgr->GetOption<float>("OllamaChat.Stuck.Radius", 6.0f));
     g_StuckIgnoreMinutes   = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.IgnoreMinutes", 10));
     g_StuckWalkMinutes     = std::min<uint32_t>(120, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.WalkMinutes", 10));
@@ -2085,6 +2105,67 @@ static void LoadNaturalChatV11Settings()
              "quiet when too low {}.",
              g_HangoutEnable ? "on" : "off", g_HangoutSpots.size(), places, g_LinksQuestLevelsAbove,
              g_LinksQuietWhenTooLow ? "on" : "off");
+}
+
+static void LoadNaturalChatV13Settings()
+{
+    auto phrases = [](const char* key, const char* def)
+    {
+        return CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(key, def));
+    };
+
+    // --- the end of a dungeon-clear run -------------------------------------------------
+    g_PartyDoneWords = phrases("OllamaChat.Party.DoneWords",
+        "clear|cleared|full clear|complete|completed|finished|all bosses|all the bosses|every boss|all done|"
+        "run done|dungeon done|were done|we are done|thats it|that is it");
+    g_PartyDoneLines = ReadPipeList("OllamaChat.Party.DoneLines",
+        "{dungeon} cleared, gg all|That's {dungeon} done, full clear. gg everyone|Full clear of {dungeon}! "
+        "nice work all|And that's {dungeon} cleared, every boss down. gg|{dungeon} complete, gg and ty all|"
+        "Every boss in {dungeon} is down, that's the clear done. gg");
+    g_PartyCheerEnable       = sConfigMgr->GetOption<bool>("OllamaChat.Party.CheerEnable", true);
+    g_PartyCheerChance       = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.CheerChance", 85));
+    g_PartyCheerCannedChance = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.CheerCannedChance", 60));
+    g_PartyCheerLines = ReadPipeList("OllamaChat.Party.CheerLines",
+        "gg|gg all|gg ty|gg everyone|gj all|ty all|thanks all|thx all|good run|nice run|gg wp|ty for the group|"
+        "great run|gg thanks all|ty gg");
+    g_PartyCheerPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Party.CheerPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in a dungeon group. Your chat style: "
+        "{bot_personality} Your group has just cleared {dungeon} - every boss is dead and the run is over - and "
+        "{tank} has just said so. Say a quick end-of-run line in party chat, 1 to 6 words, the way players do "
+        "before they leave: gg, gj, ty all, good run, thanks for the group, or something like it in your own "
+        "words. No quotes, no name in front.");
+    g_PartyDoneLeave        = sConfigMgr->GetOption<bool>("OllamaChat.Party.DoneLeave", true);
+    g_PartyDoneLeaveSeconds = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.DoneLeaveSeconds", 30), 10, 600);
+    g_PartyDoneStayWords = phrases("OllamaChat.Party.DoneStayWords",
+        "wait|hang on|hold on|one sec|1 sec|sec|brb|dont leave|dont go|not yet|pls stay|please stay|stay a bit|"
+        "stay for|can you stay|stay pls|stay please|help me|need help|help with|help us|can you|could you|"
+        "can someone|can anyone|anyone up|anyone want|anyone fancy|quest|one more|another run|another dungeon|"
+        "go again|run it again|do it again|run it back|next one|next run|next dungeon");
+    g_PartyDoneGoWords = phrases("OllamaChat.Party.DoneGoWords",
+        "bye|cya|see ya|see you|you can go|u can go|you can leave|u can leave|ok go|thats all|thats it|im done|"
+        "we are done|were done|done now|all good|thanks for the help|ty for the help|thx for the help|stay safe|"
+        "take care");
+    g_PartyDoneStateText = sConfigMgr->GetOption<std::string>("OllamaChat.Party.DoneStateText",
+        "The run is over: every boss in {dungeon} is dead and the group has cleared the dungeon.{plan}");
+    g_PartyDoneLeavingText = sConfigMgr->GetOption<std::string>("OllamaChat.Party.DoneLeavingText",
+        " Everyone who came in through the dungeon finder is about to leave the group, the way people do after a "
+        "run, unless someone asks them to stay.");
+    g_PartyDoneStayingText = sConfigMgr->GetOption<std::string>("OllamaChat.Party.DoneStayingText",
+        " Someone asked everyone to stick around, so you are all staying in the group for now.");
+
+    // --- city hangouts filled from elsewhere -------------------------------------------
+    g_HangoutBringIn          = sConfigMgr->GetOption<bool>("OllamaChat.Hangout.BringIn", true);
+    g_HangoutBringInFill      = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.BringInFill", 75));
+    g_HangoutBringInPerMinute = std::min<uint32_t>(120, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.BringInPerMinute", 15));
+    g_HangoutBringInMinLevel  = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.BringInMinLevel", 10), 1, 80);
+    g_HangoutArrivalRange     = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Hangout.ArrivalRange", 400.0f), 0.0f, 1000.0f);
+
+    LOG_INFO("module.ollamachat",
+             "[Ollama Chat] Chat v13: end of a run - gg from {}% of the group, leaving after {} s {}; hangouts "
+             "filled from elsewhere {} (to {}%, up to {} a minute, level {}+).",
+             g_PartyCheerEnable ? g_PartyCheerChance : 0, g_PartyDoneLeaveSeconds, g_PartyDoneLeave ? "on" : "off",
+             g_HangoutBringIn ? "on" : "off", g_HangoutBringInFill, g_HangoutBringInPerMinute,
+             g_HangoutBringInMinLevel);
 }
 
 void LoadPersonalityExtras()
@@ -2615,6 +2696,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV7Settings();
     LoadNaturalChatV10Settings();
     LoadNaturalChatV11Settings();
+    LoadNaturalChatV13Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

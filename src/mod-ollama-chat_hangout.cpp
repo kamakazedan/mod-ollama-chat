@@ -4,6 +4,7 @@
 #include "mod-ollama-chat-utilities.h"
 
 #include "CellImpl.h"
+#include "DBCStores.h"
 #include "GameObject.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
@@ -15,11 +16,13 @@
 #include "MotionMaster.h"
 #include "MoveSpline.h"
 #include "ObjectAccessor.h"
+#include "ObjectMgr.h"
 #include "PathGenerator.h"
 #include "Player.h"
 #include "SpellAuraDefines.h"
 #include "Timer.h"
 
+#include "Event.h"
 #include "NewRpgInfo.h"
 #include "PlayerbotAI.h"
 #include "PlayerbotAIConfig.h"
@@ -31,9 +34,11 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <deque>
 #include <list>
 #include <random>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -61,6 +66,7 @@ namespace
 
     enum class Phase : uint8_t
     {
+        Arriving,   // fetched from elsewhere: teleported in, not landed yet
         Travel,     // playerbots' "go camp" is taking it there
         Approach,   // the last few steps, to its own place in the crowd
         Settled
@@ -92,6 +98,11 @@ namespace
         Clock::time_point until{};
         Clock::time_point nextLook{};
         Clock::time_point cameBack{};         // was AFK, then talked to
+        Clock::time_point landedAt{};         // fetched: when it was first seen in the city
+        Clock::time_point nextTry{};          // ...and when it next looks for room
+        bool              broughtIn = false;  // fetched from elsewhere (Hangout.BringIn)...
+        uint32_t          fromMap   = 0;      // ...from here
+        float             fromX = 0.0f, fromY = 0.0f, fromZ = 0.0f, fromO = 0.0f;
     };
 
     std::unordered_map<uint64_t, Visit>             g_visits;     // by bot guid
@@ -107,6 +118,29 @@ namespace
         uint32_t zone = 0;
     };
     std::unordered_map<std::string, SpotZone> g_spotZones;
+
+    // Where the bots fetched for a spot arrive while someone is in the city:
+    // an inn near it, the way people come in by hearthstone. Worked out once
+    // per spot from the creature spawns.
+    struct Inn
+    {
+        float    x = 0.0f, y = 0.0f, z = 0.0f, o = 0.0f;
+        float    dist    = 0.0f;
+        uint32_t faction = 0;   // the innkeeper's faction template
+    };
+    struct SpotInns
+    {
+        uint32_t         map = 0;
+        float            x = 0.0f, y = 0.0f;   // the spot they were found for
+        bool             known = false;
+        std::vector<Inn> inns;                 // nearest first
+    };
+    std::unordered_map<std::string, SpotInns> g_spotInns;
+
+    std::deque<Clock::time_point>  g_fetchTimes;   // bots fetched in the last minute
+    std::unordered_map<std::string, Clock::time_point> g_spotNextFetch;   // a spot with no room fetches again from then
+    std::unordered_map<uint64_t, Clock::time_point>    g_cityNextFetch;   // a city someone is in takes its next arrival from then
+    std::unordered_set<uint64_t>   g_watched;      // (map << 32 | zone) with a real player in it, as of the last look
 
     std::mt19937& Rng()
     {
@@ -148,6 +182,118 @@ namespace
         const uint32_t zone = map ? map->GetZoneId(PHASEMASK_NORMAL, s.x, s.y, s.z) : 0;
         known = SpotZone{ s.map, s.x, s.y, zone };
         return zone;
+    }
+
+    uint64_t WatchKey(uint32_t map, uint32_t zone)
+    {
+        return (uint64_t(map) << 32) | zone;
+    }
+
+    // A city whose side the bot is on: an Alliance capital takes Alliance
+    // bots, a Horde one Horde bots, Shattrath and Dalaran anyone.
+    bool TeamFits(Player* bot, uint32_t zone)
+    {
+        AreaTableEntry const* area = sAreaTableStore.LookupEntry(zone);
+        if (!area)
+            return false;
+        if (area->team == AREATEAM_ALLY)
+            return bot->GetTeamId() == TEAM_ALLIANCE;
+        if (area->team == AREATEAM_HORDE)
+            return bot->GetTeamId() == TEAM_HORDE;
+        return true;
+    }
+
+    // Outland's and Northrend's cities are for the levels that go there:
+    // Shattrath from 58, Dalaran from 68. (Silvermoon and the Exodar are on
+    // the Outland map too, but they are starting cities.)
+    uint32_t MinLevelFor(const HangoutSpotConfig& s, uint32_t zone)
+    {
+        constexpr uint32_t kSilvermoonCity = 3487, kTheExodar = 3557;
+        uint32_t level = g_HangoutBringInMinLevel;
+        if (s.map == 571)
+            level = std::max<uint32_t>(level, 68);
+        else if (s.map == 530 && zone != kSilvermoonCity && zone != kTheExodar)
+            level = std::max<uint32_t>(level, 58);
+        return level;
+    }
+
+    // The inns within Hangout.ArrivalRange of a spot, in its zone, nearest
+    // first. Empty until the spot's map is up.
+    const std::vector<Inn>& InnsFor(const HangoutSpotConfig& s, uint32_t zone)
+    {
+        SpotInns& known = g_spotInns[s.key];
+        if (known.known && known.map == s.map && known.x == s.x && known.y == s.y)
+            return known.inns;
+        known = SpotInns{};
+        Map* base = sMapMgr->FindBaseMap(s.map);
+        if (!base || !zone)
+            return known.inns;   // looked for again once it is up
+        known.map   = s.map;
+        known.x     = s.x;
+        known.y     = s.y;
+        known.known = true;
+        if (g_HangoutArrivalRange <= 0.0f)
+            return known.inns;
+        for (auto const& [spawnId, data] : sObjectMgr->GetAllCreatureData())
+        {
+            if (data.mapid != s.map || std::fabs(data.posZ - s.z) > kMaxClimb)
+                continue;
+            const float dist = std::hypot(data.posX - s.x, data.posY - s.y);
+            if (dist > g_HangoutArrivalRange)
+                continue;
+            CreatureTemplate const* info = sObjectMgr->GetCreatureTemplate(data.id);
+            if (!info || !((info->npcflag | data.npcflag) & UNIT_NPC_FLAG_INNKEEPER))
+                continue;
+            if (base->GetZoneId(PHASEMASK_NORMAL, data.posX, data.posY, data.posZ) != zone)
+                continue;
+            Inn inn;
+            inn.x       = data.posX;
+            inn.y       = data.posY;
+            inn.z       = data.posZ;
+            inn.o       = data.orientation;
+            inn.dist    = dist;
+            inn.faction = info->faction;
+            known.inns.push_back(inn);
+        }
+        std::sort(known.inns.begin(), known.inns.end(), [](const Inn& a, const Inn& b) { return a.dist < b.dist; });
+        if (known.inns.empty())
+            LOG_INFO("module.ollamachat",
+                     "[Ollama Chat] City hangouts: no inn within {:.0f} yards of {}; bots are fetched for it only "
+                     "while nobody is in the city.",
+                     g_HangoutArrivalRange, s.name);
+        return known.inns;
+    }
+
+    // The nearest of a spot's inns that is friendly to this bot (else one
+    // that is at least not hostile): nobody hearths into the other side's inn.
+    Inn const* InnFor(Player* bot, const std::vector<Inn>& inns)
+    {
+        FactionTemplateEntry const* mine = bot->GetFactionTemplateEntry();
+        if (!mine)
+            return nullptr;
+        Inn const* fallback = nullptr;
+        for (const Inn& inn : inns)
+        {
+            FactionTemplateEntry const* theirs = sFactionTemplateStore.LookupEntry(inn.faction);
+            if (!theirs || mine->IsHostileTo(*theirs) || theirs->IsHostileTo(*mine))
+                continue;
+            if (mine->IsFriendlyTo(*theirs) && theirs->IsFriendlyTo(*mine))
+                return &inn;
+            if (!fallback)
+                fallback = &inn;
+        }
+        return fallback;
+    }
+
+    // A real player anywhere near a place, on its map: they would see a bot
+    // appear there, or vanish.
+    bool RealPlayerNear(uint32_t map, float x, float y, float z, float range)
+    {
+        for (Player* p : sRandomPlayerbotMgr.GetPlayers())
+            if (p && p->IsInWorld() && p->GetMapId() == map && OllamaIsRealPlayer(p) &&
+                p->GetExactDistSq(x, y, z) < range * range)
+                return true;
+        return false;
     }
 
     // Two bots on one spot of ground would stand inside each other.
@@ -315,6 +461,25 @@ namespace
         g_cooldown[bot->GetGUID().GetRawValue()] = now + std::chrono::minutes(g_HangoutCooldownMinutes);
     }
 
+    // A fetched bot goes back where it came from once it is done, if nobody
+    // would see it vanish here or turn up there: so a city nobody is in does
+    // not fill up with bots that are done hanging out in it. False: it stays,
+    // and goes about its business from here like anyone else.
+    bool SendBack(Player* bot, PlayerbotAI* ai, const Visit& v)
+    {
+        if (!ai || !bot->IsInWorld() || bot->IsBeingTeleported() || Wanted(bot) || bot->GetVehicle() ||
+            RealPlayerNear(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 150.0f) ||
+            RealPlayerNear(v.fromMap, v.fromX, v.fromY, v.fromZ, 150.0f))
+            return false;
+        bot->GetMotionMaster()->Clear();
+        ai->Reset(true);
+        bot->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_TELEPORTED | AURA_INTERRUPT_FLAG_CHANGE_MAP);
+        if (!bot->TeleportTo(v.fromMap, v.fromX, v.fromY, v.fromZ, v.fromO))
+            return false;
+        ++g_stats.sentBack;
+        return true;
+    }
+
     bool IdleInRpg(PlayerbotAI* ai)
     {
         const auto& data = ai->rpgInfo.data;
@@ -346,6 +511,207 @@ namespace
         return true;
     }
 
+    // ---- bots fetched from elsewhere (Hangout.BringIn) --------------------------
+
+    bool StillFree(Player* bot, const Visit& v);
+    void Arrived(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now);
+
+    // A bot that may be fetched from wherever it is, for this spot: one of
+    // playerbots' random bots, on its own, wanted by nobody, of the city's
+    // side and of a level that goes there, with no real player near enough to
+    // see it go. (The cheap checks -- alive, out of a fight, not grouped, not
+    // in an instance, on a boat or a flight -- are made before.)
+    bool CanBringIn(Player* bot, PlayerbotAI* ai, const HangoutSpotConfig& s, uint32_t zone)
+    {
+        if (!ai || !ai->IsBotAI() || ai->GetMaster() || !sRandomPlayerbotMgr.IsRandomBot(bot) ||
+            !ai->HasStrategy("new rpg", BOT_STATE_NON_COMBAT) || Wanted(bot))
+            return false;
+        if (bot->GetLevel() < MinLevelFor(s, zone) || !TeamFits(bot, zone))
+            return false;
+        return !RealPlayerNear(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 150.0f);
+    }
+
+    // Off it goes: to an inn in the city while someone is in it (it walks
+    // over from there, like anyone who has just hearthed in), straight to the
+    // spot while nobody is.
+    bool BringIn(Player* bot, PlayerbotAI* ai, const HangoutSpotConfig& s, uint32_t zone, bool watched,
+                 const Clock::time_point now)
+    {
+        float x = s.x, y = s.y, z = s.z, o = Frand(0.0f, kTwoPi);
+        Map* base = sMapMgr->FindBaseMap(s.map);
+        if (!base)
+            return false;
+        if (watched)
+        {
+            Inn const* inn = InnFor(bot, InnsFor(s, zone));
+            if (!inn)
+                return false;   // nowhere to come in that a player would not see it appear
+            // A step out from behind the counter, if there is floor there.
+            x = inn->x;
+            y = inn->y;
+            z = inn->z;
+            o = inn->o;
+            const float sx = inn->x + 1.5f * std::cos(inn->o), sy = inn->y + 1.5f * std::sin(inn->o);
+            const float sz = base->GetHeight(PHASEMASK_NORMAL, sx, sy, inn->z + 2.0f, true, 6.0f);
+            if (sz > INVALID_HEIGHT && std::fabs(sz - inn->z) < 0.6f)
+            {
+                x = sx;
+                y = sy;
+                z = sz;
+            }
+        }
+        else
+        {
+            if (RealPlayerNear(s.map, x, y, z, 150.0f))
+                return false;   // over the zone line from someone after all
+            const float ground = base->GetHeight(PHASEMASK_NORMAL, x, y, z + 2.0f, true, 6.0f);
+            if (ground > INVALID_HEIGHT && std::fabs(ground - z) < 3.0f)
+                z = ground;
+        }
+        z += 0.05f;
+
+        Visit v;
+        v.spotKey   = s.key;
+        v.spotName  = s.name;
+        v.map       = s.map;
+        v.cx        = s.x;
+        v.cy        = s.y;
+        v.cz        = s.z;
+        v.radius    = s.radius;
+        v.phase     = Phase::Arriving;
+        v.started   = now;
+        v.broughtIn = true;
+        v.fromMap   = bot->GetMapId();
+        v.fromX     = bot->GetPositionX();
+        v.fromY     = bot->GetPositionY();
+        v.fromZ     = bot->GetPositionZ();
+        v.fromO     = bot->GetOrientation();
+        // Back on the ground (or the water) it was over, not in mid-air.
+        const float floor = bot->GetMapWaterOrGroundLevel(v.fromX, v.fromY, v.fromZ);
+        if (floor > INVALID_HEIGHT && v.fromZ - floor > 1.0f && v.fromZ - floor < 50.0f)
+            v.fromZ = floor + 0.05f;
+
+        // The way playerbots sends a random bot somewhere itself.
+        bot->GetMotionMaster()->Clear();
+        ai->Reset(true);
+        bot->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_TELEPORTED | AURA_INTERRUPT_FLAG_CHANGE_MAP);
+        if (!bot->TeleportTo(s.map, x, y, z, o))
+            return false;
+        g_visits[bot->GetGUID().GetRawValue()] = std::move(v);
+        g_fetchTimes.push_back(now);
+        ++g_stats.broughtIn;
+        if (g_DebugEnabled)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] {} is fetched to hang out at {} ({}).", bot->GetName(), s.name,
+                     watched ? "at the inn" : "nobody about");
+        return true;
+    }
+
+    // Landed: to its place, walking over from the inn while someone is in the
+    // city, straight there while nobody is. False: it is not staying after all.
+    bool Arrive(Player* bot, PlayerbotAI* ai, Visit& v, HangoutSpotConfig const& s, const Clock::time_point now)
+    {
+        const uint32_t zone = ZoneOf(s);
+        if (bot->GetMapId() != v.map || !zone || bot->GetZoneId() != zone || !StillFree(bot, v))
+        {
+            ++g_stats.gaveUp;
+            Let(bot, ai, v, false, now);
+            return false;
+        }
+        if (v.landedAt == Clock::time_point{})
+            v.landedAt = now;
+        if (now - v.landedAt < std::chrono::seconds(1) || now < v.nextTry)
+            return true;   // a moment to land, or to look again
+        if (!PickPlace(bot, s, v.x, v.y, v.z))
+        {
+            v.nextTry = now + std::chrono::seconds(1);
+            if (now - v.landedAt < std::chrono::seconds(20))
+                return true;   // everywhere taken just now: another look in a moment
+            ++g_stats.gaveUp;
+            g_spotNextFetch[v.spotKey] = now + std::chrono::minutes(2);   // nowhere to put them: not for a while
+            Let(bot, ai, v, false, now);
+            if (!SendBack(bot, ai, v) && g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] {} found no room at {}.", bot->GetName(), v.spotName);
+            return false;
+        }
+        if (g_watched.count(WatchKey(v.map, zone)))
+        {
+            if (bot->IsSitState())
+                bot->SetStandState(UNIT_STAND_STATE_STAND);
+            ai->rpgInfo.ChangeToGoCamp(WorldPosition(v.map, v.x, v.y, v.z));
+            v.phase   = Phase::Travel;
+            v.started = now;
+            return true;
+        }
+        Arrived(bot, ai, v, now);
+        return true;
+    }
+
+    // Spots short of bots (Hangout.BringInFill of their room) get one more
+    // each, from elsewhere, up to Hangout.BringInPerMinute in all -- the
+    // cities someone is in first.
+    void BringInSome(const Clock::time_point now,
+                     const std::vector<std::pair<HangoutSpotConfig const*, uint32_t>>& open,
+                     std::vector<Player*>& fetchable)
+    {
+        while (!g_fetchTimes.empty() && now - g_fetchTimes.front() > std::chrono::seconds(60))
+            g_fetchTimes.pop_front();
+        if (g_fetchTimes.size() >= g_HangoutBringInPerMinute || fetchable.empty())
+            return;
+        uint32_t budget = g_HangoutBringInPerMinute - static_cast<uint32_t>(g_fetchTimes.size());
+
+        std::unordered_map<std::string, uint32_t> there;
+        for (const auto& [guid, v] : g_visits)
+            ++there[v.spotKey];
+        std::vector<std::pair<HangoutSpotConfig const*, uint32_t>> wanting, others;
+        for (const auto& [s, zone] : open)
+        {
+            const uint32_t target = (s->capacity * g_HangoutBringInFill + 99) / 100;
+            if (there[s->key] >= target)
+                continue;
+            auto next = g_spotNextFetch.find(s->key);
+            if (next != g_spotNextFetch.end() && now < next->second)
+                continue;
+            (g_watched.count(WatchKey(s->map, zone)) ? wanting : others).emplace_back(s, zone);
+        }
+        wanting.insert(wanting.end(), others.begin(), others.end());
+
+        for (const auto& [s, zone] : wanting)
+        {
+            if (!budget || fetchable.empty())
+                break;
+            const bool watched = g_watched.count(WatchKey(s->map, zone)) != 0;
+            if (watched && InnsFor(*s, zone).empty())
+                continue;   // no inn to come in at: only while nobody is there
+            if (watched)
+            {
+                auto next = g_cityNextFetch.find(WatchKey(s->map, zone));
+                if (next != g_cityNextFetch.end() && now < next->second)
+                    continue;   // someone just came in at the inn there
+            }
+            for (int tries = 0; tries < 12 && !fetchable.empty(); ++tries)
+            {
+                const size_t i = std::uniform_int_distribution<size_t>(0, fetchable.size() - 1)(Rng());
+                Player* bot = fetchable[i];
+                fetchable[i] = fetchable.back();
+                fetchable.pop_back();
+                if (g_visits.count(bot->GetGUID().GetRawValue()))
+                    continue;   // just sent to a spot in its own town
+                PlayerbotAI* ai = AiOf(bot);
+                if (!CanBringIn(bot, ai, *s, zone))
+                    continue;
+                if (BringIn(bot, ai, *s, zone, watched, now))
+                {
+                    --budget;
+                    // Someone in the city sees them come in at its inns: not a
+                    // stream of them, one every so often, whichever spot.
+                    if (watched)
+                        g_cityNextFetch[WatchKey(s->map, zone)] = now + std::chrono::seconds(8);
+                    break;
+                }
+            }
+        }
+    }
+
     void Recruit(const Clock::time_point now)
     {
         if (g_HangoutSpots.empty())
@@ -356,6 +722,9 @@ namespace
         for (auto const& [guid, p] : ObjectAccessor::GetPlayers())
             if (p && p->IsInWorld() && OllamaIsRealPlayer(p))
                 real.push_back(p);
+        g_watched.clear();
+        for (Player* p : real)
+            g_watched.insert(WatchKey(p->GetMapId(), p->GetZoneId()));
         if (real.empty())
             return;
 
@@ -370,13 +739,25 @@ namespace
         if (open.empty())
             return;
 
+        const bool fetching = g_HangoutBringIn && g_HangoutBringInFill > 0 && g_HangoutBringInPerMinute > 0;
+        std::vector<Player*> fetchable;   // could be fetched from where they are, as far as the cheap checks go
         std::unordered_map<std::string, std::vector<Player*>> willing;
         for (auto const& [guid, bot] : ObjectAccessor::GetPlayers())
         {
             if (!bot || !bot->IsInWorld() || !bot->IsAlive() || bot->IsInCombat() || bot->GetGroup() ||
-                bot->IsInFlight() || bot->GetVehicle() || bot->IsBeingTeleported() || bot->isAFK() ||
+                bot->IsInFlight() || bot->GetVehicle() || bot->IsBeingTeleported() ||
                 bot->InBattleground() || bot->InArena())
                 continue;
+            if (fetching && !bot->GetTransport() && bot->GetMap() && !bot->GetMap()->Instanceable() &&
+                !bot->IsFlying() && !bot->HasUnitMovementFlag(MOVEMENTFLAG_FLYING) &&
+                !g_visits.count(bot->GetGUID().GetRawValue()))
+            {
+                auto cool = g_cooldown.find(bot->GetGUID().GetRawValue());
+                if (cool == g_cooldown.end() || now >= cool->second)
+                    fetchable.push_back(bot);
+            }
+            if (bot->isAFK())
+                continue;   // (one fetched is no matter: that flag is playerbots', for a bot nobody is near)
 
             // The nearest spot with room, in this zone and on this level of it.
             HangoutSpotConfig const* best = nullptr;
@@ -424,6 +805,10 @@ namespace
                 if (Send(bots[i], AiOf(bots[i]), *s, now))
                     break;
         }
+
+        // Not enough idle bots in town: some from elsewhere.
+        if (fetching)
+            BringInSome(now, open, fetchable);
     }
 
     // Still a bot that may be hanging out at all.
@@ -431,6 +816,8 @@ namespace
     {
         return !Wanted(bot) && bot->GetMapId() == v.map && !bot->IsInFlight() && !bot->GetVehicle();
     }
+
+    void Arrived(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now);
 
     // On its way. False: it is not going there after all.
     bool Travel(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
@@ -440,6 +827,8 @@ namespace
         {
             ++g_stats.gaveUp;
             Let(bot, ai, v, free, now);   // timed out: on with something else
+            if (free && v.broughtIn)
+                SendBack(bot, ai, v);     // (fetched, and stuck on the way: back where it was, if nobody sees)
             return false;
         }
 
@@ -466,11 +855,16 @@ namespace
             Let(bot, ai, v, false, now);
             return false;
         }
-        if (!there)
-            return true;
+        if (there)
+            Arrived(bot, ai, v, now);
+        return true;
+    }
 
-        // Here. It rests for as long as it hangs out, its own AI held from now
-        // on, and how it spends it is settled where it can see the place.
+    // Here (or in the city, for one fetched while nobody is about). It rests
+    // for as long as it hangs out, its own AI held from now on, and how it
+    // spends it is settled where it can see the place.
+    void Arrived(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
         ai->rpgInfo.ChangeToRest();
         ai->SetNextCheckDelay(kHoldMs);
         GameObject* bench = Roll(g_HangoutBenchChance) ? FindBench(bot, v) : nullptr;
@@ -495,13 +889,16 @@ namespace
             bot->GetMotionMaster()->MovePoint(kPointId, v.bx, v.by, v.bz);
         else
             bot->GetMotionMaster()->MovePoint(kPointId, v.x, v.y, v.z);
-        return true;
     }
 
     void Settle(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
     {
         if (v.posture != Posture::Mounted && bot->IsMounted())
             bot->RemoveAurasByType(SPELL_AURA_MOUNTED);   // off the horse: it is sitting or standing here
+        else if (v.posture == Posture::Mounted && !bot->IsMounted())
+            // Up on its best mount now, by playerbots' own pick: a bot fetched
+            // for a city nobody is in has an AI too idle to do it by itself.
+            ai->DoSpecificAction("check mount state", Event(), true);
 
         if (v.posture == Posture::Bench)
         {
@@ -587,10 +984,18 @@ namespace
             if (v.posture == Posture::Mounted && !bot->IsMounted() && now - v.settledAt < kMountGrace)
                 return true;
             v.holding = true;
-            if (v.wantsAfk && !bot->isAFK() && v.cameBack == Clock::time_point{})
+            if (v.cameBack == Clock::time_point{})
             {
-                bot->ToggleAFK();
-                v.afkSet = bot->isAFK();
+                if (v.wantsAfk)
+                {
+                    // (Already flagged: playerbots marks a bot nobody is near
+                    // AFK. Ours now, to take off when it is done.)
+                    if (!bot->isAFK())
+                        bot->ToggleAFK();
+                    v.afkSet = bot->isAFK();
+                }
+                else if (bot->isAFK())
+                    bot->ToggleAFK();   // that flag, on one fetched from where nobody was: not AFK here
             }
         }
         else
@@ -627,9 +1032,10 @@ namespace
         {
             ++g_stats.movedOn;
             Let(bot, ai, v, true, now);
+            const bool back = v.broughtIn && SendBack(bot, ai, v);
             if (g_DebugEnabled)
-                LOG_INFO("module.ollamachat", "[Ollama Chat] {} is done hanging out at {}.", bot->GetName(),
-                         v.spotName);
+                LOG_INFO("module.ollamachat", "[Ollama Chat] {} is done hanging out at {}{}.", bot->GetName(),
+                         v.spotName, back ? ", and goes back where it came from" : "");
             return false;
         }
         ai->rpgInfo.startT = getMSTime();   // playerbots' rest is 30 seconds; it is still resting
@@ -668,15 +1074,26 @@ void Hangout_Update(uint32_t /*diff*/)
             it = g_visits.erase(it);   // logged out: nothing to put back
             continue;
         }
+        if (v.phase == Phase::Arriving && now - v.started > std::chrono::seconds(60))
+        {
+            // Never landed (or not where it was sent): nothing of this to undo.
+            ++g_stats.gaveUp;
+            g_cooldown[it->first] = now + std::chrono::minutes(g_HangoutCooldownMinutes);
+            it = g_visits.erase(it);
+            continue;
+        }
         if (!bot->IsInWorld() || bot->IsBeingTeleported())
         {
             ++it;   // between maps: looked at again once it lands
             continue;
         }
 
-        bool keep = SpotByKey(v.spotKey) != nullptr;   // a spot taken out of the conf: everyone there goes
+        HangoutSpotConfig const* spot = SpotByKey(v.spotKey);
+        bool keep = spot != nullptr;   // a spot taken out of the conf: everyone there goes
         if (!keep)
             Let(bot, ai, v, true, now);
+        else if (v.phase == Phase::Arriving)
+            keep = Arrive(bot, ai, v, *spot, now);
         else if (v.phase == Phase::Travel)
             keep = Travel(bot, ai, v, now);
         else if (v.phase == Phase::Approach)
@@ -701,6 +1118,10 @@ void Hangout_Update(uint32_t /*diff*/)
 
     for (auto it = g_cooldown.begin(); it != g_cooldown.end();)
         it = (now >= it->second) ? g_cooldown.erase(it) : std::next(it);
+    for (auto it = g_spotNextFetch.begin(); it != g_spotNextFetch.end();)
+        it = (now >= it->second) ? g_spotNextFetch.erase(it) : std::next(it);
+    for (auto it = g_cityNextFetch.begin(); it != g_cityNextFetch.end();)
+        it = (now >= it->second) ? g_cityNextFetch.erase(it) : std::next(it);
 }
 
 bool Hangout_IsAway(Player* bot)
@@ -762,6 +1183,9 @@ HangoutStats Hangout_GetStats()
 {
     HangoutStats s = g_stats;
     s.spots = static_cast<uint32_t>(g_HangoutSpots.size());
+    for (const auto& [key, known] : g_spotInns)
+        if (known.known && !known.inns.empty())
+            ++s.withInn;
     for (const auto& [guid, v] : g_visits)
     {
         if (v.phase == Phase::Settled)

@@ -555,14 +555,19 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
 
     const PartyCmdStats party = PartyCmd_GetStats();
     handler->PSendSysMessage("Party instructions: {} (dungeon clear {}) - {} started, {} paused, {} resumed, "
-                             "{} waited for players, {} refused",
+                             "{} waited for players, {} refused; {} runs called done, {} gg, {} bots left after, "
+                             "{} groups asked to stay",
                              g_PartyCmdEnable ? "on" : "off",
                              PartyCmd_Available() ? "found" : "not in this build",
                              (unsigned long long)party.started,
                              (unsigned long long)party.paused,
                              (unsigned long long)party.resumed,
                              (unsigned long long)party.waiting,
-                             (unsigned long long)party.refused);
+                             (unsigned long long)party.refused,
+                             (unsigned long long)party.done,
+                             (unsigned long long)party.cheers,
+                             (unsigned long long)party.left,
+                             (unsigned long long)party.stayed);
 
     const ConjureStats conjure = Conjure_GetStats();
     handler->PSendSysMessage("Conjured food and water: {} - {} asked, {} trades offered, {} traded, {} waited "
@@ -700,11 +705,14 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              (unsigned long long)progress.shared,
                              (unsigned long long)progress.lapsed);
     const HangoutStats hangout = Hangout_GetStats();
-    handler->PSendSysMessage("City hangouts: {} - {} hanging out ({} AFK) and {} on their way, {} spots; {} sent, "
-                             "{} settled, {} never got there, {} moved on, {} cut short, {} back from AFK to talk",
+    handler->PSendSysMessage("City hangouts: {} - {} hanging out ({} AFK) and {} on their way, {} spots ({} with an "
+                             "inn to arrive at); {} sent, {} fetched from elsewhere ({} gone back after), {} settled, "
+                             "{} never got there, {} moved on, {} cut short, {} back from AFK to talk",
                              g_HangoutEnable ? "on" : "off",
-                             hangout.hanging, hangout.away, hangout.onTheWay, hangout.spots,
+                             hangout.hanging, hangout.away, hangout.onTheWay, hangout.spots, hangout.withInn,
                              (unsigned long long)hangout.sent,
+                             (unsigned long long)hangout.broughtIn,
+                             (unsigned long long)hangout.sentBack,
                              (unsigned long long)hangout.settled,
                              (unsigned long long)hangout.gaveUp,
                              (unsigned long long)hangout.movedOn,

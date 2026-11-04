@@ -118,12 +118,14 @@ namespace
         g_lastError = what;
     }
 
-    // A conversation's opening line that came to nothing still has to reach
-    // the world thread, which frees the place the conversation was holding
-    // for it. (A crowd voice reports through Crowd_ReportWorkerFailure.)
-    void ReportOpenerFailure(const OllamaChatRequest& request)
+    // A line that came to nothing still has to reach the world thread when
+    // something waits on it there: a conversation's opening line frees the
+    // place the conversation was holding for it, and a line that has to go
+    // out goes out in its stock words. (A crowd voice reports through
+    // Crowd_ReportWorkerFailure.)
+    void ReportFailure(const OllamaChatRequest& request)
     {
-        if (request.openerKey.empty())
+        if (request.openerKey.empty() && request.fallbackText.empty())
             return;
         Completion completion;
         completion.request   = request;
@@ -166,7 +168,7 @@ namespace
         {
             RecordError(api.error);
             Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
-            ReportOpenerFailure(task.request);
+            ReportFailure(task.request);
             return;
         }
 
@@ -196,7 +198,7 @@ namespace
                          "[Ollama Chat] Bot {} produced nothing usable after cleanup.",
                          task.request.botName);
             Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
-            ReportOpenerFailure(task.request);
+            ReportFailure(task.request);
             return;
         }
 
@@ -276,7 +278,7 @@ namespace
                 if (task.type == TaskType::ChatReply)
                 {
                     Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
-                    ReportOpenerFailure(task.request);
+                    ReportFailure(task.request);
                 }
             }
             catch (...)
@@ -286,7 +288,7 @@ namespace
                 if (task.type == TaskType::ChatReply)
                 {
                     Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
-                    ReportOpenerFailure(task.request);
+                    ReportFailure(task.request);
                 }
             }
 
@@ -444,6 +446,14 @@ namespace
     // By value: the line can still be trimmed here before it is spoken.
     void Deliver(Completion c, const OllamaWorldSnapshot& world)
     {
+        // A line that has to go out goes out in its stock words when the model
+        // could not be reached.
+        if (c.failed && !c.request.fallbackText.empty())
+        {
+            c.failed = false;
+            c.text   = c.request.fallbackText;
+        }
+
         // A worker failure has already told the crowd; only the opener needs
         // to hear about it here.
         CrowdSlotReport crowdReport{ c.failed ? 0 : c.request.crowdPlanId, c.request.crowdSlot };
@@ -485,6 +495,19 @@ namespace
 
         // What they said, as they saw it: a link in it is its "[Name]".
         const std::string origin = TextRules::StripChatMarkup(c.request.originMessage);
+
+        // A line that has to say something in particular: the model's, if it
+        // did say it, else the stock one.
+        if (!c.request.fallbackText.empty() && c.text != c.request.fallbackText &&
+            (Context_IsPassReply(c.text) || CrowdText::Words(c.text).empty() ||
+             (!c.request.mustSay.empty() &&
+              !CrowdText::ContainsPhrase(CrowdText::Words(c.text), c.request.mustSay))))
+        {
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} did not say what it had to ('{}'): '{}' instead.",
+                         bot->GetName(), c.text, c.request.fallbackText);
+            c.text = c.request.fallbackText;
+        }
 
         // The prompt lets a bot that overheard someone else's exchange decline
         // to butt in. Checked here, on the world thread, because the token is
@@ -665,7 +688,16 @@ namespace
         // few minutes.
         {
             std::string which;
-            const PhraseCheck verdict = Phrases_Check(c.text, origin, directAddress, bot->GetLevel(), which);
+            PhraseCheck verdict = Phrases_Check(c.text, origin, directAddress, bot->GetLevel(), which);
+            if (verdict != PhraseCheck::Ok && !c.request.fallbackText.empty() && c.text != c.request.fallbackText)
+            {
+                // It has to go out: in its stock words, then.
+                if (g_DebugEnabled)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} line had '{}' in it: '{}' instead.",
+                             bot->GetName(), which, c.request.fallbackText);
+                c.text  = c.request.fallbackText;
+                verdict = PhraseCheck::Ok;
+            }
             if (verdict != PhraseCheck::Ok)
             {
                 ++g_droppedPhrase;
@@ -779,6 +811,8 @@ namespace
             PartyCmd_NoteAck(bot, plain);
         if (c.request.readyAsk)   // "everyone ready?" is out: a "yep" now answers it
             PartyCmd_NoteReadyAsked(bot);
+        if (c.request.doneCall)   // "that's the dungeon cleared": the rest say gg
+            PartyCmd_NoteDoneCalled(bot);
         if (c.request.progressKey)
             Progress_NoteDelivered(c.request.progressKey);
         if (c.request.noSelfDing)   // a "gz": the one it is for hears it, and thanks once for the lot

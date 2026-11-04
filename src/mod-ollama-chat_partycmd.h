@@ -74,6 +74,21 @@ void PartyCmd_NoteAck(Player* bot, const std::string& line);
 // "yep" or "sure" from the group answers it and starts the run.
 void PartyCmd_NoteReadyAsked(Player* bot);
 
+// The tank's "that's the dungeon cleared" went out: the rest of the group says
+// gg, each once and to nobody in particular (Party.Cheer*).
+void PartyCmd_NoteDoneCalled(Player* bot);
+
+// A real player's party or raid line once a run is over. "wait", "can you help
+// me with..." keeps the bots that were about to leave (Party.DoneStayWords);
+// after that, "ok bye" lets them go after all (Party.DoneGoWords). Only looks:
+// the line is answered as usual.
+void PartyCmd_NoteHumanPartyLine(Player* player, const std::string& msg, ChatChannelSourceLocal source);
+
+// For a party or raid prompt once a run is over, in the copy of the dungeon it
+// was in: that it is over, and whether the group is about to split up
+// (Party.DoneStateText). Empty otherwise.
+std::string PartyCmd_DoneStateFor(Player* bot, ChatChannelSourceLocal source);
+
 // The group-chat glossary for a bot answering in party or raid chat inside a
 // dungeon or raid (OllamaChat.Party.DungeonGlossary); empty elsewhere.
 std::string PartyCmd_GlossaryFor(Player* bot, ChatChannelSourceLocal source);
@@ -94,8 +109,26 @@ std::string PartyCmd_TogetherFor(Player* bot, ChatChannelSourceLocal source);
 // The world tick, every couple of seconds: a bot tank leading a dungeon-clear
 // group greets it when it comes into a dungeon ("let me know when you're ready
 // to start", OllamaChat.Party.Greet*) and says so in party when every boss is
-// down (OllamaChat.Party.Done*), in its own chat style.
+// down (OllamaChat.Party.Done*), in its own chat style -- in words that make
+// it plain the dungeon is cleared, or in stock ones (Party.DoneLines). The rest
+// of the group says gg, and in a dungeon-finder group the random bots leave
+// one by one, Party.DoneLeaveSeconds later, unless someone asks them to stay.
 void PartyCmd_Update(uint32_t diff);
+
+// Notes who joined a group while it was a dungeon-finder group -- the
+// players the finder matched (and the first of a group it made) -- and who
+// was invited by whom, so that after a run only the finder's bots leave: not
+// ones a player invited, even when they queued together and the finder
+// rebuilt the group around them. Group::AddMember and AddInvite can run on
+// map threads: this only records, under a lock.
+class OllamaChatFinderJoinScript : public GroupScript
+{
+public:
+    OllamaChatFinderJoinScript()
+        : GroupScript("OllamaChatFinderJoinScript", { GROUPHOOK_ON_ADD_MEMBER, GROUPHOOK_ON_INVITE_MEMBER }) {}
+    void OnAddMember(Group* group, ObjectGuid guid) override;
+    void OnInviteMember(Group* group, ObjectGuid guid) override;
+};
 
 struct PartyCmdStats
 {
@@ -104,6 +137,10 @@ struct PartyCmdStats
     uint64_t resumed = 0;
     uint64_t waiting = 0;   // "ready", but someone was not there yet
     uint64_t refused = 0;   // dungeon clear said no (whispered why)
+    uint64_t done    = 0;   // runs the tank called finished
+    uint64_t cheers  = 0;   // gg lines from the rest
+    uint64_t left    = 0;   // bots that left the group after a run
+    uint64_t stayed  = 0;   // groups asked to stay
 };
 PartyCmdStats PartyCmd_GetStats();
 

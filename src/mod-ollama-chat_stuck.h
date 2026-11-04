@@ -25,8 +25,10 @@ class Unit;
 //
 // Every time a bot mounts, it is noted (a UnitScript hook, on map threads:
 // record only). A bot that mounts Stuck.MountCount times in
-// Stuck.WindowSeconds without leaving a few yards of where it started, out of
-// any fight, takes the hint on the world tick: what it was trying to loot is
+// Stuck.WindowSeconds without leaving a few yards of where it started, and
+// without a fight anywhere in between (a bot grinding mobs that stand close
+// together gets on and off on the spot too, between kills -- polled once a
+// second), takes the hint on the world tick: what it was trying to loot is
 // put out of its reach for Stuck.IgnoreMinutes -- no longer its loot target,
 // held off in its loot list, written off as a gathering node -- so it goes
 // and does something else. A random bot on its own (no group, no master) is
