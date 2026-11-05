@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_dispatch.h"
+#include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_api.h"
@@ -826,6 +827,10 @@ namespace
         const uint64_t seq = Context_RecordLine(bot, c.request.source,
                                                 channel ? channel->GetName() : c.request.channelName,
                                                 plain, ContextLineKind::Bot);
+
+        // A gossip in the group may whisper a real player about it, now and then.
+        if (c.request.source == SRC_PARTY_LOCAL || c.request.source == SRC_RAID_LOCAL)
+            Aside_NotePartyLine(bot, plain, c.request.source);
 
         // ...and a conversation running here hears it too, before anyone
         // reacts to it below.

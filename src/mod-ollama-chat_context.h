@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 class Player;
 
@@ -59,6 +60,19 @@ uint64_t Context_LatestLineFrom(Player* speaker, ChatChannelSourceLocal source,
 // recent.
 std::string Context_BuildTranscript(Player* viewer, ChatChannelSourceLocal source,
                                     const std::string& channelName, uint64_t excludeSeq);
+
+// The newest lines of that space that `viewer` could have seen, newest first:
+// at most `max`, none older than `maxAgeSeconds`, events left out.
+struct ContextRecentLine
+{
+    uint64_t    speakerGuid  = 0;
+    std::string speakerName;
+    bool        speakerIsBot = false;
+    std::string text;
+};
+std::vector<ContextRecentLine> Context_RecentLines(Player* viewer, ChatChannelSourceLocal source,
+                                                   const std::string& channelName, size_t max,
+                                                   uint32_t maxAgeSeconds);
 
 // The channel as a prompt names it: "party chat", "guild chat", "General"
 // (for "General - Elwynn Forest"), "/say nearby".

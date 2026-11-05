@@ -457,6 +457,22 @@ namespace TextRules
     // to"). Fewer than `n` words: none. A name in brackets ("[Look to the
     // Stars]") is game data, not wording: no run includes any of it.
     std::vector<std::string> ContentGrams(const std::string& text, size_t n, const std::vector<std::string>& common);
+
+    // ---- prices --------------------------------------------------------------
+
+    // `text` with every "[Name]" taken out (one space left where it was): what
+    // a player wrote around the things they linked, so "[Gold Ring]" is not a
+    // price and "[Bag of Spare Parts]" not an offer.
+    std::string WithoutBracketNames(const std::string& text);
+
+    // The first price in `text`, in copper: "5g", "5 gold", "1g 50s", "1g50s",
+    // "50 silver", "75c", "2.5g". A number with no coin after it ("lvl 20",
+    // "x5") is no price, nor a coin letter that starts a word ("5 gnolls").
+    // 0 when there is none. Capped at 1,000,000 gold.
+    uint32_t ParsePrice(const std::string& text);
+
+    // A price as people write it: "1g 50s", "35s", "80c"; "0c" for nothing.
+    std::string MoneyWords(uint32_t copper);
 }
 
 #endif // MOD_OLLAMA_CHAT_TEXTRULES_H

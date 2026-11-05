@@ -568,6 +568,93 @@ uint32_t    g_HangoutBringInMinLevel       = 10;
 float       g_HangoutArrivalRange          = 400.0f;
 
 // --------------------------------------------
+// A player giving away or selling something
+// --------------------------------------------
+bool        g_GiftsEnable                  = true;
+std::vector<std::vector<std::string>> g_GiftsOfferWords;
+std::vector<std::vector<std::string>> g_GiftsSellWords;
+std::vector<std::string> g_GiftsGreedyPersonalities;
+uint32_t    g_GiftsSecondVoiceChance       = 35;
+uint32_t    g_GiftsNobodyChance            = 60;
+uint32_t    g_GiftsFollowUpSeconds         = 90;
+uint32_t    g_GiftsRememberSeconds         = 300;
+uint32_t    g_GiftsMaxSpendPercent         = 50;
+std::string g_GiftsHintWant;
+std::string g_GiftsHintWantToo;
+std::string g_GiftsHintNoNeed;
+std::string g_GiftsHintNotTradable;
+std::string g_GiftsHintAskPrice;
+std::string g_GiftsHintBuy;
+std::string g_GiftsHintCounter;
+std::string g_GiftsHintTooDear;
+std::string g_GiftsHintNoBuy;
+std::string g_GiftsInviteText;
+std::string g_GiftsSaidGiftText;
+std::string g_GiftsSaidBuyText;
+std::string g_GiftsSaidCounterText;
+std::string g_GiftsSaidAskText;
+
+// --------------------------------------------
+// The tank down, a wipe, nobody to rez
+// --------------------------------------------
+bool        g_WipeEnable                   = true;
+uint32_t    g_WipeTankDownChance           = 60;
+uint32_t    g_WipeApologyChance            = 75;
+uint32_t    g_WipeNoRezChance              = 90;
+uint32_t    g_WipeRunBackChance            = 60;
+uint32_t    g_WipeTypedChance              = 35;
+uint32_t    g_WipeRunBackQuietSeconds      = 4;
+uint32_t    g_WipeStateMinutes             = 5;
+std::string g_WipeTankDownPrompt;
+std::string g_WipeApologyPrompt;
+std::string g_WipeNoRezPrompt;
+std::string g_WipeRunBackPrompt;
+std::vector<std::string> g_WipeTankDownLines;
+std::vector<std::string> g_WipeApologyLines;
+std::vector<std::string> g_WipeNoRezLines;
+std::vector<std::string> g_WipeRunBackLines;
+std::string g_WipeStateWipeText;
+std::string g_WipeStateDeadText;
+std::string g_WipeStateTankFirstText;
+std::string g_WipeStateTankDeadText;
+std::string g_WipeStateSelfResText;
+std::string g_WipeStateRezzerText;
+std::string g_WipeStateRunBackText;
+std::string g_WipeStateNoRezzerText;
+std::string g_WipeStateBackText;
+
+// --------------------------------------------
+// Gear talk and teasing
+// --------------------------------------------
+bool        g_GearEnable                   = true;
+std::vector<std::vector<std::string>> g_GearTalkWords;
+std::vector<std::vector<std::string>> g_GearBackOffWords;
+uint32_t    g_GearMaxPeople                = 4;
+uint32_t    g_GearBackOffMinutes           = 5;
+std::string g_GearPromptText;
+std::string g_GearBackOffText;
+
+// --------------------------------------------
+// Whispered asides in a group
+// --------------------------------------------
+bool        g_AsideEnable                  = true;
+std::unordered_map<std::string, uint32_t> g_AsidePersonalities;
+uint32_t    g_AsideLineChance              = 10;
+uint32_t    g_AsideIdleChance              = 4;
+uint32_t    g_AsideCheckSeconds            = 60;
+uint32_t    g_AsidePlayerMinutes           = 20;
+uint32_t    g_AsideBotMinutes              = 45;
+uint32_t    g_AsideMinWords                = 4;
+std::string g_AsidePrompt;
+std::string g_AsideHistoryNote;
+std::string g_AsideFactSaid;
+std::string g_AsideFactClass;
+std::string g_AsideFactLevel;
+std::string g_AsideFactGear;
+std::string g_AsideFactPet;
+std::string g_AsideFactDeaths;
+
+// --------------------------------------------
 // Topic engine
 // --------------------------------------------
 uint32_t g_TopicWeightPeople        = 30;
@@ -2168,6 +2255,214 @@ static void LoadNaturalChatV13Settings()
              g_HangoutBringInMinLevel);
 }
 
+static void LoadNaturalChatV14Settings()
+{
+    auto phrases = [](const char* key, const char* def)
+    {
+        return CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(key, def));
+    };
+    auto percent = [](const char* key, uint32_t def)
+    {
+        return std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>(key, def));
+    };
+
+    // --- a player giving away or selling something ---------------------------------------
+    g_GiftsEnable = sConfigMgr->GetOption<bool>("OllamaChat.Gifts.Enable", true);
+    g_GiftsOfferWords = phrases("OllamaChat.Gifts.OfferWords",
+        "anyone want|anybody want|any1 want|anyone wants|anybody wants|who wants|who want|whoever wants|anyone need|"
+        "anybody need|any1 need|who needs|whoever needs|you want|u want|ya want|you need|u need|want my|want this|"
+        "want it|want one|need this|need it|need one|need my|free|for free|freebie|giving away|give away|"
+        "giving it away|giving this away|giving them away|up for grabs|anyone use|anybody use|can anyone use|"
+        "can anybody use|any use|use this|use it|you can have|u can have|can have it|have it if|take it|take this|"
+        "have this|for you|for u|here you go|here u go|dont need|do not need|no longer need|getting rid|get rid");
+    g_GiftsSellWords = phrases("OllamaChat.Gifts.SellWords",
+        "wts|selling|for sale|buy|buying|buyer|buyers|make an offer|make me an offer|any offers|best offer|or offer|"
+        "obo|cheap|bargain|pay|paying");
+    g_GiftsGreedyPersonalities = ReadPipeList("OllamaChat.Gifts.GreedyPersonalities", "NAT_GOLDMAKER|NAT_RUDE");
+    for (std::string& key : g_GiftsGreedyPersonalities)
+        for (char& ch : key)
+            ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    g_GiftsSecondVoiceChance = percent("OllamaChat.Gifts.SecondVoiceChance", 35);
+    g_GiftsNobodyChance      = percent("OllamaChat.Gifts.NobodyChance", 60);
+    g_GiftsFollowUpSeconds   = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Gifts.FollowUpSeconds", 90), 10, 600);
+    g_GiftsRememberSeconds   = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Gifts.RememberSeconds", 300), 30, 3600);
+    g_GiftsMaxSpendPercent   = percent("OllamaChat.Gifts.MaxSpendPercent", 50);
+    g_GiftsHintWant = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.HintWant",
+        "{player_name} is giving away {item} for free to anyone in the group who wants it -- they are offering it, "
+        "not asking for one. It would be useful to you: {why}. Say you would like it, in a few words and in your "
+        "own way, so they can trade it to you.");
+    g_GiftsHintWantToo = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.HintWantToo",
+        "{player_name} is giving away {item} for free, and {first} has already said they would like it. It would "
+        "have been useful to you too ({why}); if you say anything, keep it light -- that you would have taken it "
+        "too, or that {first} can have it.");
+    g_GiftsHintNoNeed = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.HintNoNeed",
+        "{player_name} is giving away {item} for free to anyone who wants it -- they are offering it, not asking "
+        "for one. It is no use to you: {why}. If you say anything, just a quick no thanks in your own words.");
+    g_GiftsHintNotTradable = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.HintNotTradable",
+        "{player_name} is offering {item}, but it is soulbound, so it cannot be traded to anyone. Say so lightly, "
+        "in a few words.");
+    g_GiftsHintAskPrice = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.HintAskPrice",
+        "{player_name} is selling {item} but has not said what they want for it. It would be useful to you: {why}. "
+        "Ask how much they want for it, in a few words.");
+    g_GiftsHintBuy = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.HintBuy",
+        "{player_name} is selling {item} for {price}. It would be useful to you ({why}) and that is a fair price, "
+        "so you will buy it: say so in a few words, and that they can trade it to you.");
+    g_GiftsHintCounter = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.HintCounter",
+        "{player_name} is selling {item} for {price}. It would be useful to you ({why}), but {price} is more than "
+        "you would pay: offer {counter} for it instead, in a few words.");
+    g_GiftsHintTooDear = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.HintTooDear",
+        "{player_name} is selling {item} for {price}. It would be useful to you, but you cannot afford that: you "
+        "only have {money}. Say so, in a few words.");
+    g_GiftsHintNoBuy = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.HintNoBuy",
+        "{player_name} is selling {item}. It is no use to you: {why}. If you say anything, a quick no thanks.");
+    g_GiftsInviteText = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.InviteText",
+        "You are not in their group, and you only trade with your group: ask them to invite you first.");
+    g_GiftsSaidGiftText = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.SaidGiftText",
+        "You told {player_name} you would like their {item}: it comes over when they put it in a trade window "
+        "with you.");
+    g_GiftsSaidBuyText = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.SaidBuyText",
+        "You agreed to buy {player_name}'s {item} for {price}: when they put it in a trade window with you, you put "
+        "the money in.");
+    g_GiftsSaidCounterText = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.SaidCounterText",
+        "You offered {player_name} {price} for their {item}; if they agree, they can put it in a trade window with "
+        "you and you pay that.");
+    g_GiftsSaidAskText = sConfigMgr->GetOption<std::string>("OllamaChat.Gifts.SaidAskText",
+        "You asked {player_name} how much they want for their {item}.");
+
+    // --- the tank down, a wipe, nobody to rez --------------------------------------------
+    g_WipeEnable              = sConfigMgr->GetOption<bool>("OllamaChat.Wipe.Enable", true);
+    g_WipeTankDownChance      = percent("OllamaChat.Wipe.TankDownChance", 60);
+    g_WipeApologyChance       = percent("OllamaChat.Wipe.ApologyChance", 75);
+    g_WipeNoRezChance         = percent("OllamaChat.Wipe.NoRezChance", 90);
+    g_WipeRunBackChance       = percent("OllamaChat.Wipe.RunBackChance", 60);
+    g_WipeTypedChance         = percent("OllamaChat.Wipe.TypedChance", 35);
+    g_WipeRunBackQuietSeconds = std::min<uint32_t>(120, sConfigMgr->GetOption<uint32_t>("OllamaChat.Wipe.RunBackQuietSeconds", 4));
+    g_WipeStateMinutes        = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Wipe.StateMinutes", 5), 1, 60);
+    g_WipeTankDownPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Wipe.TankDownPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in a group in {place}. Your chat style: "
+        "{bot_personality} You are in the middle of a fight and {tank}, your tank, has just died. React in party "
+        "chat the way players do the moment it starts going wrong: a couple of words like uh oh or oh no, in your "
+        "own way. Under 6 words, no name in front, no quotes.");
+    g_WipeApologyPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Wipe.ApologyPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, the tank of your group in {place}. Your "
+        "chat style: {bot_personality} Your whole group has just died: a wipe, and as the tank it is on you. Say "
+        "sorry in party chat in a few words, your own way (sorry all, my bad, that one's on me). No long excuses, "
+        "under 10 words, no name in front, no quotes.");
+    g_WipeNoRezPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Wipe.NoRezPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in a group in {place}. Your chat style: "
+        "{bot_personality} Your whole group has just died -- a wipe -- and nobody is left alive who could resurrect "
+        "anyone. Say in party chat, in a few words, that it is release and run back for everyone (no rez, gotta "
+        "run back, release and run in). Under 12 words, no name in front, no quotes.");
+    g_WipeRunBackPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Wipe.RunBackPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in a group in {place}. Your chat style: "
+        "{bot_personality} You died in that fight, and nobody still alive in your group can resurrect you. Say in "
+        "party chat, in a few words, that you will release and run back (no rez, running back). Under 10 words, no "
+        "name in front, no quotes.");
+    g_WipeTankDownLines = ReadPipeList("OllamaChat.Wipe.TankDownLines",
+        "uh oh|oh no|uh oh...|oh no tank|uh oh, tank down|oh dear|oh no no no|this is bad|uh oh guys|welp|tank down!");
+    g_WipeApologyLines = ReadPipeList("OllamaChat.Wipe.ApologyLines",
+        "sorry guys|my bad|sorry all, my fault|my bad guys|sorry all|oops, my fault|thats on me, sorry|sorry, my bad");
+    g_WipeNoRezLines = ReadPipeList("OllamaChat.Wipe.NoRezLines",
+        "no one left to res, gotta run back|release and run back i guess|no rez, run back time|guess we're running "
+        "back|nobody can res, release and run in|corpse run time|run back time all");
+    g_WipeRunBackLines = ReadPipeList("OllamaChat.Wipe.RunBackLines",
+        "no rez, running back|running back|no one can res me, running back|ill run back|corpse run, brb|"
+        "releasing, brb");
+    g_WipeStateWipeText = sConfigMgr->GetOption<std::string>("OllamaChat.Wipe.StateWipeText",
+        "Your whole group died a moment ago in {place}: a wipe{first}. {rez}");
+    g_WipeStateDeadText = sConfigMgr->GetOption<std::string>("OllamaChat.Wipe.StateDeadText",
+        "In your group, {dead} {is_are} dead{you}. {rez}");
+    g_WipeStateTankFirstText = sConfigMgr->GetOption<std::string>("OllamaChat.Wipe.StateTankFirstText",
+        " -- {tank}, the tank, went down first");
+    g_WipeStateTankDeadText = sConfigMgr->GetOption<std::string>("OllamaChat.Wipe.StateTankDeadText",
+        "{tank}, your tank, is one of them.");
+    g_WipeStateSelfResText = sConfigMgr->GetOption<std::string>("OllamaChat.Wipe.StateSelfResText",
+        "{name} can get back up on their own and bring the rest back.");
+    g_WipeStateRezzerText = sConfigMgr->GetOption<std::string>("OllamaChat.Wipe.StateRezzerText",
+        "{rezzers} can resurrect {them} once the fight is over.");
+    g_WipeStateRunBackText = sConfigMgr->GetOption<std::string>("OllamaChat.Wipe.StateRunBackText",
+        "Nobody is left alive who could resurrect anyone, so everyone has to release their spirit and run back in "
+        "from the graveyard.");
+    g_WipeStateNoRezzerText = sConfigMgr->GetOption<std::string>("OllamaChat.Wipe.StateNoRezzerText",
+        "Nobody still alive can resurrect, so the dead have to release and run back.");
+    g_WipeStateBackText = sConfigMgr->GetOption<std::string>("OllamaChat.Wipe.StateBackText",
+        "{back} {is_are} back up already.");
+
+    // --- gear talk and teasing -----------------------------------------------------------
+    g_GearEnable    = sConfigMgr->GetOption<bool>("OllamaChat.Gear.Enable", true);
+    g_GearTalkWords = phrases("OllamaChat.Gear.TalkWords",
+        "gear|geared|wearing|wear|wears|worn|outfit|outfits|robe|robes|armor|armour|cloth|leather|chainmail|"
+        "chain mail|plate|helm|helmet|hat|shoulders|pauldrons|pants|trousers|leggings|boots|gloves|gauntlets|staff|"
+        "wand|sword|axe|mace|dagger|shield|weapon|weapons|transmog|ilvl|item level|gearscore|gear score|naked|"
+        "dressed|fashion|drip|rags|tailor|look like|looks like");
+    g_GearBackOffWords = phrases("OllamaChat.Gear.BackOffWords",
+        "rude|rood|harsh|so mean|thats mean|youre mean|you are mean|being mean|how mean|leave me alone|stop it|"
+        "stop that|knock it off|bully|bullying|bullies|not nice|uncalled for|no need for that|wow ok|ok wow|"
+        "savage|toxic|hurtful");
+    g_GearMaxPeople      = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Gear.MaxPeople", 4), 1, 8);
+    g_GearBackOffMinutes = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Gear.BackOffMinutes", 5), 1, 60);
+    g_GearPromptText = sConfigMgr->GetOption<std::string>("OllamaChat.Gear.PromptText",
+        "What the people in this chat are wearing, as anyone can see by looking at them: {gear}. If gear comes up, "
+        "go only by this. Never make up what someone's gear looks like or is made of -- no wood, trees, rags or "
+        "sacks -- and never invent gear they are not wearing. A light tease about something real is fine once, "
+        "but do not pile on: if someone has already teased them about it, let it go.");
+    g_GearBackOffText = sConfigMgr->GetOption<std::string>("OllamaChat.Gear.BackOffText",
+        "{player_name} has said they feel picked on: do not tease them any more. A quick sorry, something kind, or "
+        "just talk about something else.");
+
+    // --- whispered asides in a group -----------------------------------------------------
+    g_AsideEnable = sConfigMgr->GetOption<bool>("OllamaChat.Aside.Enable", true);
+    g_AsidePersonalities.clear();
+    for (const std::string& item : ReadPipeList("OllamaChat.Aside.Personalities",
+             "NAT_GOSSIP:100|NAT_BUTTERFLY:50|NAT_BANTER:40|NAT_DEADPAN:30|NAT_JOKER:30|NAT_RUDE:30|NAT_GRUMBLER:25|"
+             "NAT_RAIDER:25|NAT_SOCIAL:25|NAT_TROLL:20|NAT_CONTRARIAN:20|NAT_MINMAXER:20|NAT_PETLOVER:20|"
+             "NAT_PRANKSTER:20|NAT_HYPE:15"))
+    {
+        const size_t colon = item.find(':');
+        std::string key = item.substr(0, colon);
+        for (char& ch : key)
+            ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        const uint32_t weight = colon == std::string::npos ? 100
+                              : uint32_t(std::clamp(std::atoi(item.c_str() + colon + 1), 0, 100));
+        if (!key.empty() && weight)
+            g_AsidePersonalities[key] = weight;
+    }
+    g_AsideLineChance    = percent("OllamaChat.Aside.LineChance", 10);
+    g_AsideIdleChance    = percent("OllamaChat.Aside.IdleChance", 4);
+    g_AsideCheckSeconds  = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Aside.CheckSeconds", 60), 10, 3600);
+    g_AsidePlayerMinutes = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Aside.PlayerMinutes", 20), 1, 1440);
+    g_AsideBotMinutes    = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Aside.BotMinutes", 45), 1, 1440);
+    g_AsideMinWords      = std::min<uint32_t>(20, sConfigMgr->GetOption<uint32_t>("OllamaChat.Aside.MinWords", 4));
+    g_AsidePrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Aside.Prompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} You are "
+        "in a group with {player_name}, a real player, and with {subject}. Whisper {player_name} privately: a quick "
+        "aside about {subject}, the cheeky, gossipy or slightly catty kind of remark you would only make in a "
+        "whisper, to get a laugh out of them. Base it on this, and nothing else: {fact}. Keep it playful, never "
+        "cruel, nothing about anyone's real life, and make up nothing about {subject} beyond that. Do not say you "
+        "are whispering. One short line, under 20 words, no name in front, no quotes.");
+    g_AsideHistoryNote = sConfigMgr->GetOption<std::string>("OllamaChat.Aside.HistoryNote",
+        "(nothing yet: you whispered them first)");
+    g_AsideFactSaid = sConfigMgr->GetOption<std::string>("OllamaChat.Aside.FactSaid",
+        "{subject} just said in party chat: '{line}'");
+    g_AsideFactClass = sConfigMgr->GetOption<std::string>("OllamaChat.Aside.FactClass",
+        "{subject} is a level {level} {race} {role}{duty}");
+    g_AsideFactLevel = sConfigMgr->GetOption<std::string>("OllamaChat.Aside.FactLevel",
+        "{subject} is level {level}, {gap} levels {dir} the rest of the group");
+    g_AsideFactGear = sConfigMgr->GetOption<std::string>("OllamaChat.Aside.FactGear",
+        "{subject} is wearing {item}");
+    g_AsideFactPet = sConfigMgr->GetOption<std::string>("OllamaChat.Aside.FactPet",
+        "{subject}'s pet is a {family} called {pet}");
+    g_AsideFactDeaths = sConfigMgr->GetOption<std::string>("OllamaChat.Aside.FactDeaths",
+        "{subject} has died {deaths} times since joining the group");
+
+    LOG_INFO("module.ollamachat",
+             "[Ollama Chat] Chat v14: gifts and sales {}; wipes {} (uh oh {}%, sorry {}%, run back {}%); gear talk {}; "
+             "asides {} ({} styles, one per player per {} min).",
+             g_GiftsEnable ? "on" : "off", g_WipeEnable ? "on" : "off", g_WipeTankDownChance, g_WipeApologyChance,
+             g_WipeNoRezChance, g_GearEnable ? "on" : "off", g_AsideEnable ? "on" : "off",
+             g_AsidePersonalities.size(), g_AsidePlayerMinutes);
+}
+
 void LoadPersonalityExtras()
 {
     g_PersonalityNudges.clear();
@@ -2697,6 +2992,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV10Settings();
     LoadNaturalChatV11Settings();
     LoadNaturalChatV13Settings();
+    LoadNaturalChatV14Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

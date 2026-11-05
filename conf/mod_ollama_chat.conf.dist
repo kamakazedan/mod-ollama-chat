@@ -3793,6 +3793,349 @@ OllamaChat.Bags.HintCancel = "{player_name} changed their mind about {item}, so 
 
 ###############################################################################
 #
+#   OLLAMA CHAT - A PLAYER GIVING AWAY OR SELLING SOMETHING
+#
+#   "anyone want my [Woolen Bag]?" used to read to the bots as talk about
+#   items, so each of them was shown what it could spare (OllamaChat.Bags):
+#   one said it had no bags to spare, one offered its own vest. Now a real
+#   player's line in party, raid or a whisper that links something they have
+#   on them, with one of OfferWords or SellWords -- or a price ("5g", "1g
+#   50s", "75 silver") -- is read as what it is. The words around the links
+#   count, not the item names: "[Gold Ring]" is no price.
+#
+#   Each bot of the group on the player's map judges the thing the way
+#   playerbots does when it loots: a quest item it still needs, an upgrade,
+#   a bag bigger than its smallest one or a bag slot it has free (all the
+#   more with its bags nearly full), something for its profession, something
+#   it would use. One named in the line, or the one whispered, answers alone.
+#
+#   Given away: the one it is most use to says yes please (HintWant), and
+#   playerbots takes it when it is put in a trade window with it, as it takes
+#   any gift it has a use for. Sometimes (SecondVoiceChance) a second voice:
+#   another who could have used it (HintWantToo) or a no thanks (HintNoNeed).
+#   When nobody can use it, one no thanks now and then (NobodyChance).
+#   Soulbound, and past its loot trade window: one bot says it cannot be
+#   traded (HintNotTradable).
+#
+#   Sold: with no price named, the one who could use it asks how much
+#   (HintAskPrice), and the price that follows within FollowUpSeconds goes
+#   to it. At a price it would pay -- no more than playerbots' own value of
+#   the thing (what a vendor would charge for it, times this bot's buy rate),
+#   so its trade check always passes, and no more than MaxSpendPercent of its
+#   money -- it says it will buy (HintBuy); when the player puts the thing in
+#   a trade window with it, it puts the money in on its side, and the
+#   player's accept completes it. Asked more, it offers what it would pay,
+#   rounded (HintCounter), and that price stands if they trade at it; too
+#   dear for its purse, it says so (HintTooDear). Only what it could really
+#   use is bought, never something it would only vendor.
+#
+#   Afterwards, for RememberSeconds, its replies know what it said yes to,
+#   offered or agreed to pay (Said*Text), and the replies to the line do not
+#   list their own spare things. Off when playerbots' random-bot trading is
+#   off or only lets bots sell (Playerbots.EnableRandomBotTrading 0 or 3).
+#
+###############################################################################
+
+#    OllamaChat.Gifts.Enable
+#        Default: 1
+OllamaChat.Gifts.Enable = 1
+
+#    OllamaChat.Gifts.OfferWords
+#    OllamaChat.Gifts.SellWords
+#        Whole words and phrases, separated by |, that make a line with a
+#        linked thing an offer or a sale. A price makes it a sale too.
+#        Default: (below)
+OllamaChat.Gifts.OfferWords = "anyone want|anybody want|any1 want|anyone wants|anybody wants|who wants|who want|whoever wants|anyone need|anybody need|any1 need|who needs|whoever needs|you want|u want|ya want|you need|u need|want my|want this|want it|want one|need this|need it|need one|need my|free|for free|freebie|giving away|give away|giving it away|giving this away|giving them away|up for grabs|anyone use|anybody use|can anyone use|can anybody use|any use|use this|use it|you can have|u can have|can have it|have it if|take it|take this|have this|for you|for u|here you go|here u go|dont need|do not need|no longer need|getting rid|get rid"
+OllamaChat.Gifts.SellWords = "wts|selling|for sale|buy|buying|buyer|buyers|make an offer|make me an offer|any offers|best offer|or offer|obo|cheap|bargain|pay|paying"
+
+#    OllamaChat.Gifts.GreedyPersonalities
+#        Chat styles that take a free thing they could only sell. Separated by |.
+#        Default: NAT_GOLDMAKER|NAT_RUDE
+OllamaChat.Gifts.GreedyPersonalities = "NAT_GOLDMAKER|NAT_RUDE"
+
+#    OllamaChat.Gifts.SecondVoiceChance
+#    OllamaChat.Gifts.NobodyChance
+#        Percent: a second voice after the yes please; a no thanks when nobody
+#        can use it (or buy it).
+#        Default: 35, 60
+OllamaChat.Gifts.SecondVoiceChance = 35
+OllamaChat.Gifts.NobodyChance = 60
+
+#    OllamaChat.Gifts.FollowUpSeconds
+#        A line from the same player with no link of its own ("5g then", "its
+#        free") is still about the last thing, this long after it.
+#        Default: 90
+OllamaChat.Gifts.FollowUpSeconds = 90
+
+#    OllamaChat.Gifts.RememberSeconds
+#        How long a bot remembers what it said yes to, and a price it agreed
+#        stands.
+#        Default: 300
+OllamaChat.Gifts.RememberSeconds = 300
+
+#    OllamaChat.Gifts.MaxSpendPercent
+#        The most of its money a bot pays for one thing.
+#        Default: 50
+OllamaChat.Gifts.MaxSpendPercent = 50
+
+#    OllamaChat.Gifts.HintWant ... OllamaChat.Gifts.HintNoBuy
+#    OllamaChat.Gifts.InviteText
+#        What the answering bot is told. {player_name}, {item} ("[Woolen
+#        Bag]"), {why} (what use it is to it, or why none), {price} (what they
+#        asked), {counter} (what it offers), {money} (what it has), {first}
+#        (who already said yes). InviteText goes after a yes from a bot outside
+#        their group.
+OllamaChat.Gifts.HintWant = "{player_name} is giving away {item} for free to anyone in the group who wants it -- they are offering it, not asking for one. It would be useful to you: {why}. Say you would like it, in a few words and in your own way, so they can trade it to you."
+OllamaChat.Gifts.HintWantToo = "{player_name} is giving away {item} for free, and {first} has already said they would like it. It would have been useful to you too ({why}); if you say anything, keep it light -- that you would have taken it too, or that {first} can have it."
+OllamaChat.Gifts.HintNoNeed = "{player_name} is giving away {item} for free to anyone who wants it -- they are offering it, not asking for one. It is no use to you: {why}. If you say anything, just a quick no thanks in your own words."
+OllamaChat.Gifts.HintNotTradable = "{player_name} is offering {item}, but it is soulbound, so it cannot be traded to anyone. Say so lightly, in a few words."
+OllamaChat.Gifts.HintAskPrice = "{player_name} is selling {item} but has not said what they want for it. It would be useful to you: {why}. Ask how much they want for it, in a few words."
+OllamaChat.Gifts.HintBuy = "{player_name} is selling {item} for {price}. It would be useful to you ({why}) and that is a fair price, so you will buy it: say so in a few words, and that they can trade it to you."
+OllamaChat.Gifts.HintCounter = "{player_name} is selling {item} for {price}. It would be useful to you ({why}), but {price} is more than you would pay: offer {counter} for it instead, in a few words."
+OllamaChat.Gifts.HintTooDear = "{player_name} is selling {item} for {price}. It would be useful to you, but you cannot afford that: you only have {money}. Say so, in a few words."
+OllamaChat.Gifts.HintNoBuy = "{player_name} is selling {item}. It is no use to you: {why}. If you say anything, a quick no thanks."
+OllamaChat.Gifts.InviteText = "You are not in their group, and you only trade with your group: ask them to invite you first."
+
+#    OllamaChat.Gifts.SaidGiftText ... OllamaChat.Gifts.SaidAskText
+#        Added to the bot's reply prompts afterwards. {player_name}, {item},
+#        {price} (agreed, or offered). Empty: not added.
+OllamaChat.Gifts.SaidGiftText = "You told {player_name} you would like their {item}: it comes over when they put it in a trade window with you."
+OllamaChat.Gifts.SaidBuyText = "You agreed to buy {player_name}'s {item} for {price}: when they put it in a trade window with you, you put the money in."
+OllamaChat.Gifts.SaidCounterText = "You offered {player_name} {price} for their {item}; if they agree, they can put it in a trade window with you and you pay that."
+OllamaChat.Gifts.SaidAskText = "You asked {player_name} how much they want for their {item}."
+
+###############################################################################
+#
+#   OLLAMA CHAT - THE TANK DOWN, A WIPE, NOBODY LEFT TO REZ
+#
+#   A group wiped and its bots had no idea: "shes coming back soon i think",
+#   "just waiting for urdrudes to get back then", with all of them lying
+#   dead. Once a second, each group with a real player in it is looked at:
+#
+#     * The tank -- mod-dungeon-clear's tank when there is one, else whoever
+#       tanks by spec -- dies while the rest are still fighting: one bot
+#       still standing says so the way people do, "uh oh", "oh no"
+#       (TankDown*), once a fight, a moment after.
+#     * Everyone where the group was fighting is dead -- a wipe: a bot tank
+#       says sorry (Apology*), and a few seconds later someone says nobody is
+#       left to rez, so it is release and run back (NoRez*) -- unless one of
+#       them has a soulstone or a reincarnation ready, which gets them up
+#       without anyone.
+#     * A fight over with some of them dead and nobody alive who can
+#       resurrect -- real players count -- one of the dead bots says it is
+#       running back (RunBack*), as OllamaChat.Revive then has it do.
+#
+#   Each line is the model's, in the bot's own voice (the *Prompt settings:
+#   {bot_name}, {bot_level}, {bot_race}, {bot_class}, {bot_personality},
+#   {tank}, {place}), or now and then (TypedChance) a typed one from the
+#   *Lines lists -- which also go out when the model cannot be reached.
+#
+#   And every reply prompt of a bot in such a group says who is dead, whether
+#   it was a wipe and whether the tank went down first, and who can still
+#   bring them back (State*Text), for StateMinutes after a wipe, so "we
+#   wiped, we need to respawn" is understood.
+#
+###############################################################################
+
+#    OllamaChat.Wipe.Enable
+#        Default: 1
+OllamaChat.Wipe.Enable = 1
+
+#    OllamaChat.Wipe.TankDownChance
+#    OllamaChat.Wipe.ApologyChance
+#    OllamaChat.Wipe.NoRezChance
+#    OllamaChat.Wipe.RunBackChance
+#        Percent for each.
+#        Default: 60, 75, 90, 60
+OllamaChat.Wipe.TankDownChance = 60
+OllamaChat.Wipe.ApologyChance = 75
+OllamaChat.Wipe.NoRezChance = 90
+OllamaChat.Wipe.RunBackChance = 60
+
+#    OllamaChat.Wipe.TypedChance
+#        Percent of these lines that are typed from the lists instead of the
+#        model's. None in roleplay mode, where a bare "uh oh" breaks character.
+#        Default: 35
+OllamaChat.Wipe.TypedChance = 35
+
+#    OllamaChat.Wipe.RunBackQuietSeconds
+#        After the last of a fight, before a dead bot says it is running back.
+#        Default: 4
+OllamaChat.Wipe.RunBackQuietSeconds = 4
+
+#    OllamaChat.Wipe.StateMinutes
+#        How long after a wipe the reply prompts still call it one.
+#        Default: 5
+OllamaChat.Wipe.StateMinutes = 5
+
+#    OllamaChat.Wipe.TankDownPrompt
+#    OllamaChat.Wipe.ApologyPrompt
+#    OllamaChat.Wipe.NoRezPrompt
+#    OllamaChat.Wipe.RunBackPrompt
+OllamaChat.Wipe.TankDownPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in a group in {place}. Your chat style: {bot_personality} You are in the middle of a fight and {tank}, your tank, has just died. React in party chat the way players do the moment it starts going wrong: a couple of words like uh oh or oh no, in your own way. Under 6 words, no name in front, no quotes."
+OllamaChat.Wipe.ApologyPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, the tank of your group in {place}. Your chat style: {bot_personality} Your whole group has just died: a wipe, and as the tank it is on you. Say sorry in party chat in a few words, your own way (sorry all, my bad, that one's on me). No long excuses, under 10 words, no name in front, no quotes."
+OllamaChat.Wipe.NoRezPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in a group in {place}. Your chat style: {bot_personality} Your whole group has just died -- a wipe -- and nobody is left alive who could resurrect anyone. Say in party chat, in a few words, that it is release and run back for everyone (no rez, gotta run back, release and run in). Under 12 words, no name in front, no quotes."
+OllamaChat.Wipe.RunBackPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in a group in {place}. Your chat style: {bot_personality} You died in that fight, and nobody still alive in your group can resurrect you. Say in party chat, in a few words, that you will release and run back (no rez, running back). Under 10 words, no name in front, no quotes."
+
+#    OllamaChat.Wipe.TankDownLines
+#    OllamaChat.Wipe.ApologyLines
+#    OllamaChat.Wipe.NoRezLines
+#    OllamaChat.Wipe.RunBackLines
+#        Typed lines, separated by |.
+OllamaChat.Wipe.TankDownLines = "uh oh|oh no|uh oh...|oh no tank|uh oh, tank down|oh dear|oh no no no|this is bad|uh oh guys|welp|tank down!"
+OllamaChat.Wipe.ApologyLines = "sorry guys|my bad|sorry all, my fault|my bad guys|sorry all|oops, my fault|thats on me, sorry|sorry, my bad"
+OllamaChat.Wipe.NoRezLines = "no one left to res, gotta run back|release and run back i guess|no rez, run back time|guess we're running back|nobody can res, release and run in|corpse run time|run back time all"
+OllamaChat.Wipe.RunBackLines = "no rez, running back|running back|no one can res me, running back|ill run back|corpse run, brb|releasing, brb"
+
+#    OllamaChat.Wipe.StateWipeText ... OllamaChat.Wipe.StateBackText
+#        For reply prompts. StateWipeText after a wipe ({place}, {first}: the
+#        StateTankFirstText when the tank went down first, {rez}); otherwise
+#        StateDeadText ({dead}: who else is dead, {is_are}, {you}: " (you
+#        too)" when the bot is, {rez}) and StateTankDeadText when the tank is
+#        one of them. {rez} is StateSelfResText ({name}), StateRezzerText
+#        ({rezzers}, {them}), StateRunBackText after a wipe or
+#        StateNoRezzerText. StateBackText ({back}, {is_are}) names who is back
+#        up after a wipe. Empty StateWipeText and StateDeadText: nothing added.
+OllamaChat.Wipe.StateWipeText = "Your whole group died a moment ago in {place}: a wipe{first}. {rez}"
+OllamaChat.Wipe.StateDeadText = "In your group, {dead} {is_are} dead{you}. {rez}"
+OllamaChat.Wipe.StateTankFirstText = " -- {tank}, the tank, went down first"
+OllamaChat.Wipe.StateTankDeadText = "{tank}, your tank, is one of them."
+OllamaChat.Wipe.StateSelfResText = "{name} can get back up on their own and bring the rest back."
+OllamaChat.Wipe.StateRezzerText = "{rezzers} can resurrect {them} once the fight is over."
+OllamaChat.Wipe.StateRunBackText = "Nobody is left alive who could resurrect anyone, so everyone has to release their spirit and run back in from the graveyard."
+OllamaChat.Wipe.StateNoRezzerText = "Nobody still alive can resurrect, so the dead have to release and run back."
+OllamaChat.Wipe.StateBackText = "{back} {is_are} back up already."
+
+###############################################################################
+#
+#   OLLAMA CHAT - GEAR TALK, AND TEASING THAT STOPS
+#
+#   "im wearing robes what you mean" had nothing to go on -- the bots knew
+#   nobody's gear -- so they made it up and egged each other on: "those look
+#   like actual pieces of wood", "hard to be rude when you're wearing trees".
+#
+#   When gear comes up -- TalkWords in the line, or in the last three lines
+#   of the chat there, within a minute and a half -- the reply prompt says
+#   what the people in the conversation visibly wear (PromptText, {gear}):
+#   whoever spoke, anyone named, the real players in the group and the bot
+#   itself, at most MaxPeople, each by helm, shoulders, chest, trousers,
+#   gloves, boots and weapons, with name, quality and kind ("[Robe of
+#   Evocation] (green cloth robe)"), and nothing on the chest or legs where
+#   that is so. The text tells the bot to go only by that, and not to pile
+#   on.
+#
+#   A real player saying they feel picked on -- BackOffWords: "rude",
+#   "harsh", "leave me alone" -- gets every bot in their group to drop it for
+#   BackOffMinutes (BackOffText, {player_name}).
+#
+###############################################################################
+
+#    OllamaChat.Gear.Enable
+#        Default: 1
+OllamaChat.Gear.Enable = 1
+
+#    OllamaChat.Gear.TalkWords
+#    OllamaChat.Gear.BackOffWords
+#        Whole words and phrases, separated by |.
+#        Default: (below)
+OllamaChat.Gear.TalkWords = "gear|geared|wearing|wear|wears|worn|outfit|outfits|robe|robes|armor|armour|cloth|leather|chainmail|chain mail|plate|helm|helmet|hat|shoulders|pauldrons|pants|trousers|leggings|boots|gloves|gauntlets|staff|wand|sword|axe|mace|dagger|shield|weapon|weapons|transmog|ilvl|item level|gearscore|gear score|naked|dressed|fashion|drip|rags|tailor|look like|looks like"
+OllamaChat.Gear.BackOffWords = "rude|rood|harsh|so mean|thats mean|youre mean|you are mean|being mean|how mean|leave me alone|stop it|stop that|knock it off|bully|bullying|bullies|not nice|uncalled for|no need for that|wow ok|ok wow|savage|toxic|hurtful"
+
+#    OllamaChat.Gear.MaxPeople
+#        Default: 4
+OllamaChat.Gear.MaxPeople = 4
+
+#    OllamaChat.Gear.BackOffMinutes
+#        Default: 5
+OllamaChat.Gear.BackOffMinutes = 5
+
+#    OllamaChat.Gear.PromptText
+#    OllamaChat.Gear.BackOffText
+#        Empty: not added.
+OllamaChat.Gear.PromptText = "What the people in this chat are wearing, as anyone can see by looking at them: {gear}. If gear comes up, go only by this. Never make up what someone's gear looks like or is made of -- no wood, trees, rags or sacks -- and never invent gear they are not wearing. A light tease about something real is fine once, but do not pile on: if someone has already teased them about it, let it go."
+OllamaChat.Gear.BackOffText = "{player_name} has said they feel picked on: do not tease them any more. A quick sorry, something kind, or just talk about something else."
+
+###############################################################################
+#
+#   OLLAMA CHAT - WHISPERED ASIDES IN A GROUP
+#
+#   Now and then -- rarely -- a bot in a group with a real player whispers
+#   them a quick catty, cheeky or gossipy remark about someone else in the
+#   group, the kind of thing people only say in a whisper. About something
+#   real and nothing made up: a line that someone just said in party chat
+#   (FactSaid), their class and spec (FactClass), a level well off the rest
+#   of the group (FactLevel), a piece of what they wear -- something grey
+#   first (FactGear), their pet (FactPet), how often they have died with the
+#   group (FactDeaths).
+#
+#   Only the chat styles in Personalities do it, each with a weight: the
+#   percent of its chances it takes (NAT_GOSSIP all of them). The chances: a
+#   party or raid line of MinWords or more (LineChance), and once every
+#   CheckSeconds out of a fight (IdleChance). Never more than one to the same
+#   player in PlayerMinutes -- from whichever bot, so several gossips in a
+#   group do not take turns -- one bot not again within BotMinutes, never the
+#   same person talked about twice running, and not while the player or the
+#   bot is fighting, nor to a player AFK or busy.
+#
+#   The whisper goes into that bot's history with the player (HistoryNote is
+#   what the player "said" before it), so a whisper back carries on from it
+#   -- when bots answer whispers at all (OllamaChat.EnableWhisperReplies; with
+#   that off, an aside is a one-off remark, which is all it needs to be).
+#
+###############################################################################
+
+#    OllamaChat.Aside.Enable
+#        Default: 1
+OllamaChat.Aside.Enable = 1
+
+#    OllamaChat.Aside.Personalities
+#        STYLE:weight, separated by |. A style not listed never does it.
+#        Default: (below)
+OllamaChat.Aside.Personalities = "NAT_GOSSIP:100|NAT_BUTTERFLY:50|NAT_BANTER:40|NAT_DEADPAN:30|NAT_JOKER:30|NAT_RUDE:30|NAT_GRUMBLER:25|NAT_RAIDER:25|NAT_SOCIAL:25|NAT_TROLL:20|NAT_CONTRARIAN:20|NAT_MINMAXER:20|NAT_PETLOVER:20|NAT_PRANKSTER:20|NAT_HYPE:15"
+
+#    OllamaChat.Aside.LineChance
+#    OllamaChat.Aside.MinWords
+#        Percent of party lines of at least MinWords words that are a chance.
+#        Default: 10, 4
+OllamaChat.Aside.LineChance = 10
+OllamaChat.Aside.MinWords = 4
+
+#    OllamaChat.Aside.IdleChance
+#    OllamaChat.Aside.CheckSeconds
+#        Percent chance, every CheckSeconds, for each real player in a group.
+#        Default: 4, 60
+OllamaChat.Aside.IdleChance = 4
+OllamaChat.Aside.CheckSeconds = 60
+
+#    OllamaChat.Aside.PlayerMinutes
+#    OllamaChat.Aside.BotMinutes
+#        Default: 20, 45
+OllamaChat.Aside.PlayerMinutes = 20
+OllamaChat.Aside.BotMinutes = 45
+
+#    OllamaChat.Aside.Prompt
+#        {bot_name}, {bot_level}, {bot_race}, {bot_class}, {bot_personality},
+#        {player_name} (whispered), {subject} (talked about), {fact}.
+OllamaChat.Aside.Prompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} You are in a group with {player_name}, a real player, and with {subject}. Whisper {player_name} privately: a quick aside about {subject}, the cheeky, gossipy or slightly catty kind of remark you would only make in a whisper, to get a laugh out of them. Base it on this, and nothing else: {fact}. Keep it playful, never cruel, nothing about anyone's real life, and make up nothing about {subject} beyond that. Do not say you are whispering. One short line, under 20 words, no name in front, no quotes."
+
+#    OllamaChat.Aside.HistoryNote
+OllamaChat.Aside.HistoryNote = "(nothing yet: you whispered them first)"
+
+#    OllamaChat.Aside.FactSaid ... OllamaChat.Aside.FactDeaths
+#        {subject}, {level}; FactSaid {line}; FactClass {race}, {role} ("feral
+#        druid"), {duty} (", the group's tank"); FactLevel {gap}, {dir} (below
+#        or above); FactGear {item}; FactPet {family}, {pet}; FactDeaths
+#        {deaths}. Empty: that kind is never used. (No double quotes inside a
+#        value: the server's config reader drops every one of them.)
+OllamaChat.Aside.FactSaid = "{subject} just said in party chat: '{line}'"
+OllamaChat.Aside.FactClass = "{subject} is a level {level} {race} {role}{duty}"
+OllamaChat.Aside.FactLevel = "{subject} is level {level}, {gap} levels {dir} the rest of the group"
+OllamaChat.Aside.FactGear = "{subject} is wearing {item}"
+OllamaChat.Aside.FactPet = "{subject}'s pet is a {family} called {pet}"
+OllamaChat.Aside.FactDeaths = "{subject} has died {deaths} times since joining the group"
+
+###############################################################################
+#
 #   OLLAMA CHAT - ASKS WITH A REAL REASON
 #
 #   Real people in General ask for a Hogger group, where potions are sold,

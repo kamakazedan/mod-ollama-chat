@@ -32,6 +32,10 @@
 #include "mod-ollama-chat_revive.h"
 #include "mod-ollama-chat_stuck.h"
 #include "mod-ollama-chat_hangout.h"
+#include "mod-ollama-chat_gifts.h"
+#include "mod-ollama-chat_gear.h"
+#include "mod-ollama-chat_wipe.h"
+#include "mod-ollama-chat_aside.h"
 
 #include "CellImpl.h"
 #include "Channel.h"
@@ -411,6 +415,9 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
     Conjure_Update();
     Bags_Tick();
 
+    // A bot that agreed a price puts the money in the trade window.
+    Gifts_Tick();
+
     // The one "ty" for a ding, once the gz have come in.
     Congrats_Tick();
 
@@ -436,6 +443,12 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
     // Dead bots with nobody to rez them releasing and running back.
     Revive_Update(diff);
 
+    // The tank down mid-fight, a wipe, nobody left to rez: said, and known.
+    Wipe_Update(diff);
+
+    // The odd whispered aside about someone else in the group.
+    Aside_Update(diff);
+
     // Raid marks: whose mark is whose, saps on the star, the skull moving on.
     Marks_Update(diff);
 
@@ -458,6 +471,8 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
         Links_Update();
         Phrases_Update();
         Bags_Update();
+        Gifts_Update();
+        Gear_Update();
         Needs_Update();
         Congrats_Update();
         Joined_Maintain();

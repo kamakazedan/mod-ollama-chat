@@ -730,6 +730,93 @@ extern uint32_t    g_HangoutBringInMinLevel;
 extern float       g_HangoutArrivalRange;      // an inn this close to a spot is where its bots arrive
 
 // --------------------------------------------
+// A player giving away or selling something (mod-ollama-chat_gifts)
+// --------------------------------------------
+extern bool        g_GiftsEnable;
+extern std::vector<std::vector<std::string>> g_GiftsOfferWords;   // "anyone want", "free"
+extern std::vector<std::vector<std::string>> g_GiftsSellWords;    // "wts", "selling"
+extern std::vector<std::string> g_GiftsGreedyPersonalities;       // take what they could only sell
+extern uint32_t    g_GiftsSecondVoiceChance;
+extern uint32_t    g_GiftsNobodyChance;
+extern uint32_t    g_GiftsFollowUpSeconds;   // "5g then": still about the last thing
+extern uint32_t    g_GiftsRememberSeconds;   // what a bot said yes to, or a price it agreed
+extern uint32_t    g_GiftsMaxSpendPercent;   // of a bot's money, on one thing
+extern std::string g_GiftsHintWant;
+extern std::string g_GiftsHintWantToo;
+extern std::string g_GiftsHintNoNeed;
+extern std::string g_GiftsHintNotTradable;
+extern std::string g_GiftsHintAskPrice;
+extern std::string g_GiftsHintBuy;
+extern std::string g_GiftsHintCounter;
+extern std::string g_GiftsHintTooDear;
+extern std::string g_GiftsHintNoBuy;
+extern std::string g_GiftsInviteText;
+extern std::string g_GiftsSaidGiftText;
+extern std::string g_GiftsSaidBuyText;
+extern std::string g_GiftsSaidCounterText;
+extern std::string g_GiftsSaidAskText;
+
+// --------------------------------------------
+// The tank down, a wipe, nobody to rez (mod-ollama-chat_wipe)
+// --------------------------------------------
+extern bool        g_WipeEnable;
+extern uint32_t    g_WipeTankDownChance;
+extern uint32_t    g_WipeApologyChance;
+extern uint32_t    g_WipeNoRezChance;
+extern uint32_t    g_WipeRunBackChance;
+extern uint32_t    g_WipeTypedChance;          // a typed line instead of the model's
+extern uint32_t    g_WipeRunBackQuietSeconds;  // after the fight, before "running back"
+extern uint32_t    g_WipeStateMinutes;         // a wipe stays in reply prompts this long
+extern std::string g_WipeTankDownPrompt;
+extern std::string g_WipeApologyPrompt;
+extern std::string g_WipeNoRezPrompt;
+extern std::string g_WipeRunBackPrompt;
+extern std::vector<std::string> g_WipeTankDownLines;
+extern std::vector<std::string> g_WipeApologyLines;
+extern std::vector<std::string> g_WipeNoRezLines;
+extern std::vector<std::string> g_WipeRunBackLines;
+extern std::string g_WipeStateWipeText;
+extern std::string g_WipeStateDeadText;
+extern std::string g_WipeStateTankFirstText;
+extern std::string g_WipeStateTankDeadText;
+extern std::string g_WipeStateSelfResText;
+extern std::string g_WipeStateRezzerText;
+extern std::string g_WipeStateRunBackText;
+extern std::string g_WipeStateNoRezzerText;
+extern std::string g_WipeStateBackText;
+
+// --------------------------------------------
+// Gear talk and teasing (mod-ollama-chat_gear)
+// --------------------------------------------
+extern bool        g_GearEnable;
+extern std::vector<std::vector<std::string>> g_GearTalkWords;
+extern std::vector<std::vector<std::string>> g_GearBackOffWords;
+extern uint32_t    g_GearMaxPeople;
+extern uint32_t    g_GearBackOffMinutes;
+extern std::string g_GearPromptText;
+extern std::string g_GearBackOffText;
+
+// --------------------------------------------
+// Whispered asides in a group (mod-ollama-chat_aside)
+// --------------------------------------------
+extern bool        g_AsideEnable;
+extern std::unordered_map<std::string, uint32_t> g_AsidePersonalities;   // style -> weight, percent
+extern uint32_t    g_AsideLineChance;
+extern uint32_t    g_AsideIdleChance;
+extern uint32_t    g_AsideCheckSeconds;
+extern uint32_t    g_AsidePlayerMinutes;
+extern uint32_t    g_AsideBotMinutes;
+extern uint32_t    g_AsideMinWords;
+extern std::string g_AsidePrompt;
+extern std::string g_AsideHistoryNote;
+extern std::string g_AsideFactSaid;
+extern std::string g_AsideFactClass;
+extern std::string g_AsideFactLevel;
+extern std::string g_AsideFactGear;
+extern std::string g_AsideFactPet;
+extern std::string g_AsideFactDeaths;
+
+// --------------------------------------------
 // Topic engine
 // --------------------------------------------
 extern uint32_t g_TopicWeightPeople;

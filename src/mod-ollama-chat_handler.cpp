@@ -58,6 +58,10 @@
 #include "mod-ollama-chat_presence.h"
 #include "mod-ollama-chat_stuck.h"
 #include "mod-ollama-chat_hangout.h"
+#include "mod-ollama-chat_gifts.h"
+#include "mod-ollama-chat_wipe.h"
+#include "mod-ollama-chat_gear.h"
+#include "mod-ollama-chat_aside.h"
 #include <iomanip>
 #include <unordered_set>
 #include "SpellMgr.h"
@@ -1238,6 +1242,9 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // After a run: "wait, can you help me with..." keeps the group together.
         PartyCmd_NoteHumanPartyLine(player, msg, sourceLocal);
 
+        // "yall are rude": the group's bots leave them be for a while.
+        Gear_NoteHumanLine(player, msg);
+
         // "dc on", "dc pause": mod-dungeon-clear answers those itself.
         if (partyLine == PartyCmdLine::DcCommand)
             return;
@@ -1257,6 +1264,12 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // run and gets the water -- the mage answers after the tank. Before the
         // blacklist too, since "trade" starts a line people use to ask.
         if (Conjure_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq))
+            handled = true;
+
+        // "anyone want my [Woolen Bag]?", "wts [Pagan Vest] 50s": what they are
+        // giving away or selling, answered by the bot it is any use to. Before
+        // the bag handlers, which would show every bot what it could spare.
+        if (!handled && Gifts_HandleHumanLine(player, msg, sourceLocal, contextChannel, receiver, scopeKey, humanSeq))
             handled = true;
 
         // "can I have your [Linen Cloth]", "ill take the leggings", "me!" right
@@ -1392,6 +1405,12 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
     const ContextAddressee addressee = (sourceLocal == SRC_WHISPER_LOCAL)
         ? ContextAddressee{}
         : Context_LikelyAddressee(player, sourceLocal, contextChannel, contextSeq);
+
+    // Something a person said in party chat: now and then, a gossip in the
+    // group whispers another real player about it. (Bot lines are noted when
+    // they are delivered.)
+    if (!senderIsBot)
+        Aside_NotePartyLine(player, msg, sourceLocal);
 
     if (g_DebugEnabled && addressee.guid)
         LOG_INFO("module.ollamachat",
@@ -3357,6 +3376,15 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         if (!state.empty())
             prompt += " " + state;
     }
+
+    // ...and who else in its group is dead, whether it was a wipe and who can
+    // bring them back: "we wiped, we need to respawn" is understood.
+    if (!publicLine)
+    {
+        const std::string deaths = Wipe_StateTextFor(bot);
+        if (!deaths.empty())
+            prompt += " " + deaths;
+    }
     else if (!publicLine)
     {
         // ...and one told to stay put knows why it is not following -- in the
@@ -3372,10 +3400,28 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     // and then, and for a few minutes after, that saying so hands nothing over.
     const bool spokenTo = source == SRC_WHISPER_LOCAL || source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL ||
                           source == SRC_SAY_LOCAL || replyHint == g_ContextHintAddressed;
+    // Not when the line gave something away ("anyone want my [Woolen Bag]?"):
+    // a list of its own spare things is how it ended up offering those.
+    if (!Gifts_IsOfferLine(player, sentMessage))
     {
         const std::string bags = Bags_PromptFor(bot, player, playerMessage, spokenTo);
         if (!bags.empty())
             prompt += " " + bags;
+    }
+
+    // What it said yes to, offered or agreed to pay for lately.
+    {
+        const std::string said = Gifts_PromptFor(bot);
+        if (!said.empty())
+            prompt += " " + said;
+    }
+
+    // When gear comes up, what people really wear -- and leave alone anyone
+    // who felt picked on.
+    {
+        const std::string gear = Gear_PromptFor(bot, player, playerMessage, source, channelName);
+        if (!gear.empty())
+            prompt += " " + gear;
     }
 
     // What it asked for in chat lately, and why: "why do you need hogger?"

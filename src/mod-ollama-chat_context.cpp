@@ -421,6 +421,33 @@ uint64_t Context_LatestLineFrom(Player* speaker, ChatChannelSourceLocal source,
     return 0;
 }
 
+std::vector<ContextRecentLine> Context_RecentLines(Player* viewer, ChatChannelSourceLocal source,
+                                                   const std::string& channelName, size_t max,
+                                                   uint32_t maxAgeSeconds)
+{
+    std::vector<ContextRecentLine> out;
+    if (!g_ContextEnable || !viewer || !max)
+        return out;
+    const std::string key = SpaceKey(viewer, source, channelName);
+    if (key.empty())
+        return out;
+    const auto now = Clock::now();
+
+    std::lock_guard<std::mutex> lock(g_mutex);
+    auto it = g_spaces.find(key);
+    if (it == g_spaces.end())
+        return out;
+    for (auto line = it->second.rbegin(); line != it->second.rend() && out.size() < max; ++line)
+    {
+        if (SecondsBetween(line->when, now) > double(maxAgeSeconds))
+            break;
+        if (line->kind == ContextLineKind::Event || !VisibleTo(*line, viewer))
+            continue;
+        out.push_back({ line->speakerGuid, line->speakerName, line->speakerIsBot, line->text });
+    }
+    return out;
+}
+
 std::string Context_ChannelLabel(ChatChannelSourceLocal source, const std::string& channelName)
 {
     return SpaceLabel(source, channelName);

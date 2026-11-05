@@ -29,6 +29,10 @@
 #include "mod-ollama-chat_revive.h"
 #include "mod-ollama-chat_stuck.h"
 #include "mod-ollama-chat_hangout.h"
+#include "mod-ollama-chat_gifts.h"
+#include "mod-ollama-chat_wipe.h"
+#include "mod-ollama-chat_gear.h"
+#include "mod-ollama-chat_aside.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
 #include <thread>
@@ -718,6 +722,40 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              (unsigned long long)hangout.movedOn,
                              (unsigned long long)hangout.cutShort,
                              (unsigned long long)hangout.cameBack);
+    const GiftsStats gifts = Gifts_GetStats();
+    handler->PSendSysMessage("Things given away and sold: {} - {} given away, {} sold; {} said yes please, {} nobody "
+                             "could use; {} asked the price, {} agreed one, {} offered less, {} paid ({} agreed and "
+                             "not traded yet)",
+                             g_GiftsEnable ? "on" : "off",
+                             (unsigned long long)gifts.offers,
+                             (unsigned long long)gifts.sales,
+                             (unsigned long long)gifts.wanted,
+                             (unsigned long long)gifts.nobody,
+                             (unsigned long long)gifts.asked,
+                             (unsigned long long)gifts.agreed,
+                             (unsigned long long)gifts.countered,
+                             (unsigned long long)gifts.paid,
+                             gifts.deals);
+    const WipeStats wipe = Wipe_GetStats();
+    handler->PSendSysMessage("Deaths in groups: {} - {} uh-ohs for the tank, {} wipes ({} sorries from the tank, {} "
+                             "calls to run back), {} running back on their own",
+                             g_WipeEnable ? "on" : "off",
+                             (unsigned long long)wipe.tankDown,
+                             (unsigned long long)wipe.wipes,
+                             (unsigned long long)wipe.apologies,
+                             (unsigned long long)wipe.noRez,
+                             (unsigned long long)wipe.runBack);
+    const GearStats gear = Gear_GetStats();
+    const AsideStats aside = Aside_GetStats();
+    handler->PSendSysMessage("Gear talk: {} - {} prompts told what people wear, {} players who felt picked on   "
+                             "Asides: {} - {} whispered ({} about something said, {} about something else)",
+                             g_GearEnable ? "on" : "off",
+                             (unsigned long long)gear.described,
+                             (unsigned long long)gear.backOffs,
+                             g_AsideEnable ? "on" : "off",
+                             (unsigned long long)aside.whispered,
+                             (unsigned long long)aside.onLines,
+                             (unsigned long long)aside.idle);
 
     handler->PSendSysMessage("Roleplay: {} (strictness {})   Emote reactions: {}",
                              g_RoleplayEnable ? "on" : "off",

@@ -296,6 +296,11 @@ bool Revive_RunDecides(Player* bot)
     return bot && InDungeonClearRun(bot);
 }
 
+bool Revive_KnowsResurrect(Player* player)
+{
+    return player && KnowsResurrect(player);
+}
+
 ReviveStats Revive_GetStats()
 {
     return g_stats;

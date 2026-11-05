@@ -33,6 +33,10 @@ class Player;
 // dead come back: nothing else releases them.
 bool Revive_RunDecides(Player* bot);
 
+// Does this character know a resurrection spell (priest, paladin, shaman or
+// druid, once learned)? Looked up once a minute per character.
+bool Revive_KnowsResurrect(Player* player);
+
 struct ReviveStats
 {
     uint64_t released = 0;   // told to release, nobody could rez them
