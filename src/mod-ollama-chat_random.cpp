@@ -267,6 +267,13 @@ namespace
                 prompt += " " + g_PartyDungeonFocusText;
         }
 
+        // Its style's nudge, rolled for this line just as for a reply: the
+        // binger works a film line into its own chatter on the same share of
+        // lines as into its answers (Personality.Nudge.<KEY>).
+        const std::string styleNudge = OllamaStyleNudgeFor(bot, personality);
+        if (!styleNudge.empty())
+            prompt += " " + styleNudge;
+
         // Now and then, a smiley would not go amiss.
         const std::string smiley = Context_EmoticonNudgeFor(bot);
         if (!smiley.empty())

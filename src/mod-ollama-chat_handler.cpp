@@ -3150,23 +3150,49 @@ uint32_t OllamaMaxReplyLengthFor(Player* bot)
     return it == g_PersonalityMaxReplyLength.end() ? 0 : it->second;
 }
 
-// What a chat style is told on top of its personality, for one reply. A nudge
-// rolls each time, so "90|quote a film" is a film quote nine replies in ten
-// and, with an "otherwise" part, something plainly different on the tenth.
-static std::string OllamaPersonalityNote(const std::string& personality)
+// A nudge rolls each time, so "50|work in a film line" is a film line on half
+// a style's lines and, with an "otherwise" part, something plainly different
+// on the rest. The share that gets it is also shown what the bot said lately:
+// a binger told to quote a film, and not told what it quoted ten minutes ago,
+// quoted it again.
+std::string OllamaStyleNudgeFor(Player* bot, const std::string& personality)
+{
+    if (!bot || g_PersonalityNudges.empty())
+        return {};
+    const auto nudge = g_PersonalityNudges.find(OllamaUpperKey(personality));
+    if (nudge == g_PersonalityNudges.end())
+        return {};
+
+    const PersonalityNudge& n = nudge->second;
+    static std::mt19937 rng{ std::random_device{}() };
+    const bool yes = n.percent > 0 && urand(1, 100) <= n.percent;
+    std::string out = TextRules::ExpandChoices(yes ? n.yes : n.no, rng);
+
+    if (yes && !out.empty() && !g_PersonalitySaidLatelyNote.empty() && g_PersonalitySaidLatelyLines > 0)
+    {
+        const std::vector<std::string> lately = Governor_RecentLines(bot->GetGUID(), g_PersonalitySaidLatelyLines);
+        if (!lately.empty())
+        {
+            std::string lines;
+            for (const std::string& line : lately)
+                lines += (lines.empty() ? "'" : ", '") + line + "'";
+            const std::string note = SafeFormat(g_PersonalitySaidLatelyNote, fmt::arg("lines", lines));
+            if (!note.empty() && note != "[Format Error]")
+                out += " " + note;
+        }
+    }
+    return out;
+}
+
+// What a chat style is told on top of its personality, for one reply: its
+// nudge, and that it may write more when it has a longer reply limit.
+static std::string OllamaPersonalityNote(Player* bot, const std::string& personality)
 {
     if (g_PersonalityNudges.empty() && g_PersonalityMaxReplyLength.empty())
         return {};
     const std::string key = OllamaUpperKey(personality);
 
-    std::string out;
-    const auto nudge = g_PersonalityNudges.find(key);
-    if (nudge != g_PersonalityNudges.end())
-    {
-        const PersonalityNudge& n = nudge->second;
-        static std::mt19937 rng{ std::random_device{}() };
-        out = TextRules::ExpandChoices((n.percent > 0 && urand(1, 100) <= n.percent) ? n.yes : n.no, rng);
-    }
+    std::string out = OllamaStyleNudgeFor(bot, personality);
 
     // Only when it really is longer than everyone else's limit.
     const auto longer = g_PersonalityMaxReplyLength.find(key);
@@ -3488,7 +3514,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     // What this chat style is told on top of its personality, this time: a
     // nudge on some share of its replies (Personality.Nudge.<KEY>), or that it
     // may write more than one short line (Personality.MaxReplyLength.<KEY>).
-    const std::string styleNote = OllamaPersonalityNote(personality);
+    const std::string styleNote = OllamaPersonalityNote(bot, personality);
     if (!styleNote.empty())
         prompt += " " + styleNote;
 

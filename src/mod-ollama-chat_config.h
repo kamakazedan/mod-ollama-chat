@@ -229,6 +229,9 @@ extern uint32_t g_OpenerHistorySize;
 // what was said this recently: across a whole busy evening the same short
 // reaction is bound to come up again, and that is not repetition.
 extern uint32_t g_RepetitionShortLineWindowSeconds;
+extern std::string g_RepetitionOwnRepeatNote;   // one more go for a line it said itself lately: {line}
+extern TextRules::QuoteSources g_ResponseQuoteSources;            // what a quoted line is from: cut off the end
+extern std::unordered_set<std::string> g_ResponseQuoteSourceStyles; // ...of these styles' lines
 
 // --------------------------------------------
 // Shared chat context (mod-ollama-chat_context)
@@ -467,6 +470,8 @@ struct PersonalityNudge
 extern std::unordered_map<std::string, PersonalityNudge> g_PersonalityNudges;
 extern std::unordered_map<std::string, uint32_t>         g_PersonalityMaxReplyLength;
 extern std::string g_PersonalityLongReplyNote;   // what a style with a longer limit is told
+extern std::string g_PersonalitySaidLatelyNote;  // with a nudge: what it said lately, {lines}
+extern uint32_t    g_PersonalitySaidLatelyLines; // ...at most this many of them
 
 // Read OllamaChat.Emote.Style.<KEY> for every personality loaded from the
 // database. Called from the config load, after the personality templates.

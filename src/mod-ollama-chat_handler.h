@@ -68,6 +68,13 @@ std::string BuildEmoteReactionPrompt(Player* bot, Player* player, uint32_t textE
 // is what tells the bot it may write more. World thread only.
 uint32_t OllamaMaxReplyLengthFor(Player* bot);
 
+// This bot's chat style's nudge for one line (OllamaChat.Personality.Nudge.<KEY>),
+// rolled each time: the instruction on its share of lines, plus what the bot
+// said lately (Personality.SaidLatelyNote), or the "otherwise" part on the
+// rest. Empty for a style without one. Replies and the bot's own chatter both
+// get it. World thread only.
+std::string OllamaStyleNudgeFor(Player* bot, const std::string& personality);
+
 // Bounded, distance-sorted snapshot helpers used by the prompt builders and
 // the topic engine.
 std::string GenerateBotGameStateSnapshot(Player* bot);

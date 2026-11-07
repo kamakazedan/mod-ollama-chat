@@ -604,6 +604,24 @@ namespace
             c.text = dated;
         }
 
+        // "i'm the spider king now. avengers.": the binger naming what it
+        // quoted, however often it is told not to. The name goes, the line
+        // stays (Response.QuoteSources, .QuoteSourceStyles).
+        if (!g_ResponseQuoteSourceStyles.empty() && !g_ResponseQuoteSources.names.empty())
+        {
+            std::string style;
+            for (char ch : GetBotPersonality(bot))
+                style += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+            if (g_ResponseQuoteSourceStyles.count(style))
+            {
+                const std::string unsourced = TextRules::StripQuoteSource(c.text, g_ResponseQuoteSources, origin);
+                if (g_DebugEnabled && unsourced != c.text)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} named what it quoted: '{}' -> '{}'",
+                             bot->GetName(), c.text, unsourced);
+                c.text = unsourced;
+            }
+        }
+
         // "nah just chilling here you knob": an insult out of nowhere. One
         // fits banter someone started, or a line that was rude to it, or a
         // bot whose style is just rude -- and even then not every time (the
@@ -674,13 +692,10 @@ namespace
         // A line owed to someone that came back with a stock phrase gets one
         // more go, told what to leave out, rather than leaving them without an
         // answer. Its crowd slot or conversation place waits for the second go.
-        auto retry = [&](const std::string& phrase) -> bool
+        auto retryWith = [&](const std::string& note, const std::string& phrase) -> bool
         {
             if (!g_ResponseRetryOwed || !directAddress || c.request.retried || c.request.prompt.empty() ||
-                !c.request.fixedText.empty() || g_ResponseRetryNote.empty())
-                return false;
-            const std::string note = SafeFormat(g_ResponseRetryNote, fmt::arg("phrase", phrase));
-            if (note.empty() || note == "[Format Error]")
+                !c.request.fixedText.empty() || note.empty() || note == "[Format Error]")
                 return false;
             OllamaChatRequest again = c.request;
             again.retried = true;
@@ -694,6 +709,11 @@ namespace
                 LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} asked again without '{}': '{}'", bot->GetName(),
                          phrase, c.text);
             return true;
+        };
+        auto retry = [&](const std::string& phrase) -> bool
+        {
+            return !g_ResponseRetryNote.empty() &&
+                   retryWith(SafeFormat(g_ResponseRetryNote, fmt::arg("phrase", phrase)), phrase);
         };
 
         // Wrath has no keystones, a level 6 has no repair bills, and nobody
@@ -764,6 +784,34 @@ namespace
             return;
         }
 
+        // ...but owed or not, not a line it said itself a moment ago to
+        // something else: "i'm going to make him an offer he can't refuse",
+        // to one bot and then the next. It gets one more go, told so
+        // (Repetition.OwnRepeatNote). Missed twice, it is held back where a
+        // bot was owed it, and goes out where a person was: better the same
+        // line than none.
+        if (directAddress)
+        {
+            std::string said;
+            if (Governor_RepeatsOwnLine(botGuid, c.text, origin, said))
+            {
+                const std::string note = g_RepetitionOwnRepeatNote.empty()
+                                             ? std::string()
+                                             : SafeFormat(g_RepetitionOwnRepeatNote, fmt::arg("line", said));
+                if (retryWith(note, said))
+                    return;
+                if (c.request.chainDepth > 0)
+                {
+                    ++g_droppedGovernor;
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat",
+                                 "[Ollama Chat] Bot {} reply to a bot suppressed, it said that already: '{}'",
+                                 bot->GetName(), c.text);
+                    return;
+                }
+            }
+        }
+
         // A crowd voice is paced by its crowd -- but only while that crowd is
         // still running. A late line from one that has ended or been replaced
         // gets the ordinary cooldowns like any other line. A conversation's
@@ -818,7 +866,7 @@ namespace
             Bags_NoteOffer(bot, c.request.offerEntry, c.request.scopeKey);
         else                        // "just have some [Ankh] if you want", asked what it has
             Bags_NoteReply(bot, plain, line.text, c.request.scopeKey, c.request.targetGuid);
-        Governor_RecordUtterance(botGuid, c.request.scopeKey, plain);
+        Governor_RecordUtterance(botGuid, c.request.scopeKey, plain, origin);
         Phrases_NoteSaid(plain);
         Phrases_NoteEcho(botGuid.GetRawValue(), plain);
         Context_NoteEmoticonSent(bot, plain);

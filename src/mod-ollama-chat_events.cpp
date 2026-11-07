@@ -21,6 +21,7 @@
 
 #include "AchievementMgr.h"
 #include "Containers.h"
+#include "DatabaseEnv.h"
 #include "GameObject.h"
 #include "Group.h"
 #include "Guild.h"
@@ -168,7 +169,9 @@ namespace
         if (type == g_GuildEventTypeGuildLeave)
             return { SafeFormat("{} left the guild", actor), true };
         if (type == g_GuildEventTypeGuildPromotion)
-            return { SafeFormat("{} was promoted", actor), true };
+            return { SafeFormat("{} was promoted to {}", actor, detail), true };
+        if (type == g_GuildEventTypeGuildDemotion)   // the game tells the whole guild too
+            return { SafeFormat("{} was demoted to {}", actor, detail), true };
         if (type == g_GuildEventTypeEpicGear)
             return { SafeFormat("{} looted [{}]", actor, detail), true };
         if (type == g_GuildEventTypeGuildMOTD)
@@ -748,8 +751,24 @@ void ChatOnGuild::OnMOTDChanged(Guild* guild, std::string const& newMotd)
     eventChatter.DispatchGameEvent(setter, g_GuildEventTypeGuildMOTD, TextRules::StripChatMarkup(newMotd));
 }
 
-void ChatOnGuild::OnEvent(Guild* guild, uint8 eventType, ObjectGuid::LowType playerGuid1,
-                          ObjectGuid::LowType /*playerGuid2*/, uint8 newRank)
+// The rank's name -- "Officer", "Veteran" -- rather than its number: "promoted
+// to rank 2" is not how anyone says it. The guild keeps its ranks to itself, so
+// the name is read back from where they are saved; a promotion is rare enough
+// for one small query.
+static std::string GuildRankName(Guild* guild, uint8 rankId)
+{
+    if (QueryResult result = CharacterDatabase.Query(
+            "SELECT `rname` FROM `guild_rank` WHERE `guildid` = {} AND `rid` = {}", guild->GetId(), uint32(rankId)))
+    {
+        const std::string name = result->Fetch()[0].Get<std::string>();
+        if (!name.empty())
+            return name;
+    }
+    return std::to_string(rankId);
+}
+
+void ChatOnGuild::OnEvent(Guild* guild, uint8 eventType, ObjectGuid::LowType /*playerGuid1*/,
+                          ObjectGuid::LowType playerGuid2, uint8 newRank)
 {
     if (!guild || !g_EnableGuildEventChatter)
         return;
@@ -757,8 +776,11 @@ void ChatOnGuild::OnEvent(Guild* guild, uint8 eventType, ObjectGuid::LowType pla
     if (eventType != GUILD_EVENT_LOG_PROMOTE_PLAYER && eventType != GUILD_EVENT_LOG_DEMOTE_PLAYER)
         return;
 
+    // The guild log's first guid is whoever did it, the second the member it
+    // was done to (Guild::HandleUpdateMemberRank). Reading the first, a guild
+    // master who promoted someone was the one congratulated on a promotion.
     Player* player = ObjectAccessor::FindConnectedPlayer(
-        ObjectGuid::Create<HighGuid::Player>(playerGuid1));
+        ObjectGuid::Create<HighGuid::Player>(playerGuid2));
     if (!player)
         return;
 
@@ -768,7 +790,7 @@ void ChatOnGuild::OnEvent(Guild* guild, uint8 eventType, ObjectGuid::LowType pla
     if (type.empty())
         return;
 
-    eventChatter.DispatchGameEvent(player, type, std::to_string(newRank));
+    eventChatter.DispatchGameEvent(player, type, GuildRankName(guild, newRank));
 }
 
 // --------------------------------------------------------------------------

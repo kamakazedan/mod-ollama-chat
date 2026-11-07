@@ -4,6 +4,7 @@
 #include "ObjectGuid.h"
 #include <string>
 #include <cstdint>
+#include <vector>
 
 // --------------------------------------------------------------------------
 // Conversation governor.
@@ -91,8 +92,22 @@ bool Governor_BotIsFresh(ObjectGuid botGuid);
 bool Governor_IsRepetitive(ObjectGuid botGuid, const std::string& scopeKey,
                            const std::string& text);
 
+// For a line owed to someone, which Governor_IsRepetitive does not hold back:
+// is it one this bot said itself lately (Repetition.WindowSeconds,
+// .SimilarityThreshold) in answer to something else? "i'm going to make him
+// an offer he can't refuse", to one bot and then another five minutes later.
+// Asked the same thing twice, the same answer stands; short lines ("ty", "on
+// my way") come round again and never count. `repeated`: the earlier line.
+bool Governor_RepeatsOwnLine(ObjectGuid botGuid, const std::string& text,
+                             const std::string& origin, std::string& repeated);
+
+// What this bot said lately, newest first, as it went out: up to `count`
+// lines of more than three words from the repetition window.
+std::vector<std::string> Governor_RecentLines(ObjectGuid botGuid, uint32_t count);
+
+// A line went out. `origin`: the line it answered, if any.
 void Governor_RecordUtterance(ObjectGuid botGuid, const std::string& scopeKey,
-                              const std::string& text);
+                              const std::string& text, const std::string& origin = {});
 
 // Similarity in [0,1]; exposed for the .ollama status command and testing.
 float Governor_Similarity(const std::string& a, const std::string& b);

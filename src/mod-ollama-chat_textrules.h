@@ -6,6 +6,7 @@
 #include <random>
 #include <functional>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 // --------------------------------------------------------------------------
@@ -60,6 +61,31 @@ namespace TextRules
     // (0 Sunday .. 6 Saturday), in the same case. "on tuesday", "next
     // tuesday", "last tuesday" and "this tuesday" are other days: left alone.
     std::string FixWeekday(const std::string& text, int today);
+
+    // ---- what a quote is from -------------------------------------------
+
+    // Films, shows and characters a line might be put down to, and the words
+    // that say a line is about watching them at all.
+    struct QuoteSources
+    {
+        std::unordered_set<std::string> names;    // NormalizeSourceName: "toy story", "the godfather"
+        std::unordered_set<std::string> joined;   // the same without spaces, for "#toystory"
+        std::vector<std::vector<std::string>> filmWords;   // CrowdText phrases
+    };
+    QuoteSources ParseQuoteSources(const std::string& names, const std::string& filmWords);
+
+    // "Wayne's World", "Bill & Ted", "E.T." -> "waynes world", "bill and ted",
+    // "e t": lowercase letters and digits in single-spaced words.
+    std::string NormalizeSourceName(const std::string& name);
+
+    // "to infinity and beyond. toy story." -> "to infinity and beyond." What a
+    // line is from, named at its end after the line itself -- ". lotr",
+    // " - Toy Story", " (The Godfather, 1972)", ", from Shrek", " #avengers".
+    // Left as it is when that would leave less than two words, or when the
+    // line, or `answering` (what it replies to), is about films and shows at
+    // all: asked "what's your favourite film?", "easy. jaws" is the answer.
+    std::string StripQuoteSource(const std::string& text, const QuoteSources& sources,
+                                 const std::string& answering);
 
     // ---- muted bot lines ----------------------------------------------------
 

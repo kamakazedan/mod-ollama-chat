@@ -31,6 +31,8 @@ namespace
         GramCounts            grams;     // character trigrams
         double                gramNorm = 0.0;   // sqrt(sum of squares)
         TimePoint             when;
+        std::string           said;      // as it went out (bot history only)
+        std::string           origin;    // normalized: the line it answered, if any (bot history only)
     };
 
     struct BotState
@@ -212,6 +214,32 @@ namespace
     {
         while (hist.size() > maxSize)
             hist.pop_front();
+    }
+
+    // Is a candidate line (normalized, with its tokens and trigrams) close
+    // enough to one already said to count as saying it again?
+    bool CloseTo(const std::string& norm, const std::set<std::string>& tokens, const GramCounts& grams,
+                 double gramNorm, const Utterance& u)
+    {
+        if (u.normalized == norm)
+            return true;
+
+        // Cheap reject first: lines of wildly different length cannot be
+        // similar enough to matter.
+        const size_t la = norm.size(), lb = u.normalized.size();
+        const size_t lo = la < lb ? la : lb, hi = la < lb ? lb : la;
+        if (hi > 0 && double(lo) / double(hi) < 0.4)
+            return false;
+
+        return JaccardOf(tokens, u.tokens) >= g_RepetitionSimilarityThreshold ||
+               CosineOf(grams, gramNorm, u.grams, u.gramNorm) >= g_RepetitionSimilarityThreshold;
+    }
+
+    // "ty", "on my way", "lol same": short lines come round again however
+    // varied a bot is.
+    bool IsShortLine(const std::string& normalized)
+    {
+        return Tokenize(normalized, false).size() <= 3;
     }
 }
 
@@ -482,7 +510,7 @@ bool Governor_IsRepetitive(ObjectGuid botGuid, const std::string& scopeKey,
     // silence most reactions in an active channel. Short lines are only
     // compared with what was said lately.
     double window = double(g_RepetitionWindowSeconds);
-    if (g_RepetitionShortLineWindowSeconds > 0 && Tokenize(norm, false).size() <= 3)
+    if (g_RepetitionShortLineWindowSeconds > 0 && IsShortLine(norm))
         window = std::min(window, double(g_RepetitionShortLineWindowSeconds));
 
     std::lock_guard<std::mutex> lock(g_mutex);
@@ -494,19 +522,7 @@ bool Governor_IsRepetitive(ObjectGuid botGuid, const std::string& scopeKey,
         {
             if (SecondsSince(u.when, now) > window)
                 continue;
-            if (u.normalized == norm)
-                return true;
-
-            // Cheap reject first: lines of wildly different length cannot be
-            // similar enough to matter.
-            const size_t la = norm.size(), lb = u.normalized.size();
-            const size_t lo = la < lb ? la : lb, hi = la < lb ? lb : la;
-            if (hi > 0 && double(lo) / double(hi) < 0.4)
-                continue;
-
-            if (JaccardOf(candTokens, u.tokens) >= g_RepetitionSimilarityThreshold)
-                return true;
-            if (CosineOf(candGrams, candNorm, u.grams, u.gramNorm) >= g_RepetitionSimilarityThreshold)
+            if (CloseTo(norm, candTokens, candGrams, candNorm, u))
                 return true;
         }
         return false;
@@ -552,8 +568,78 @@ bool Governor_IsRepetitive(ObjectGuid botGuid, const std::string& scopeKey,
     return false;
 }
 
+bool Governor_RepeatsOwnLine(ObjectGuid botGuid, const std::string& text,
+                             const std::string& origin, std::string& repeated)
+{
+    const std::string norm = NormalizeText(text);
+    if (norm.empty() || IsShortLine(norm))
+        return false;
+
+    const std::set<std::string> candTokens = BuildTokenSet(norm);
+    const GramCounts            candGrams  = BuildGrams(norm);
+    const double                candNorm   = GramNorm(candGrams);
+    const std::string           asked      = NormalizeText(origin);
+
+    std::lock_guard<std::mutex> lock(g_mutex);
+    const TimePoint now = Clock::now();
+
+    auto botIt = g_bots.find(botGuid.GetRawValue());
+    if (botIt == g_bots.end())
+        return false;
+
+    const Utterance* earlier = nullptr;   // the latest time it said this to something else
+    for (auto it = botIt->second.history.rbegin(); it != botIt->second.history.rend(); ++it)
+    {
+        const Utterance& u = *it;
+        if (SecondsSince(u.when, now) > double(g_RepetitionWindowSeconds))
+            continue;
+        if (!CloseTo(norm, candTokens, candGrams, candNorm, u))
+            continue;
+
+        // Asked the same thing again: the same answer stands, whatever else
+        // it was said to in between.
+        if (!asked.empty() && !u.origin.empty() &&
+            (asked == u.origin || Governor_Similarity(asked, u.origin) >= g_RepetitionSimilarityThreshold))
+            return false;
+
+        if (!earlier)
+            earlier = &u;
+    }
+    if (!earlier)
+        return false;
+
+    repeated = earlier->said.empty() ? earlier->normalized : earlier->said;
+    ++g_stats.blockedRepetition;
+    return true;
+}
+
+std::vector<std::string> Governor_RecentLines(ObjectGuid botGuid, uint32_t count)
+{
+    std::vector<std::string> out;
+    if (count == 0)
+        return out;
+
+    std::lock_guard<std::mutex> lock(g_mutex);
+    const TimePoint now = Clock::now();
+
+    auto botIt = g_bots.find(botGuid.GetRawValue());
+    if (botIt == g_bots.end())
+        return out;
+
+    for (auto it = botIt->second.history.rbegin(); it != botIt->second.history.rend() && out.size() < count; ++it)
+    {
+        if (SecondsSince(it->when, now) > double(g_RepetitionWindowSeconds))
+            break;   // oldest at the front: everything from here on is older
+        if (it->said.empty() || IsShortLine(it->normalized))
+            continue;
+        if (std::find(out.begin(), out.end(), it->said) == out.end())
+            out.push_back(it->said);
+    }
+    return out;
+}
+
 void Governor_RecordUtterance(ObjectGuid botGuid, const std::string& scopeKey,
-                              const std::string& text)
+                              const std::string& text, const std::string& origin)
 {
     const std::string norm = NormalizeText(text);
     if (norm.empty())
@@ -569,8 +655,13 @@ void Governor_RecordUtterance(ObjectGuid botGuid, const std::string& scopeKey,
 
     std::lock_guard<std::mutex> lock(g_mutex);
 
+    // The bot's own history keeps the line as said and what it answered: what
+    // it is shown it said lately, and what tells a repeated answer to a
+    // repeated question from the same line said to something else.
     BotState& bot = g_bots[botGuid.GetRawValue()];
     bot.history.push_back(u);
+    bot.history.back().said   = text.size() > 200 ? text.substr(0, 200) : text;
+    bot.history.back().origin = NormalizeText(origin);
     TrimHistory(bot.history, g_BotHistorySize);
 
     ScopeState& scope = g_scopes[scopeKey];

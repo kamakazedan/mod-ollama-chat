@@ -182,6 +182,9 @@ float    g_RepetitionSimilarityThreshold = 0.72f;
 uint32_t g_RepetitionWindowSeconds       = 1800;
 uint32_t g_OpenerHistorySize             = 8;
 uint32_t g_RepetitionShortLineWindowSeconds = 300;
+std::string g_RepetitionOwnRepeatNote;
+TextRules::QuoteSources g_ResponseQuoteSources;
+std::unordered_set<std::string> g_ResponseQuoteSourceStyles;
 
 // --------------------------------------------
 // Shared chat context
@@ -364,6 +367,8 @@ std::string g_ConjureHintNotGrouped;
 std::unordered_map<std::string, PersonalityNudge> g_PersonalityNudges;
 std::unordered_map<std::string, uint32_t>         g_PersonalityMaxReplyLength;
 std::string g_PersonalityLongReplyNote;
+std::string g_PersonalitySaidLatelyNote;
+uint32_t    g_PersonalitySaidLatelyLines = 5;
 
 std::vector<std::vector<std::string>> g_ResponseDropVocatives;
 std::vector<std::vector<std::string>> g_ResponseInsultWords;
@@ -2671,8 +2676,9 @@ static void LoadNaturalChatV15Settings()
 
     // --- a guild message of the day nobody set ---------------------------------------------
     g_GuildEnvCommentGuildMOTDUnset = ReadPipeList("OllamaChat.GuildEnvCommentGuildMOTDUnset",
-        "the guild message of the day: nobody has ever set one, so it still shows the game's default text, No "
-        "message set.");
+        "the guild message of the day (the note at the top of the guild window): nobody has ever set one, so it "
+        "still shows the game's default text, No message set. Call it the gmotd or the guild message of the day, "
+        "so everyone knows what you mean, and say nobody has set one rather than repeating the default text.");
     g_GuildEventTypeGuildMOTD = sConfigMgr->GetOption<std::string>("OllamaChat.GuildEventTypeGuildMOTD",
         "set the guild message of the day to:");
     g_GuildEventTypeGuildMOTD_Chance = std::clamp(sConfigMgr->GetOption<int>("OllamaChat.GuildEventTypeGuildMOTD_Chance", 100), 0, 100);
@@ -2691,6 +2697,10 @@ void LoadPersonalityExtras()
         "You can write more than most players do: when you explain how to do something, use two or three short "
         "sentences, up to about {words} words, clear and to the point. Still one chat line, no lists or "
         "headings.");
+    g_PersonalitySaidLatelyNote = sConfigMgr->GetOption<std::string>("OllamaChat.Personality.SaidLatelyNote",
+        "Lately you have said: {lines}. Nothing like any of those again.");
+    g_PersonalitySaidLatelyLines = std::min<uint32_t>(10,
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.Personality.SaidLatelyLines", 5));
 
     std::string bad;
     for (const std::string& key : g_PersonalityKeys)
@@ -3071,6 +3081,136 @@ void LoadOllamaChatConfig()
     g_RepetitionWindowSeconds         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.WindowSeconds", 1800);
     g_OpenerHistorySize               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.OpenerHistorySize", 8);
     g_RepetitionShortLineWindowSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Repetition.ShortLineWindowSeconds", 300);
+    g_RepetitionOwnRepeatNote         = sConfigMgr->GetOption<std::string>("OllamaChat.Repetition.OwnRepeatNote",
+        "You said '{line}' a moment ago, to something else: say something different this time.");
+
+    // "i'm the spider king now. avengers.": what a quote is from, cut off the end.
+    g_ResponseQuoteSourceStyles.clear();
+    {
+        const std::string styles = sConfigMgr->GetOption<std::string>("OllamaChat.Response.QuoteSourceStyles", "NAT_BINGER");
+        size_t start = 0;
+        while (start <= styles.size())
+        {
+            size_t bar = styles.find('|', start);
+            if (bar == std::string::npos)
+                bar = styles.size();
+            std::string key;
+            for (char ch : styles.substr(start, bar - start))
+                if (!std::isspace(static_cast<unsigned char>(ch)))
+                    key += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+            if (!key.empty())
+                g_ResponseQuoteSourceStyles.insert(key);
+            start = bar + 1;
+        }
+    }
+    g_ResponseQuoteSources = TextRules::ParseQuoteSources(
+        sConfigMgr->GetOption<std::string>("OllamaChat.Response.QuoteSources",
+        "the godfather|the godfather part ii|scarface|goodfellas|pulp fiction|reservoir dogs|kill bill|"
+        "taxi driver|the departed|casablanca|citizen kane|gone with the wind|the wizard of oz|titanic|"
+        "the sixth sense|the shining|apocalypse now|full metal jacket|platoon|saving private ryan|"
+        "black hawk down|the great escape|where eagles dare|zulu|the dirty dozen|band of brothers|"
+        "a few good men|jerry maguire|the silence of the lambs|the terminator|terminator 2|predator|"
+        "the exorcist|poltergeist|jaws|e.t.|home alone|home alone 2|braveheart|top gun|top gun maverick|"
+        "die hard|die hard 2|die hard with a vengeance|back to the future|bttf|ghostbusters|forrest gump|"
+        "jurassic park|jurassic world|star wars|a new hope|the empire strikes back|return of the jedi|"
+        "the phantom menace|revenge of the sith|rogue one|the mandalorian|the lord of the rings|lotr|"
+        "the fellowship of the ring|the two towers|the return of the king|the hobbit|harry potter|"
+        "indiana jones|raiders of the lost ark|the matrix|the dark knight|the dark knight rises|batman|"
+        "batman begins|superman|spider-man|iron man|the avengers|infinity war|captain america|thor|"
+        "guardians of the galaxy|deadpool|x-men|wolverine|wonder woman|black panther|doctor strange|ant-man|"
+        "aquaman|shazam|justice league|suicide squad|captain marvel|watchmen|hellboy|the incredibles|"
+        "toy story|toy story 2|toy story 3|toy story 4|monsters inc|finding nemo|finding dory|the lion king|"
+        "aladdin|beauty and the beast|the little mermaid|snow white|cinderella|pinocchio|peter pan|bambi|"
+        "dumbo|mulan|moana|encanto|zootopia|lilo and stitch|the jungle book|mary poppins|the sound of music|"
+        "shrek|shrek 2|madagascar|kung fu panda|despicable me|how to train your dragon|ice age|ratatouille|"
+        "wall-e|the lego movie|chicken run|wallace and gromit|paddington|paddington 2|willy wonka|"
+        "charlie and the chocolate factory|the princess bride|monty python|monty python and the holy grail|"
+        "holy grail|life of brian|the meaning of life|anchorman|anchorman 2|mean girls|the big lebowski|"
+        "fight club|the shawshank redemption|shawshank|the usual suspects|apollo 13|groundhog day|"
+        "mrs doubtfire|the truman show|dumb and dumber|ace ventura|the mask|liar liar|bruce almighty|"
+        "zoolander|napoleon dynamite|borat|the hangover|step brothers|talladega nights|superbad|caddyshack|"
+        "blazing saddles|young frankenstein|spaceballs|the naked gun|police academy|beverly hills cop|"
+        "office space|waynes world|bill and ted|bill and teds excellent adventure|ferris bueller|"
+        "ferris buellers day off|the breakfast club|dirty dancing|the goonies|stand by me|the karate kid|"
+        "gremlins|robocop|total recall|commando|kindergarten cop|rambo|first blood|mad max|mad max fury road|"
+        "blade runner|the fifth element|men in black|independence day|armageddon|mission impossible|"
+        "james bond|goldfinger|skyfall|casino royale|austin powers|john wick|lethal weapon|point break|"
+        "con air|face off|bad boys|rush hour|the fast and the furious|fast and furious|crocodile dundee|"
+        "enter the dragon|the mummy|the bourne identity|pretty woman|notting hill|love actually|"
+        "four weddings and a funeral|bridget jones|bridget joness diary|hot fuzz|shaun of the dead|"
+        "the worlds end|inception|interstellar|the hunger games|pirates of the caribbean|potc|"
+        "the wolf of wall street|the social network|the nightmare before christmas|the grinch|"
+        "how the grinch stole christmas|a christmas story|christmas vacation|national lampoon|home alone 3|"
+        "the santa clause|scrooged|the muppet christmas carol|the lost boys|beetlejuice|edward scissorhands|"
+        "jumanji|the sandlot|space jam|lock stock|lock stock and two smoking barrels|trainspotting|"
+        "the full monty|withnail and i|a fish called wanda|planes trains and automobiles|coming to america|"
+        "trading places|the blues brothers|uncle buck|galaxy quest|tropic thunder|dodgeball|wedding crashers|"
+        "meet the parents|american pie|scary movie|hot shots|this is spinal tap|spinal tap|team america|"
+        "the pink panther|johnny english|kingsman|school of rock|happy gilmore|billy madison|the waterboy|"
+        "the cable guy|legally blonde|bridesmaids|pineapple express|the evil dead|army of darkness|"
+        "the rocky horror picture show|rocky horror|donnie darko|big trouble in little china|"
+        "escape from new york|they live|highlander|conan the barbarian|the neverending story|"
+        "the dark crystal|chitty chitty bang bang|the iron giant|the land before time|"
+        "an american werewolf in london|a nightmare on elm street|nightmare on elm street|friday the 13th|"
+        "the texas chainsaw massacre|the blair witch project|childs play|the evil dead 2|close encounters|"
+        "2001 a space odyssey|starship troopers|district 9|the martian|the hitchhikers guide to the galaxy|"
+        "hitchhikers guide|battlestar galactica|stargate|les miserables|les mis|mamma mia|"
+        "the greatest showman|west side story|singin in the rain|the phantom of the opera|hairspray|"
+        "la la land|fargo|no country for old men|se7en|the godfather 2|the hurt locker|inglourious basterds|"
+        "django unchained|the hateful eight|once upon a time in hollywood|the good the bad and the ugly|"
+        "a fistful of dollars|dirty harry|the italian job|the long good friday|get carter|mrs brown|"
+        "willy wonka and the chocolate factory|honey i shrunk the kids|hocus pocus|the addams family|"
+        "free willy|the mighty ducks|cool runnings|the polar express|happy feet|the secret life of pets|"
+        "the croods|megamind|big hero 6|wreck-it ralph|the princess and the frog|the emperors new groove|"
+        "tarzan|pocahontas|the hunchback of notre dame|101 dalmatians|lady and the tramp|the aristocats|"
+        "the fox and the hound|sleeping beauty|alice in wonderland|bedknobs and broomsticks|the simpsons|"
+        "futurama|family guy|south park|seinfeld|the office|the office uk|parks and rec|parks and recreation|"
+        "brooklyn nine-nine|brooklyn 99|b99|how i met your mother|himym|the big bang theory|game of thrones|"
+        "breaking bad|better call saul|the sopranos|the wire|star trek|star trek the next generation|"
+        "the next generation|tng|deep space nine|doctor who|dr who|sherlock|blackadder|only fools and horses|"
+        "only fools|fawlty towers|red dwarf|father ted|the it crowd|peep show|the inbetweeners|mr bean|"
+        "monty pythons flying circus|flying circus|little britain|the young ones|allo allo|dads army|"
+        "keeping up appearances|the vicar of dibley|absolutely fabulous|ab fab|gavin and stacey|"
+        "the thick of it|im alan partridge|knowing me knowing you|the league of gentlemen|black books|"
+        "the mighty boosh|men behaving badly|the royle family|phoenix nights|top gear|the grand tour|"
+        "eastenders|coronation street|corrie|emmerdale|home and away|hollyoaks|who wants to be a millionaire|"
+        "the weakest link|deal or no deal|family fortunes|blankety blank|the crystal maze|"
+        "the generation game|university challenge|the price is right|wheel of fortune|family feud|"
+        "the krypton factor|play your cards right|bake off|great british bake off|strictly come dancing|"
+        "britains got talent|the x factor|big brother|love island|spongebob|spongebob squarepants|scooby doo|"
+        "rick and morty|avatar the last airbender|the last airbender|dragon ball z|dbz|pokemon|looney tunes|"
+        "tom and jerry|the flintstones|the jetsons|the a-team|knight rider|baywatch|the x-files|buffy|"
+        "buffy the vampire slayer|the walking dead|stranger things|downton abbey|arrested development|"
+        "its always sunny|its always sunny in philadelphia|always sunny|iasip|the fresh prince|"
+        "the fresh prince of bel-air|frasier|the golden girls|m*a*s*h|the twilight zone|columbo|the muppets|"
+        "the muppet show|sesame street|teletubbies|power rangers|transformers|he-man|thundercats|"
+        "teenage mutant ninja turtles|ninja turtles|tmnt|peaky blinders|line of duty|black mirror|"
+        "the witcher|westworld|the expanse|thunderbirds|danger mouse|wacky races|top cat|yogi bear|"
+        "the smurfs|inspector gadget|count duckula|ducktales|rugrats|hey arnold|johnny bravo|"
+        "dexters laboratory|the powerpuff girls|samurai jack|adventure time|gravity falls|bluey|peppa pig|"
+        "postman pat|fireman sam|bob the builder|thomas the tank engine|the magic roundabout|chucklevision|"
+        "art attack|robot wars|knightmare|mr blobby|noels house party|youve been framed|grange hill|"
+        "byker grove|narcos|ozark|yoda|gandalf|darth vader|vader|han solo|obi-wan|obi-wan kenobi|"
+        "luke skywalker|princess leia|chewbacca|chewie|buzz lightyear|homer simpson|bart simpson|del boy|"
+        "del boy trotter|rodney trotter|basil fawlty|jack sparrow|captain jack sparrow|arnold schwarzenegger|"
+        "schwarzenegger|arnie|spock|mr spock|captain kirk|captain picard|jean-luc picard|picard|"
+        "sherlock holmes|sheldon cooper|michael scott|dwight schrute|ron swanson|jake peralta|barney stinson|"
+        "jon snow|tyrion lannister|walter white|heisenberg|tony soprano|ron burgundy|inigo montoya|gollum|"
+        "smeagol|frodo|aragorn|boromir|dumbledore|hagrid|voldemort|severus snape|snape|hermione|simba|mufasa|"
+        "groot|thanos|tony stark|the hulk|baldrick|father jack|alan partridge|david brent|hyacinth bucket|"
+        "victor meldrew|captain mainwaring|corporal jones|arnold rimmer|michael corleone|vito corleone|"
+        "don corleone|tony montana|hannibal lecter|jack torrance|freddy krueger|john mcclane|hans gruber|"
+        "marty mcfly|doc brown|optimus prime|fred flintstone|bugs bunny|daffy duck|elmer fudd|wile e coyote|"
+        "patrick star|squidward|rick sanchez|peter griffin|stewie griffin|eric cartman|cartman|mr burns|"
+        "ned flanders|ralph wiggum|chandler bing|joey tribbiani|ross geller|george costanza|frasier crane|"
+        "zoidberg|rocky balboa|lord farquaad|the genie|jafar|baby yoda|r2-d2|c-3po|darth sidious|palpatine|"
+        "bilbo|bilbo baggins|legolas|gimli|samwise|sauron|saruman|t-800|lieutenant dan|boycie"),
+        sConfigMgr->GetOption<std::string>("OllamaChat.Response.QuoteFilmWords",
+        "film|films|movie|movies|flick|flicks|cinema|tv|telly|tv show|tv shows|that show|this show|the series|"
+        "series|sitcom|sitcoms|cartoon|cartoons|anime|episode|episodes|season|seasons|sequel|sequels|remake|"
+        "trailer|netflix|rewatch*|binge*|watching|watched|seen it|favourite|favorite|fave|actor|actress|director|"
+        "whats that from|what is that from|wheres that from|where is that from|what film|what movie|which film|"
+        "which movie"));
 
     // --- Shared chat context ---------------------------------------------
     g_ContextEnable                   = sConfigMgr->GetOption<bool>("OllamaChat.Context.Enable", true);

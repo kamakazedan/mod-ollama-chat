@@ -604,6 +604,204 @@ namespace TextRules
         return out;
     }
 
+    std::string NormalizeSourceName(const std::string& name)
+    {
+        std::string out;
+        out.reserve(name.size());
+        auto space = [&out]()
+        {
+            if (!out.empty() && out.back() != ' ')
+                out.push_back(' ');
+        };
+        for (size_t i = 0; i < name.size(); ++i)
+        {
+            const unsigned char c = static_cast<unsigned char>(name[i]);
+            if (c == '\'')
+                continue;   // "wayne's" -> "waynes"
+            if (c == 0xE2 && i + 2 < name.size() && static_cast<unsigned char>(name[i + 1]) == 0x80 &&
+                (static_cast<unsigned char>(name[i + 2]) == 0x98 || static_cast<unsigned char>(name[i + 2]) == 0x99))
+            {
+                i += 2;     // a curly apostrophe, the same
+                continue;
+            }
+            if (c == '&')
+            {
+                space();
+                out += "and ";
+                continue;
+            }
+            if (std::isalnum(c))
+                out.push_back(static_cast<char>(std::tolower(c)));
+            else if (c >= 0x80)
+                out.push_back(static_cast<char>(c));   // part of a word ("pokémon")
+            else
+                space();
+        }
+        while (!out.empty() && out.back() == ' ')
+            out.pop_back();
+        return out;
+    }
+
+    QuoteSources ParseQuoteSources(const std::string& names, const std::string& filmWords)
+    {
+        QuoteSources out;
+        size_t start = 0;
+        while (start <= names.size())
+        {
+            size_t bar = names.find('|', start);
+            if (bar == std::string::npos)
+                bar = names.size();
+            const std::string name = NormalizeSourceName(names.substr(start, bar - start));
+            if (!name.empty())
+            {
+                out.names.insert(name);
+                std::string joined;
+                for (char c : name)
+                    if (c != ' ')
+                        joined.push_back(c);
+                out.joined.insert(joined);
+            }
+            start = bar + 1;
+        }
+        out.filmWords = CrowdText::ParsePhrases(filmWords);
+        return out;
+    }
+
+    namespace
+    {
+        // Is `tail` -- what follows the line -- the name of what it is from?
+        // "Toy Story", "from shrek", "the movie Elf", "#lotr", "Jaws (1975)".
+        bool IsQuoteSource(const std::string& tail, const QuoteSources& qs)
+        {
+            std::string n = NormalizeSourceName(tail);
+            if (n.empty() || std::count(n.begin(), n.end(), ' ') > 7)
+                return false;
+
+            static const char* const kLeads[] = { "quote from ", "thats from ", "its from ", "from ", "as in ",
+                                                  "like in ", "the movie ", "the film ", "the show ", "movie ",
+                                                  "film ", "tv ", "via " };
+            for (bool again = true; again;)
+            {
+                again = false;
+                for (const char* lead : kLeads)
+                {
+                    const size_t len = std::strlen(lead);
+                    if (n.size() > len && n.compare(0, len, lead) == 0)
+                    {
+                        n.erase(0, len);
+                        again = true;
+                    }
+                }
+            }
+
+            // "toy story lol": a laugh after the name is part of the tag.
+            static const char* const kLaughs[] = { " lol", " lmao", " haha", " hehe", " xd", " rofl", " jk" };
+            for (bool again = true; again;)
+            {
+                again = false;
+                for (const char* laugh : kLaughs)
+                {
+                    const size_t len = std::strlen(laugh);
+                    if (n.size() > len && n.compare(n.size() - len, len, laugh) == 0)
+                    {
+                        n.erase(n.size() - len);
+                        again = true;
+                    }
+                }
+            }
+
+            // "Jaws 1975", "toy story (1995)": the year it came out.
+            const size_t lastSpace = n.rfind(' ');
+            if (lastSpace != std::string::npos && n.size() - lastSpace - 1 == 4 &&
+                (n.compare(lastSpace + 1, 2, "19") == 0 || n.compare(lastSpace + 1, 2, "20") == 0) &&
+                std::all_of(n.begin() + lastSpace + 1, n.end(), [](unsigned char c) { return std::isdigit(c) != 0; }))
+                n.erase(lastSpace);
+
+            if (n.empty())
+                return false;
+            if (qs.names.count(n) || qs.names.count("the " + n))
+                return true;
+            if (n.size() > 4 && n.compare(0, 4, "the ") == 0 && qs.names.count(n.substr(4)))
+                return true;
+
+            std::string joined;
+            for (char c : n)
+                if (c != ' ')
+                    joined.push_back(c);
+            return qs.joined.count(joined) != 0;
+        }
+    }
+
+    std::string StripQuoteSource(const std::string& text, const QuoteSources& qs, const std::string& answering)
+    {
+        if (qs.names.empty() || text.empty())
+            return text;
+
+        // Talking about films, naming one is the point.
+        if (!qs.filmWords.empty() && !answering.empty() &&
+            CrowdText::ContainsPhrase(CrowdText::Words(answering), qs.filmWords))
+            return text;
+
+        size_t b = 0, e = text.size();
+        while (b < e && std::isspace(static_cast<unsigned char>(text[b])))
+            ++b;
+        while (e > b && std::isspace(static_cast<unsigned char>(text[e - 1])))
+            --e;
+        const std::string t = text.substr(b, e - b);
+
+        // Where a source can follow the line: after its last full stop (kept),
+        // or after a comma, a dash, an opening bracket, a hashtag or "from".
+        struct Sep { const char* text; bool keepMark; };
+        static const Sep kSeps[] = {
+            { ". ", true }, { "! ", true }, { "? ", true }, { ", ", false }, { ": ", false }, { "; ", false },
+            { " - ", false }, { " -- ", false }, { " \xE2\x80\x94 ", false }, { " \xE2\x80\x93 ", false },
+            { "\xE2\x80\x94", false }, { " ~ ", false }, { " ~", false }, { " (", false }, { " #", false },
+            { " | ", false }, { " from ", false } };
+
+        struct Cut { size_t restEnd; size_t tailStart; };
+        std::vector<Cut> cuts;
+        for (const Sep& sep : kSeps)
+        {
+            const size_t len = std::strlen(sep.text);
+            for (size_t pos = t.find(sep.text); pos != std::string::npos; pos = t.find(sep.text, pos + 1))
+            {
+                const size_t tailStart = pos + len;
+                if (tailStart >= t.size())
+                    continue;
+                cuts.push_back({ sep.keepMark ? pos + 1 : pos, tailStart });
+            }
+        }
+        // The shortest tail first: the name is the last thing on the line.
+        std::sort(cuts.begin(), cuts.end(), [](const Cut& x, const Cut& y) { return x.tailStart > y.tailStart; });
+
+        for (const Cut& cut : cuts)
+        {
+            if (!IsQuoteSource(t.substr(cut.tailStart), qs))
+                continue;
+
+            std::string rest = t.substr(0, cut.restEnd);
+            while (!rest.empty() && (std::isspace(static_cast<unsigned char>(rest.back())) ||
+                                     std::strchr(",:;-~|(#", rest.back()) != nullptr))
+                rest.pop_back();
+            while (rest.size() >= 3 && static_cast<unsigned char>(rest[rest.size() - 3]) == 0xE2 &&
+                   static_cast<unsigned char>(rest[rest.size() - 2]) == 0x80 &&
+                   (static_cast<unsigned char>(rest.back()) == 0x94 || static_cast<unsigned char>(rest.back()) == 0x93))
+            {
+                rest.resize(rest.size() - 3);   // a dangling dash
+                while (!rest.empty() && std::isspace(static_cast<unsigned char>(rest.back())))
+                    rest.pop_back();
+            }
+
+            const std::vector<std::string> left = CrowdText::Words(rest);
+            if (left.size() < 2)
+                return text;
+            if (!qs.filmWords.empty() && CrowdText::ContainsPhrase(left, qs.filmWords))
+                return text;
+            return rest;
+        }
+        return text;
+    }
+
     std::string StripVocatives(const std::string& text,
                                const std::vector<std::vector<std::string>>& vocatives)
     {
