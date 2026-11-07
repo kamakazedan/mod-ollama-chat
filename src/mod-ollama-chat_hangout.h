@@ -71,6 +71,10 @@ bool Hangout_UsingBench();
 // Empty when it is not hanging out.
 std::string Hangout_StateTextFor(Player* bot);
 
+// Where it is hanging out and how, for a prompt: "the Trade District in
+// Stormwind", "sitting on a bench". False when it is not settled at a spot.
+bool Hangout_WhereAndDoing(Player* bot, std::string& spot, std::string& doing);
+
 struct HangoutStats
 {
     uint64_t sent      = 0;   // set off for a spot

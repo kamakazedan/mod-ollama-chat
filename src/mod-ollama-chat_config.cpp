@@ -183,6 +183,37 @@ uint32_t g_RepetitionWindowSeconds       = 1800;
 uint32_t g_OpenerHistorySize             = 8;
 uint32_t g_RepetitionShortLineWindowSeconds = 300;
 std::string g_RepetitionOwnRepeatNote;
+bool        g_MingleEnable              = true;
+bool        g_MingleCitiesOnly          = true;
+uint32_t    g_MingleGapMinSeconds       = 40;
+uint32_t    g_MingleGapMaxSeconds       = 100;
+uint32_t    g_MingleStartChance         = 70;
+uint32_t    g_MingleMaxActive           = 4;
+uint32_t    g_MingleMaxNearPlayer       = 2;
+float       g_MingleHearRange           = 25.0f;
+float       g_MinglePairRange           = 9.0f;
+uint32_t    g_MingleThreeChance         = 25;
+uint32_t    g_MingleMinLines            = 2;
+uint32_t    g_MingleMaxLines            = 10;
+uint32_t    g_MingleMaxEmotes           = 3;
+uint32_t    g_MingleBotCooldownSeconds  = 600;
+uint32_t    g_MingleQueueLimit          = 4;
+uint32_t    g_MingleNumPredict          = 320;
+uint32_t    g_MingleReadMinMs           = 1200;
+uint32_t    g_MingleReadMaxMs           = 3500;
+std::string g_MinglePromptTemplate;
+std::vector<std::string> g_MinglePremises;
+std::vector<std::string> g_MingleEmotes;
+std::string g_MingleSameGuildText;
+std::string g_MingleStrangersText;
+bool        g_MingleEmoteEnable         = true;
+uint32_t    g_MingleEmoteMinSeconds     = 30;
+uint32_t    g_MingleEmoteMaxSeconds     = 80;
+uint32_t    g_MingleEmoteChance         = 60;
+uint32_t    g_MingleEmoteReturnChance   = 60;
+float       g_MingleEmoteRange          = 8.0f;
+uint32_t    g_MingleEmoteBotCooldownSeconds = 300;
+std::vector<uint32_t> g_MingleGreetings;
 TextRules::QuoteSources g_ResponseQuoteSources;
 std::unordered_set<std::string> g_ResponseQuoteSourceStyles;
 
@@ -2689,6 +2720,101 @@ static void LoadNaturalChatV15Settings()
              g_LinksRepeatSeconds);
 }
 
+// Chat v16: bots mingling in /say (mod-ollama-chat_mingle).
+static void LoadNaturalChatV16Settings()
+{
+    auto number = [](const char* key, uint32_t def, uint32_t lo, uint32_t hi)
+    {
+        return std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>(key, def), lo, hi);
+    };
+
+    g_MingleEnable         = sConfigMgr->GetOption<bool>("OllamaChat.Mingle.Enable", true);
+    g_MingleCitiesOnly     = sConfigMgr->GetOption<bool>("OllamaChat.Mingle.CitiesOnly", true);
+    g_MingleGapMinSeconds  = number("OllamaChat.Mingle.GapMinSeconds", 40, 5, 3600);
+    g_MingleGapMaxSeconds  = std::max(g_MingleGapMinSeconds, number("OllamaChat.Mingle.GapMaxSeconds", 100, 5, 3600));
+    g_MingleStartChance    = number("OllamaChat.Mingle.StartChance", 70, 0, 100);
+    g_MingleMaxActive      = number("OllamaChat.Mingle.MaxActive", 4, 0, 50);
+    g_MingleMaxNearPlayer  = number("OllamaChat.Mingle.MaxNearPlayer", 2, 1, 10);
+    g_MingleHearRange      = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Mingle.HearRange", 25.0f), 5.0f, 60.0f);
+    g_MinglePairRange      = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Mingle.PairRange", 9.0f), 2.0f, 30.0f);
+    g_MingleThreeChance    = number("OllamaChat.Mingle.ThreeChance", 25, 0, 100);
+    g_MingleMinLines       = number("OllamaChat.Mingle.MinLines", 2, 2, 20);
+    g_MingleMaxLines       = std::max(g_MingleMinLines, number("OllamaChat.Mingle.MaxLines", 10, 2, 20));
+    g_MingleMaxEmotes      = number("OllamaChat.Mingle.MaxEmotes", 3, 0, 10);
+    g_MingleBotCooldownSeconds = number("OllamaChat.Mingle.BotCooldownSeconds", 600, 0, 86400);
+    g_MingleQueueLimit     = number("OllamaChat.Mingle.QueueLimit", 4, 0, 1000);
+    g_MingleNumPredict     = number("OllamaChat.Mingle.NumPredict", 320, 64, 4096);
+    g_MingleReadMinMs      = number("OllamaChat.Mingle.ReadMinMs", 1200, 0, 60000);
+    g_MingleReadMaxMs      = std::max(g_MingleReadMinMs, number("OllamaChat.Mingle.ReadMaxMs", 3500, 0, 60000));
+    g_MinglePromptTemplate = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.PromptTemplate",
+        "{count} World of Warcraft players are standing near each other in {where} and get chatting in "
+        "/say. It is {when}. They are:{people}{relation} What gets them talking: {premise}. Write what they "
+        "type, one message per line, each line starting with the speaker's name and a colon, like this:{example}"
+        "About {lines} lines in all, mostly taking turns. Each line is what that player types into chat: short "
+        "(2 to 15 words), casual, in their own chat style. Instead of words, a line can be just an emote at the "
+        "other one, written as a slash command ({emotes}), at most {max_emotes} in all. It ends the way a chat "
+        "between players does: a laugh, a goodbye, someone heading off, or simply done. No narration, no actions "
+        "in asterisks, no quotation marks, and nothing made up about items or quests. A famous line from a film "
+        "or show is fine now and then, but never say what it is from.");
+    g_MinglePremises = ReadPipeList("OllamaChat.Mingle.Premises",
+        "saying hello and asking what the other has been up to|one of them just got back from questing and moans "
+        "about it|one of them admires the other's mount, gear or pet|one of them teases the other about their race "
+        "or class, all in good fun|swapping tips about levelling their classes|one of them is waiting for a group "
+        "and getting bored|one of them asks the other for a duel|one of them asks the other if they have a few "
+        "silver to spare|one of them shows off something they just looted|people-watching: the players walking "
+        "past|the auction house prices|levelling their professions|which zone is the worst to quest in|being "
+        "lost in this city|what they are saving their gold for|a funny death one of them had today|one of them "
+        "is about to log off|their guilds, or not having one|a rumour one of them heard|gnomes|murlocs|"
+        "[15+] whether to run a dungeon together later|[15+] a dungeon one of them ran earlier|"
+        "[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] flying mounts");
+    g_MingleEmotes.clear();
+    {
+        std::string unknown;
+        for (const std::string& name : ReadPipeList("OllamaChat.Mingle.Emotes",
+                 "wave|laugh|bow|nod|cheer|grin|shrug|flex|chuckle|wink|thank|salute|applaud|facepalm|sigh|smile|"
+                 "poke|hug|point|giggle|agree|clap"))
+        {
+            if (LookupTextEmoteId(name))
+                g_MingleEmotes.push_back(name);
+            else
+                unknown += (unknown.empty() ? "" : ", ") + name;
+        }
+        if (!unknown.empty())
+            LOG_WARN("module.ollamachat", "[Ollama Chat] OllamaChat.Mingle.Emotes: not emotes: {}", unknown);
+    }
+    g_MingleSameGuildText = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.SameGuildText",
+        "{names} are in the same guild, {guild}.");
+    g_MingleStrangersText = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.StrangersText",
+        "They do not know each other, beyond seeing each other around.");
+
+    g_MingleEmoteEnable          = sConfigMgr->GetOption<bool>("OllamaChat.Mingle.Emote.Enable", true);
+    g_MingleEmoteMinSeconds      = number("OllamaChat.Mingle.Emote.MinSeconds", 30, 5, 3600);
+    g_MingleEmoteMaxSeconds      = std::max(g_MingleEmoteMinSeconds, number("OllamaChat.Mingle.Emote.MaxSeconds", 80, 5, 3600));
+    g_MingleEmoteChance          = number("OllamaChat.Mingle.Emote.Chance", 60, 0, 100);
+    g_MingleEmoteReturnChance    = number("OllamaChat.Mingle.Emote.ReturnChance", 60, 0, 100);
+    g_MingleEmoteRange           = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Mingle.Emote.Range", 8.0f), 2.0f, 30.0f);
+    g_MingleEmoteBotCooldownSeconds = number("OllamaChat.Mingle.Emote.BotCooldownSeconds", 300, 0, 86400);
+    g_MingleGreetings.clear();
+    {
+        std::string unknown;
+        for (const std::string& name : ReadPipeList("OllamaChat.Mingle.Emote.Greetings",
+                 "wave|nod|bow|smile|hello|salute|wink|cheer|grin"))
+        {
+            if (const uint32_t id = LookupTextEmoteId(name))
+                g_MingleGreetings.push_back(id);
+            else
+                unknown += (unknown.empty() ? "" : ", ") + name;
+        }
+        if (!unknown.empty())
+            LOG_WARN("module.ollamachat", "[Ollama Chat] OllamaChat.Mingle.Emote.Greetings: not emotes: {}", unknown);
+    }
+
+    LOG_INFO("module.ollamachat",
+             "[Ollama Chat] Chat v16: mingling {} ({} premises, {} emotes, up to {} at once); bots greeting each other {}.",
+             g_MingleEnable ? "on" : "off", g_MinglePremises.size(), g_MingleEmotes.size(), g_MingleMaxActive,
+             g_MingleEmoteEnable ? "on" : "off");
+}
+
 void LoadPersonalityExtras()
 {
     g_PersonalityNudges.clear();
@@ -3354,6 +3480,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV13Settings();
     LoadNaturalChatV14Settings();
     LoadNaturalChatV15Settings();
+    LoadNaturalChatV16Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

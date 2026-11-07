@@ -885,6 +885,41 @@ extern std::string g_GuildEventTypeGuildMOTD;                       // a new mes
 extern int         g_GuildEventTypeGuildMOTD_Chance;
 
 // --------------------------------------------
+// Chat v16: bots mingling in /say (mod-ollama-chat_mingle)
+// --------------------------------------------
+extern bool        g_MingleEnable;
+extern bool        g_MingleCitiesOnly;          // only where a real player is in a city (or inn)
+extern uint32_t    g_MingleGapMinSeconds;       // how often one may start near a real player
+extern uint32_t    g_MingleGapMaxSeconds;
+extern uint32_t    g_MingleStartChance;
+extern uint32_t    g_MingleMaxActive;           // realm-wide
+extern uint32_t    g_MingleMaxNearPlayer;
+extern float       g_MingleHearRange;           // bots within this of the real player
+extern float       g_MinglePairRange;           // ...and this of each other
+extern uint32_t    g_MingleThreeChance;
+extern uint32_t    g_MingleMinLines;
+extern uint32_t    g_MingleMaxLines;
+extern uint32_t    g_MingleMaxEmotes;
+extern uint32_t    g_MingleBotCooldownSeconds;
+extern uint32_t    g_MingleQueueLimit;          // not started with more requests than this waiting
+extern uint32_t    g_MingleNumPredict;          // tokens for one whole exchange
+extern uint32_t    g_MingleReadMinMs;           // the pause to read a line before typing the next
+extern uint32_t    g_MingleReadMaxMs;
+extern std::string g_MinglePromptTemplate;
+extern std::vector<std::string> g_MinglePremises;
+extern std::vector<std::string> g_MingleEmotes;   // offered in the prompt, by name
+extern std::string g_MingleSameGuildText;
+extern std::string g_MingleStrangersText;
+extern bool        g_MingleEmoteEnable;         // bots greeting each other without a word
+extern uint32_t    g_MingleEmoteMinSeconds;
+extern uint32_t    g_MingleEmoteMaxSeconds;
+extern uint32_t    g_MingleEmoteChance;
+extern uint32_t    g_MingleEmoteReturnChance;
+extern float       g_MingleEmoteRange;
+extern uint32_t    g_MingleEmoteBotCooldownSeconds;
+extern std::vector<uint32_t> g_MingleGreetings;   // TEXT_EMOTE_* two bots greet each other with
+
+// --------------------------------------------
 // Topic engine
 // --------------------------------------------
 extern uint32_t g_TopicWeightPeople;

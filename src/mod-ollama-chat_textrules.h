@@ -87,6 +87,26 @@ namespace TextRules
     std::string StripQuoteSource(const std::string& text, const QuoteSources& sources,
                                  const std::string& answering);
 
+    // ---- a /say exchange between bots (mod-ollama-chat_mingle) -----------
+
+    struct ScriptLine
+    {
+        size_t      speaker = 0;   // index into the names it was read with
+        std::string text;          // what they type; empty for an emote on its own
+        std::string emote;         // "laugh", "waves" as written; empty for none
+    };
+
+    // An exchange written one message per line as "Name: what they type", for
+    // the `names` in it (case does not matter). "**Name:**", "- Name:",
+    // "[Name]:" and "Name says:" read as "Name:"; anything else -- a heading,
+    // narration, someone not in it -- is passed over. An emote at a line's
+    // start or end ("/wave", "*laughs*", "(grins)", "[emote:nod]") comes out
+    // on its own when `isEmote` knows it, and quotation marks round the
+    // words go; an action in asterisks never stays in the words. At most
+    // `maxLines`.
+    std::vector<ScriptLine> ParseScript(const std::string& text, const std::vector<std::string>& names,
+                                        size_t maxLines, const std::function<bool(const std::string&)>& isEmote);
+
     // ---- muted bot lines ----------------------------------------------------
 
     // Does `text` match `pattern`? Case-insensitive, the whole text; '*'

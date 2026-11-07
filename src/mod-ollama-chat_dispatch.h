@@ -11,6 +11,7 @@
 
 class Player;
 class Channel;
+struct OllamaWorldSnapshot;
 
 // --------------------------------------------------------------------------
 // Central dispatcher.
@@ -158,6 +159,10 @@ struct OllamaChatRequest
     // The tank calling the end of a dungeon-clear run (mod-ollama-chat_partycmd):
     // once it is out, the rest of the group says gg.
     bool doneCall = false;
+
+    // A line of a /say exchange between bots (mod-ollama-chat_mingle): a
+    // conversation running nearby does not take it for a turn of its own.
+    bool mingle = false;
 };
 
 // Submit a request. Returns false when the queue is at MaxQueueDepth, in which
@@ -166,6 +171,34 @@ bool OllamaDispatch_Submit(OllamaChatRequest request);
 
 // Drain finished generations and deliver them. World thread only.
 void OllamaDispatch_Update(uint32_t diff);
+
+// Deliver a line typed without the model (`request.fixedText`) now, through
+// the same checks, routing and bookkeeping as any other, with `emoteId` (a
+// TEXT_EMOTE_*, 0 for none) aimed at `request.targetGuid`. True when it went
+// out. For lines that must come in a set order at set times, which a trip
+// through the worker queue cannot promise (mod-ollama-chat_mingle). World
+// thread only.
+bool OllamaDispatch_DeliverNow(OllamaChatRequest request, uint32_t emoteId, const OllamaWorldSnapshot& world);
+
+// A whole /say exchange between bots, written by one generation
+// (mod-ollama-chat_mingle). The worker returns the model's text untouched --
+// several lines -- with up to `numPredict` tokens. False when the queue is
+// too full for it. The prompt is built on the world thread, like any other.
+bool OllamaDispatch_SubmitScript(uint64_t scriptId, std::string prompt, uint32_t numPredict);
+
+struct OllamaScriptResult
+{
+    uint64_t    scriptId = 0;
+    bool        ok       = false;
+    std::string text;
+};
+
+// The exchanges written since the last call. World thread.
+std::vector<OllamaScriptResult> OllamaDispatch_TakeScripts();
+
+// Requests waiting for a worker right now: a busy backend is no time to ask
+// for something nobody is waiting on.
+uint32_t OllamaDispatch_QueueDepth();
 
 void OllamaDispatch_Start();
 void OllamaDispatch_Stop();

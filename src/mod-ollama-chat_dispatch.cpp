@@ -55,7 +55,7 @@ namespace
 {
     using Clock = std::chrono::steady_clock;
 
-    enum class TaskType : uint8_t { ChatReply, Sentiment, Condense, Relationship };
+    enum class TaskType : uint8_t { ChatReply, Sentiment, Condense, Relationship, Script };
 
     struct Task
     {
@@ -73,6 +73,11 @@ namespace
         uint64_t    memoryOtherGuid = 0;
         std::string memoryOtherName;
         std::string memoryPrompt;
+
+        // A /say exchange between bots (mod-ollama-chat_mingle).
+        uint64_t    scriptId         = 0;
+        std::string scriptPrompt;
+        uint32_t    scriptNumPredict = 0;
     };
 
     struct Completion
@@ -93,6 +98,9 @@ namespace
 
     std::mutex             g_doneMutex;
     std::deque<Completion> g_done;
+
+    std::mutex                      g_scriptMutex;
+    std::vector<OllamaScriptResult> g_scripts;
 
     std::vector<std::thread> g_workers;
 
@@ -226,6 +234,35 @@ namespace
         g_done.push_back(std::move(completion));
     }
 
+    void ReportScriptFailure(uint64_t scriptId)
+    {
+        OllamaScriptResult result;
+        result.scriptId = scriptId;
+        std::lock_guard<std::mutex> lock(g_scriptMutex);
+        if (g_scripts.size() < 64)
+            g_scripts.push_back(std::move(result));
+    }
+
+    // A whole /say exchange: the model's text as it came, for the world
+    // thread to read (mod-ollama-chat_mingle).
+    void RunScriptTask(const Task& task)
+    {
+        OllamaScriptResult result;
+        result.scriptId = task.scriptId;
+        OllamaApiResult api = QueryOllama(task.scriptPrompt, OllamaRequestKind::RandomChatter, task.scriptNumPredict);
+        if (api.ok && !api.text.empty())
+        {
+            result.ok   = true;
+            result.text = std::move(api.text);
+        }
+        else if (!api.ok)
+            RecordError(api.error);
+
+        std::lock_guard<std::mutex> lock(g_scriptMutex);
+        if (g_scripts.size() < 64)
+            g_scripts.push_back(std::move(result));
+    }
+
     void RunSentimentTask(const Task& task)
     {
         // Sentiment touches only mutex-guarded in-memory state and async DB
@@ -268,6 +305,9 @@ namespace
                         Memory_RunRelationshipUpdate(task.memoryBotGuid, task.memoryOtherGuid,
                                                      task.memoryOtherName, task.memoryPrompt);
                         break;
+                    case TaskType::Script:
+                        RunScriptTask(task);
+                        break;
                     default:
                         RunChatTask(task);
                         break;
@@ -282,6 +322,8 @@ namespace
                     Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
                     ReportFailure(task.request);
                 }
+                else if (task.type == TaskType::Script)
+                    ReportScriptFailure(task.scriptId);
             }
             catch (...)
             {
@@ -292,6 +334,8 @@ namespace
                     Crowd_ReportWorkerFailure(task.request.crowdPlanId, task.request.crowdSlot);
                     ReportFailure(task.request);
                 }
+                else if (task.type == TaskType::Script)
+                    ReportScriptFailure(task.scriptId);
             }
 
             --g_inFlight;
@@ -819,9 +863,15 @@ namespace
         // Conversation.CooldownSeconds between them).
         const bool paced = (c.request.crowdPlanId && Crowd_FindById(c.request.crowdPlanId)) ||
                            !c.request.openerKey.empty();
-        const bool allowed = paced
-            ? Governor_TryConsumePaced(botGuid, c.request.scopeKey, directAddress)
-            : Governor_TryConsumeSend(botGuid, c.request.scopeKey, directAddress);
+        // A line of a /say exchange between bots was written with the rest of
+        // it, in one request, and its exchange paces it: it only notes that
+        // the bot spoke (mod-ollama-chat_mingle).
+        bool allowed = true;
+        if (c.request.mingle)
+            Governor_NoteSpoke(botGuid, c.request.scopeKey);
+        else
+            allowed = paced ? Governor_TryConsumePaced(botGuid, c.request.scopeKey, directAddress)
+                            : Governor_TryConsumeSend(botGuid, c.request.scopeKey, directAddress);
         if (!allowed)
         {
             ++g_droppedGovernor;
@@ -896,7 +946,7 @@ namespace
 
         // ...and a conversation running here hears it too, before anyone
         // reacts to it below.
-        if (c.request.source == SRC_GENERAL_LOCAL || c.request.source == SRC_SAY_LOCAL)
+        if ((c.request.source == SRC_GENERAL_LOCAL || c.request.source == SRC_SAY_LOCAL) && !c.request.mingle)
             Conversation_NoteLine(Crowd_KeyFor(c.request.scopeKey, c.request.source, uint32(bot->GetTeamId())),
                                   bot, true, plain, seq, c.request.crowdPlanId, 0);
 
@@ -1041,6 +1091,45 @@ bool OllamaDispatch_Submit(OllamaChatRequest request)
     ++g_totalSubmitted;
     g_queueCv.notify_one();
     return true;
+}
+
+bool OllamaDispatch_DeliverNow(OllamaChatRequest request, uint32_t emoteId, const OllamaWorldSnapshot& world)
+{
+    if (request.fixedText.empty() || request.botGuid == 0)
+        return false;
+
+    Completion c;
+    c.text      = request.fixedText;
+    c.emoteId   = emoteId;
+    c.deliverAt = Clock::now();
+    c.request   = std::move(request);
+
+    const uint64_t before = g_totalDelivered.load();
+    try
+    {
+        Deliver(std::move(c), world);
+    }
+    catch (const std::exception& e)
+    {
+        RecordError(e.what());
+        LOG_ERROR("module.ollamachat", "[Ollama Chat] Delivery exception: {}", e.what());
+        return false;
+    }
+    return g_totalDelivered.load() > before;
+}
+
+std::vector<OllamaScriptResult> OllamaDispatch_TakeScripts()
+{
+    std::vector<OllamaScriptResult> out;
+    std::lock_guard<std::mutex> lock(g_scriptMutex);
+    out.swap(g_scripts);
+    return out;
+}
+
+uint32_t OllamaDispatch_QueueDepth()
+{
+    std::lock_guard<std::mutex> lock(g_queueMutex);
+    return static_cast<uint32_t>(g_queue.size());
 }
 
 void OllamaDispatch_SubmitSentiment(uint64_t botGuid, uint64_t playerGuid,
@@ -1195,6 +1284,26 @@ void OllamaDispatch_SubmitRelationship(uint64_t botGuid, uint64_t otherGuid,
 
     if (SubmitBackground(std::move(task)))
         g_queueCv.notify_one();
+}
+
+bool OllamaDispatch_SubmitScript(uint64_t scriptId, std::string prompt, uint32_t numPredict)
+{
+    if (scriptId == 0 || prompt.empty())
+        return false;
+
+    Task task;
+    task.type             = TaskType::Script;
+    task.scriptId         = scriptId;
+    task.scriptPrompt     = std::move(prompt);
+    task.scriptNumPredict = numPredict;
+
+    // Nobody is owed one: with the queue half full it is not asked for at
+    // all, as for memories.
+    if (!SubmitBackground(std::move(task)))
+        return false;
+    ++g_totalSubmitted;
+    g_queueCv.notify_one();
+    return true;
 }
 
 OllamaDispatchStats OllamaDispatch_GetStats()

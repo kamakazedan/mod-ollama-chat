@@ -4,6 +4,7 @@
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_governor.h"
+#include "mod-ollama-chat_mingle.h"
 #include "mod-ollama-chat_presence.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
@@ -339,7 +340,8 @@ namespace
             return p && p->IsInWorld() && !p->IsBeingTeleported() && p->IsAlive() &&
                    !(g_DisableRepliesInCombat && p->IsInCombat()) &&
                    OllamaIsBotPlayer(p) && uint32(p->GetTeamId()) == c.teamId &&
-                   !FindSeat(c, p->GetGUID().GetRawValue());
+                   !FindSeat(c, p->GetGUID().GetRawValue()) &&
+                   !(c.source == SRC_SAY_LOCAL && Mingle_IsBusy(p));   // chatting with another bot already
         };
 
         if (c.source == SRC_SAY_LOCAL)

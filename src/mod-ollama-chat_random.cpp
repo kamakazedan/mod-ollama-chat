@@ -23,6 +23,7 @@
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_marks.h"
+#include "mod-ollama-chat_mingle.h"
 #include "mod-ollama-chat_needs.h"
 #include "mod-ollama-chat_mute.h"
 #include "mod-ollama-chat_orders.h"
@@ -379,7 +380,7 @@ namespace
                 continue;
             if (p->GetTeamId() != bot->GetTeamId() || (g_DisableRepliesInCombat && p->IsInCombat()))
                 continue;
-            if (!world.RealPlayerWithin(p, g_SayDistance) || Hangout_IsAway(p))
+            if (!world.RealPlayerWithin(p, g_SayDistance) || Hangout_IsAway(p) || Mingle_IsBusy(p))
                 continue;
             partners.push_back(p);
         }
@@ -471,6 +472,10 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 
     // Bots noticing the real players walking past them.
     Presence_Update(diff);
+
+    // Bots near a real player in a city chatting among themselves in /say,
+    // and greeting each other.
+    Mingle_Update(diff);
 
     static uint32 maintenanceTimer = 0;
     if (maintenanceTimer <= diff)
@@ -565,8 +570,9 @@ void OllamaBotRandomChatter::HandleRandomChatter()
         if (g_DisableRepliesInCombat && bot->IsInCombat())
             continue;
 
-        // Away from the keyboard, hanging out in a city: nothing to say.
-        if (Hangout_IsAway(bot))
+        // Away from the keyboard, hanging out in a city: nothing to say. In
+        // the middle of a /say exchange with another bot: nothing else to say.
+        if (Hangout_IsAway(bot) || Mingle_IsBusy(bot))
             continue;
 
         const uint64_t rawGuid = bot->GetGUID().GetRawValue();

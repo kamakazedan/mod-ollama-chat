@@ -88,7 +88,10 @@ OllamaHttpHeaders OllamaBuildRequestHeaders(const OllamaEndpointSettings& cfg);
 // provider rejects the request for asking.
 //
 // Blocking. Call from a worker thread, never from the world thread.
-OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind);
+// `numPredict`: a token limit for this one request instead of
+// OllamaChat.NumPredict -- a whole /say exchange is longer than one line
+// (mod-ollama-chat_mingle). 0 for the usual one.
+OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, uint32_t numPredict = 0);
 
 // Legacy shim: returns the text, or empty on any failure.
 std::string QueryOllamaAPI(const std::string& prompt);

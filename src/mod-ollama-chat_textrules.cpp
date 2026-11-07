@@ -802,6 +802,269 @@ namespace TextRules
         return text;
     }
 
+    namespace
+    {
+        std::string TrimSpaces(std::string s)
+        {
+            size_t b = 0, e = s.size();
+            while (b < e && std::isspace(static_cast<unsigned char>(s[b])))
+                ++b;
+            while (e > b && std::isspace(static_cast<unsigned char>(s[e - 1])))
+                --e;
+            return s.substr(b, e - b);
+        }
+
+        std::string LowerAscii(std::string s)
+        {
+            for (char& c : s)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            return s;
+        }
+
+        // One emote at the start or the end of a line's words: "/wave hey",
+        // "lol /laugh", "*laughs* yeah", "nice (grins)", "[emote:nod]". Taken
+        // out of `text` when `isEmote` knows it, and its first word returned,
+        // lowercase. An action in asterisks goes either way -- "*looks
+        // around*" is narration, not chat -- but brackets and a slash are
+        // left alone when the word in them is no emote: "(the one by the
+        // bank)", "and/or".
+        std::string TakeEmote(std::string& text, const std::function<bool(const std::string&)>& isEmote)
+        {
+            text = TrimSpaces(text);
+            auto known = [&isEmote](const std::string& word) { return !word.empty() && isEmote(word); };
+            auto wordAt = [](const std::string& s, size_t from) -> std::string
+            {
+                size_t end = from;
+                while (end < s.size() && std::isalpha(static_cast<unsigned char>(s[end])))
+                    ++end;
+                return LowerAscii(s.substr(from, end - from));
+            };
+
+            // [emote:nod] anywhere.
+            const size_t tag = LowerAscii(text).find("[emote:");
+            if (tag != std::string::npos)
+            {
+                const size_t close = text.find(']', tag);
+                if (close != std::string::npos)
+                {
+                    const std::string word = LowerAscii(TrimSpaces(text.substr(tag + 7, close - tag - 7)));
+                    text = TrimSpaces(text.substr(0, tag) + " " + text.substr(close + 1));
+                    return known(word) ? word : std::string();
+                }
+            }
+
+            // "/wave", "/wave hey there" at the start. A slash command it is
+            // not given ("/dance") is not typed into chat either: it goes.
+            if (text.size() > 1 && text[0] == '/')
+            {
+                const std::string word = wordAt(text, 1);
+                if (!word.empty())
+                {
+                    text = TrimSpaces(text.substr(1 + word.size()));
+                    return known(word) ? word : std::string();
+                }
+            }
+
+            // "*laughs*" at the start or the end; "*laughs loudly*" is its first word.
+            if (!text.empty() && text[0] == '*')
+            {
+                const size_t end = text.find('*', 1);
+                if (end != std::string::npos)
+                {
+                    const std::string word = wordAt(TrimSpaces(text.substr(1, end - 1)), 0);
+                    text = TrimSpaces(text.substr(end + 1));
+                    return known(word) ? word : std::string();
+                }
+            }
+            if (text.size() > 2 && text.back() == '*')
+            {
+                const size_t start = text.rfind('*', text.size() - 2);
+                if (start != std::string::npos)
+                {
+                    const std::string word = wordAt(TrimSpaces(text.substr(start + 1, text.size() - start - 2)), 0);
+                    text = TrimSpaces(text.substr(0, start));
+                    return known(word) ? word : std::string();
+                }
+            }
+
+            // "(grins)" at the start or the end: only an emote.
+            if (!text.empty() && text[0] == '(')
+            {
+                const size_t end = text.find(')', 1);
+                if (end != std::string::npos)
+                {
+                    const std::string inside = TrimSpaces(text.substr(1, end - 1));
+                    const std::string word = wordAt(inside, 0);
+                    if (known(word) && inside.size() <= word.size() + 8)
+                    {
+                        text = TrimSpaces(text.substr(end + 1));
+                        return word;
+                    }
+                }
+            }
+            if (text.size() > 2 && text.back() == ')')
+            {
+                const size_t start = text.rfind('(');
+                if (start != std::string::npos)
+                {
+                    const std::string inside = TrimSpaces(text.substr(start + 1, text.size() - start - 2));
+                    const std::string word = wordAt(inside, 0);
+                    if (known(word) && inside.size() <= word.size() + 8)
+                    {
+                        text = TrimSpaces(text.substr(0, start));
+                        return word;
+                    }
+                }
+            }
+
+            // "lol /laugh" at the end.
+            const size_t slash = text.rfind(" /");
+            if (slash != std::string::npos)
+            {
+                const std::string word = wordAt(text, slash + 2);
+                if (known(word) && slash + 2 + word.size() == text.size())
+                {
+                    text = TrimSpaces(text.substr(0, slash));
+                    return word;
+                }
+            }
+            return {};
+        }
+
+        // "Grigohm:", "**Grigohm**:", "- Grigohm:", "[Grigohm]:", "Grigohm
+        // says:" at the start of `line`: which of `names`, and where the words
+        // start. False when the line is not one of theirs.
+        bool SpeakerOf(const std::string& line, const std::vector<std::string>& names, size_t& who, size_t& rest)
+        {
+            size_t i = 0;
+            auto skip = [&](const char* chars)
+            {
+                while (i < line.size() && (std::strchr(chars, line[i]) != nullptr ||
+                                           std::isspace(static_cast<unsigned char>(line[i]))))
+                    ++i;
+            };
+            skip("-*#>[");
+            // "1." or "1)" numbering
+            size_t j = i;
+            while (j < line.size() && std::isdigit(static_cast<unsigned char>(line[j])))
+                ++j;
+            if (j > i && j < line.size() && (line[j] == '.' || line[j] == ')'))
+            {
+                i = j + 1;
+                skip("-*#>[");
+            }
+
+            const std::string lower = LowerAscii(line);
+            for (size_t n = 0; n < names.size(); ++n)
+            {
+                const std::string name = LowerAscii(names[n]);
+                if (name.empty() || lower.compare(i, name.size(), name) != 0)
+                    continue;
+                size_t k = i + name.size();
+                if (k < line.size() && std::isalnum(static_cast<unsigned char>(line[k])))
+                    continue;   // "Grigohmx": someone else
+                while (k < line.size() && (line[k] == '*' || line[k] == ']' || line[k] == ' '))
+                    ++k;
+                if (k < line.size() && line[k] == '(')   // "Grigohm (dwarf hunter):"
+                {
+                    const size_t close = line.find(')', k);
+                    if (close == std::string::npos)
+                        continue;
+                    k = close + 1;
+                    while (k < line.size() && (line[k] == '*' || line[k] == ' '))
+                        ++k;
+                }
+                if (lower.compare(k, 4, "says") == 0)
+                {
+                    k += 4;
+                    while (k < line.size() && line[k] == ' ')
+                        ++k;
+                }
+                while (k < line.size() && (line[k] == '*' || line[k] == ' '))
+                    ++k;
+                if (k < line.size() && line[k] == ':')
+                {
+                    ++k;
+                    while (k < line.size() && line[k] == '*')   // the end of "**Grigohm:**"
+                        ++k;
+                    while (k < line.size() && line[k] == ' ')
+                        ++k;
+                    who  = n;
+                    rest = k;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Quotation marks round the whole of what they said.
+        std::string Unquote(std::string s)
+        {
+            s = TrimSpaces(s);
+            for (bool again = true; again && s.size() >= 2;)
+            {
+                again = false;
+                const unsigned char f = static_cast<unsigned char>(s.front());
+                const unsigned char b = static_cast<unsigned char>(s.back());
+                if ((f == '"' && b == '"') || (f == '\'' && b == '\'' && s.size() > 2))
+                {
+                    s = TrimSpaces(s.substr(1, s.size() - 2));
+                    again = true;
+                }
+                else if (s.size() >= 6 && s.compare(0, 3, "\xE2\x80\x9C") == 0 &&
+                         s.compare(s.size() - 3, 3, "\xE2\x80\x9D") == 0)
+                {
+                    s = TrimSpaces(s.substr(3, s.size() - 6));
+                    again = true;
+                }
+            }
+            return s;
+        }
+    }
+
+    std::vector<ScriptLine> ParseScript(const std::string& text, const std::vector<std::string>& names,
+                                        size_t maxLines, const std::function<bool(const std::string&)>& isEmote)
+    {
+        std::vector<ScriptLine> out;
+        size_t start = 0;
+        while (start < text.size() && out.size() < maxLines)
+        {
+            size_t end = text.find('\n', start);
+            if (end == std::string::npos)
+                end = text.size();
+            std::string line = text.substr(start, end - start);
+            start = end + 1;
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+
+            size_t who = 0, rest = 0;
+            if (!SpeakerOf(line, names, who, rest))
+                continue;
+
+            std::string words = line.substr(rest);
+            // The example's "<what Grigohm types>", copied rather than filled in.
+            {
+                const std::string w = TrimSpaces(words);
+                if (w.size() >= 2 && w.front() == '<' && w.back() == '>')
+                    continue;
+            }
+            std::string emote = TakeEmote(words, isEmote);
+            words = Unquote(words);
+            if (emote.empty())   // the emote after a quoted line: "\"hey\" *waves*"
+                emote = TakeEmote(words, isEmote);
+            words = Unquote(words);
+            if (words.empty() && emote.empty())
+                continue;
+
+            ScriptLine l;
+            l.speaker = who;
+            l.text    = words;
+            l.emote   = emote;
+            out.push_back(std::move(l));
+        }
+        return out;
+    }
+
     std::string StripVocatives(const std::string& text,
                                const std::vector<std::vector<std::string>>& vocatives)
     {

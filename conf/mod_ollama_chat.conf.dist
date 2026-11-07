@@ -4480,6 +4480,182 @@ OllamaChat.Rolls.HighPrompt = "You are {bot_name}, a level {bot_level} {bot_race
 
 ###############################################################################
 #
+#   OLLAMA CHAT - MINGLING: BOTS CHATTING AMONG THEMSELVES IN /SAY
+#
+#   In a city a real player had bots talking to them -- a wave as they
+#   passed, an answer to their /say -- and bots arguing in General, but two
+#   bots standing next to each other never had a word for each other. Now,
+#   while a real player is in a city and not fighting, two or three idle
+#   bots near them now and then get chatting in /say: a few lines, the way
+#   people standing about do, ending with a laugh, a goodbye or someone
+#   heading off. Several can be going at once at different spots, whatever
+#   General is doing. Bots hanging out at a spot (CITY HANGOUTS) are picked
+#   first; one walking past stops to talk.
+#
+#   One generation writes the whole exchange (PromptTemplate), so it has a
+#   start and an end and costs one request instead of one per line; then each
+#   line goes out as that bot's own /say, after a pause to read the one before
+#   and the time to type it (TypingSimulation*), through the same checks as
+#   any other line. A line can be an emote at the other one -- "Grigohm laughs
+#   at Thimack." -- and whoever is spoken to turns to the speaker. Other bots
+#   in earshot leave them to it.
+#
+#   It stops early when one of them is wanted (a fight, an invite, a trade, a
+#   queue), walks off or logs out, when a line is held back (a stock phrase,
+#   a line it said itself lately), when no real player can hear it any more,
+#   or when a real player says something to one of them in /say -- who then
+#   gets an answer the usual way.
+#
+#   And now and then two bots standing close just greet each other without a
+#   word (Mingle.Emote.*).
+#
+#   .ollama status shows how many were asked for, written, finished and cut.
+#
+###############################################################################
+
+#    OllamaChat.Mingle.Enable
+#        Default: 1
+OllamaChat.Mingle.Enable = 1
+
+#    OllamaChat.Mingle.CitiesOnly
+#        Only near a real player in a capital or a hub town (CITIES). 0: near
+#        a real player anywhere outside instances.
+#        Default: 1
+OllamaChat.Mingle.CitiesOnly = 1
+
+#    OllamaChat.Mingle.GapMinSeconds
+#    OllamaChat.Mingle.GapMaxSeconds
+#    OllamaChat.Mingle.StartChance
+#        Every GapMin..GapMax seconds near each real player, an exchange
+#        starts with StartChance (0-100), if two bots are free to have it. The
+#        first one near someone who just arrived waits 10 to 30 seconds.
+#        Default: 40, 100, 70
+OllamaChat.Mingle.GapMinSeconds = 40
+OllamaChat.Mingle.GapMaxSeconds = 100
+OllamaChat.Mingle.StartChance = 70
+
+#    OllamaChat.Mingle.MaxActive
+#    OllamaChat.Mingle.MaxNearPlayer
+#        At most this many at once on the realm, and near any one real player.
+#        Default: 4, 2
+OllamaChat.Mingle.MaxActive = 4
+OllamaChat.Mingle.MaxNearPlayer = 2
+
+#    OllamaChat.Mingle.HearRange
+#    OllamaChat.Mingle.PairRange
+#    OllamaChat.Mingle.ThreeChance
+#        The bots are within HearRange yards of the real player, so they hear
+#        it, and within PairRange of each other. ThreeChance (0-100): a third
+#        one standing close joins in.
+#        Default: 25, 9, 25
+OllamaChat.Mingle.HearRange = 25
+OllamaChat.Mingle.PairRange = 9
+OllamaChat.Mingle.ThreeChance = 25
+
+#    OllamaChat.Mingle.MinLines
+#    OllamaChat.Mingle.MaxLines
+#    OllamaChat.Mingle.MaxEmotes
+#        How many lines one is asked to run to, emotes included: rolled
+#        twice between MinLines and MaxLines and the lower taken, so most are
+#        short. A model that needs a line or two more to finish properly gets
+#        them -- never more than MaxLines + 4. At most MaxEmotes are emotes.
+#        Default: 2, 10, 3
+OllamaChat.Mingle.MinLines = 2
+OllamaChat.Mingle.MaxLines = 10
+OllamaChat.Mingle.MaxEmotes = 3
+
+#    OllamaChat.Mingle.BotCooldownSeconds
+#        A bot that took part waits this long before the next one.
+#        Default: 600
+OllamaChat.Mingle.BotCooldownSeconds = 600
+
+#    OllamaChat.Mingle.QueueLimit
+#    OllamaChat.Mingle.NumPredict
+#        Nobody is waiting on one, so none is asked for while more than
+#        QueueLimit requests are waiting for the model: answers to people come
+#        first. NumPredict: the token limit for writing one, instead of
+#        NumPredict -- a whole exchange is longer than one line.
+#        Default: 4, 320
+OllamaChat.Mingle.QueueLimit = 4
+OllamaChat.Mingle.NumPredict = 320
+
+#    OllamaChat.Mingle.ReadMinMs
+#    OllamaChat.Mingle.ReadMaxMs
+#        Between one line and the next: a pause to read it (a third of it when
+#        the same one carries on), then the time to type the next one
+#        (TypingSimulation*). An emote comes quicker.
+#        Default: 1200, 3500
+OllamaChat.Mingle.ReadMinMs = 1200
+OllamaChat.Mingle.ReadMaxMs = 3500
+
+#    OllamaChat.Mingle.PromptTemplate
+#        What the model is asked, to write one. Placeholders:
+#          {count}       Two or Three
+#          {where}       the spot they are at, or the area and city
+#          {when}        the day and the time of day ("Saturday afternoon")
+#          {people}      a line each: what the others can see of them (level,
+#                        race, class, mount, pet, sitting on a bench) and
+#                        their chat style -- each on a new line
+#          {relation}    MingleSameGuildText or MingleStrangersText
+#          {premise}     what gets them talking (Premises)
+#          {example}     the format, with their names -- on new lines
+#          {lines}       how many lines this one runs to
+#          {emotes}      the emotes they can use, as /commands (Emotes)
+#          {max_emotes}  MaxEmotes
+#        (No double quotes inside it: the server's config reader drops every
+#        one of them.)
+#        Default: (below)
+OllamaChat.Mingle.PromptTemplate = "{count} World of Warcraft players are standing near each other in {where} and get chatting in /say. It is {when}. They are:{people}{relation} What gets them talking: {premise}. Write what they type, one message per line, each line starting with the speaker's name and a colon, like this:{example}About {lines} lines in all, mostly taking turns. Each line is what that player types into chat: short (2 to 15 words), casual, in their own chat style. Instead of words, a line can be just an emote at the other one, written as a slash command ({emotes}), at most {max_emotes} in all. It ends the way a chat between players does: a laugh, a goodbye, someone heading off, or simply done. No narration, no actions in asterisks, no quotation marks, and nothing made up about items or quests. A famous line from a film or show is fine now and then, but never say what it is from."
+
+#    OllamaChat.Mingle.Premises
+#        What gets them talking, one picked each time: a premise only the
+#        lowest level among them fits (a tag like [15+] or [10-39] in front,
+#        as for Conversation.Premises), and not one used lately. Things people
+#        standing about chat about -- not the arguments General has. | separated.
+#        Default: (below)
+OllamaChat.Mingle.Premises = "saying hello and asking what the other has been up to|one of them just got back from questing and moans about it|one of them admires the other's mount, gear or pet|one of them teases the other about their race or class, all in good fun|swapping tips about levelling their classes|one of them is waiting for a group and getting bored|one of them asks the other for a duel|one of them asks the other if they have a few silver to spare|one of them shows off something they just looted|people-watching: the players walking past|the auction house prices|levelling their professions|which zone is the worst to quest in|being lost in this city|what they are saving their gold for|a funny death one of them had today|one of them is about to log off|their guilds, or not having one|a rumour one of them heard|gnomes|murlocs|[15+] whether to run a dungeon together later|[15+] a dungeon one of them ran earlier|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] flying mounts"
+
+#    OllamaChat.Mingle.Emotes
+#        The emotes an exchange can use, offered in the prompt. One the model
+#        uses that is not a WotLK emote is left out; one in Presence.SkipEmotes
+#        (rude or gross) is never done. | separated.
+#        Default: (below)
+OllamaChat.Mingle.Emotes = "wave|laugh|bow|nod|cheer|grin|shrug|flex|chuckle|wink|thank|salute|applaud|facepalm|sigh|smile|poke|hug|point|giggle|agree|clap"
+
+#    OllamaChat.Mingle.SameGuildText
+#    OllamaChat.Mingle.StrangersText
+#        {relation}: when they are all in one guild ({names}, {guild}), and
+#        when not.
+#        Default: (below)
+OllamaChat.Mingle.SameGuildText = "{names} are in the same guild, {guild}."
+OllamaChat.Mingle.StrangersText = "They do not know each other, beyond seeing each other around."
+
+#    OllamaChat.Mingle.Emote.Enable
+#    OllamaChat.Mingle.Emote.MinSeconds
+#    OllamaChat.Mingle.Emote.MaxSeconds
+#    OllamaChat.Mingle.Emote.Chance
+#    OllamaChat.Mingle.Emote.ReturnChance
+#    OllamaChat.Mingle.Emote.Range
+#    OllamaChat.Mingle.Emote.BotCooldownSeconds
+#    OllamaChat.Mingle.Emote.Greetings
+#        Two bots greeting each other without a word, near a real player in a
+#        city: every MinSeconds..MaxSeconds with Chance (0-100), two free bots
+#        within Range yards of each other -- one of Greetings at the other,
+#        and with ReturnChance one back a moment later (a wave for a wave, a
+#        bow for a bow). A bot greets again after BotCooldownSeconds. No
+#        model is asked: it costs nothing.
+#        Default: 1, 30, 80, 60, 60, 8, 300, (below)
+OllamaChat.Mingle.Emote.Enable = 1
+OllamaChat.Mingle.Emote.MinSeconds = 30
+OllamaChat.Mingle.Emote.MaxSeconds = 80
+OllamaChat.Mingle.Emote.Chance = 60
+OllamaChat.Mingle.Emote.ReturnChance = 60
+OllamaChat.Mingle.Emote.Range = 8
+OllamaChat.Mingle.Emote.BotCooldownSeconds = 300
+OllamaChat.Mingle.Emote.Greetings = "wave|nod|bow|smile|hello|salute|wink|cheer|grin"
+
+###############################################################################
+#
 #   OLLAMA CHAT - ASKS WITH A REAL REASON
 #
 #   Real people in General ask for a Hogger group, where potions are sold,

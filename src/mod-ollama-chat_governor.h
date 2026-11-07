@@ -71,6 +71,12 @@ bool Governor_TryConsumeSend(ObjectGuid botGuid, const std::string& scopeKey,
 bool Governor_CanSend(ObjectGuid botGuid, const std::string& scopeKey,
                       bool directAddress = false);
 
+// A line went out that no limit holds back -- one of a /say exchange between
+// bots, written in one go and paced by it (mod-ollama-chat_mingle): it only
+// counts as the bot and the scope having spoken just now, not against the
+// per-minute ceilings that are there to spare the model.
+void Governor_NoteSpoke(ObjectGuid botGuid, const std::string& scopeKey);
+
 // Crowd replies are paced by their own plan -- one at a time, each after the
 // one before it has landed -- so the per-bot and per-scope cooldowns would
 // only cut a crowd down to its first voice. These skip both and keep the

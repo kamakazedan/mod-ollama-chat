@@ -624,7 +624,7 @@ OllamaHttpHeaders OllamaBuildRequestHeaders(const OllamaEndpointSettings& cfg)
     return headers;
 }
 
-OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind)
+OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, uint32_t numPredict)
 {
     OllamaApiResult result;
 
@@ -634,7 +634,9 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind)
         return result;
     }
 
-    const OllamaEndpointSettings cfg = OllamaConfig_Snapshot();
+    OllamaEndpointSettings cfg = OllamaConfig_Snapshot();
+    if (numPredict > 0)
+        cfg.numPredict = numPredict;
 
     // One place decides what the "think" field should be: policy for this
     // request kind, plus everything learned about this model so far.

@@ -34,6 +34,7 @@
 #include "mod-ollama-chat_gear.h"
 #include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_knowledge.h"
+#include "mod-ollama-chat_mingle.h"
 #include "mod-ollama-chat_rolls.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
@@ -776,6 +777,18 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              g_RollsEnable ? "on" : "off",
                              (unsigned long long)rolls.noted,
                              (unsigned long long)rolls.reactions);
+    const MingleStats mingle = Mingle_GetStats();
+    handler->PSendSysMessage("Mingling: {} - {} running, {} asked for, {} written ({} unusable), {} ran to the end, "
+                             "{} cut short, {} lines, {} emotes at each other; {} greetings between bots",
+                             g_MingleEnable ? "on" : "off", mingle.running,
+                             (unsigned long long)mingle.asked,
+                             (unsigned long long)mingle.written,
+                             (unsigned long long)mingle.unusable,
+                             (unsigned long long)mingle.finished,
+                             (unsigned long long)mingle.cut,
+                             (unsigned long long)mingle.lines,
+                             (unsigned long long)mingle.emotes,
+                             (unsigned long long)mingle.greetings);
 
     handler->PSendSysMessage("Roleplay: {} (strictness {})   Emote reactions: {}",
                              g_RoleplayEnable ? "on" : "off",

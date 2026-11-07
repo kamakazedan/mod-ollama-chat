@@ -1179,6 +1179,18 @@ std::string Hangout_StateTextFor(Player* bot)
     return out;
 }
 
+bool Hangout_WhereAndDoing(Player* bot, std::string& spot, std::string& doing)
+{
+    if (!bot || g_visits.empty())
+        return false;
+    auto it = g_visits.find(bot->GetGUID().GetRawValue());
+    if (it == g_visits.end() || it->second.phase != Phase::Settled)
+        return false;
+    spot  = it->second.spotName;
+    doing = Doing(it->second, bot);
+    return true;
+}
+
 HangoutStats Hangout_GetStats()
 {
     HangoutStats s = g_stats;

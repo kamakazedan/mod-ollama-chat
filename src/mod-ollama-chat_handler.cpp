@@ -41,6 +41,7 @@
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_memory.h"
+#include "mod-ollama-chat_mingle.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat_random.h"
 #include "mod-ollama-chat_context.h"
@@ -1431,6 +1432,11 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // noted when they are delivered.)
         Conversation_NoteLine(Crowd_KeyFor(scopeKey, sourceLocal, uint32(player->GetTeamId())),
                               player, false, msg, contextSeq, 0, addressee.guid);
+
+        // Two bots chatting in /say that this is said to stop, so the one it
+        // is for can answer (mod-ollama-chat_mingle).
+        if (sourceLocal == SRC_SAY_LOCAL || sourceLocal == SRC_YELL_LOCAL)
+            Mingle_NoteHumanSay(player, msg, addressee.guid);
     }
 
     // One pass over the online players, reused by every eligibility test
@@ -2342,6 +2348,10 @@ namespace
             // line names it.
             if ((Hangout_IsAway(bot) || Links_AllTooHighFor(bot, quests)) &&
                 OllamaFindBotNameMention(msg, bot->GetName()) == std::string::npos)
+                continue;
+            // In the middle of a /say exchange with another bot
+            // (mod-ollama-chat_mingle): not one of those answering /say.
+            if ((source == SRC_SAY_LOCAL || source == SRC_YELL_LOCAL) && Mingle_IsBusy(bot))
                 continue;
             pool.push_back(bot);
         }
@@ -3594,4 +3604,5 @@ void OllamaChatMaintenance::OnPlayerLogout(Player* player)
     Topics_ForgetBot(guid);
     Context_ForgetPlayer(guid.GetRawValue());
     Conversation_ForgetPlayer(guid.GetRawValue());
+    Mingle_ForgetPlayer(guid.GetRawValue());
 }

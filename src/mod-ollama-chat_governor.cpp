@@ -445,6 +445,14 @@ bool Governor_CanSend(ObjectGuid botGuid, const std::string& scopeKey,
     return CheckSendLocked(botGuid, scopeKey, Clock::now(), false, directAddress);
 }
 
+void Governor_NoteSpoke(ObjectGuid botGuid, const std::string& scopeKey)
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    const TimePoint now = Clock::now();
+    g_bots[botGuid.GetRawValue()].lastSend = now;
+    g_scopes[scopeKey].lastSend = now;
+}
+
 bool Governor_TryConsumePaced(ObjectGuid botGuid, const std::string& scopeKey,
                               bool directAddress)
 {
