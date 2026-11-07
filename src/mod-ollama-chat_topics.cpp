@@ -2,6 +2,7 @@
 #include "mod-ollama-chat_clock.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_links.h"
+#include "mod-ollama-chat_premises.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
@@ -603,6 +604,18 @@ namespace
         }
     }
 
+    // One of the things a conversation in town opens with (Premises_Pick:
+    // level-tagged, filled from the pools, not again across the realm for
+    // a while), as a passing remark.
+    void GatherTalk(Player* bot, std::vector<Candidate>& out)
+    {
+        const std::string premise = Premises_Pick(bot);
+        if (premise.empty())
+            return;
+        Add(out, TopicCategory::Talk, "game_talk", g_EnvCommentGameTalk,
+            SafeFormat(PickOne(g_EnvCommentGameTalk), fmt::arg("premise", premise)));
+    }
+
     void GatherGuild(Player* bot, std::vector<Candidate>& out)
     {
         Guild* guild = bot->GetGuild();
@@ -667,6 +680,12 @@ TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world)
         { TopicCategory::Self,     g_TopicWeightSelf     },
     };
 
+    // The game itself -- a raid, an old meme, a bit of lore -- the way people
+    // in General talk about things nowhere near them. Not in a dungeon, where
+    // the run is what there is to talk about.
+    if (g_TopicWeightTalk > 0 && !g_EnvCommentGameTalk.empty() && !bot->GetMap()->Instanceable())
+        cats.push_back({ TopicCategory::Talk, g_TopicWeightTalk });
+
     // Guild topics only apply when there is a guild with someone in it.
     if (bot->GetGuild() && g_EnableGuildRandomAmbientChatter &&
         world.GuildHasRealPlayer(bot->GetGuildId()))
@@ -725,6 +744,7 @@ TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world)
             case TopicCategory::Activity: GatherActivity(bot, candidates);      break;
             case TopicCategory::Self:     GatherSelf(bot, candidates);          break;
             case TopicCategory::Guild:    GatherGuild(bot, candidates);         break;
+            case TopicCategory::Talk:     GatherTalk(bot, candidates);          break;
             default: break;
         }
 

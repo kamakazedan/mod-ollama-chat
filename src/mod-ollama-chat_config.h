@@ -927,6 +927,7 @@ extern uint32_t g_TopicWeightWorld;
 extern uint32_t g_TopicWeightActivity;
 extern uint32_t g_TopicWeightSelf;
 extern uint32_t g_TopicWeightGuild;
+extern uint32_t g_TopicWeightTalk;     // the game itself: a conversation premise as a passing remark
 extern uint32_t g_TopicMemoryCount;
 extern uint32_t g_TopicEventMemorySize;
 extern uint32_t g_TopicEventMemorySeconds;
@@ -940,6 +941,7 @@ extern std::vector<std::string> g_EnvCommentRecentEvent;
 extern std::vector<std::string> g_EnvCommentNamedNpc;
 extern std::vector<std::string> g_EnvCommentZoneLandmark;
 extern std::vector<std::string> g_EnvCommentTimeOfDay;
+extern std::vector<std::string> g_EnvCommentGameTalk;   // {premise}
 extern std::vector<std::string> g_EnvCommentCorpse;
 extern std::vector<std::string> g_EnvCommentDanger;
 extern std::vector<std::string> g_EnvCommentQuestObjective;

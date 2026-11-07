@@ -34,6 +34,7 @@ enum class TopicCategory : uint8_t
     Activity,
     Self,
     Guild,
+    Talk,       // the game itself: raids, lore, old memes (Conversation.Premises)
     Count
 };
 

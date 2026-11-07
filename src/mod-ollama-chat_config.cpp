@@ -185,8 +185,8 @@ uint32_t g_RepetitionShortLineWindowSeconds = 300;
 std::string g_RepetitionOwnRepeatNote;
 bool        g_MingleEnable              = true;
 bool        g_MingleCitiesOnly          = true;
-uint32_t    g_MingleGapMinSeconds       = 40;
-uint32_t    g_MingleGapMaxSeconds       = 100;
+uint32_t    g_MingleGapMinSeconds       = 80;
+uint32_t    g_MingleGapMaxSeconds       = 200;
 uint32_t    g_MingleStartChance         = 70;
 uint32_t    g_MingleMaxActive           = 4;
 uint32_t    g_MingleMaxNearPlayer       = 2;
@@ -207,8 +207,8 @@ std::vector<std::string> g_MingleEmotes;
 std::string g_MingleSameGuildText;
 std::string g_MingleStrangersText;
 bool        g_MingleEmoteEnable         = true;
-uint32_t    g_MingleEmoteMinSeconds     = 30;
-uint32_t    g_MingleEmoteMaxSeconds     = 80;
+uint32_t    g_MingleEmoteMinSeconds     = 60;
+uint32_t    g_MingleEmoteMaxSeconds     = 160;
 uint32_t    g_MingleEmoteChance         = 60;
 uint32_t    g_MingleEmoteReturnChance   = 60;
 float       g_MingleEmoteRange          = 8.0f;
@@ -754,6 +754,7 @@ uint32_t g_TopicWeightWorld         = 30;
 uint32_t g_TopicWeightActivity      = 25;
 uint32_t g_TopicWeightSelf          = 15;
 uint32_t g_TopicWeightGuild         = 20;
+uint32_t g_TopicWeightTalk          = 25;
 uint32_t g_TopicMemoryCount         = 4;
 uint32_t g_TopicEventMemorySize     = 6;
 uint32_t g_TopicEventMemorySeconds  = 300;
@@ -767,6 +768,7 @@ std::vector<std::string> g_EnvCommentRecentEvent;
 std::vector<std::string> g_EnvCommentNamedNpc;
 std::vector<std::string> g_EnvCommentZoneLandmark;
 std::vector<std::string> g_EnvCommentTimeOfDay;
+std::vector<std::string> g_EnvCommentGameTalk;
 std::vector<std::string> g_EnvCommentCorpse;
 std::vector<std::string> g_EnvCommentDanger;
 std::vector<std::string> g_EnvCommentQuestObjective;
@@ -2730,8 +2732,8 @@ static void LoadNaturalChatV16Settings()
 
     g_MingleEnable         = sConfigMgr->GetOption<bool>("OllamaChat.Mingle.Enable", true);
     g_MingleCitiesOnly     = sConfigMgr->GetOption<bool>("OllamaChat.Mingle.CitiesOnly", true);
-    g_MingleGapMinSeconds  = number("OllamaChat.Mingle.GapMinSeconds", 40, 5, 3600);
-    g_MingleGapMaxSeconds  = std::max(g_MingleGapMinSeconds, number("OllamaChat.Mingle.GapMaxSeconds", 100, 5, 3600));
+    g_MingleGapMinSeconds  = number("OllamaChat.Mingle.GapMinSeconds", 80, 5, 3600);
+    g_MingleGapMaxSeconds  = std::max(g_MingleGapMinSeconds, number("OllamaChat.Mingle.GapMaxSeconds", 200, 5, 3600));
     g_MingleStartChance    = number("OllamaChat.Mingle.StartChance", 70, 0, 100);
     g_MingleMaxActive      = number("OllamaChat.Mingle.MaxActive", 4, 0, 50);
     g_MingleMaxNearPlayer  = number("OllamaChat.Mingle.MaxNearPlayer", 2, 1, 10);
@@ -2788,8 +2790,8 @@ static void LoadNaturalChatV16Settings()
         "They do not know each other, beyond seeing each other around.");
 
     g_MingleEmoteEnable          = sConfigMgr->GetOption<bool>("OllamaChat.Mingle.Emote.Enable", true);
-    g_MingleEmoteMinSeconds      = number("OllamaChat.Mingle.Emote.MinSeconds", 30, 5, 3600);
-    g_MingleEmoteMaxSeconds      = std::max(g_MingleEmoteMinSeconds, number("OllamaChat.Mingle.Emote.MaxSeconds", 80, 5, 3600));
+    g_MingleEmoteMinSeconds      = number("OllamaChat.Mingle.Emote.MinSeconds", 60, 5, 3600);
+    g_MingleEmoteMaxSeconds      = std::max(g_MingleEmoteMinSeconds, number("OllamaChat.Mingle.Emote.MaxSeconds", 160, 5, 3600));
     g_MingleEmoteChance          = number("OllamaChat.Mingle.Emote.Chance", 60, 0, 100);
     g_MingleEmoteReturnChance    = number("OllamaChat.Mingle.Emote.ReturnChance", 60, 0, 100);
     g_MingleEmoteRange           = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Mingle.Emote.Range", 8.0f), 2.0f, 30.0f);
@@ -3488,6 +3490,7 @@ void LoadOllamaChatConfig()
     g_TopicWeightActivity             = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightActivity", 25);
     g_TopicWeightSelf                 = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightSelf", 15);
     g_TopicWeightGuild                = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightGuild", 20);
+    g_TopicWeightTalk                 = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightTalk", 25);
     g_TopicMemoryCount                = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.MemoryCount", 4);
     g_TopicEventMemorySize            = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.EventMemorySize", 6);
     g_TopicEventMemorySeconds         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.EventMemorySeconds", 300);
@@ -3697,6 +3700,11 @@ void LoadOllamaChatConfig()
         "Remark on the look or feel of {area_name}.",
         "Comment on what {zone_name} is known for.",
         "Say whether {area_name} is worth lingering in."
+    });
+
+    g_EnvCommentGameTalk = LoadEnvCommentVector("OllamaChat.EnvCommentGameTalk", {
+        "Something about the game on your mind: {premise}.",
+        "Something you could bring up, about the game: {premise}."
     });
 
     g_EnvCommentTimeOfDay = LoadEnvCommentVector("OllamaChat.EnvCommentTimeOfDay", {

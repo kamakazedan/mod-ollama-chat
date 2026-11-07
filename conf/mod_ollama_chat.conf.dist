@@ -4529,9 +4529,9 @@ OllamaChat.Mingle.CitiesOnly = 1
 #        Every GapMin..GapMax seconds near each real player, an exchange
 #        starts with StartChance (0-100), if two bots are free to have it. The
 #        first one near someone who just arrived waits 10 to 30 seconds.
-#        Default: 40, 100, 70
-OllamaChat.Mingle.GapMinSeconds = 40
-OllamaChat.Mingle.GapMaxSeconds = 100
+#        Default: 80, 200, 70
+OllamaChat.Mingle.GapMinSeconds = 80
+OllamaChat.Mingle.GapMaxSeconds = 200
 OllamaChat.Mingle.StartChance = 70
 
 #    OllamaChat.Mingle.MaxActive
@@ -4644,10 +4644,10 @@ OllamaChat.Mingle.StrangersText = "They do not know each other, beyond seeing ea
 #        and with ReturnChance one back a moment later (a wave for a wave, a
 #        bow for a bow). A bot greets again after BotCooldownSeconds. No
 #        model is asked: it costs nothing.
-#        Default: 1, 30, 80, 60, 60, 8, 300, (below)
+#        Default: 1, 60, 160, 60, 60, 8, 300, (below)
 OllamaChat.Mingle.Emote.Enable = 1
-OllamaChat.Mingle.Emote.MinSeconds = 30
-OllamaChat.Mingle.Emote.MaxSeconds = 80
+OllamaChat.Mingle.Emote.MinSeconds = 60
+OllamaChat.Mingle.Emote.MaxSeconds = 160
 OllamaChat.Mingle.Emote.Chance = 60
 OllamaChat.Mingle.Emote.ReturnChance = 60
 OllamaChat.Mingle.Emote.Range = 8
@@ -5016,6 +5016,19 @@ OllamaChat.Topic.WeightSelf = 15
 #        real player online.
 #        Default: 20
 OllamaChat.Topic.WeightGuild = 20
+
+#    OllamaChat.Topic.WeightTalk
+#    OllamaChat.EnvCommentGameTalk
+#        The game itself, the way General talks about things nowhere near
+#        anyone: a raid, an old meme, a bit of lore, a gripe about levelling.
+#        It is one of the things a conversation in town opens with
+#        (Conversation.Premises and .PremiseTemplates, level-tagged, filled
+#        from the pools, and not again across the realm for
+#        PremiseCooldownMinutes), offered as a passing remark through
+#        EnvCommentGameTalk ({premise}). Not inside a dungeon. 0 turns it off.
+#        Default: 25, (below)
+OllamaChat.Topic.WeightTalk = 25
+OllamaChat.EnvCommentGameTalk = "Something about the game on your mind: {premise}.|Something you could bring up, about the game: {premise}."
 
 #    OllamaChat.Topic.MemoryCount
 #        How many recently used topics are suppressed per bot, so a bot does
