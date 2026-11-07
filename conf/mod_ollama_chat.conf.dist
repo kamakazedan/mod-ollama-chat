@@ -5030,6 +5030,28 @@ OllamaChat.Topic.WeightGuild = 20
 OllamaChat.Topic.WeightTalk = 25
 OllamaChat.EnvCommentGameTalk = "Something about the game on your mind: {premise}.|Something you could bring up, about the game: {premise}."
 
+#    OllamaChat.Topic.WeightMarket
+#    OllamaChat.Market.TalkMinutes
+#    OllamaChat.EnvCommentMarketListed
+#    OllamaChat.EnvCommentMarketSold
+#    OllamaChat.EnvCommentMarketUnsold
+#    OllamaChat.EnvCommentMarketBought
+#        With mod-playerbots-plus in the same build, random bots trade on the
+#        auction house. A bot that just put something up, sold it, got it back
+#        unsold or bought something may bring it up in chat, once, within
+#        TalkMinutes of it: while it is fresh it is one more topic, weighed
+#        against the others by WeightMarket. In the lines: {item} is like
+#        "20 [Linen Cloth]", {price} like "1g 20s", {to} is " to <buyer>" or
+#        nothing, {from} is " from <seller>" or nothing. WeightMarket 0 turns
+#        it off. Without mod-playerbots-plus none of this does anything.
+#        Default: 30, 90, (below)
+OllamaChat.Topic.WeightMarket = 30
+OllamaChat.Market.TalkMinutes = 90
+OllamaChat.EnvCommentMarketListed = "You just put {item} up on the auction house for {price}. Mention it the way players do in General: that it is up if anyone wants it, or ask what it usually goes for.|{item} is up on the auction house now, yours, for {price}. Say so in passing, or wonder whether you priced it right."
+OllamaChat.EnvCommentMarketSold = "Your {item} just sold on the auction house for {price}{to}. Say something about it in passing: pleased it went, or that you should have asked more.|Someone bought your {item} off the auction house for {price}{to}. Mention it the way a player would."
+OllamaChat.EnvCommentMarketUnsold = "Nobody bought your {item} on the auction house at {price}, and it came back in the mail. Grumble about it, or ask what it is actually worth.|Your {item} came back unsold from the auction house. Say something about the auction house, the way players do."
+OllamaChat.EnvCommentMarketBought = "You just bought {item} off the auction house for {price}{from}. Mention it the way a player would: a bargain, a rip-off, or just what you needed.|You got {item} on the auction house for {price}{from}. Say something about it in passing."
+
 #    OllamaChat.Topic.MemoryCount
 #        How many recently used topics are suppressed per bot, so a bot does
 #        not talk about the same thing twice in a row.

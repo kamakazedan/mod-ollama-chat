@@ -12,6 +12,7 @@
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_mute.h"
+#include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_textrules.h"
@@ -755,6 +756,8 @@ uint32_t g_TopicWeightActivity      = 25;
 uint32_t g_TopicWeightSelf          = 15;
 uint32_t g_TopicWeightGuild         = 20;
 uint32_t g_TopicWeightTalk          = 25;
+uint32_t g_TopicWeightMarket        = 30;
+uint32_t g_MarketTalkMinutes        = 90;
 uint32_t g_TopicMemoryCount         = 4;
 uint32_t g_TopicEventMemorySize     = 6;
 uint32_t g_TopicEventMemorySeconds  = 300;
@@ -769,6 +772,10 @@ std::vector<std::string> g_EnvCommentNamedNpc;
 std::vector<std::string> g_EnvCommentZoneLandmark;
 std::vector<std::string> g_EnvCommentTimeOfDay;
 std::vector<std::string> g_EnvCommentGameTalk;
+std::vector<std::string> g_EnvCommentMarketListed;
+std::vector<std::string> g_EnvCommentMarketSold;
+std::vector<std::string> g_EnvCommentMarketUnsold;
+std::vector<std::string> g_EnvCommentMarketBought;
 std::vector<std::string> g_EnvCommentCorpse;
 std::vector<std::string> g_EnvCommentDanger;
 std::vector<std::string> g_EnvCommentQuestObjective;
@@ -3497,6 +3504,8 @@ void LoadOllamaChatConfig()
     g_TopicWeightSelf                 = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightSelf", 15);
     g_TopicWeightGuild                = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightGuild", 20);
     g_TopicWeightTalk                 = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightTalk", 25);
+    g_TopicWeightMarket               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightMarket", 30);
+    g_MarketTalkMinutes               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Market.TalkMinutes", 90);
     g_TopicMemoryCount                = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.MemoryCount", 4);
     g_TopicEventMemorySize            = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.EventMemorySize", 6);
     g_TopicEventMemorySeconds         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.EventMemorySeconds", 300);
@@ -3713,6 +3722,26 @@ void LoadOllamaChatConfig()
         "Something you could bring up, about the game: {premise}."
     });
 
+    g_EnvCommentMarketListed = LoadEnvCommentVector("OllamaChat.EnvCommentMarketListed", {
+        "You just put {item} up on the auction house for {price}. Mention it the way players do in General: that it is up if anyone wants it, or ask what it usually goes for.",
+        "{item} is up on the auction house now, yours, for {price}. Say so in passing, or wonder whether you priced it right."
+    });
+
+    g_EnvCommentMarketSold = LoadEnvCommentVector("OllamaChat.EnvCommentMarketSold", {
+        "Your {item} just sold on the auction house for {price}{to}. Say something about it in passing: pleased it went, or that you should have asked more.",
+        "Someone bought your {item} off the auction house for {price}{to}. Mention it the way a player would."
+    });
+
+    g_EnvCommentMarketUnsold = LoadEnvCommentVector("OllamaChat.EnvCommentMarketUnsold", {
+        "Nobody bought your {item} on the auction house at {price}, and it came back in the mail. Grumble about it, or ask what it is actually worth.",
+        "Your {item} came back unsold from the auction house. Say something about the auction house, the way players do."
+    });
+
+    g_EnvCommentMarketBought = LoadEnvCommentVector("OllamaChat.EnvCommentMarketBought", {
+        "You just bought {item} off the auction house for {price}{from}. Mention it the way a player would: a bargain, a rip-off, or just what you needed.",
+        "You got {item} on the auction house for {price}{from}. Say something about it in passing."
+    });
+
     g_EnvCommentTimeOfDay = LoadEnvCommentVector("OllamaChat.EnvCommentTimeOfDay", {
         "It is {time_of_day}. Remark on the hour.",
         "Comment on it being {time_of_day} and what that means for travelling.",
@@ -3918,6 +3947,7 @@ OllamaChatConfigWorldScript::OllamaChatConfigWorldScript() : WorldScript("Ollama
 void OllamaChatConfigWorldScript::OnStartup()
 {
     LoadOllamaChatConfig();
+    OllamaMarket_Init();
     LoadBotPersonalityList();
     LoadBotConversationHistoryFromDB();
     InitializeSentimentTracking();

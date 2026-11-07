@@ -36,6 +36,7 @@
 #include "mod-ollama-chat_knowledge.h"
 #include "mod-ollama-chat_mingle.h"
 #include "mod-ollama-chat_rolls.h"
+#include "mod-ollama-chat_market.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
 #include <thread>
@@ -875,9 +876,11 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (uint32)g_RoleplayStrictness,
                              g_EnableEmoteReactions ? "on" : "off");
     if (show("chat"))
-        handler->PSendSysMessage("Topic weights: people {} / world {} / activity {} / self {} / guild {} / the game {}",
+        handler->PSendSysMessage("Topic weights: people {} / world {} / activity {} / self {} / guild {} / the game {} / the auction house {}{}",
                              g_TopicWeightPeople, g_TopicWeightWorld, g_TopicWeightActivity,
-                             g_TopicWeightSelf, g_TopicWeightGuild, g_TopicWeightTalk);
+                             g_TopicWeightSelf, g_TopicWeightGuild, g_TopicWeightTalk, g_TopicWeightMarket,
+                             OllamaMarket_Available() ? fmt::format(" ({} dealings heard of)", OllamaMarket_Heard())
+                                                      : std::string(" (no mod-playerbots-plus)"));
 
     if (!dispatch.lastError.empty())
         handler->PSendSysMessage("|cffff0000Last error:|r {}", dispatch.lastError);

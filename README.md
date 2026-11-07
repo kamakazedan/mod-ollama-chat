@@ -584,6 +584,16 @@ every boss is down (`OllamaChat.Party.Greet*`, `Party.Done*`). After a mana
 break, "ok im done", "full" or "done drinking" resumes the run; "im ready
 now" starts one too.
 
+## The Auction House
+
+With [mod-playerbots-plus](https://github.com/kamakazedan/mod-playerbots-plus)
+in the same build, random bots trade on the auction house. A bot that just
+sold something, bought something, put something up or got something back
+unsold may bring it up in chat once within the next hour and a half: "finally
+sold those [Linen Cloth]", "got [Shadowfang] off the AH for 30g, bargain". See
+`OllamaChat.Topic.WeightMarket`, `Market.TalkMinutes` and
+`EnvCommentMarket*`. Without mod-playerbots-plus this does nothing.
+
 ## Per-Style Nudges and Longer Replies
 
 Any chat style can have `OllamaChat.Personality.Nudge.<KEY>`

@@ -35,6 +35,7 @@ enum class TopicCategory : uint8_t
     Self,
     Guild,
     Talk,       // the game itself: raids, lore, old memes (Conversation.Premises)
+    Market,     // what it just did on the auction house (mod-playerbots-plus)
     Count
 };
 

@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_topics.h"
+#include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_clock.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_links.h"
@@ -433,6 +434,31 @@ namespace
         }
     }
 
+    // What it just did on the auction house: sold, bought, put up, or got
+    // back unsold (mod-playerbots-plus).
+    void GatherMarket(Player* bot, std::vector<Candidate>& out)
+    {
+        OllamaMarketNote deal;
+        if (!OllamaMarket_Peek(bot, deal))
+            return;
+
+        static const char* const keys[] = { "market_listed", "market_sold", "market_unsold", "market_bought" };
+        const std::vector<std::string>* pools[] = { &g_EnvCommentMarketListed, &g_EnvCommentMarketSold,
+                                                    &g_EnvCommentMarketUnsold, &g_EnvCommentMarketBought };
+        if (deal.type > 3 || pools[deal.type]->empty())
+            return;
+
+        const std::vector<std::string>& pool = *pools[deal.type];
+        const std::string to   = (deal.type == 1 && !deal.other.empty()) ? " to " + deal.other : std::string();
+        const std::string from = (deal.type == 3 && !deal.other.empty()) ? " from " + deal.other : std::string();
+        Add(out, TopicCategory::Market, keys[deal.type], pool,
+            SafeFormat(PickOne(pool),
+                       fmt::arg("item", deal.item),
+                       fmt::arg("price", deal.price),
+                       fmt::arg("to", to),
+                       fmt::arg("from", from)));
+    }
+
     void GatherActivity(Player* bot, std::vector<Candidate>& out)
     {
         // What they are actually trying to do right now. Inside a dungeon,
@@ -686,6 +712,11 @@ TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world)
     if (g_TopicWeightTalk > 0 && !g_EnvCommentGameTalk.empty() && !bot->GetMap()->Instanceable())
         cats.push_back({ TopicCategory::Talk, g_TopicWeightTalk });
 
+    // Something it just did on the auction house, while it is fresh.
+    OllamaMarketNote deal;
+    if (g_TopicWeightMarket > 0 && OllamaMarket_Peek(bot, deal))
+        cats.push_back({ TopicCategory::Market, g_TopicWeightMarket });
+
     // Guild topics only apply when there is a guild with someone in it.
     if (bot->GetGuild() && g_EnableGuildRandomAmbientChatter &&
         world.GuildHasRealPlayer(bot->GetGuildId()))
@@ -745,6 +776,7 @@ TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world)
             case TopicCategory::Self:     GatherSelf(bot, candidates);          break;
             case TopicCategory::Guild:    GatherGuild(bot, candidates);         break;
             case TopicCategory::Talk:     GatherTalk(bot, candidates);          break;
+            case TopicCategory::Market:   GatherMarket(bot, candidates);        break;
             default: break;
         }
 
@@ -776,6 +808,9 @@ void Topics_NoteUsed(ObjectGuid botGuid, const std::string& key)
 {
     if (key.empty())
         return;
+
+    if (key.rfind("market_", 0) == 0)
+        OllamaMarket_NoteTalked(botGuid);   // that dealing has had its say
 
     std::lock_guard<std::mutex> lock(g_mutex);
     auto& state = g_state[botGuid.GetRawValue()];

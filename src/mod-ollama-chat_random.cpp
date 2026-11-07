@@ -38,6 +38,7 @@
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_rolls.h"
+#include "mod-ollama-chat_market.h"
 
 #include "CellImpl.h"
 #include "Channel.h"
@@ -492,6 +493,7 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
         Needs_Update();
         Congrats_Update();
         Joined_Maintain();
+        OllamaMarket_Update();
     }
     else
     {
