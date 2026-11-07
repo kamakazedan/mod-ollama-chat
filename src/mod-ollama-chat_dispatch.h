@@ -160,6 +160,11 @@ struct OllamaChatRequest
     // once it is out, the rest of the group says gg.
     bool doneCall = false;
 
+    // The tank calling a rest over ("right, lets go", mod-ollama-chat_partycmd):
+    // dropped if the run got going some other way while it was written, and
+    // once it is out, the run carries on.
+    bool breakEndCall = false;
+
     // A line of a /say exchange between bots (mod-ollama-chat_mingle): a
     // conversation running nearby does not take it for a turn of its own.
     bool mingle = false;

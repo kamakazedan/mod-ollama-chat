@@ -194,6 +194,18 @@ uint32_t    g_EquipGroupCooldownSeconds = 90;
 uint32_t    g_EquipLootedMinutes        = 10;
 std::string g_EquipPrompt;
 
+std::string g_EmoteEventText;
+std::string g_PartyCmdHintBreak;
+bool        g_PartyBreakEndEnable        = true;
+uint32_t    g_PartyBreakEndHealthPct     = 90;
+uint32_t    g_PartyBreakEndManaPct       = 95;
+uint32_t    g_PartyBreakEndOthersManaPct = 80;
+uint32_t    g_PartyBreakEndMinSeconds    = 10;
+uint32_t    g_PartyBreakEndMaxMinutes    = 5;
+std::string g_PartyBreakEndSituation;
+std::vector<std::vector<std::string>> g_PartyBreakEndWords;
+std::vector<std::string> g_PartyBreakEndLines;
+
 bool        g_MingleEnable              = true;
 bool        g_MingleCitiesOnly          = true;
 uint32_t    g_MingleGapMinSeconds       = 80;
@@ -2581,6 +2593,47 @@ static void LoadNaturalChatV20Settings()
              g_EquipMinQuality >= 4 ? "epics" : "rares", g_EquipChance, g_EquipPersonalities.size());
 }
 
+static void LoadNaturalChatV21Settings()
+{
+    // --- emotes in the transcript ------------------------------------------------------
+    g_EmoteEventText = sConfigMgr->GetOption<std::string>("OllamaChat.Emote.EventText",
+        "{actor} gave {target} a /{emote}");
+
+    // --- a rest that ends by itself ----------------------------------------------------
+    g_PartyCmdHintBreak = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.HintBreak",
+        "{player_name} asked for {reason}, so you have stopped the run for it. Just say ok, in one to four "
+        "words and your own chat style, the easy way a tank does when someone needs to drink. You will see "
+        "for yourself when everyone is ready, so do not ask them to tell you.{recent_acks}");
+    g_PartyBreakEndEnable = sConfigMgr->GetOption<bool>("OllamaChat.Party.BreakEndEnable", true);
+    g_PartyBreakEndHealthPct =
+        std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.BreakEndHealthPct", 90));
+    g_PartyBreakEndManaPct =
+        std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.BreakEndManaPct", 95));
+    g_PartyBreakEndOthersManaPct =
+        std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.BreakEndOthersManaPct", 80));
+    g_PartyBreakEndMinSeconds =
+        std::min<uint32_t>(600, sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.BreakEndMinSeconds", 10));
+    g_PartyBreakEndMaxMinutes =
+        std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.BreakEndMaxMinutes", 5), 1, 60);
+    g_PartyBreakEndSituation = sConfigMgr->GetOption<std::string>("OllamaChat.Party.BreakEndSituation",
+        "Everyone has had their break and has their health and mana back, so you are getting the run going "
+        "again, right now. {~Tell them you are off|Get them moving|Tell them you are carrying on|Call them back "
+        "to it}, in a few words of your own: hurry them along, tease them for being slow, keep it short and "
+        "bossy, or just say you are going, whatever suits your chat style.");
+    g_PartyBreakEndWords = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(
+        "OllamaChat.Party.BreakEndWords",
+        "go|gogo|move|moving|carry on|carrying on|keep up|keep going|onward|onwards|continue|continuing|pull|"
+        "pulling|next|back to it|lets roll|rolling|push on|pushing on|follow|resume|resuming|off we|on we"));
+    g_PartyBreakEndLines = ReadPipeList("OllamaChat.Party.BreakEndLines",
+        "ok lets go|right, moving on|alright, lets go|ok, pulling|right, back to it|ok everyone good, lets carry on|"
+        "lets keep going");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v21: a rest ends by itself {} (health {}%, mana {}% for "
+             "players and healers, {}% for other bots), emotes in the transcript {}.",
+             g_PartyBreakEndEnable ? "on" : "off", g_PartyBreakEndHealthPct, g_PartyBreakEndManaPct,
+             g_PartyBreakEndOthersManaPct, g_EmoteEventText.empty() ? "off" : "on");
+}
+
 static void LoadNaturalChatV16Settings()
 {
     auto number = [](const char* key, uint32_t def, uint32_t lo, uint32_t hi)
@@ -3342,6 +3395,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV15Settings();
     LoadNaturalChatV16Settings();
     LoadNaturalChatV20Settings();
+    LoadNaturalChatV21Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

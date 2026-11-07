@@ -123,6 +123,12 @@ stock lines and the auction house market are mod-playerbots-plus's. This
 module only voices them. Do not add bot behaviour that needs no language model
 here: put it there and raise an event.
 
+The one exception is steering a mod-dungeon-clear run from what a player types
+(`mod-ollama-chat_partycmd.cpp`): reading "mb" out of a party line is this
+module's, so the pause, the resume, and the end of a rest that ends by itself
+(the tank's "lets go" goes out first, and the run moves when it lands) stay
+together here. mod-playerbots-plus knows nothing of mod-dungeon-clear.
+
 - Include `mod-ollama-chat_plus.h`, never `PlayerbotsPlus.h` directly.
   `OLLAMA_CHAT_PLAYERBOTS_PLUS` is its API version, 0 when it is not in the
   build, and this module must compile and run either way.

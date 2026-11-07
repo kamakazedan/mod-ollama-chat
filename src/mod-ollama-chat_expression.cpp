@@ -1,5 +1,7 @@
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_context.h"
+#include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_governor.h"
@@ -754,6 +756,24 @@ void ScheduleBotExpression(Player* bot, ObjectGuid targetGuid,
         bot->m_Events.CalculateTime(delayMs));
 }
 
+void Expression_NoteEmote(Player* actor, Player* target, uint32_t textEmoteId, bool atPet)
+{
+    if (!g_Enable || !actor || !target || g_EmoteEventText.empty())
+        return;
+    const std::string emote = LookupTextEmoteName(textEmoteId);
+    if (emote.empty())
+        return;
+    const std::string note = SafeFormat(g_EmoteEventText, fmt::arg("actor", actor->GetName()),
+                                        fmt::arg("target", atPet ? target->GetName() + "'s pet"
+                                                                 : target->GetName()),
+                                        fmt::arg("emote", emote));
+    if (note.empty() || note == "[Format Error]")
+        return;
+    // Under the transcript's own lock, reading nothing but these two: safe
+    // from the map thread they are on.
+    Context_RecordEvent(actor, note, false, target);
+}
+
 // --------------------------------------------------------------------------
 
 uint32_t GetMirrorEmote(uint32_t inbound)
@@ -820,7 +840,7 @@ ChatOnEmote::ChatOnEmote() : PlayerScript("ChatOnEmote", { PLAYERHOOK_ON_TEXT_EM
 void ChatOnEmote::OnPlayerTextEmote(Player* player, uint32 textEmote,
                                     uint32 /*emoteNum*/, ObjectGuid guid)
 {
-    if (!g_Enable || !g_EnableEmoteReactions || !player)
+    if (!g_Enable || !player)
         return;
 
     if (guid.IsEmpty())
@@ -838,17 +858,25 @@ void ChatOnEmote::OnPlayerTextEmote(Player* player, uint32 textEmote,
     if (!botAI || !botAI->IsBotAI())
         return;
 
+    // This runs on the map thread the emote came in on: a bot on another
+    // map is not to be read from here.
+    if (player->GetMap() != bot->GetMap())
+        return;
+    if (g_SayDistance > 0.0f && bot->GetDistance(player) > g_SayDistance)
+        return;
+
+    // What they did is part of what everyone nearby saw, answered or not.
+    Expression_NoteEmote(player, bot, textEmote);
+
+    if (!g_EnableEmoteReactions)
+        return;
+
     if (g_DisableRepliesInCombat && bot->IsInCombat())
         return;
 
     // AFK (hanging out in a city, mod-ollama-chat_hangout): nobody at the
     // keyboard to see it. The flag only -- this hook is no place for more.
     if (bot->isAFK())
-        return;
-
-    if (player->GetMapId() != bot->GetMapId())
-        return;
-    if (g_SayDistance > 0.0f && bot->GetDistance(player) > g_SayDistance)
         return;
 
     // Debounce per (player, bot) pair so /spam cannot flood the queue.
@@ -890,6 +918,8 @@ void ChatOnEmote::OnPlayerTextEmote(Player* player, uint32 textEmote,
     if (reactEmote)
     {
         ScheduleBotExpression(bot, player->GetGUID(), reactEmote, g_BotExpressionDelayMs);
+        if (g_EnableBotEmotes)
+            Expression_NoteEmote(bot, player, reactEmote);   // ...and so is this
 
         if (g_DebugEnabled)
             LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} reacting to emote {} from {} with emote {}",

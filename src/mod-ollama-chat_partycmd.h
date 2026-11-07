@@ -17,12 +17,14 @@ class Player;
 // of people:
 //
 //   "ready", "r?", "lets go", "ok carry on"   start the clear, or resume it
-//   "mb", "wait", "stop", "brb", "need mana"  pause it where it stands
+//   "mb", "need mana", "lets eat"             a rest: the tank carries on by
+//                                             itself once everyone has rested
+//   "wait", "stop", "brb"                     pause it until someone is ready
 //   "ok im done", "full", "done drinking"     resume it -- only while paused
 //
-// The tank answers in party ("np, drink up, say when"), and the line gets no
-// other replies -- so "mb" is never read as "my bad" again. A start waits for
-// every real player in the group to be inside and near the tank.
+// The tank answers in party ("np", "drink up"), and the line gets no other
+// replies -- so "mb" is never read as "my bad" again. A start waits for every
+// real player in the group to be inside and near the tank.
 //
 // Only lines that are short and plainly an instruction count; questions
 // ("wait what?", "you oom?") and negations ("not ready", "i dont need mana")
@@ -77,6 +79,20 @@ void PartyCmd_NoteReadyAsked(Player* bot);
 // The tank's "that's the dungeon cleared" went out: the rest of the group says
 // gg, each once and to nobody in particular (Party.Cheer*).
 void PartyCmd_NoteDoneCalled(Player* bot);
+
+// A rest someone called in party -- "mb", "need to drink", "lets eat" -- ends
+// by itself: the tank only says ok (PartyCommands.HintBreak), and once every
+// one has rested (Party.BreakEnd*) it says it is carrying on, in its own chat
+// style, and does. "ready" still ends it at any time, as before; "brb" or
+// "wait" in the middle of it leaves it to someone to say so, and another "mb"
+// starts it over.
+//
+// Before the tank's "lets go" is delivered: is it still due? Not once the run
+// has got going some other way while it was being written ("ok ready").
+bool PartyCmd_BreakEndStillDue(Player* bot);
+
+// ...and once it is out: the run carries on.
+void PartyCmd_NoteBreakEndCalled(Player* bot);
 
 // A real player's party or raid line once a run is over. "wait", "can you help
 // me with..." keeps the bots that were about to leave (Party.DoneStayWords);
@@ -134,6 +150,8 @@ struct PartyCmdStats
 {
     uint64_t started = 0;
     uint64_t paused  = 0;
+    uint64_t breaks  = 0;   // ...of them rests that end by themselves
+    uint64_t breaksEnded = 0;   // rests the tank called over itself
     uint64_t resumed = 0;
     uint64_t waiting = 0;   // "ready", but someone was not there yet
     uint64_t refused = 0;   // dungeon clear said no (whispered why)

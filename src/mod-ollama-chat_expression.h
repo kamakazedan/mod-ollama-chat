@@ -77,6 +77,17 @@ void BotPlayTextEmote(Player* bot, uint32_t textEmoteId, ObjectGuid targetGuid);
 void ScheduleBotExpression(Player* bot, ObjectGuid targetGuid,
                            uint32_t textEmoteId, uint32_t delayMs);
 
+// "Jukaroug gave Kami a /sigh" (OllamaChat.Emote.EventText), into the
+// transcript of what the people nearby, and the actor's party, saw. An emote
+// nobody wrote down was one no bot knew about: "why you sighing at me?" went
+// to whoever had last said something, and that bot had no idea what it was
+// being asked. Written down, the one who did it is who the next line is
+// most likely aimed at (Context_LikelyAddressee), and it knows why -- and a
+// player who emotes at a bot and then speaks is talking to that bot.
+// `atPet`: it was the target's pet. Nothing for an emote the table has no
+// name for. On the world thread, or the map thread actor and target are on.
+void Expression_NoteEmote(Player* actor, Player* target, uint32_t textEmoteId, bool atPet = false);
+
 // True when turning the bot would not fight movement, combat or transport state.
 bool IsSafeForFacing(Player* bot);
 

@@ -851,6 +851,22 @@ extern uint32_t    g_EquipGroupCooldownSeconds;
 extern uint32_t    g_EquipLootedMinutes;        // got it this recently: loot, a roll, a quest reward
 extern std::string g_EquipPrompt;
 
+// --------------------------------------------
+// Chat v21: a rest that ends by itself (mod-ollama-chat_partycmd), and emotes
+// in the transcript (mod-ollama-chat_expression)
+// --------------------------------------------
+extern std::string g_EmoteEventText;              // "{actor} gave {target} a /{emote}"
+extern std::string g_PartyCmdHintBreak;           // the tank's ok to "mb" when the rest ends by itself
+extern bool        g_PartyBreakEndEnable;
+extern uint32_t    g_PartyBreakEndHealthPct;      // everyone's health back to at least this
+extern uint32_t    g_PartyBreakEndManaPct;        // a real player's and a healer's mana
+extern uint32_t    g_PartyBreakEndOthersManaPct;  // every other bot's mana
+extern uint32_t    g_PartyBreakEndMinSeconds;     // never sooner than this after it began
+extern uint32_t    g_PartyBreakEndMaxMinutes;     // longer than this: over when someone says so
+extern std::string g_PartyBreakEndSituation;      // the tank's "lets go", for Party.AnnouncePrompt
+extern std::vector<std::vector<std::string>> g_PartyBreakEndWords;   // the line has one of these, or...
+extern std::vector<std::string> g_PartyBreakEndLines;                 // ...one of these goes out instead
+
 extern bool        g_MingleEnable;
 extern bool        g_MingleCitiesOnly;          // only where a real player is in a city (or inn)
 extern uint32_t    g_MingleGapMinSeconds;       // how often one may start near a real player

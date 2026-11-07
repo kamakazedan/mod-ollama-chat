@@ -558,15 +558,24 @@ Playerbots also reads every chat line as one of its own commands unless
 ahead" sends every bot off. Setting the prefix (`"!"`) leaves plain chat to
 chat and orders, with playerbots' commands still there as `!summon`.
 
-## Greetings and the Finish
+## Greetings, Mana Breaks and the Finish
 
 A bot tank leading a dungeon-clear group says
 to let it know when everyone is ready as the group comes in, and says so when
-every boss is down (`OllamaChat.Party.Greet*`, `Party.Done*`). After a mana
-break, "ok im done", "full" or "done drinking" resumes the run; "im ready
-now" starts one too, and so does "lets go" however it's typed: "lego",
-"lesgo", "letsgoooo", "leeggoooo". A word typed long for effect counts as
-itself, so "readyyy" is "ready".
+every boss is down (`OllamaChat.Party.Greet*`, `Party.Done*`). "im ready now"
+starts a run, and so does "lets go" however it's typed: "lego", "lesgo",
+"letsgoooo", "leeggoooo". A word typed long for effect counts as itself, so
+"readyyy" is "ready".
+
+Call a mana break ("mb", "need mana", "drink", "lets eat") and the tank stops
+with a quick "np" or "drink up", then keeps an eye on the bars, like a real
+tank. When everyone has their health and mana back, it says it's carrying on
+and does, in its own style: "right lets go guys" from one, "too slow, lets go"
+or "KEEP UP" from another. Your mana and the healers' have to be all but full,
+the other bots' most of the way, and nobody can still be sitting down
+drinking. "ok im done", "full" or "ready" still carries on at once. A "brb",
+"wait" or "stop", during a break or on its own, waits until someone says
+they're ready (`OllamaChat.Party.BreakEnd*`).
 
 ## New Gear
 
@@ -709,6 +718,11 @@ a log line.
 - **Emote reactions** — bots react when a player emotes at them, either by
   mirroring (wave gets a wave), countering (flex gets a laugh), or answering in
   words. The first two cost no LLM call.
+- **Emotes are remembered** — a player's emote at a bot, the bot's emote back,
+  and a bot's emote at someone walking past all go into the chat history. Ask
+  "why you sighing at me?" and the bot that sighed answers, knowing what it did.
+  Emote at a bot and then say something, and that bot takes it as said to it
+  (`OllamaChat.Emote.EventText`).
 
 ## Think Mode
 

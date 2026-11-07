@@ -2396,13 +2396,16 @@ OllamaChat.Personality.MaxReplyLength.NAT_EXPERT = 250
 #   group of people:
 #
 #       "ready", "r?", "lets go", "ok carry on"    start the clear, or resume
-#       "mb", "wait", "stop", "brb", "need mana"   pause it where it stands
+#       "mb", "need mana", "drink", "lets eat"     a rest: the tank carries on
+#                                                  by itself once everyone has
+#                                                  rested (Party.BreakEnd*)
+#       "wait", "stop", "brb", "hold on"           pause it where it stands
 #       "stay here", "hold position"               pause it too
 #       "ok im done", "full", "done drinking"      resume -- only while paused
 #
-#   The tank answers in party ("np, drink up, say when"), and nobody else
-#   replies to that line. A start waits until every real player in the
-#   group is inside and within MaxDistance of the tank.
+#   The tank answers in party ("np", "drink up"), and nobody else replies to
+#   that line. A start waits until every real player in the group is inside
+#   and within MaxDistance of the tank.
 #
 #   A ready check counts as a start ("r?", "everyone ready?", "are we
 #   ready"); any other question does not ("you oom?", "wait what",
@@ -2534,18 +2537,24 @@ OllamaChat.PartyCommands.MaxDistance = 100
 
 #    OllamaChat.PartyCommands.HintStart
 #    OllamaChat.PartyCommands.HintPause
+#    OllamaChat.PartyCommands.HintBreak
 #    OllamaChat.PartyCommands.HintResume
 #    OllamaChat.PartyCommands.HintWaiting
 #        What the tank is told when it answers. It answers in its own chat
 #        style -- "ok moving" from a serious one, something daft from a
 #        joker -- and is shown its last few answers in this group so it does
-#        not say the same thing every time. Placeholders: {player_name},
-#        {player_message}, {reason} (HintPause: "a mana break (mb means mana
-#        break: they need to drink)", "a short break", "a moment"),
-#        {missing} (HintWaiting: who is not there yet), {recent_acks}
-#        (RecentAcksText, or nothing; added at the end if left out).
+#        not say the same thing every time. HintBreak is its answer to a
+#        rest that ends by itself (Party.BreakEnd*): just an ok, "np" or
+#        "drink up", as it will see for itself when everyone is ready; empty
+#        uses HintPause. Placeholders: {player_name}, {player_message},
+#        {reason} (HintPause, HintBreak: "a mana break (mb means mana break:
+#        they need to drink)", "a rest to eat and drink", "a short break",
+#        "a moment"), {missing} (HintWaiting: who is not there yet),
+#        {recent_acks} (RecentAcksText, or nothing; added at the end if left
+#        out).
 OllamaChat.PartyCommands.HintStart = "{player_name} is ready, so you lead the group on through the dungeon. Tell them in two to six words, in your own chat style: someone serious just says they are moving, a joker shouts something silly, and anything in between is fine. Only talk about a fight if one is actually in front of you.{recent_acks}"
 OllamaChat.PartyCommands.HintPause = "{player_name} asked the group to stop for {reason}, and you have stopped the run. Tell them in a few words, in your own chat style, that you will wait and they should say when they are ready.{recent_acks}"
+OllamaChat.PartyCommands.HintBreak = "{player_name} asked for {reason}, so you have stopped the run for it. Just say ok, in one to four words and your own chat style, the easy way a tank does when someone needs to drink. You will see for yourself when everyone is ready, so do not ask them to tell you.{recent_acks}"
 OllamaChat.PartyCommands.HintResume = "{player_name} is ready again, so the run carries on and you lead the way. Say so in a few words, in your own chat style.{recent_acks}"
 OllamaChat.PartyCommands.HintWaiting = "{player_name} wants to start, but not everyone is here yet: still waiting for {missing}. Tell them in a few words that you will start as soon as everyone is here.{recent_acks}"
 
@@ -2705,12 +2714,63 @@ OllamaChat.Party.DoneStateText = "The run is over: every boss in {dungeon} is de
 OllamaChat.Party.DoneLeavingText = " Everyone who came in through the dungeon finder is about to leave the group, the way people do after a run, unless someone asks them to stay."
 OllamaChat.Party.DoneStayingText = " Someone asked everyone to stick around, so you are all staying in the group for now."
 
+#    OllamaChat.Party.BreakEndEnable
+#    OllamaChat.Party.BreakEndHealthPct
+#    OllamaChat.Party.BreakEndManaPct
+#    OllamaChat.Party.BreakEndOthersManaPct
+#    OllamaChat.Party.BreakEndMinSeconds
+#    OllamaChat.Party.BreakEndMaxMinutes
+#        A rest someone calls in party -- "mb", "need mana", "drink", "lets
+#        eat" -- ends by itself, the way a tank ends one: it watches the bars,
+#        and when everyone is ready it says so in party and carries on. When
+#        the rest is called it only says ok (PartyCommands.HintBreak). It
+#        carries on once the rest has gone on BreakEndMinSeconds and:
+#          - everyone in the group who is inside is alive, out of combat and
+#            back to BreakEndHealthPct health,
+#          - every real player and every healer has BreakEndManaPct mana,
+#            every other bot BreakEndOthersManaPct (it tops up on the way,
+#            as on the rest of a run),
+#          - every real player is inside, within PartyCommands.MaxDistance of
+#            the tank, not AFK, and not still sat drinking: someone sat down
+#            is done only when both bars are full.
+#        "ready" or "ok im done" still ends it at once. "brb", "wait" or
+#        "stop" in the middle of it leaves it to someone to say ready, as
+#        does a rest that has gone on BreakEndMaxMinutes (1 to 60); another
+#        "mb" starts it over. On their own, "brb", "wait" and "stop" always
+#        wait for someone to say ready.
+#        Only with a bot leading the run. 0 disables: every pause waits for
+#        someone to say ready, as before.
+#        Default: 1, 90, 95, 80, 10, 5
+OllamaChat.Party.BreakEndEnable = 1
+OllamaChat.Party.BreakEndHealthPct = 90
+OllamaChat.Party.BreakEndManaPct = 95
+OllamaChat.Party.BreakEndOthersManaPct = 80
+OllamaChat.Party.BreakEndMinSeconds = 10
+OllamaChat.Party.BreakEndMaxMinutes = 5
+
+#    OllamaChat.Party.BreakEndSituation
+#    OllamaChat.Party.BreakEndWords
+#    OllamaChat.Party.BreakEndLines
+#        The tank's line as it carries on, in its own chat style: "right lets
+#        go guys" from one, "too slow, lets go" or "KEEP UP" from another. It
+#        goes into AnnouncePrompt as {situation}; {~a|b} picks one at random.
+#        The line has to make it plain they are moving, so it must have one
+#        of BreakEndWords in it. When it does not -- or the model passes,
+#        fails or cannot be reached -- one of BreakEndLines goes out instead.
+#        The run carries on once the line is out (20 seconds later anyway if
+#        it never gets out), and a line still being written when somebody
+#        says ready is dropped.
+#        Default: (below)
+OllamaChat.Party.BreakEndSituation = "Everyone has had their break and has their health and mana back, so you are getting the run going again, right now. {~Tell them you are off|Get them moving|Tell them you are carrying on|Call them back to it}, in a few words of your own: hurry them along, tease them for being slow, keep it short and bossy, or just say you are going, whatever suits your chat style."
+OllamaChat.Party.BreakEndWords = "go|gogo|move|moving|carry on|carrying on|keep up|keep going|onward|onwards|continue|continuing|pull|pulling|next|back to it|lets roll|rolling|push on|pushing on|follow|resume|resuming|off we|on we"
+OllamaChat.Party.BreakEndLines = "ok lets go|right, moving on|alright, lets go|ok, pulling|right, back to it|ok everyone good, lets carry on|lets keep going"
+
 #    OllamaChat.Party.AnnouncePrompt
-#        The prompt for those two lines. Placeholders: {bot_name},
-#        {bot_level}, {bot_race}, {bot_class}, {bot_personality}, {dungeon},
-#        {situation} (GreetSituation or DoneSituation), {recent_acks} (the
-#        tank's last few lines in this group, RecentAcksText; added at the end
-#        if left out).
+#        The prompt for the tank's lines nobody asked for. Placeholders:
+#        {bot_name}, {bot_level}, {bot_race}, {bot_class}, {bot_personality},
+#        {dungeon}, {situation} (GreetSituation, DoneSituation or
+#        BreakEndSituation), {recent_acks} (the tank's last few lines in this
+#        group, RecentAcksText; added at the end if left out).
 OllamaChat.Party.AnnouncePrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, the tank of your group in {dungeon}. Your chat style: {bot_personality} {situation} Write it as one party chat line, 3 to 12 words, the way a player types it: no quotes, no name in front.{recent_acks}"
 
 ###############################################################################
@@ -4996,6 +5056,21 @@ OllamaChat.BotExpressionDelayMs = 400
 #        Bots react when a real player emotes at them.
 #        Default: 1
 OllamaChat.EnableEmoteReactions = 1
+
+#    OllamaChat.Emote.EventText
+#        An emote is part of what everyone nearby saw: a real player's at a
+#        bot, a bot's back at them, and a bot's at someone walking past
+#        (Presence) go into the chat transcript ("Jukaroug gave Kami a
+#        /sigh"), for the people nearby and the one who did it's party.
+#        Without it no bot knew it had happened, so "why you sighing at me?"
+#        went to whoever had last said something, who had no idea what it
+#        was being asked. Now the one who did it is who the next line is
+#        taken to be aimed at, and it knows why; and a player who emotes at
+#        a bot and then says something is taken to be talking to that bot.
+#        Placeholders: {actor}, {target}, {emote} (its name: "sigh",
+#        "wave"). Empty disables.
+#        Default: (below)
+OllamaChat.Emote.EventText = "{actor} gave {target} a /{emote}"
 
 #    OllamaChat.EmoteReplyChance
 #        Percentage chance a bot reacts to an emote aimed at it.

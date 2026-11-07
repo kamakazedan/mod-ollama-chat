@@ -48,7 +48,11 @@ uint64_t Context_RecordLine(Player* speaker, ChatChannelSourceLocal source,
 // Record a game event about `actor`, e.g. "Gyku reached level 15", where the
 // people who could have noticed it will see it: the actor's party and the
 // /say area around them, or the guild transcript when toGuild is set.
-void Context_RecordEvent(Player* actor, const std::string& note, bool toGuild);
+// `target`: who it was aimed at, for an emote -- a line the actor types next
+// is then taken to be aimed at them (Context_LikelyAddressee). Reads nothing
+// of anyone but the actor and the target, under its own lock: safe on the
+// map thread both are on.
+void Context_RecordEvent(Player* actor, const std::string& note, bool toGuild, Player* target = nullptr);
 
 // Sequence number of the newest line `speaker` has in that space, or 0.
 uint64_t Context_LatestLineFrom(Player* speaker, ChatChannelSourceLocal source,
@@ -87,7 +91,8 @@ struct ContextAddressee
 
 // Who line `seq` by `speaker` was most likely aimed at: the latest other
 // speaker (or event subject) in that space within ReplyWindowSeconds of the
-// speaker's turn. The speaker's own consecutive lines count as one turn.
+// speaker's turn. The speaker's own consecutive lines count as one turn --
+// unless one of them is an emote at someone, who is then the one spoken to.
 ContextAddressee Context_LikelyAddressee(Player* speaker, ChatChannelSourceLocal source,
                                          const std::string& channelName, uint64_t seq);
 

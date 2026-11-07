@@ -515,6 +515,11 @@ namespace
         if (!botAI)
             return;
 
+        // "right, lets go" after a rest: moot once somebody said ready while
+        // it was being written.
+        if (c.request.breakEndCall && !PartyCmd_BreakEndStillDue(bot))
+            return;
+
         const ObjectGuid botGuid = bot->GetGUID();
 
         // Direct address: the bot owes this person an answer, so it skips the
@@ -926,6 +931,8 @@ namespace
             PartyCmd_NoteReadyAsked(bot);
         if (c.request.doneCall)   // "that's the dungeon cleared": the rest say gg
             PartyCmd_NoteDoneCalled(bot);
+        if (c.request.breakEndCall)   // "right, lets go": off they go
+            PartyCmd_NoteBreakEndCalled(bot);
         if (c.request.progressKey)
             Progress_NoteDelivered(c.request.progressKey);
         if (c.request.noSelfDing)   // a "gz": the one it is for hears it, and thanks once for the lot

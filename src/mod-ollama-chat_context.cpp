@@ -41,6 +41,12 @@ namespace
         uint32_t          instanceId   = 0;
         float             x = 0.0f, y = 0.0f, z = 0.0f;
         float             range        = 0.0f;
+
+        // An event aimed at someone -- an emote -- and who at. Someone who
+        // emotes at a person and then speaks is talking to that person.
+        uint64_t          targetGuid   = 0;
+        std::string       targetName;
+        bool              targetIsBot  = false;
     };
 
     std::mutex g_mutex;
@@ -368,7 +374,7 @@ uint64_t Context_RecordLine(Player* speaker, ChatChannelSourceLocal source,
     return AppendLocked(key, std::move(line));
 }
 
-void Context_RecordEvent(Player* actor, const std::string& note, bool toGuild)
+void Context_RecordEvent(Player* actor, const std::string& note, bool toGuild, Player* target)
 {
     if (!g_ContextEnable || !actor || !actor->IsInWorld() || note.empty())
         return;
@@ -377,21 +383,32 @@ void Context_RecordEvent(Player* actor, const std::string& note, bool toGuild)
     if (clean.empty())
         return;
 
+    // Read before the lock, like the actor's own details in MakeLine.
+    const uint64_t    targetGuid  = target ? target->GetGUID().GetRawValue() : 0;
+    const std::string targetName  = target ? target->GetName() : std::string();
+    const bool        targetIsBot = target && OllamaIsBotPlayer(target);
+    auto make = [&]()
+    {
+        Line line        = MakeLine(actor, ContextLineKind::Event, clean);
+        line.targetGuid  = targetGuid;
+        line.targetName  = targetName;
+        line.targetIsBot = targetIsBot;
+        return line;
+    };
+
     std::lock_guard<std::mutex> lock(g_mutex);
 
     if (toGuild)
     {
         if (actor->GetGuildId())
-            AppendLocked("G:" + std::to_string(actor->GetGuildId()),
-                         MakeLine(actor, ContextLineKind::Event, clean));
+            AppendLocked("G:" + std::to_string(actor->GetGuildId()), make());
         return;
     }
 
     if (Group* group = actor->GetGroup())
-        AppendLocked("P:" + std::to_string(group->GetGUID().GetCounter()),
-                     MakeLine(actor, ContextLineKind::Event, clean));
+        AppendLocked("P:" + std::to_string(group->GetGUID().GetCounter()), make());
 
-    Line nearby = MakeLine(actor, ContextLineKind::Event, clean);
+    Line nearby = make();
     nearby.positional = true;
     nearby.range      = std::max(g_SayDistance, g_EventChatterRealPlayerDistance);
     AppendLocked(SayKey(actor), std::move(nearby));
@@ -557,6 +574,14 @@ ContextAddressee Context_LikelyAddressee(Player* speaker, ChatChannelSourceLocal
 
         if (line->speakerGuid == speakerGuid)
         {
+            // They emoted at someone, then spoke: to them.
+            if (line->kind == ContextLineKind::Event && line->targetGuid && line->targetGuid != speakerGuid)
+            {
+                result.guid  = line->targetGuid;
+                result.isBot = line->targetIsBot;
+                result.name  = line->targetName;
+                break;
+            }
             turnStart = line->when;   // still the speaker's own turn
             continue;
         }

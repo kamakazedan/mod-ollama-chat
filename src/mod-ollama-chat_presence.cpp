@@ -333,6 +333,11 @@ void Presence_Update(uint32_t diff)
         const ObjectGuid target = (petEmote && !petGuid.IsEmpty()) ? petGuid : real->GetGUID();
         ScheduleBotExpression(bot, target, emote, urand(200, 900));
 
+        // Written down where they both are: "why you sighing at me?" is then
+        // this bot's to answer, and it knows what it did.
+        if (g_EnableBotEmotes)
+            Expression_NoteEmote(bot, real, emote, target == petGuid);
+
         ++g_stats.emotes;
         if (target == petGuid)
             ++g_stats.petEmotes;

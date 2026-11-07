@@ -244,10 +244,16 @@ namespace
     }
 #endif
 
-    enum class Outcome : uint8_t { Started, Paused, Resumed, Waiting };
+    // Paused is a stop the tank waits out until someone says they are ready;
+    // Break is a rest that ends by itself once everyone has had it.
+    enum class Outcome : uint8_t { Started, Paused, Break, Resumed, Waiting };
 
-    // What the pause is for, in words the tank can use.
-    std::string PauseReason(const std::string& clean)
+    // What a pause is for. A rest ("mb", "need to drink", "lets eat") is over
+    // when everyone has their health and mana back; someone stepping away
+    // ("brb", even "brb need mana") or a plain "wait" is over when they say so.
+    enum class BreakKind : uint8_t { Mana, Rest, Away, Moment };
+
+    BreakKind KindOfBreak(const std::string& clean)
     {
         const std::vector<std::string> words = CrowdText::Words(clean);
         auto has = [&](std::initializer_list<const char*> list)
@@ -259,14 +265,39 @@ namespace
             return false;
         };
 
-        if (has({ "mb", "mana", "manas", "manabreak", "drink", "drinking", "oom", "regen" }))
-            return "a mana break (mb means mana break: they need to drink)";
         if (has({ "brb", "afk", "bio" }))
-            return "a short break (they will be right back)";
+            return BreakKind::Away;
+        if (has({ "mb", "mana", "manas", "manabreak", "drink", "drinking", "oom", "regen" }))
+            return BreakKind::Mana;
         if (has({ "eat", "food", "rest" }))
-            return "a rest to eat and drink";
-        return "a moment";
+            return BreakKind::Rest;
+        return BreakKind::Moment;
     }
+
+    // What the pause is for, in words the tank can use.
+    const char* PauseReason(BreakKind kind)
+    {
+        switch (kind)
+        {
+            case BreakKind::Mana: return "a mana break (mb means mana break: they need to drink)";
+            case BreakKind::Rest: return "a rest to eat and drink";
+            case BreakKind::Away: return "a short break (they will be right back)";
+            default:              return "a moment";
+        }
+    }
+
+    // A rest someone called in party, while it is watched for its end
+    // (Party.BreakEnd*): by the group's guid counter. Gone once the run moves
+    // again however that came about, once someone says "brb" or "wait" in
+    // it, or once it has gone on too long to end by itself.
+    struct Break
+    {
+        uint64_t                              caller     = 0;   // who asked for it
+        uint32_t                              instanceId = 0;
+        std::chrono::steady_clock::time_point startedAt{};
+        std::chrono::steady_clock::time_point calledAt{};       // the tank's "lets go" went to be written
+    };
+    std::unordered_map<uint32_t, Break> g_breaks;
 
     // Real players in the group who are not inside, and near the tank, yet.
     std::vector<std::string> MissingPeople(Player* tank)
@@ -309,6 +340,9 @@ namespace
         {
             case Outcome::Started: templ = &g_PartyCmdHintStart;   break;
             case Outcome::Paused:  templ = &g_PartyCmdHintPause;   break;
+            case Outcome::Break:
+                templ = g_PartyCmdHintBreak.empty() ? &g_PartyCmdHintPause : &g_PartyCmdHintBreak;
+                break;
             case Outcome::Resumed: templ = &g_PartyCmdHintResume;  break;
             case Outcome::Waiting: templ = &g_PartyCmdHintWaiting; break;
         }
@@ -512,10 +546,33 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
 
     if (intent == TextRules::PartyIntent::Pause)
     {
+        const BreakKind kind = KindOfBreak(clean);
+
         // Nothing running to pause: ordinary chat (with the glossary, so a
         // "mb" still reads as a mana break).
         if (!running || paused)
+        {
+            // In the middle of a rest: "brb" or "wait" leaves its end to
+            // somebody saying so; another "mb" starts it over (and takes back
+            // a "lets go" still being written).
+            auto it = paused ? g_breaks.find(GroupKey(player)) : g_breaks.end();
+            if (it != g_breaks.end())
+            {
+                if (kind == BreakKind::Mana || kind == BreakKind::Rest)
+                {
+                    it->second.startedAt = std::chrono::steady_clock::now();
+                    it->second.calledAt  = {};
+                }
+                else
+                {
+                    g_breaks.erase(it);
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] {}: '{}', so the break waits for someone to "
+                                 "say ready.", player->GetName(), clean);
+                }
+            }
             return false;
+        }
 
         Dispatch(player, tank, "dc pause", "pause");
         if (!DcLeaderSignal::IsInPausedDungeonClearRun(player))
@@ -525,9 +582,28 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
         }
 
         ++g_stats.paused;
-        Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Paused, PauseReason(clean));
+
+        // A rest, with a bot leading: the tank gets going again by itself once
+        // everyone has rested (PartyCmd_Update), so it only says ok now.
+        bool endsByItself = false;
+#if OLLAMA_CHAT_DC_RUN_STATE
+        endsByItself = g_PartyBreakEndEnable && (kind == BreakKind::Mana || kind == BreakKind::Rest) &&
+                       OllamaIsBotPlayer(tank);
+        if (endsByItself)
+        {
+            Break& b     = g_breaks[GroupKey(player)];
+            b            = Break{};
+            b.caller     = player->GetGUID().GetRawValue();
+            b.instanceId = map->GetInstanceId();
+            b.startedAt  = std::chrono::steady_clock::now();
+            ++g_stats.breaks;
+        }
+#endif
+        Acknowledge(player, tank, msg, seq, source, scopeKey, endsByItself ? Outcome::Break : Outcome::Paused,
+                    PauseReason(kind));
         if (g_DebugEnabled)
-            LOG_INFO("module.ollamachat", "[Ollama Chat] {} paused the dungeon clear: '{}'", player->GetName(), clean);
+            LOG_INFO("module.ollamachat", "[Ollama Chat] {} paused the dungeon clear{}: '{}'", player->GetName(),
+                     endsByItself ? " for a rest that ends by itself" : "", clean);
         return true;
     }
 
@@ -552,6 +628,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
             return false;
         }
         ++g_stats.resumed;
+        g_breaks.erase(GroupKey(player));   // said ready before everyone had rested: over all the same
         ReleaseStaysFor(player);
         Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Resumed, std::string());
     }
@@ -734,7 +811,8 @@ namespace
     {
         std::vector<std::vector<std::string>> phrases;   // one of these in the model's line...
         std::string                           fallback;  // ...or this goes out instead
-        bool                                  doneCall = false;
+        bool                                  doneCall     = false;
+        bool                                  breakEndCall = false;
     };
 
     // The tank says something to the whole group without being asked, in its
@@ -792,6 +870,7 @@ namespace
             request.mustSay      = must->phrases;
             request.fallbackText = must->fallback;
             request.doneCall     = must->doneCall;
+            request.breakEndCall = must->breakEndCall;
         }
         return OllamaDispatch_Submit(std::move(request));
     }
@@ -1006,6 +1085,142 @@ namespace
             it = over ? g_wrapups.erase(it) : std::next(it);
         }
     }
+
+    // ---- a rest that ends by itself ------------------------------------------------
+
+    // Everyone has rested: in here and alive, out of combat, health and mana
+    // back (Party.BreakEnd*), and every real player close by, at the keyboard
+    // and done drinking -- one sat down still is done only when full. A real
+    // player's and a healer's mana has to be all but full; any other bot's
+    // less, as it tops up on the way like on the rest of a run.
+    bool GroupRested(Player* tank, Group* group)
+    {
+        Map* map = tank->GetMap();
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member)
+                continue;
+            const bool real = !OllamaIsBotPlayer(member);
+            if (!member->IsInWorld() || member->GetMap() != map)
+            {
+                if (real)
+                    return false;   // not in here (yet)
+                continue;           // a bot somewhere else is no part of it
+            }
+            if (!member->IsAlive() || member->IsInCombat())
+                return false;
+            if (real && (member->isAFK() ||
+                         (g_PartyCmdMaxDistance > 0.0f && !member->IsWithinDistInMap(tank, g_PartyCmdMaxDistance))))
+                return false;
+
+            const float health  = member->GetHealthPct();
+            const bool  hasMana = member->GetMaxPower(POWER_MANA) > 0;
+            const float mana    = hasMana ? member->GetPowerPct(POWER_MANA) : 100.0f;
+            if (health < float(g_PartyBreakEndHealthPct))
+                return false;
+            const uint32_t bar = (real || PlayerbotAI::IsHeal(member)) ? g_PartyBreakEndManaPct
+                                                                       : g_PartyBreakEndOthersManaPct;
+            if (hasMana && mana < float(bar))
+                return false;
+            if (real && member->IsSitState() && (health < 100.0f || mana < 100.0f))
+                return false;   // still drinking: they get to finish it
+        }
+        return true;
+    }
+
+    // The break is over: the run goes on, as if whoever called it had said
+    // they were ready -- or another real player in the group, if they are gone.
+    void EndBreak(Player* tank, uint32_t key)
+    {
+        auto it = g_breaks.find(key);
+        if (it == g_breaks.end())
+            return;
+        const uint64_t caller = it->second.caller;
+        g_breaks.erase(it);
+
+        Group* group = tank ? tank->GetGroup() : nullptr;
+        if (!group)
+            return;
+        Player* issuer = ObjectAccessor::FindConnectedPlayer(ObjectGuid(caller));
+        if (!issuer || !issuer->IsInWorld() || issuer->GetGroup() != group)
+            issuer = nullptr;
+        for (GroupReference* ref = group->GetFirstMember(); ref && !issuer; ref = ref->next())
+            if (Player* member = ref->GetSource())
+                if (member->IsInWorld() && !OllamaIsBotPlayer(member))
+                    issuer = member;
+        if (!issuer || !DcLeaderSignal::IsInPausedDungeonClearRun(issuer))
+            return;   // nobody to give the word, or going again already
+        Player* leader = DcLeaderSignal::FindLeaderTank(issuer);
+        if (!leader || !leader->IsInWorld())
+            return;
+
+        Dispatch(issuer, leader, "dc pause", "resume");
+        if (DcLeaderSignal::IsInPausedDungeonClearRun(issuer))
+        {
+            ++g_stats.refused;   // dungeon clear whispered why
+            return;
+        }
+        ++g_stats.breaksEnded;
+        ReleaseStaysFor(issuer);
+        if (g_DebugEnabled)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] Everyone has rested: {} carries on with the dungeon clear.",
+                     leader->GetName());
+    }
+
+    // "right, lets go": the tank calls the break over, in its own chat style
+    // and in words that plainly say they are moving, or else in stock ones
+    // (Party.BreakEndLines). The run goes on once the line is out
+    // (PartyCmd_NoteBreakEndCalled).
+    bool SubmitBreakEndLine(Player* tank)
+    {
+        if (g_PartyBreakEndSituation.empty())
+            return false;
+        MustSay must;
+        must.phrases      = g_PartyBreakEndWords;
+        must.breakEndCall = true;
+        if (!g_PartyBreakEndLines.empty())
+            must.fallback = g_PartyBreakEndLines[Between(0, uint32_t(g_PartyBreakEndLines.size() - 1))];
+        return SubmitTankLine(tank, TextRules::ExpandChoices(g_PartyBreakEndSituation, WrapRng()), false, &must);
+    }
+
+    // One group's rest, every couple of seconds while it lasts.
+    void WatchBreak(Player* tank, Group* group, Map* map, uint32_t key, bool pausedRun, WatchClock::time_point now)
+    {
+        auto it = g_breaks.find(key);
+        if (it == g_breaks.end())
+            return;
+        Break& b = it->second;
+        if (!g_PartyBreakEndEnable || !pausedRun || b.instanceId != map->GetInstanceId())
+        {
+            g_breaks.erase(it);   // going again, however that came about
+            return;
+        }
+
+        if (b.calledAt != WatchClock::time_point{})
+        {
+            // The line is on its way, and the run goes when it is out. One
+            // that never makes it out does not leave them standing there.
+            if (now - b.calledAt > std::chrono::seconds(20))
+                EndBreak(tank, key);
+            return;
+        }
+        if (now - b.startedAt > std::chrono::minutes(g_PartyBreakEndMaxMinutes))
+        {
+            g_breaks.erase(it);   // a long one: over when somebody says so
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] A break in {} has gone on {} minutes: it waits for "
+                         "someone to say ready.", map->GetMapName(), g_PartyBreakEndMaxMinutes);
+            return;
+        }
+        if (now - b.startedAt < std::chrono::seconds(g_PartyBreakEndMinSeconds) || !tank->IsAlive() ||
+            !GroupRested(tank, group))
+            return;
+
+        b.calledAt = now;
+        if (!SubmitBreakEndLine(tank))
+            EndBreak(tank, key);   // nothing to say it with: it just goes
+    }
 }
 #endif
 
@@ -1022,7 +1237,7 @@ void PartyCmd_Update(uint32_t diff)
     if (!DcModule::IsEnabled())
         return;
     const bool unstayWanted = g_PartyCmdEnable || g_OrdersEnable;
-    if (!g_PartyGreetEnable && !g_PartyDoneEnable && !unstayWanted)
+    if (!g_PartyGreetEnable && !g_PartyDoneEnable && !unstayWanted && g_breaks.empty())
         return;
 
     const WatchClock::time_point now = WatchClock::now();
@@ -1066,7 +1281,8 @@ void PartyCmd_Update(uint32_t diff)
         // The run has just got going, however it was started or carried on:
         // a line here (which took them along already), "dc on", the addon, a
         // door it was waiting at. Whoever is still on a stay goes along.
-        const bool moving = owner && !DcLeaderSignal::IsInPausedDungeonClearRun(player);
+        const bool pausedRun = owner && DcLeaderSignal::IsInPausedDungeonClearRun(player);
+        const bool moving    = owner && !pausedRun;
         if (g_unstayLater.erase(key))
             w.unstay = unstayWanted;
         if (moving && !w.moving)
@@ -1076,6 +1292,9 @@ void PartyCmd_Update(uint32_t diff)
             w.unstay = false;
         else if (w.unstay && ReleaseStaysWhenFree(player))
             w.unstay = false;
+
+        // A rest someone called ("mb"): over once everyone has had it.
+        WatchBreak(tank, group, map, key, pausedRun, now);
 
         // "let me know when you're ready": once, when they first come in.
         if (!w.greeted)
@@ -1132,6 +1351,11 @@ void PartyCmd_Update(uint32_t diff)
 
     for (auto it = g_watches.begin(); it != g_watches.end();)
         it = (now - it->second.lastSeen > std::chrono::minutes(30)) ? g_watches.erase(it) : std::next(it);
+    // Rests of groups no longer looked at (nobody real inside, a player
+    // tanking now): long over either way.
+    for (auto it = g_breaks.begin(); it != g_breaks.end();)
+        it = (now - it->second.startedAt > std::chrono::minutes(g_PartyBreakEndMaxMinutes + 1)) ? g_breaks.erase(it)
+                                                                                                 : std::next(it);
     for (auto it = g_readyAsked.begin(); it != g_readyAsked.end();)
         it = (now - it->second > std::chrono::seconds(g_PartyReadyWindowSeconds)) ? g_readyAsked.erase(it)
                                                                                   : std::next(it);
@@ -1147,6 +1371,29 @@ void PartyCmd_NoteDoneCalled(Player* bot)
     auto it = g_wrapups.find(group->GetGUID().GetCounter());
     if (it != g_wrapups.end() && !it->second.cheered)
         Cheer(bot, it->second);
+#else
+    (void)bot;
+#endif
+}
+
+bool PartyCmd_BreakEndStillDue(Player* bot)
+{
+#if OLLAMA_CHAT_DC_RUN_STATE
+    auto it = g_breaks.find(GroupKey(bot));
+    return it != g_breaks.end() && it->second.calledAt != std::chrono::steady_clock::time_point{} &&
+           DcLeaderSignal::IsInPausedDungeonClearRun(bot);
+#else
+    (void)bot;
+    return false;
+#endif
+}
+
+void PartyCmd_NoteBreakEndCalled(Player* bot)
+{
+#if OLLAMA_CHAT_DC_RUN_STATE
+    const uint32_t key = GroupKey(bot);
+    if (key && g_breaks.count(key))
+        EndBreak(bot, key);
 #else
     (void)bot;
 #endif

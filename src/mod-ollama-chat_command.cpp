@@ -631,13 +631,16 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
 
     const PartyCmdStats party = PartyCmd_GetStats();
     if (show("party"))
-        handler->PSendSysMessage("Party instructions: {} (dungeon clear {}) - {} started, {} paused, {} resumed, "
+        handler->PSendSysMessage("Party instructions: {} (dungeon clear {}) - {} started, {} paused ({} rests, "
+                             "{} the tank called over itself), {} resumed, "
                              "{} waited for players, {} refused; {} runs called done, {} gg, {} bots left after, "
                              "{} groups asked to stay",
                              g_PartyCmdEnable ? "on" : "off",
                              PartyCmd_Available() ? "found" : "not in this build",
                              (unsigned long long)party.started,
                              (unsigned long long)party.paused,
+                             (unsigned long long)party.breaks,
+                             (unsigned long long)party.breaksEnded,
                              (unsigned long long)party.resumed,
                              (unsigned long long)party.waiting,
                              (unsigned long long)party.refused,
