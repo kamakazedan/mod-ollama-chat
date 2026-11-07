@@ -113,7 +113,29 @@ repetition history.
 - `"buff"` is playerbots' list of buff potions; class buffs are `"rebuff"`.
   `"release"` on a living bot makes it stay. `"revive"` is the spirit healer.
 - Packet hooks (`ServerScript::CanPacketSend`) run on any thread: read only a
-  snapshot published from the world thread (`mod-ollama-chat_mute.cpp`).
+  snapshot published from the world thread (mod-playerbots-plus's
+  `PlayerbotsPlusMute.cpp` does).
+
+## What bots do without a model lives in mod-playerbots-plus
+
+City hangouts, stuck mounts, getting back up, raid marks, muting playerbots'
+stock lines and the auction house market are mod-playerbots-plus's. This
+module only voices them. Do not add bot behaviour that needs no language model
+here: put it there and raise an event.
+
+- Include `mod-ollama-chat_plus.h`, never `PlayerbotsPlus.h` directly.
+  `OLLAMA_CHAT_PLAYERBOTS_PLUS` is its API version, 0 when it is not in the
+  build, and this module must compile and run either way.
+- Its events arrive on the world thread. A `PlayerbotsPlus::BotEvent` comes
+  while the bot is still where it happened: look it up by guid, then build the
+  prompt as anywhere else (`mod-ollama-chat_stuck.cpp`, `_marks.cpp`). A
+  `MarketEvent` may be about a bot that is offline (a sale), so
+  `_market.cpp` only notes it. What the bot says, and its prompt settings,
+  stay here.
+- `mod-ollama-chat_hangout.cpp` and `MuteOwnLine` are thin bridges with stubs
+  for a build without it, so their callers need not care.
+- `Revive_RunDecides` and `Revive_KnowsResurrect` are this module's own copies:
+  orders and the wipe lines need them with or without mod-playerbots-plus.
 
 ## Performance traps specific to this module
 

@@ -6,11 +6,9 @@
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_rag.h"
 #include "mod-ollama-chat_conjure.h"
-#include "mod-ollama-chat_mute.h"
 #include "mod-ollama-chat_rolls.h"
 #include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_partycmd.h"
-#include "mod-ollama-chat_stuck.h"
 #include "Log.h"
 
 void Addmod_ollama_chatScripts()
@@ -45,9 +43,6 @@ void Addmod_ollama_chatScripts()
     // Mages filling the trade window they offered as soon as it opens.
     new OllamaChatConjureScript();
 
-    // Stock bot lines nobody needs: "Using [Hearthstone]", "AI was reset to defaults".
-    new OllamaChatMuteScript();
-
     // Loot rolls, numbers and all, for the bots to know about.
     new OllamaChatRollsScript();
 
@@ -56,7 +51,4 @@ void Addmod_ollama_chatScripts()
 
     // Who the dungeon finder put in a group: the ones that leave after a run.
     new OllamaChatFinderJoinScript();
-
-    // Bots stuck getting on and off their mount on the spot: noted as they mount.
-    new OllamaChatStuckScript();
 }

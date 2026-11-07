@@ -2170,148 +2170,16 @@ OllamaChat.City.ConversationBoost = 2
 #
 #   OLLAMA CHAT - CITY HANGOUTS
 #
-#   On a real server everyone parks in the same places: the Trade District,
-#   the Commons, the Valley of Strength, outside the bank in Dalaran --
-#   mounted on their best mount, sat on a bench, or stood there AFK.
-#   Playerbots never sends a bot anywhere in particular: one with nothing to
-#   do in a city walks from NPC to NPC, and its "rest" is 30 seconds sat
-#   wherever it happens to be.
-#
-#   Every CheckSeconds, each spot with room may take one more (RecruitChance)
-#   of the idle random bots within RecruitRange of it, in its zone and on its
-#   level of it (not up in the Ruins of Lordaeron over the Undercity, or down
-#   in Crystalsong under Dalaran): not grouped, not queued for a dungeon or a
-#   battleground, not questing, flying, gathering or fighting, not one a real
-#   player has targeted, and not one that hung out in the last
-#   CooldownMinutes. It walks over (playerbots' own
-#   "go camp") to a place of its own in the spot -- on the ground within
-#   HeightTolerance of the middle's height, in sight of the middle, out of the
-#   water, and one you can walk to, so not the top of a market stall -- and
-#   stays StayMinutesMin to StayMinutesMax:
-#
-#     * on a free bench within BenchRange, in sight of the middle
-#       (BenchChance, when there is one; a seat whose name has one of
-#       BenchWords);
-#     * mounted (MountedChance), if it can ride and it is outdoors --
-#       playerbots puts an idle random bot on its best mount anyway;
-#     * sat on the ground (SitChance), or else just standing about;
-#     * and, AfkChance of the time, AFK: the flag, so it shows <AFK>. An AFK
-#       bot says nothing and reacts to nothing until someone talks to it --
-#       a whisper, a line that names it -- and then it is back, and knows it
-#       had stepped away (AwayText).
-#
-#   Once it is there its playerbots AI is held, the way a parked player does
-#   nothing -- otherwise playerbots stands a sitting bot up and takes its AFK
-#   off on its very next tick. An invite (group, guild, arena team), a trade,
-#   a duel, a queue or a fight lets it go at once, as does being moved off
-#   the spot. When its time is up it stands and goes about its business.
-#   Switching hangouts or the module off lets everyone go at once; if the
-#   module stopped running altogether, the hold would run out by itself
-#   within five seconds. Nothing happens while no real player is online.
-#
-#   The idle bots already in a city are seldom enough: playerbots sends only
-#   a few bots to the capitals (Playerbots.ProbTeleToBankers of its random
-#   teleports, every two to eight hours a bot), so after the first half hour
-#   or so of a session there is nobody left there to recruit. So a spot with
-#   fewer than BringInFill percent of its room taken also gets bots fetched
-#   from elsewhere (BringIn), up to BringInPerMinute a minute in all, the
-#   cities someone is in first: random bots of the city's side, of
-#   BringInMinLevel or more (58 for Shattrath, 68 for Dalaran), out in the
-#   open world on their own, not wanted by anyone, and with no real player
-#   within 150 yards to see them go.
-#
-#     * While someone is in that city, a fetched bot comes in at an inn
-#       within ArrivalRange of the spot, the way people hearth in -- the
-#       nearest one friendly to its side, so never the other side's inn in
-#       Dalaran -- and walks over from there; no more than one every eight
-#       seconds in a city, whichever of its spots it is for. A spot with no
-#       inn in reach only gets bots while nobody is in its city.
-#     * While nobody is, it is put down in the middle of the spot and walks
-#       to its place, so the spot is already busy when someone gets there.
-#       Once it is done, it goes back to where it was fetched from, so long
-#       as nobody would see it vanish or turn up there; otherwise it stays
-#       and goes about its business like any other bot in town.
-#
-#   Wherever a bot ends up, it is on the spot's own floor: every place is
-#   checked to be on the ground within HeightTolerance of the middle's
-#   height, in sight of the middle and reachable on foot from it -- so never
-#   under the city, on a roof or inside a wall -- and the inns it arrives at
-#   are where their innkeepers stand.
-#
-#   With a debug log on, each one is logged as it heads over, settles and
-#   leaves; ".ollama status" counts them.
+#   mod-playerbots-plus parks idle bots where players stand about in the
+#   capitals -- the Trade District, the Commons, outside the bank in Dalaran
+#   -- mounted, sat on a bench, or AFK (PlayerbotsPlus.Hangout.* in its
+#   conf). Here, a bot hanging out knows where it is and what it is doing
+#   when someone asks (StateText). An AFK one says nothing and reacts to
+#   nothing until someone talks to it -- a whisper, a line that names it --
+#   and then it is back, and knows it had stepped away (AwayText). Without
+#   mod-playerbots-plus nobody hangs out.
 #
 ###############################################################################
-
-#    OllamaChat.Hangout.Enable
-#        Default: 1
-OllamaChat.Hangout.Enable = 1
-
-#    OllamaChat.Hangout.CheckSeconds
-#    OllamaChat.Hangout.RecruitChance
-#    OllamaChat.Hangout.RecruitRange
-#        How often each spot may take one more bot (at most 20 seconds), the
-#        chance it does, and how far from the spot (yards) its bots come from.
-#        Default: 5, 50, 300
-OllamaChat.Hangout.CheckSeconds = 5
-OllamaChat.Hangout.RecruitChance = 50
-OllamaChat.Hangout.RecruitRange = 300
-
-#    OllamaChat.Hangout.BringIn
-#    OllamaChat.Hangout.BringInFill
-#    OllamaChat.Hangout.BringInPerMinute
-#    OllamaChat.Hangout.BringInMinLevel
-#    OllamaChat.Hangout.ArrivalRange
-#        Fetching bots from elsewhere for spots short of them (see above): on
-#        or off; how full (percent of each spot's room) it keeps them; how
-#        many bots a minute it may fetch, all spots together (at most 120);
-#        the lowest level it fetches; and how far from a spot (yards) an inn
-#        may be for its bots to arrive at while someone is in the city. A spot
-#        can still fill all the way up with bots already in town.
-#        Default: 1, 75, 15, 10, 400
-OllamaChat.Hangout.BringIn = 1
-OllamaChat.Hangout.BringInFill = 75
-OllamaChat.Hangout.BringInPerMinute = 15
-OllamaChat.Hangout.BringInMinLevel = 10
-OllamaChat.Hangout.ArrivalRange = 400
-
-#    OllamaChat.Hangout.StayMinutesMin
-#    OllamaChat.Hangout.StayMinutesMax
-#    OllamaChat.Hangout.CooldownMinutes
-#    OllamaChat.Hangout.TravelSeconds
-#        How long a bot stays (at most 60 minutes), how long before it hangs
-#        out again, and how long it has to get there before it gives up.
-#        Default: 5, 20, 45, 180
-OllamaChat.Hangout.StayMinutesMin = 5
-OllamaChat.Hangout.StayMinutesMax = 20
-OllamaChat.Hangout.CooldownMinutes = 45
-OllamaChat.Hangout.TravelSeconds = 180
-
-#    OllamaChat.Hangout.BenchChance
-#    OllamaChat.Hangout.MountedChance
-#    OllamaChat.Hangout.SitChance
-#    OllamaChat.Hangout.AfkChance
-#        How it spends it, tried in this order: a bench (when one is free),
-#        mounted (when it can ride there), sat on the ground, else standing.
-#        AfkChance is on top of any of them.
-#        Default: 60, 45, 35, 35
-OllamaChat.Hangout.BenchChance = 60
-OllamaChat.Hangout.MountedChance = 45
-OllamaChat.Hangout.SitChance = 35
-OllamaChat.Hangout.AfkChance = 35
-
-#    OllamaChat.Hangout.BenchRange
-#    OllamaChat.Hangout.BenchWords
-#    OllamaChat.Hangout.HeightTolerance
-#        How far from where it arrives (yards) a bench may be; what counts as
-#        a bench (part of a seat's name, separated by |: "Bench", "Stone
-#        Bench" and "Wooden Bench" all have "bench"; chairs are mostly
-#        indoors); and how far up or down from a spot's middle (yards) a
-#        place in it may be.
-#        Default: 25, "bench", 6
-OllamaChat.Hangout.BenchRange = 25
-OllamaChat.Hangout.BenchWords = "bench"
-OllamaChat.Hangout.HeightTolerance = 6
 
 #    OllamaChat.Hangout.StateText
 #    OllamaChat.Hangout.AwayText
@@ -2321,31 +2189,6 @@ OllamaChat.Hangout.HeightTolerance = 6
 #        that it has just come back.
 OllamaChat.Hangout.StateText = "Right now you are hanging around {spot}, {doing}, with nowhere in particular to be."
 OllamaChat.Hangout.AwayText = "You had stepped away from your keyboard there (AFK) and have only just come back to it."
-
-#    OllamaChat.Hangout.Spot.<Name>
-#        Where people hang out: "map x y z radius capacity name". x y z is
-#        the middle (a place a player can stand: these are taken from a
-#        mailbox, a teleport point, a flight master); radius (3-60 yards)
-#        how far from it a place may be; capacity how many bots at most;
-#        name what bots call it ("the Trade District in Stormwind"). Add as
-#        many as you like, one key each; capacity 0 turns one off. With no
-#        Spot keys at all, these are the defaults.
-#        Maps: 0 Eastern Kingdoms, 1 Kalimdor, 530 Outland and the Blood
-#        Elf and Draenei lands, 571 Northrend.
-OllamaChat.Hangout.Spot.StormwindTrade = "0 -8833.4 628.6 94.0 22 14 the Trade District in Stormwind"
-OllamaChat.Hangout.Spot.StormwindBank = "0 -8914.0 621.5 99.6 14 8 the bank in Stormwind"
-OllamaChat.Hangout.Spot.IronforgeCommons = "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge"
-OllamaChat.Hangout.Spot.OrgrimmarValley = "1 1657.9 -4433.0 17.5 22 10 the Valley of Strength in Orgrimmar"
-OllamaChat.Hangout.Spot.OrgrimmarBank = "1 1615.6 -4391.6 10.3 14 6 outside the bank in Orgrimmar"
-OllamaChat.Hangout.Spot.UndercityTrade = "0 1584.1 240.3 -52.2 16 10 the Trade Quarter in the Undercity"
-OllamaChat.Hangout.Spot.ThunderBluffBank = "1 -1263.3 44.5 127.5 16 8 outside the bank in Thunder Bluff"
-OllamaChat.Hangout.Spot.DarnassusBank = "1 9943.0 2497.7 1317.7 16 8 outside the bank in Darnassus"
-OllamaChat.Hangout.Spot.ExodarHall = "530 -3965.7 -11653.6 -138.8 18 8 the main hall of the Exodar"
-OllamaChat.Hangout.Spot.SilvermoonExchange = "530 9744.0 -7466.1 13.5 22 10 the Royal Exchange in Silvermoon"
-OllamaChat.Hangout.Spot.ShattrathTerrace = "530 -1863.7 5430.0 -9.6 24 12 the Terrace of Light in Shattrath"
-OllamaChat.Hangout.Spot.DalaranBank = "571 5958.1 617.3 650.6 18 12 outside the bank in Dalaran"
-OllamaChat.Hangout.Spot.DalaranKrasus = "571 5813.4 453.4 658.8 16 8 Krasus' Landing in Dalaran"
-OllamaChat.Hangout.Spot.DalaranMerchants = "571 5654.9 682.2 652.0 14 8 outside the Merchants' Bank in Dalaran"
 
 ###############################################################################
 #
@@ -3289,44 +3132,16 @@ OllamaChat.State.OwnWay = "Right now you are off doing your own thing -- questin
 #   OLLAMA CHAT - MUTED BOT LINES
 #
 #   Playerbots whispers a stock line for a lot of what bots do: "Using
-#   [Hearthstone]", "Drinking [Conjured Water] (40%)", "AI was reset to
-#   defaults", "I don't know this dungeon, lead the way!", "Staying",
-#   "Following". The ones listed here never reach you. "Staying",
-#   "Following" and the like are on it because the bot now says it in its
-#   own words (ORDERS above); take them off if you turn orders off.
-#
-#   Only lines a bot sends as a whisper or in party or raid chat are looked
-#   at, and only whole lines: "Staying" is muted, "staying here till you
-#   are back" is not. What this module sends for a bot -- the model's lines,
-#   a canned "gz" -- is never muted, so "Hi" on the list mutes playerbots'
-#   stock "Hi" whisper on joining a group but never a bot's own "hi".
-#
-#   "Hello", "Hi", "Hello there!" and the rest are what playerbots whispers
-#   when a bot accepts an invite, and "Hello, I follow you!", "Hi, lead the
-#   way!" when it takes a group leader as its master. With JOINING A GROUP
-#   (below) on, the bot says hello in party chat its own way instead.
-#
-#   Quest progress: playerbots whispers every kill and item a quest wants,
-#   "Kobold Vermin 3/10 [Kobold Camp Cleanup]" (the "* */* |c*|Hquest:*"
-#   pattern), and "Quest completed [...]". With QUEST PROGRESS IN PARTY on,
-#   a bot says in party when one is done instead, and nobody hears 1 of 6.
-#   They stay muted with it off too, and then nothing is said about quest
-#   progress at all: take those two patterns out to have the whispers back.
-#   The trade, taxi and goodbye lines ("A pleasure doing business with you",
-#   "I am ready for the next flight", "Bye bye!") go too.
-#
-#   Patterns are separated by ; (an item link starts with |, so | cannot
-#   be the separator here), compared ignoring case; * matches anything, so
-#   "Using |c*" is "Using " followed by an item link.
+#   [Hearthstone]", "AI was reset to defaults", "Staying", "Following",
+#   "Hello!", every kill a quest wants. mod-playerbots-plus mutes them
+#   (PlayerbotsPlus.Mute.* in its conf), and the bots here say most of them
+#   in their own words instead (ORDERS, JOINING A GROUP, QUEST PROGRESS IN
+#   PARTY), so give it the longer list its conf has for a realm with this
+#   module. What this module sends for a bot -- the model's lines, a canned
+#   "gz" -- is never muted, so "Hi" on that list mutes playerbots' stock "Hi"
+#   whisper on joining a group but never a bot's own "hi".
 #
 ###############################################################################
-
-#    OllamaChat.Mute.Enable
-#        Default: 1
-OllamaChat.Mute.Enable = 1
-
-#    OllamaChat.Mute.Patterns
-OllamaChat.Mute.Patterns = "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;I don't know this dungeon, lead the way!;Staying;Following;Fleeing;Running away;Attacking;Releasing...;Meet me at the graveyard;Hello;Hello!;Hi;Hi!;Hello there!;* */* |c*|Hquest:*;Quest completed |c*;I have accepted |c*;Grinding;Moving away from group;Hello, I follow you!;Hello, lead the way!;Hi, lead the way!;Goodbye!;Bye bye!;See you later!;Fair trade;Off with you;A pleasure doing business with you;Thanks;I am ready for the next flight"
 
 ###############################################################################
 #
@@ -3450,74 +3265,19 @@ OllamaChat.Progress.QuestText = "everything {quest} needs: it is ready to hand i
 #
 #   OLLAMA CHAT - STUCK ON A MOUNT
 #
-#   Playerbots' loot code gets a mounted bot down before it opens something.
-#   When the opening then fails -- a mining vein another bot has hold of, a
-#   herb two bots went for at once, a body it cannot get close to -- the
-#   thing is put off for a second, then two, four, up to sixteen, and never
-#   written off while the bot is near it. In that pause the mount check --
-#   once a second, for a random bot with nothing to fight -- puts it back on
-#   its mount, so the next try starts with another dismount: the bot gets on
-#   and off on the spot, every few seconds, for as long as nothing gives. (A
-#   try that only got the bot down does not count as a failed one.)
-#
-#   A bot that mounts MountCount times in WindowSeconds without leaving
-#   Radius yards of where it started, out of any fight, takes the hint: what
-#   it was trying to loot -- its loot target, else the gathering node it is
-#   out for, else a chest-like object at its feet -- is out of its reach for
-#   IgnoreMinutes (not its loot target, held off in its loot list, written
-#   off as a gathering node), so it goes and does something else. A random
-#   bot on its own also goes on foot for WalkMinutes, so it does not start
-#   again at the next herb. For RememberMinutes it knows it was stuck, if
-#   asked (StateText); grouped with a real player, or with one in earshot, it
-#   may laugh it off (RemarkChance, half that in /say). Every one is logged
-#   at INFO with where it happened, who the bot was with and anyone else at
-#   the same thing. One with nothing to loot is only logged (and, if it is on
-#   its own, kept on foot).
+#   mod-playerbots-plus notices a bot getting on and off its mount on the
+#   spot -- a mining vein another bot has hold of, a herb two bots went for
+#   at once -- and takes it off that thing for a while (PlayerbotsPlus.Stuck.*
+#   in its conf). Here, for RememberMinutes the bot knows it was stuck, if
+#   asked (StateText); grouped with a real player, or with one in earshot,
+#   it may laugh it off (RemarkChance, half that in /say). Without
+#   mod-playerbots-plus nothing is noticed.
 #
 ###############################################################################
 
-#    OllamaChat.Stuck.Enable
-#        Default: 1
-OllamaChat.Stuck.Enable = 1
-
-#    OllamaChat.Stuck.MountCount
-#    OllamaChat.Stuck.WindowSeconds
-#    OllamaChat.Stuck.Radius
-#        A stuck bot goes round every two or three seconds at first (the
-#        pauses in between grow later), so four times in half a minute
-#        catches it early. A bot that was in a fight at any time since the
-#        first of those mounts does not count: one grinding mobs that stand
-#        close together kills one, loots it, gets on its mount and straight
-#        off again for the next, on the spot but not stuck.
-#        Default: 4, 30, 6
-OllamaChat.Stuck.MountCount = 4
-OllamaChat.Stuck.WindowSeconds = 30
-OllamaChat.Stuck.Radius = 6
-
-#    OllamaChat.Stuck.IgnoreMinutes
 #    OllamaChat.Stuck.RememberMinutes
-#        Default: 10, 10
-OllamaChat.Stuck.IgnoreMinutes = 10
-OllamaChat.Stuck.RememberMinutes = 10
-
-#    OllamaChat.Stuck.WalkMinutes
-#        How long a random bot on its own (no group, no master, not in a
-#        battleground) that was caught at it stays on foot. Playerbots puts a
-#        bot on its mount only while it has the "mount" strategy, so that is
-#        taken off it, and given back when the time is up -- at once if it
-#        joins a group or gets a master, or Stuck.Enable or the module is
-#        switched off. On foot, the loot code's get-down-and-wait never
-#        starts: it walks to the next herb and picks it, the way a player
-#        would, and when the time is up it rides again. A bot in a group, or
-#        with a master, keeps its mount so it keeps up. Nothing is saved:
-#        a bot that logs out gets its strategies afresh when it logs in --
-#        unless someone gives it a strategy command ("nc +..." / "co -...")
-#        or an outfit command while it is on foot, when playerbots saves its
-#        strategies as they are, and it would come back without its mount
-#        until it is next randomised ("nc +mount" puts it right). 0 leaves
-#        every bot its mount, as before. At most 120.
 #        Default: 10
-OllamaChat.Stuck.WalkMinutes = 10
+OllamaChat.Stuck.RememberMinutes = 10
 
 #    OllamaChat.Stuck.RemarkChance
 #    OllamaChat.Stuck.RemarkPrompt
@@ -3535,151 +3295,25 @@ OllamaChat.Stuck.StateText = "A little while ago you were stuck for a minute at 
 #
 #   OLLAMA CHAT - GETTING BACK UP
 #
-#   Playerbots leaves a bot that dies near you lying where it fell until you
-#   tell it what to do, and mod-dungeon-clear keeps every dungeon body for a
-#   rez. People don't wait to be told: when nobody left standing in the
-#   group can resurrect -- no living priest, paladin, shaman or druid who has
-#   learned the spell -- a dead bot releases, runs back, gets up and joins
-#   the fight again.
-#
-#     * Someone alive can rez: the bot waits for it, for up to
-#       WaitForRezSeconds of nobody fighting, then gives up waiting.
-#     * Nobody can: it releases after ReleaseDelaySeconds.
-#     * Its body is in a dungeon or raid: the ghost runs from the graveyard
-#       to the entrance and walks in, which brings it back there, as it does
-#       for anyone. RunBackSeconds bounds the run when it cannot path there.
-#       A raid that will not let anyone in during a boss fight is tried again
-#       every few seconds.
-#     * In the open world the ghost walks back to its body, as playerbots
-#       already does.
-#
-#   Only bots in a group with a real player. Never in battlegrounds or arenas,
-#   and not while a mod-dungeon-clear run is on: the run decides how its party
-#   is brought back (a rez, a wait, or calling the run off), and once it has
-#   called the run off, this takes over. "release" or "res" said to a dead bot
-#   (ORDERS above) does it at once.
+#   A dead bot releasing, running back and getting up when nobody left in
+#   the group can resurrect it is mod-playerbots-plus's
+#   (PlayerbotsPlus.Revive.* in its conf). "release" or "res" said to a dead
+#   bot (ORDERS above) still does it at once.
 #
 ###############################################################################
-
-#    OllamaChat.Revive.Enable
-#        Default: 1
-OllamaChat.Revive.Enable = 1
-
-#    OllamaChat.Revive.ReleaseDelaySeconds
-#        How long a bot nobody can rez lies there before it releases.
-#        Default: 5
-OllamaChat.Revive.ReleaseDelaySeconds = 5
-
-#    OllamaChat.Revive.WaitForRezSeconds
-#        How long a bot waits for a rez from someone who could give one,
-#        counted only while nobody in the group is fighting. 0 waits for good.
-#        Default: 60
-OllamaChat.Revive.WaitForRezSeconds = 60
-
-#    OllamaChat.Revive.RunBackSeconds
-#        The longest a ghost spends running from the graveyard to its
-#        dungeon before it walks in anyway (about as long as the run takes).
-#        Default: 40
-OllamaChat.Revive.RunBackSeconds = 40
 
 ###############################################################################
 #
 #   OLLAMA CHAT - RAID MARKS
 #
-#   Marks make the plan plain without anyone barking it:
-#
-#       skull     kill first -- putting it on a mob starts the fight
-#       cross     kill next -- it becomes the skull when the skull dies
-#       moon      polymorph (mage)            star     sap (rogue)
-#       diamond   banish or fear (warlock)    circle   shackle undead (priest)
-#       triangle  hibernate, roots, cyclone (druid)
-#       square    freezing trap (hunter)
-#
-#   Each bot whose class can crowd-control is told which mark is its to
-#   control (ClassIcons), with playerbots' crowd-control strategy turned on
-#   if it lacked it (priests and rogues do by default). Mark the pack, then
-#   put the skull on the mob to kill first: nothing happens until the skull
-#   goes on -- that is playerbots, the skull is every bot's target -- and as
-#   the pack comes in, each one controls its own mark. A sap has to land
-#   before the pull, so the star is the exception: put it on a mob that is
-#   not fighting and a rogue in the group sneaks over and saps it. It goes
-#   into stealth first -- with Stealth still on cooldown it keeps following
-#   and goes when it can, rather than walking up in plain sight and pulling
-#   -- comes round to the mob's back (a mob only spots stealth in front of
-#   it), stops, turns to it and saps. A rogue that cannot -- no Sap before
-#   level 10, a mob Sap does not work on (undead, elementals, machines...),
-#   no stealth in time -- leaves the mob alone and says so in party.
-#
-#   While someone in the group is marking (a mark changed in the last
-#   InUseSeconds that this did not make), the skull moves on by itself when
-#   its mob dies: to the cross, else to the nearest mob still fighting the
-#   group that nobody marked to control and nothing is controlling
-#   (AutoSkull). So the bots finish the loose mobs before they break
-#   anything that is controlled. It only ever moves onto a mob already in
-#   the fight: a cross on the next pack waits for its own skull. Groups that
-#   do not mark see none of this.
-#
-#   In a 5-man dungeon playerbots' bots only crowd-control what is marked
-#   for them; in raids and out in the world they also pick targets of their
-#   own.
+#   mod-playerbots-plus gives each crowd-controlling bot its own mark, sends
+#   a rogue to sap the star and moves the skull on (PlayerbotsPlus.Marks.*
+#   in its conf). A rogue that cannot sap the star -- no Sap before level 10,
+#   a mob Sap does not work on, no stealth in time, a sap that did not take
+#   -- says why in party here, in its own words. Without mod-playerbots-plus
+#   there is no sapping.
 #
 ###############################################################################
-
-#    OllamaChat.Marks.Enable
-#        Default: 1
-OllamaChat.Marks.Enable = 1
-
-#    OllamaChat.Marks.ClassIcons
-#        class:mark pairs, comma separated. Classes: warrior, paladin,
-#        hunter, rogue, priest, deathknight, shaman, mage, warlock, druid.
-#        Marks: star, circle, diamond, triangle, moon, square, cross, skull.
-#        A paladin given a mark turns undead on it; shamans have no crowd
-#        control in playerbots.
-OllamaChat.Marks.ClassIcons = "mage:moon, rogue:star, priest:circle, warlock:diamond, druid:triangle, hunter:square"
-
-#    OllamaChat.Marks.AddCcStrategy
-#        Turn playerbots' crowd-control strategy on for those classes when a
-#        bot lacks it -- never for a tank, which would drop out of bear form
-#        to do it.
-#        Default: 1
-OllamaChat.Marks.AddCcStrategy = 1
-
-#    OllamaChat.Marks.SapStar
-#        A rogue bot saps the mob the star is put on, when nothing is fighting.
-#        Default: 1
-OllamaChat.Marks.SapStar = 1
-
-#    OllamaChat.Marks.AutoSkull
-#        With no cross in the fight to move to, the skull goes on the next
-#        loose mob in it.
-#        Default: 1
-OllamaChat.Marks.AutoSkull = 1
-
-#    OllamaChat.Marks.InUseSeconds
-#        How long after someone last changed a mark the skull keeps moving
-#        on by itself.
-#        Default: 180
-OllamaChat.Marks.InUseSeconds = 180
-
-#    OllamaChat.Marks.SapStealthWaitSeconds
-#    OllamaChat.Marks.SapApproachSeconds
-#    OllamaChat.Marks.SapWaitSeconds
-#        How long the rogue waits to go into stealth (Stealth cools down for
-#        10 seconds after it breaks), and then how long it may take to sneak
-#        round the mob and sap it, before it gives up -- not counting up to
-#        SapWaitSeconds spent hanging back, out of sight, while a mob that
-#        wanders about is on the move.
-#
-#        How close it may come in front is worked out the way the core does
-#        it (the mob's level against the rogue's stealth): where its Sap
-#        reaches further than that, it goes straight in; otherwise round the
-#        side, out of sight, and in from behind, the side a mob never spots
-#        stealth from. Every sap's outcome is logged at INFO, with the
-#        distances, whatever OllamaChat.DebugEnabled says.
-#        Default: 12, 40, 20
-OllamaChat.Marks.SapStealthWaitSeconds = 12
-OllamaChat.Marks.SapApproachSeconds = 40
-OllamaChat.Marks.SapWaitSeconds = 20
 
 #    OllamaChat.Marks.SayEnable
 #    OllamaChat.Marks.SayCooldownSeconds
@@ -4000,7 +3634,8 @@ OllamaChat.Gifts.SaidAskText = "You asked {player_name} how much they want for t
 #       without anyone.
 #     * A fight over with some of them dead and nobody alive who can
 #       resurrect -- real players count -- one of the dead bots says it is
-#       running back (RunBack*), as OllamaChat.Revive then has it do.
+#       running back (RunBack*), as mod-playerbots-plus then has it do
+#       (PlayerbotsPlus.Revive).
 #
 #   Each line is the model's, in the bot's own voice (the *Prompt settings:
 #   {bot_name}, {bot_level}, {bot_race}, {bot_class}, {bot_personality},

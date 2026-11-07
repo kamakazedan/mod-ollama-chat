@@ -107,13 +107,6 @@ namespace TextRules
     std::vector<ScriptLine> ParseScript(const std::string& text, const std::vector<std::string>& names,
                                         size_t maxLines, const std::function<bool(const std::string&)>& isEmote);
 
-    // ---- muted bot lines ----------------------------------------------------
-
-    // Does `text` match `pattern`? Case-insensitive, the whole text; '*'
-    // matches any run of characters, so "Using |c*" is "Using " followed by an
-    // item link, and "Staying" is that word alone.
-    bool GlobMatch(const std::string& pattern, const std::string& text);
-
     // ---- party commands --------------------------------------------------
 
     // A phrase from a command list. "=r" in the config matches only a line
@@ -449,22 +442,6 @@ namespace TextRules
     // `text` split at every "|" that is not inside braces, each part trimmed,
     // empty parts dropped: a list of lines where a line may hold "{~a|b}".
     std::vector<std::string> SplitBars(const std::string& text);
-
-    // A place on a map, as a config line: "map x y z radius capacity name",
-    // the name being the rest of the line ("0 -8833.4 628.6 94 22 14 the
-    // Trade District in Stormwind"). The radius is kept to 3..60 yards. False
-    // when the numbers are not all there.
-    struct SpotLine
-    {
-        uint32_t    map      = 0;
-        float       x        = 0.0f;
-        float       y        = 0.0f;
-        float       z        = 0.0f;
-        float       radius   = 0.0f;
-        uint32_t    capacity = 0;
-        std::string name;
-    };
-    bool ParseSpotLine(const std::string& text, SpotLine& out);
 
     // A template's "{slot}"s filled in: `pick(pool, taken)` gives a value from
     // the pool named by the slot without a number on the end ("{class2}" is

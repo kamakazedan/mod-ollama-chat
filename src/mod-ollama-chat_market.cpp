@@ -1,5 +1,6 @@
 #include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_plus.h"
 
 #include "CharacterCache.h"
 #include "Log.h"
@@ -13,15 +14,6 @@
 #include <deque>
 #include <mutex>
 #include <unordered_map>
-
-// mod-playerbots-plus is optional: when it is part of the same build its
-// headers are on the module include path.
-#if __has_include("PlayerbotsPlus.h")
-#include "PlayerbotsPlus.h"
-#define OLLAMA_CHAT_PLAYERBOTS_PLUS 1
-#else
-#define OLLAMA_CHAT_PLAYERBOTS_PLUS 0
-#endif
 
 namespace
 {

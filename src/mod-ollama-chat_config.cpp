@@ -11,10 +11,11 @@
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_memory.h"
-#include "mod-ollama-chat_mute.h"
 #include "mod-ollama-chat_market.h"
+#include "mod-ollama-chat_marks.h"
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_roleplay.h"
+#include "mod-ollama-chat_stuck.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat-utilities.h"
@@ -420,19 +421,6 @@ std::string g_OrdersHintCant;
 uint32_t    g_OrdersTradeWalkSeconds       = 20;
 uint32_t    g_OrdersFleeRecoverSeconds     = 8;
 std::string g_StateStayingText;
-bool        g_ReviveEnable                 = true;
-uint32_t    g_ReviveReleaseDelaySeconds    = 5;
-uint32_t    g_ReviveWaitForRezSeconds      = 60;
-uint32_t    g_ReviveRunBackSeconds         = 40;
-bool        g_MarksEnable                  = true;
-std::string g_MarksClassIcon[16];
-bool        g_MarksAddCcStrategy           = true;
-bool        g_MarksSapStar                 = true;
-bool        g_MarksAutoSkull               = true;
-uint32_t    g_MarksInUseSeconds            = 180;
-uint32_t    g_MarksSapStealthWaitSeconds   = 12;
-uint32_t    g_MarksSapApproachSeconds      = 40;
-uint32_t    g_MarksSapWaitSeconds          = 20;
 bool        g_MarksSayEnable               = true;
 uint32_t    g_MarksSayCooldownSeconds      = 120;
 std::string g_MarksSayPrompt;
@@ -510,12 +498,6 @@ std::string g_PartyDoneStayingText;
 // --------------------------------------------
 // Natural chat v10
 // --------------------------------------------
-bool        g_StuckEnable                  = true;
-uint32_t    g_StuckMountCount              = 4;
-uint32_t    g_StuckWindowSeconds           = 30;
-float       g_StuckRadius                  = 6.0f;
-uint32_t    g_StuckIgnoreMinutes           = 10;
-uint32_t    g_StuckWalkMinutes             = 10;
 uint32_t    g_StuckRememberMinutes         = 10;
 uint32_t    g_StuckRemarkChance            = 50;
 std::string g_StuckRemarkPrompt;
@@ -580,29 +562,8 @@ std::string g_LinksQuestTooHighText;
 std::string g_LinksQuestEasyText;
 std::string g_LinksItemTooHighText;
 
-bool        g_HangoutEnable                = true;
-std::vector<HangoutSpotConfig> g_HangoutSpots;
-uint32_t    g_HangoutCheckSeconds          = 5;
-float       g_HangoutRecruitRange          = 300.0f;
-uint32_t    g_HangoutRecruitChance         = 50;
-uint32_t    g_HangoutStayMinutesMin        = 5;
-uint32_t    g_HangoutStayMinutesMax        = 20;
-uint32_t    g_HangoutCooldownMinutes       = 45;
-uint32_t    g_HangoutTravelSeconds         = 180;
-uint32_t    g_HangoutMountedChance         = 45;
-uint32_t    g_HangoutBenchChance           = 60;
-uint32_t    g_HangoutSitChance             = 35;
-uint32_t    g_HangoutAfkChance             = 35;
-float       g_HangoutBenchRange            = 25.0f;
-float       g_HangoutHeightTolerance       = 6.0f;
-std::vector<std::string> g_HangoutBenchWords;
 std::string g_HangoutStateText;
 std::string g_HangoutAwayText;
-bool        g_HangoutBringIn               = true;
-uint32_t    g_HangoutBringInFill           = 75;
-uint32_t    g_HangoutBringInPerMinute      = 15;
-uint32_t    g_HangoutBringInMinLevel       = 10;
-float       g_HangoutArrivalRange          = 400.0f;
 
 // --------------------------------------------
 // A player giving away or selling something
@@ -1782,34 +1743,7 @@ static void LoadNaturalChatV7Settings()
     g_StateStayingText = sConfigMgr->GetOption<std::string>("OllamaChat.State.Staying",
         "Right now you are waiting where {player_name} told you to stay, until they tell you to follow again.");
 
-    // --- stock lines nobody needs -----------------------------------------------
-    {
-        // Separated by ';', since an item link in a line starts with '|'.
-        const std::string raw = sConfigMgr->GetOption<std::string>("OllamaChat.Mute.Patterns",
-            "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;"
-            "I don't know this dungeon, lead the way!;Staying;Following;Fleeing;Running away;Attacking;"
-            "Releasing...;Meet me at the graveyard;Hello;Hello!;Hi;Hi!;Hello there!;"
-            "* */* |c*|Hquest:*;Quest completed |c*;I have accepted |c*;Grinding;Moving away from group;"
-            "Hello, I follow you!;Hello, lead the way!;Hi, lead the way!;Goodbye!;Bye bye!;See you later!;"
-            "Fair trade;Off with you;A pleasure doing business with you;Thanks;I am ready for the next flight");
-        Mute_Publish(sConfigMgr->GetOption<bool>("OllamaChat.Mute.Enable", true), SplitString(raw, ';'));
-    }
-
-    // --- dead bots getting back up ---------------------------------------------------
-    g_ReviveEnable              = sConfigMgr->GetOption<bool>("OllamaChat.Revive.Enable", true);
-    g_ReviveReleaseDelaySeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Revive.ReleaseDelaySeconds", 5);
-    g_ReviveWaitForRezSeconds   = sConfigMgr->GetOption<uint32_t>("OllamaChat.Revive.WaitForRezSeconds", 60);
-    g_ReviveRunBackSeconds      = sConfigMgr->GetOption<uint32_t>("OllamaChat.Revive.RunBackSeconds", 40);
-
-    // --- raid marks -------------------------------------------------------------------
-    g_MarksEnable        = sConfigMgr->GetOption<bool>("OllamaChat.Marks.Enable", true);
-    g_MarksAddCcStrategy = sConfigMgr->GetOption<bool>("OllamaChat.Marks.AddCcStrategy", true);
-    g_MarksSapStar       = sConfigMgr->GetOption<bool>("OllamaChat.Marks.SapStar", true);
-    g_MarksAutoSkull     = sConfigMgr->GetOption<bool>("OllamaChat.Marks.AutoSkull", true);
-    g_MarksInUseSeconds  = sConfigMgr->GetOption<uint32_t>("OllamaChat.Marks.InUseSeconds", 180);
-    g_MarksSapStealthWaitSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Marks.SapStealthWaitSeconds", 12);
-    g_MarksSapApproachSeconds    = sConfigMgr->GetOption<uint32_t>("OllamaChat.Marks.SapApproachSeconds", 40);
-    g_MarksSapWaitSeconds        = sConfigMgr->GetOption<uint32_t>("OllamaChat.Marks.SapWaitSeconds", 20);
+    // --- the rogue saying why it is not sapping the star (mod-playerbots-plus's marks) ---
     g_MarksSayEnable             = sConfigMgr->GetOption<bool>("OllamaChat.Marks.SayEnable", true);
     g_MarksSayCooldownSeconds    = sConfigMgr->GetOption<uint32_t>("OllamaChat.Marks.SayCooldownSeconds", 120);
     g_MarksSayPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Marks.SayPrompt",
@@ -1934,50 +1868,6 @@ static void LoadNaturalChatV7Settings()
         "the way new players do: friendly, not pushy.");
     g_NeedsReasonShort = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.ReasonShort",
         "you only have {money} and are saving for {want}, so you asked for a few silver");
-    for (std::string& icon : g_MarksClassIcon)
-        icon.clear();
-    {
-        static const std::pair<const char*, uint8_t> classes[] = {
-            { "warrior", 1 }, { "paladin", 2 }, { "hunter", 3 }, { "rogue", 4 }, { "priest", 5 },
-            { "deathknight", 6 }, { "death knight", 6 }, { "dk", 6 }, { "shaman", 7 }, { "mage", 8 },
-            { "warlock", 9 }, { "druid", 11 },
-        };
-        static const char* const icons[] = { "star", "circle", "diamond", "triangle", "moon", "square", "cross", "skull" };
-        const std::string raw = sConfigMgr->GetOption<std::string>("OllamaChat.Marks.ClassIcons",
-            "mage:moon, rogue:star, priest:circle, warlock:diamond, druid:triangle, hunter:square");
-        std::string bad;
-        for (const std::string& part : SplitString(raw, ','))
-        {
-            const size_t colon = part.find(':');
-            std::string cls = colon == std::string::npos ? std::string() : part.substr(0, colon);
-            std::string icon = colon == std::string::npos ? std::string() : part.substr(colon + 1);
-            auto clean = [](std::string& s)
-            {
-                const size_t b = s.find_first_not_of(" \t");
-                const size_t e = s.find_last_not_of(" \t");
-                s = b == std::string::npos ? std::string() : s.substr(b, e - b + 1);
-                for (char& ch : s)
-                    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-            };
-            clean(cls);
-            clean(icon);
-            uint8_t id = 0;
-            for (const auto& [name, value] : classes)
-                if (cls == name)
-                    id = value;
-            bool known = false;
-            for (const char* i : icons)
-                known = known || icon == i;
-            if (!id || !known)
-            {
-                bad += (bad.empty() ? "" : ", ") + part;
-                continue;
-            }
-            g_MarksClassIcon[id] = icon;
-        }
-        if (!bad.empty())
-            LOG_ERROR("module.ollamachat", "[Ollama Chat] OllamaChat.Marks.ClassIcons: not a class:mark pair: {}", bad);
-    }
 
     // --- a bot tank greeting the group, and calling the finish ----------------------
     g_PartyAnnouncePrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Party.AnnouncePrompt",
@@ -2026,13 +1916,7 @@ static std::vector<std::string> ReadSpaceList(const char* key, const char* def)
 
 static void LoadNaturalChatV10Settings()
 {
-    // --- stuck getting on and off a mount ----------------------------------------------
-    g_StuckEnable          = sConfigMgr->GetOption<bool>("OllamaChat.Stuck.Enable", true);
-    g_StuckMountCount      = std::max<uint32_t>(3, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.MountCount", 4));
-    g_StuckWindowSeconds   = std::max<uint32_t>(10, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.WindowSeconds", 30));
-    g_StuckRadius          = std::max(1.0f, sConfigMgr->GetOption<float>("OllamaChat.Stuck.Radius", 6.0f));
-    g_StuckIgnoreMinutes   = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.IgnoreMinutes", 10));
-    g_StuckWalkMinutes     = std::min<uint32_t>(120, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.WalkMinutes", 10));
+    // --- a bot that was stuck getting on and off its mount (mod-playerbots-plus finds it) ---
     g_StuckRememberMinutes = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.RememberMinutes", 10));
     g_StuckRemarkChance    = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Stuck.RemarkChance", 50));
     g_StuckRemarkPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Stuck.RemarkPrompt",
@@ -2196,34 +2080,13 @@ static void LoadNaturalChatV10Settings()
     }
 
     LOG_INFO("module.ollamachat",
-             "[Ollama Chat] Chat v10: stuck mounts {} ({} in {}s, on foot {} min), quest progress in party {}, item "
-             "and quest descriptions {}, {} premise template(s) with {} pool(s), echoes {} ({} words, {} bots, {} "
-             "min), emoticons {}.",
-             g_StuckEnable ? "on" : "off", g_StuckMountCount, g_StuckWindowSeconds, g_StuckWalkMinutes,
+             "[Ollama Chat] Chat v10: quest progress in party {}, item and quest descriptions {}, {} premise "
+             "template(s) with {} pool(s), echoes {} ({} words, {} bots, {} min), emoticons {}.",
              g_ProgressEnable ? "on" : "off",
              g_LinksDescribeEnable ? "on" : "off", g_PremiseTemplates.size(), g_PremisePools.size(),
              g_EchoEnable ? "on" : "off", g_EchoWords, g_EchoBots, g_EchoWindowMinutes,
              g_EmoticonEnable ? "on" : "off");
 }
-
-// Where people stand about in each capital: "map x y z radius capacity name".
-// Used when the conf has no OllamaChat.Hangout.Spot.* keys at all.
-static const std::pair<const char*, const char*> kDefaultHangoutSpots[] = {
-    { "StormwindTrade",     "0 -8833.4 628.6 94.0 22 14 the Trade District in Stormwind" },
-    { "StormwindBank",      "0 -8914.0 621.5 99.6 14 8 the bank in Stormwind" },
-    { "IronforgeCommons",   "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge" },
-    { "OrgrimmarValley",    "1 1657.9 -4433.0 17.5 22 10 the Valley of Strength in Orgrimmar" },
-    { "OrgrimmarBank",      "1 1615.6 -4391.6 10.3 14 6 outside the bank in Orgrimmar" },
-    { "UndercityTrade",     "0 1584.1 240.3 -52.2 16 10 the Trade Quarter in the Undercity" },
-    { "ThunderBluffBank",   "1 -1263.3 44.5 127.5 16 8 outside the bank in Thunder Bluff" },
-    { "DarnassusBank",      "1 9943.0 2497.7 1317.7 16 8 outside the bank in Darnassus" },
-    { "ExodarHall",         "530 -3965.7 -11653.6 -138.8 18 8 the main hall of the Exodar" },
-    { "SilvermoonExchange", "530 9744.0 -7466.1 13.5 22 10 the Royal Exchange in Silvermoon" },
-    { "ShattrathTerrace",   "530 -1863.7 5430.0 -9.6 24 12 the Terrace of Light in Shattrath" },
-    { "DalaranBank",        "571 5958.1 617.3 650.6 18 12 outside the bank in Dalaran" },
-    { "DalaranKrasus",      "571 5813.4 453.4 658.8 16 8 Krasus' Landing in Dalaran" },
-    { "DalaranMerchants",   "571 5654.9 682.2 652.0 14 8 outside the Merchants' Bank in Dalaran" },
-};
 
 static void LoadNaturalChatV11Settings()
 {
@@ -2238,80 +2101,15 @@ static void LoadNaturalChatV11Settings()
     g_LinksItemTooHighText = sConfigMgr->GetOption<std::string>("OllamaChat.Links.ItemTooHighText",
         "(you are level {bot_level}, too low to use it yet)");
 
-    // --- city hangouts -------------------------------------------------------------------
-    g_HangoutEnable          = sConfigMgr->GetOption<bool>("OllamaChat.Hangout.Enable", true);
-    // At most 20: a hanging-out bot's playerbots "rest" (30 s) is renewed on these checks.
-    g_HangoutCheckSeconds    = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.CheckSeconds", 5), 1, 20);
-    g_HangoutRecruitRange    = std::max(20.0f, sConfigMgr->GetOption<float>("OllamaChat.Hangout.RecruitRange", 300.0f));
-    g_HangoutRecruitChance   = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.RecruitChance", 50));
-    g_HangoutStayMinutesMin  = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.StayMinutesMin", 5));
-    // At most an hour: a parked bot's AI is held, and what playerbots queues
-    // for it (emotes in range) waits until it goes.
-    g_HangoutStayMinutesMin  = std::min<uint32_t>(g_HangoutStayMinutesMin, 60);
-    g_HangoutStayMinutesMax  = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.StayMinutesMax", 20),
-                                                    g_HangoutStayMinutesMin, 60);
-    g_HangoutCooldownMinutes = sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.CooldownMinutes", 45);
-    g_HangoutTravelSeconds   = std::max<uint32_t>(30, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.TravelSeconds", 180));
-    g_HangoutMountedChance   = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.MountedChance", 45));
-    g_HangoutBenchChance     = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.BenchChance", 60));
-    g_HangoutSitChance       = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.SitChance", 35));
-    g_HangoutAfkChance       = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.AfkChance", 35));
-    g_HangoutBenchRange      = std::max(0.0f, sConfigMgr->GetOption<float>("OllamaChat.Hangout.BenchRange", 25.0f));
-    g_HangoutHeightTolerance = std::max(1.0f, sConfigMgr->GetOption<float>("OllamaChat.Hangout.HeightTolerance", 6.0f));
-    g_HangoutBenchWords.clear();
-    for (std::string word : ReadPipeList("OllamaChat.Hangout.BenchWords", "bench"))
-    {
-        for (char& c : word)
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        g_HangoutBenchWords.push_back(std::move(word));
-    }
+    // --- a bot hanging out in a city (mod-playerbots-plus's hangouts) --------------------
     g_HangoutStateText = sConfigMgr->GetOption<std::string>("OllamaChat.Hangout.StateText",
         "Right now you are hanging around {spot}, {doing}, with nowhere in particular to be.");
     g_HangoutAwayText = sConfigMgr->GetOption<std::string>("OllamaChat.Hangout.AwayText",
         "You had stepped away from your keyboard there (AFK) and have only just come back to it.");
 
-    g_HangoutSpots.clear();
-    std::string bad;
-    auto addSpot = [&bad](const std::string& key, const std::string& value)
-    {
-        TextRules::SpotLine line;
-        if (!TextRules::ParseSpotLine(value, line))
-        {
-            bad += (bad.empty() ? "" : ", ") + key;
-            return;
-        }
-        HangoutSpotConfig spot;
-        spot.key      = key;
-        spot.name     = line.name.empty() ? key : line.name;
-        spot.map      = line.map;
-        spot.x        = line.x;
-        spot.y        = line.y;
-        spot.z        = line.z;
-        spot.radius   = line.radius;
-        spot.capacity = line.capacity;
-        g_HangoutSpots.push_back(std::move(spot));
-    };
-    {
-        const std::string prefix = "OllamaChat.Hangout.Spot.";
-        const std::vector<std::string> keys = sConfigMgr->GetKeysByString(prefix);
-        if (keys.empty())
-            for (const auto& [key, value] : kDefaultHangoutSpots)
-                addSpot(key, value);
-        for (const std::string& key : keys)
-            addSpot(key.substr(prefix.size()), sConfigMgr->GetOption<std::string>(key, ""));
-    }
-    if (!bad.empty())
-        LOG_ERROR("server.loading", "[Ollama Chat] OllamaChat.Hangout.Spot: could not read {} (want \"map x y z "
-                  "radius capacity name\").", bad);
-
-    uint32_t places = 0;
-    for (const HangoutSpotConfig& spot : g_HangoutSpots)
-        places += spot.capacity;
     LOG_INFO("module.ollamachat",
-             "[Ollama Chat] Chat v11: city hangouts {} ({} spots, room for {}), quest level fit {} levels, "
-             "quiet when too low {}.",
-             g_HangoutEnable ? "on" : "off", g_HangoutSpots.size(), places, g_LinksQuestLevelsAbove,
-             g_LinksQuietWhenTooLow ? "on" : "off");
+             "[Ollama Chat] Chat v11: quest level fit {} levels, quiet when too low {}.",
+             g_LinksQuestLevelsAbove, g_LinksQuietWhenTooLow ? "on" : "off");
 }
 
 static void LoadNaturalChatV13Settings()
@@ -2360,19 +2158,9 @@ static void LoadNaturalChatV13Settings()
     g_PartyDoneStayingText = sConfigMgr->GetOption<std::string>("OllamaChat.Party.DoneStayingText",
         " Someone asked everyone to stick around, so you are all staying in the group for now.");
 
-    // --- city hangouts filled from elsewhere -------------------------------------------
-    g_HangoutBringIn          = sConfigMgr->GetOption<bool>("OllamaChat.Hangout.BringIn", true);
-    g_HangoutBringInFill      = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.BringInFill", 75));
-    g_HangoutBringInPerMinute = std::min<uint32_t>(120, sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.BringInPerMinute", 15));
-    g_HangoutBringInMinLevel  = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Hangout.BringInMinLevel", 10), 1, 80);
-    g_HangoutArrivalRange     = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Hangout.ArrivalRange", 400.0f), 0.0f, 1000.0f);
-
     LOG_INFO("module.ollamachat",
-             "[Ollama Chat] Chat v13: end of a run - gg from {}% of the group, leaving after {} s {}; hangouts "
-             "filled from elsewhere {} (to {}%, up to {} a minute, level {}+).",
-             g_PartyCheerEnable ? g_PartyCheerChance : 0, g_PartyDoneLeaveSeconds, g_PartyDoneLeave ? "on" : "off",
-             g_HangoutBringIn ? "on" : "off", g_HangoutBringInFill, g_HangoutBringInPerMinute,
-             g_HangoutBringInMinLevel);
+             "[Ollama Chat] Chat v13: end of a run - gg from {}% of the group, leaving after {} s {}.",
+             g_PartyCheerEnable ? g_PartyCheerChance : 0, g_PartyDoneLeaveSeconds, g_PartyDoneLeave ? "on" : "off");
 }
 
 static void LoadNaturalChatV14Settings()
@@ -3948,6 +3736,8 @@ void OllamaChatConfigWorldScript::OnStartup()
 {
     LoadOllamaChatConfig();
     OllamaMarket_Init();
+    Stuck_Init();
+    Marks_Init();
     LoadBotPersonalityList();
     LoadBotConversationHistoryFromDB();
     InitializeSentimentTracking();

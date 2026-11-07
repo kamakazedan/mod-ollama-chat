@@ -22,13 +22,10 @@
 #include "mod-ollama-chat_marks.h"
 #include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_needs.h"
-#include "mod-ollama-chat_mute.h"
 #include "mod-ollama-chat_orders.h"
 #include "mod-ollama-chat_premises.h"
 #include "mod-ollama-chat_progress.h"
-#include "mod-ollama-chat_revive.h"
 #include "mod-ollama-chat_stuck.h"
-#include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_gifts.h"
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_gear.h"
@@ -37,6 +34,7 @@
 #include "mod-ollama-chat_mingle.h"
 #include "mod-ollama-chat_rolls.h"
 #include "mod-ollama-chat_market.h"
+#include "mod-ollama-chat_plus.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
 #include <thread>
@@ -493,13 +491,24 @@ bool OllamaChatConfigCommand::HandleOllamaPersonalityListCommand(ChatHandler* ha
 
 // The few lines worth seeing every time: what it talks to, whether it is
 // keeping up, what is going on right now, and the last thing that went wrong.
+
+// Hangouts, stuck mounts, getting back up, raid marks and muted lines are
+// mod-playerbots-plus's: where to look for them.
+static const char* PlusStatus()
+{
+#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 2
+    return ".pbp status";
+#else
+    return "need mod-playerbots-plus, which is not in this build";
+#endif
+}
+
 static bool StatusSummary(ChatHandler* handler)
 {
     const OllamaDispatchStats dispatch = OllamaDispatch_GetStats();
     const GovernorStats       gov      = Governor_GetStats();
     const CrowdStats          crowd    = Crowd_GetStats();
     const ConversationStats   conv     = Conversation_GetStats();
-    const HangoutStats        hangout  = Hangout_GetStats();
     const MingleStats         mingle   = Mingle_GetStats();
 
     handler->PSendSysMessage("|cff00ff00[Ollama Chat]|r {} - {} ({}) at {}",
@@ -514,14 +523,14 @@ static bool StatusSummary(ChatHandler* handler)
                              (unsigned long long)dispatch.totalDroppedGovernor,
                              (unsigned long long)dispatch.totalDroppedPassed,
                              (unsigned long long)dispatch.totalDroppedPhrase, gov.sendsLastMinute);
-    handler->PSendSysMessage("Right now: {} crowd replies, {} conversations, {} bot chats in /say; {} bots hanging out in "
-                             "cities ({} AFK)",
-                             crowd.active, conv.active, mingle.running, hangout.hanging, hangout.away);
+    handler->PSendSysMessage("Right now: {} crowd replies, {} conversations, {} bot chats in /say",
+                             crowd.active, conv.active, mingle.running);
     if (!dispatch.lastError.empty())
         handler->PSendSysMessage("|cffff0000Last error:|r {}", dispatch.lastError);
     else
         handler->PSendSysMessage("Last error: none");
-    handler->PSendSysMessage("More: .ollama status chat | city | party | bots | all");
+    handler->PSendSysMessage("More: .ollama status chat | city | party | bots | all   Hangouts, marks, the auction "
+                             "house: {}", PlusStatus());
     return true;
 }
 
@@ -664,31 +673,14 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)orders.unstuck,
                              (unsigned long long)orders.raw);
 
-    const ReviveStats revive = Revive_GetStats();
-    const MarksStats  marks  = Marks_GetStats();
+    const MarksStats marks = Marks_GetStats();
     if (show("party"))
-        handler->PSendSysMessage("Getting back up: {} - {} released, {} ran back in, {} stopped waiting for a rez   "
-                             "Muted bot lines: {}",
-                             g_ReviveEnable ? "on" : "off",
-                             (unsigned long long)revive.released,
-                             (unsigned long long)revive.returned,
-                             (unsigned long long)revive.gaveUp,
-                             (unsigned long long)Mute_GetDropped());
-    if (show("party"))
-        handler->PSendSysMessage("Raid marks: {} - {} crowd-control marks given out, skull moved {} to the cross and "
-                             "{} to the next mob, {} saps ({} would not cast{}, {} did not take, {} given up, "
-                             "{} could not sap it at all, {} said why)",
-                             g_MarksEnable ? "on" : "off",
-                             (unsigned long long)marks.assigned,
-                             (unsigned long long)marks.moved,
-                             (unsigned long long)marks.picked,
-                             (unsigned long long)marks.saps,
-                             (unsigned long long)marks.sapFails,
-                             marks.lastFail ? fmt::format(", last cast result {}", marks.lastFail) : std::string(),
-                             (unsigned long long)marks.sapMissed,
-                             (unsigned long long)marks.sapGaveUp,
-                             (unsigned long long)marks.sapCant,
-                             (unsigned long long)marks.explained);
+        handler->PSendSysMessage("Saps that could not be done: {}, the rogue said why {} times ({})   Raid marks, "
+                             "getting back up, muted lines: {}",
+                             (unsigned long long)marks.heard,
+                             (unsigned long long)marks.explained,
+                             g_MarksSayEnable ? "on" : "off",
+                             PlusStatus());
 
     const BagsStats  bags  = Bags_GetStats();
     const NeedsStats needs = Needs_GetStats();
@@ -763,18 +755,11 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
     const StuckStats    stuck    = Stuck_GetStats();
     const ProgressStats progress = Progress_GetStats();
     if (show("bots"))
-        handler->PSendSysMessage("Stuck on a mount: {} - {} mounts noted, {} bots stuck ({} kept off what they were "
-                             "after, {} with nothing to loot, {} kept on foot), {} said so, {} held off now, {} on "
-                             "foot now",
-                             g_StuckEnable ? "on" : "off",
-                             (unsigned long long)stuck.mounts,
-                             (unsigned long long)stuck.stuck,
-                             (unsigned long long)stuck.hinted,
-                             (unsigned long long)stuck.nothing,
-                             (unsigned long long)stuck.walked,
+        handler->PSendSysMessage("Stuck on a mount: {} bots taken off what they were stuck on, {} said so   The "
+                             "rest: {}",
+                             (unsigned long long)stuck.heard,
                              (unsigned long long)stuck.remarks,
-                             stuck.holding,
-                             stuck.walking);
+                             PlusStatus());
     if (show("party"))
         handler->PSendSysMessage("Quest progress: {} - {} objectives and {} quests finished by grouped bots, {} said in "
                              "party, {} left to whoever said it first, {} let go",
@@ -784,21 +769,8 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)progress.said,
                              (unsigned long long)progress.shared,
                              (unsigned long long)progress.lapsed);
-    const HangoutStats hangout = Hangout_GetStats();
     if (show("city"))
-        handler->PSendSysMessage("City hangouts: {} - {} hanging out ({} AFK) and {} on their way, {} spots ({} with an "
-                             "inn to arrive at); {} sent, {} fetched from elsewhere ({} gone back after), {} settled, "
-                             "{} never got there, {} moved on, {} cut short, {} back from AFK to talk",
-                             g_HangoutEnable ? "on" : "off",
-                             hangout.hanging, hangout.away, hangout.onTheWay, hangout.spots, hangout.withInn,
-                             (unsigned long long)hangout.sent,
-                             (unsigned long long)hangout.broughtIn,
-                             (unsigned long long)hangout.sentBack,
-                             (unsigned long long)hangout.settled,
-                             (unsigned long long)hangout.gaveUp,
-                             (unsigned long long)hangout.movedOn,
-                             (unsigned long long)hangout.cutShort,
-                             (unsigned long long)hangout.cameBack);
+        handler->PSendSysMessage("City hangouts: {}", PlusStatus());
     const GiftsStats gifts = Gifts_GetStats();
     if (show("bots"))
         handler->PSendSysMessage("Things given away and sold: {} - {} given away, {} sold; {} said yes please, {} nobody "

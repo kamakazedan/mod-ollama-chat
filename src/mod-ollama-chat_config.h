@@ -509,23 +509,9 @@ extern uint32_t    g_OrdersTradeWalkSeconds;    // how long a bot walks over to 
 extern uint32_t    g_OrdersFleeRecoverSeconds;  // after "run!": out of combat this long, and it fights again
 extern std::string g_StateStayingText;          // a bot waiting where it was told to stay
 
-// Dead bots getting themselves back up (mod-ollama-chat_revive). World thread only.
-extern bool        g_ReviveEnable;
-extern uint32_t    g_ReviveReleaseDelaySeconds;
-extern uint32_t    g_ReviveWaitForRezSeconds;
-extern uint32_t    g_ReviveRunBackSeconds;
-
-// Raid marks (mod-ollama-chat_marks). World thread only.
-extern bool        g_MarksEnable;
-extern std::string g_MarksClassIcon[16];        // by class id: "moon", "star", ... or empty
-extern bool        g_MarksAddCcStrategy;
-extern bool        g_MarksSapStar;
-extern bool        g_MarksAutoSkull;
-extern uint32_t    g_MarksInUseSeconds;
-extern uint32_t    g_MarksSapStealthWaitSeconds;   // how long a rogue waits for Stealth before giving up
-extern uint32_t    g_MarksSapApproachSeconds;      // how long it may take to sneak round and sap
-extern uint32_t    g_MarksSapWaitSeconds;          // ...not counting this long hanging back for a wandering mob
-extern bool        g_MarksSayEnable;               // the rogue says why it is not sapping
+// The rogue saying why it is not sapping the star (mod-ollama-chat_marks; the
+// marks themselves are mod-playerbots-plus's). World thread only.
+extern bool        g_MarksSayEnable;
 extern uint32_t    g_MarksSayCooldownSeconds;
 extern std::string g_MarksSayPrompt;
 extern std::string g_MarksSapNotLearned;
@@ -615,13 +601,8 @@ void LoadPersonalityExtras();
 // --------------------------------------------
 // Natural chat v10
 // --------------------------------------------
-// Bots stuck getting on and off their mount (mod-ollama-chat_stuck)
-extern bool        g_StuckEnable;
-extern uint32_t    g_StuckMountCount;        // mounted this often...
-extern uint32_t    g_StuckWindowSeconds;     // ...in this long...
-extern float       g_StuckRadius;            // ...without leaving this many yards
-extern uint32_t    g_StuckIgnoreMinutes;     // kept off what it was stuck on for this long
-extern uint32_t    g_StuckWalkMinutes;       // a random bot on its own kept on foot this long (0 = never)
+// A bot that was stuck getting on and off its mount, knowing it and saying so
+// (mod-ollama-chat_stuck; finding it stuck is mod-playerbots-plus's)
 extern uint32_t    g_StuckRememberMinutes;   // knows it was stuck, if asked, for this long
 extern uint32_t    g_StuckRemarkChance;
 extern std::string g_StuckRemarkPrompt;
@@ -698,41 +679,10 @@ extern std::string g_LinksQuestTooHighText;
 extern std::string g_LinksQuestEasyText;
 extern std::string g_LinksItemTooHighText;
 
-// City hangouts: idle bots in a capital gather where players do (mod-ollama-chat_hangout)
-struct HangoutSpotConfig
-{
-    std::string key;        // OllamaChat.Hangout.Spot.<key>
-    std::string name;       // "the Trade District in Stormwind"
-    uint32_t    map      = 0;
-    float       x        = 0.0f;
-    float       y        = 0.0f;
-    float       z        = 0.0f;
-    float       radius   = 15.0f;
-    uint32_t    capacity = 0;
-};
-extern bool        g_HangoutEnable;
-extern std::vector<HangoutSpotConfig> g_HangoutSpots;
-extern uint32_t    g_HangoutCheckSeconds;
-extern float       g_HangoutRecruitRange;      // bots this close to a spot (same map) may go to it
-extern uint32_t    g_HangoutRecruitChance;     // % per spot per check that one more bot heads over
-extern uint32_t    g_HangoutStayMinutesMin;
-extern uint32_t    g_HangoutStayMinutesMax;
-extern uint32_t    g_HangoutCooldownMinutes;   // before the same bot hangs out again
-extern uint32_t    g_HangoutTravelSeconds;     // to get there, or it gives up
-extern uint32_t    g_HangoutMountedChance;
-extern uint32_t    g_HangoutBenchChance;
-extern uint32_t    g_HangoutSitChance;
-extern uint32_t    g_HangoutAfkChance;
-extern float       g_HangoutBenchRange;
-extern float       g_HangoutHeightTolerance;
-extern std::vector<std::string> g_HangoutBenchWords;   // lowercase; a seat whose name has one is a bench
+// A bot hanging out in a city knowing where it is and what it is doing
+// (mod-ollama-chat_hangout; the hangouts are mod-playerbots-plus's)
 extern std::string g_HangoutStateText;
 extern std::string g_HangoutAwayText;
-extern bool        g_HangoutBringIn;           // a spot short of bots gets them from elsewhere...
-extern uint32_t    g_HangoutBringInFill;       // ...up to this percent of its capacity...
-extern uint32_t    g_HangoutBringInPerMinute;  // ...at most this many a minute, all spots together
-extern uint32_t    g_HangoutBringInMinLevel;
-extern float       g_HangoutArrivalRange;      // an inn this close to a spot is where its bots arrive
 
 // --------------------------------------------
 // A player giving away or selling something (mod-ollama-chat_gifts)

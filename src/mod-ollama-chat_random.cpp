@@ -22,16 +22,12 @@
 #include "mod-ollama-chat_conjure.h"
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_joined.h"
-#include "mod-ollama-chat_marks.h"
 #include "mod-ollama-chat_mingle.h"
 #include "mod-ollama-chat_needs.h"
-#include "mod-ollama-chat_mute.h"
 #include "mod-ollama-chat_orders.h"
 #include "mod-ollama-chat_partycmd.h"
 #include "mod-ollama-chat_premises.h"
 #include "mod-ollama-chat_progress.h"
-#include "mod-ollama-chat_revive.h"
-#include "mod-ollama-chat_stuck.h"
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_gifts.h"
 #include "mod-ollama-chat_gear.h"
@@ -405,11 +401,7 @@ OllamaBotRandomChatter::OllamaBotRandomChatter() : WorldScript("OllamaBotRandomC
 void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 {
     if (!g_Enable)
-    {
-        Hangout_Update(diff);   // lets everyone hanging out go, sat down or AFK as they are
-        Stuck_Update(diff);     // gives the bots kept on foot their mounts back
         return;
-    }
 
     // The module's world tick. These run before any feature toggle can return
     // early, because pending replies still have to be delivered even when
@@ -434,24 +426,11 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
     // A bot that just joined a group saying hi, or carrying on a conversation.
     Joined_Update();
 
-    // Bots getting on and off their mount on the spot take the hint.
-    Stuck_Update(diff);
-
     // "that's all the boar meat": a quest's last kill or item, said in party.
     Progress_Update(diff);
 
-    // Idle bots in a capital gathering where players do: the Trade District,
-    // the Commons, the Valley of Strength.
-    Hangout_Update(diff);
-
     // Orders carried out a tick after they were given; bots walking over to trade.
     Orders_Update(diff);
-
-    // Which characters are bots, for the stock lines that are muted.
-    Mute_Update(diff);
-
-    // Dead bots with nobody to rez them releasing and running back.
-    Revive_Update(diff);
 
     // The tank down mid-fight, a wipe, nobody left to rez: said, and known.
     Wipe_Update(diff);
@@ -461,9 +440,6 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 
     // Loot rolls into their group's transcript; a 1 or a 99 remarked on.
     Rolls_Update();
-
-    // Raid marks: whose mark is whose, saps on the star, the skull moving on.
-    Marks_Update(diff);
 
     // A bot tank greeting its dungeon group, and calling the finish.
     PartyCmd_Update(diff);

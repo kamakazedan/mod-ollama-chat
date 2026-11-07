@@ -65,6 +65,9 @@
 - **Think Mode Support:**  
   Bots can leverage LLM models that have reasoning/think modes. Enable internal reasoning for models that support it by setting `OllamaChat.ThinkModeEnableForModule = 1` in **mod-ollama-chat.conf**. When enabled, the API request includes the `think` flag and the bot omits all `thinking` responses from its final reply.
 
+- **Works with mod-playerbots-plus:**  
+  With [mod-playerbots-plus](https://github.com/kamakazedan/mod-playerbots-plus) in the same build, bots also trade on the auction house, hang out in the cities, get unstuck, get back up and use raid marks, and talk about it. See [With mod-playerbots-plus](#with-mod-playerbots-plus).
+
 - **Live Reload for Personalities and Settings:**  
   Instantly reload all mod-ollama-chat configuration and personality packs in-game using the `.ollama reload` command with a GM level account or use `ollama reload` from the server console. No server restart required—updates to `.conf` or personality packs (`.sql` files) are applied immediately.
 
@@ -555,44 +558,48 @@ Playerbots also reads every chat line as one of its own commands unless
 ahead" sends every bot off. Setting the prefix (`"!"`) leaves plain chat to
 chat and orders, with playerbots' commands still there as `!summon`.
 
-## Getting Back Up
+## Greetings and the Finish
 
-A bot that dies with nobody alive in the group who can resurrect it releases
-by itself, runs back and gets up -- from a dungeon, the ghost runs from the
-graveyard to the entrance and walks in. With a priest, paladin, shaman or
-druid standing, it waits for the rez. Not in battlegrounds, and not while a
-dungeon-clear run is deciding how to bring its party back ("res" in a run is
-left to the run too). See `OllamaChat.Revive.*`.
-
-## Raid Marks
-
-Skull is the kill target and starts the fight; cross is next and becomes the
-skull when the skull dies. Each crowd-control class controls its own mark --
-moon polymorph, diamond banish or fear, triangle hibernate or roots, square
-freezing trap, circle shackle -- and a rogue saps the star before the pull.
-While someone is marking, the skull moves on by itself when its mob dies, to
-the cross or the next loose mob, but only onto a mob already in the fight: a
-cross on the next pack waits for its own skull. See `OllamaChat.Marks.*`.
-
-## Stock Lines, Greetings and the Finish
-
-Stock whispers nobody needs ("Using [Hearthstone]", "AI was reset to
-defaults", "I don't know this dungeon, lead the way!") are muted
-(`OllamaChat.Mute.Patterns`). A bot tank leading a dungeon-clear group says
+A bot tank leading a dungeon-clear group says
 to let it know when everyone is ready as the group comes in, and says so when
 every boss is down (`OllamaChat.Party.Greet*`, `Party.Done*`). After a mana
 break, "ok im done", "full" or "done drinking" resumes the run; "im ready
 now" starts one too.
 
-## The Auction House
+## With mod-playerbots-plus
 
-With [mod-playerbots-plus](https://github.com/kamakazedan/mod-playerbots-plus)
-in the same build, random bots trade on the auction house. A bot that just
-sold something, bought something, put something up or got something back
-unsold may bring it up in chat once within the next hour and a half: "finally
-sold those [Linen Cloth]", "got [Shadowfang] off the AH for 30g, bargain". See
-`OllamaChat.Topic.WeightMarket`, `Market.TalkMinutes` and
-`EnvCommentMarket*`. Without mod-playerbots-plus this does nothing.
+[mod-playerbots-plus](https://github.com/kamakazedan/mod-playerbots-plus) has
+random bots do what players do that needs no language model: trade on the
+auction house, hang out where players do in the cities, stop getting on and
+off their mount at a herb they can't pick, get back up after dying, and use
+raid marks. It also mutes playerbots' stock whispers, like "Using
+[Hearthstone]". City hangouts, stuck mounts, getting back up, raid marks and
+the muted lines used to be part of this module. Their settings are in its
+conf now, renamed from `OllamaChat.*` to `PlayerbotsPlus.*`.
+
+With both modules in the same build, the bots talk about what it has them do:
+
+- **The auction house:** a bot that just sold something, bought something,
+  put something up or got something back unsold may bring it up in chat once
+  within the next hour and a half: "finally sold those [Linen Cloth]", "got
+  [Shadowfang] off the AH for 30g, bargain". See
+  `OllamaChat.Topic.WeightMarket`, `Market.TalkMinutes` and
+  `EnvCommentMarket*`.
+- **City hangouts:** a bot hanging out knows where it is and what it's doing
+  when someone asks. An AFK one stays quiet until someone talks to it, then
+  it's back (`OllamaChat.Hangout.StateText`, `AwayText`).
+- **Stuck on a mount:** a bot that was stuck knows it if asked, and may laugh
+  it off (`OllamaChat.Stuck.*`).
+- **Raid marks:** a rogue that can't sap the star says why in party
+  (`OllamaChat.Marks.Say*` and the `Sap*` situations).
+- **Muted lines:** this module has the bots say "Staying", "Following", hello
+  on joining a group, and a quest objective done in their own words. Give
+  mod-playerbots-plus the longer mute list from its conf, so playerbots' own
+  versions of those lines are muted too. Anything this module sends for a
+  bot is never muted.
+
+Each module builds and runs without the other. Without mod-playerbots-plus,
+none of the above happens and the rest of this module works as before.
 
 ## Per-Style Nudges and Longer Replies
 
