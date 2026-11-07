@@ -161,8 +161,13 @@ namespace TextRules
     //     one outside it ("done, wait") makes the line a pause. One that is a
     //     start too ("im ready now", "good to go") is a start.
     // A pause wins over a start. Lines starting "dc" or "dungeon clear" are left
-    // to mod-dungeon-clear.
+    // to mod-dungeon-clear. A word typed long for effect counts as itself
+    // ("letsgoooo", "leeggoooo", "readyyy"): a line that matches nothing is
+    // tried again with every run of one letter cut to one, the phrases too.
     PartyIntent MatchPartyIntent(const std::string& cleanText, const PartyRules& rules);
+
+    // `word` with every run of one letter cut to one: "leeggoooo" -> "lego".
+    std::string SqueezeLetters(const std::string& word);
 
     // A line starting "dc" or "dungeon clear": one of mod-dungeon-clear's own
     // chat commands ("dc on", "dc pause").

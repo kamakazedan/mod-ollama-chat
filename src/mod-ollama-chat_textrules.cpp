@@ -1259,9 +1259,88 @@ namespace TextRules
                (words[0] == "dc" || (words.size() >= 2 && words[0] == "dungeon" && words[1] == "clear"));
     }
 
+    std::string SqueezeLetters(const std::string& word)
+    {
+        std::string out;
+        out.reserve(word.size());
+        for (char c : word)
+            if (out.empty() || c != out.back() || !std::isalpha(static_cast<unsigned char>(c)))
+                out += c;
+        return out;
+    }
+
+    namespace
+    {
+        // A phrase word with its letter runs cut, unless it has a '*': "gogo*"
+        // cut to "go*" would take "good" for a go.
+        std::string SqueezePhraseWord(const std::string& w)
+        {
+            return w.find('*') == std::string::npos ? SqueezeLetters(w) : w;
+        }
+
+        std::vector<std::vector<std::string>> SqueezePhrases(const std::vector<std::vector<std::string>>& list)
+        {
+            std::vector<std::vector<std::string>> out = list;
+            for (std::vector<std::string>& phrase : out)
+                for (std::string& w : phrase)
+                    w = SqueezePhraseWord(w);
+            return out;
+        }
+
+        std::vector<CommandPhrase> SqueezePhrases(const std::vector<CommandPhrase>& list)
+        {
+            std::vector<CommandPhrase> out = list;
+            for (CommandPhrase& phrase : out)
+                for (std::string& w : phrase.words)
+                    w = SqueezePhraseWord(w);
+            return out;
+        }
+
+        PartyRules SqueezeRules(const PartyRules& rules)
+        {
+            PartyRules out = rules;
+            out.start         = SqueezePhrases(rules.start);
+            out.pause         = SqueezePhrases(rules.pause);
+            out.resume        = SqueezePhrases(rules.resume);
+            out.cancel        = SqueezePhrases(rules.cancel);
+            out.negations     = SqueezePhrases(rules.negations);
+            out.questions     = SqueezePhrases(rules.questions);
+            out.openers       = SqueezePhrases(rules.openers);
+            out.notYet        = SqueezePhrases(rules.notYet);
+            out.resumeFillers = SqueezePhrases(rules.resumeFillers);
+            return out;
+        }
+
+        PartyIntent MatchPartyWords(const std::vector<std::string>& words, const std::string& cleanText,
+                                    const PartyRules& rules);
+    }
+
     PartyIntent MatchPartyIntent(const std::string& cleanText, const PartyRules& rules)
     {
         const std::vector<std::string> words = CrowdText::Words(cleanText);
+        const PartyIntent intent = MatchPartyWords(words, cleanText, rules);
+        if (intent != PartyIntent::None || words.empty() || (rules.maxWords > 0 && words.size() > rules.maxWords))
+            return intent;
+
+        // "letsgoooo", "leeggoooo": typed long. Only worth a second look when
+        // a word has a run in it at all.
+        std::vector<std::string> squeezed;
+        bool changed = false;
+        for (const std::string& w : words)
+        {
+            squeezed.push_back(SqueezeLetters(w));
+            changed = changed || squeezed.back() != w;
+        }
+        if (!changed)
+            return intent;
+        return MatchPartyWords(squeezed, cleanText, SqueezeRules(rules));
+    }
+
+    namespace
+    {
+    PartyIntent MatchPartyWords(const std::vector<std::string>& words, const std::string& cleanText,
+                                const PartyRules& rules)
+    {
         if (words.empty() || (rules.maxWords > 0 && words.size() > rules.maxWords))
             return PartyIntent::None;
 
@@ -1328,6 +1407,7 @@ namespace TextRules
             return PartyIntent::Start;
 
         return PartyIntent::None;
+    }
     }
 
     // ---- conjured food and water ---------------------------------------------

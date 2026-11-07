@@ -177,6 +177,43 @@ namespace
         }
     }
 
+    // What playerbots hands a bot for nothing, and tops up every few hours:
+    // ammo, food and drink, potions, class reagents, stones, oils, poisons
+    // (PlayerbotFactory). Its own supplies: never given away or offered, even
+    // the stone that does not fit its weapon.
+    bool IsSupply(ItemTemplate const* proto)
+    {
+        switch (proto->Class)
+        {
+            case ITEM_CLASS_PROJECTILE:
+            case ITEM_CLASS_REAGENT:
+                return true;
+            case ITEM_CLASS_MISC:
+                if (proto->SubClass == ITEM_SUBCLASS_JUNK_REAGENT)
+                    return true;
+                break;
+            case ITEM_CLASS_CONSUMABLE:
+                if (proto->SubClass == ITEM_SUBCLASS_FOOD || proto->SubClass == ITEM_SUBCLASS_POTION)
+                    return true;
+                break;
+            default:
+                break;
+        }
+        static const std::unordered_set<uint32_t> kGiven = {
+            ROUGH_SHARPENING_STONE, COARSE_SHARPENING_STONE, HEAVY_SHARPENING_STONE, SOLID_SHARPENING_STONE,
+            DENSE_SHARPENING_STONE, ELEMENTAL_SHARPENING_STONE, FEL_SHARPENING_STONE, ADAMANTITE_SHARPENING_STONE,
+            ROUGH_WEIGHTSTONE, COARSE_WEIGHTSTONE, HEAVY_WEIGHTSTONE, SOLID_WEIGHTSTONE, DENSE_WEIGHTSTONE,
+            FEL_WEIGHTSTONE, ADAMANTITE_WEIGHTSTONE,
+            MINOR_WIZARD_OIL, LESSER_WIZARD_OIL, WIZARD_OIL, BRILLIANT_WIZARD_OIL, SUPERIOR_WIZARD_OIL,
+            MINOR_MANA_OIL, LESSER_MANA_OIL, BRILLIANT_MANA_OIL, SUPERIOR_MANA_OIL,
+            INSTANT_POISON, INSTANT_POISON_II, INSTANT_POISON_III, INSTANT_POISON_IV, INSTANT_POISON_V,
+            INSTANT_POISON_VI, INSTANT_POISON_VII, INSTANT_POISON_VIII, INSTANT_POISON_IX,
+            DEADLY_POISON, DEADLY_POISON_II, DEADLY_POISON_III, DEADLY_POISON_IV, DEADLY_POISON_V,
+            DEADLY_POISON_VI, DEADLY_POISON_VII, DEADLY_POISON_VIII, DEADLY_POISON_IX,
+        };
+        return kGiven.count(proto->ItemId) != 0;
+    }
+
     // A kept thing worth naming: what someone would actually ask about.
     int KeptRank(const BagEntry& e)
     {
@@ -600,12 +637,25 @@ namespace
             add(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot), true);
 
         // Given away free, so only what a player would give away free: not a
-        // blue, not a stack worth real gold (Bags.MaxGiftQuality, MaxGiftCopper).
+        // blue, not a stack worth real gold (Bags.MaxGiftQuality, MaxGiftCopper)
+        // -- and nothing at all unless Bags.GiveAway, or of its own supplies.
         for (BagEntry& e : out)
         {
             if (!e.spare)
                 continue;
             ItemTemplate const* proto = sObjectMgr->GetItemTemplate(e.entry);
+            if (proto && IsSupply(proto))
+            {
+                e.spare = false;
+                e.why   = g_BagsSupplyReason.empty() ? std::string("you are keeping it") : g_BagsSupplyReason;
+                continue;
+            }
+            if (!g_BagsGiveAway)
+            {
+                e.spare = false;
+                e.why   = g_BagsNoGiftReason.empty() ? std::string("you are keeping it") : g_BagsNoGiftReason;
+                continue;
+            }
             const uint32_t stack = proto ? std::max<uint32_t>(1, proto->GetMaxStackSize()) : 1;
             const uint64_t value = proto ? uint64_t(proto->SellPrice) * std::min(e.count, stack) : 0;
             if (e.quality > g_BagsMaxGiftQuality || value > g_BagsMaxGiftCopper)
@@ -746,6 +796,21 @@ void Bags_NoteLoot(Player* bot, uint32_t entry)
     list.push_back({ entry, Clock::now() });
     if (list.size() > kLootKept)
         list.erase(list.begin(), list.begin() + (list.size() - kLootKept));
+}
+
+bool Bags_GotLately(Player* bot, uint32_t entry, uint32_t minutes)
+{
+    if (!bot)
+        return false;
+    const auto now = Clock::now();
+    std::lock_guard<std::mutex> lock(g_lootMutex);
+    auto it = g_loot.find(bot->GetGUID().GetRawValue());
+    if (it == g_loot.end())
+        return false;
+    for (const Looted& l : it->second)
+        if (l.entry == entry && now - l.when <= std::chrono::minutes(minutes))
+            return true;
+    return false;
 }
 
 void Bags_NoteOffer(Player* bot, uint32_t entry, const std::string& scopeKey)

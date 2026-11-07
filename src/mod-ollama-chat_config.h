@@ -533,6 +533,9 @@ extern std::vector<std::vector<std::string>> g_BagsYesPhrases;    // words a bar
 extern std::vector<std::vector<std::string>> g_BagsClaimPhrases;  // ...one of which it needs: "me", "yes", "dibs"
 extern uint32_t    g_BagsMaxGiftQuality;     // given away free: no better than this (2 = green)
 extern uint32_t    g_BagsMaxGiftCopper;      // ...and a stack selling for no more than this
+extern bool        g_BagsGiveAway;           // hands over what it has no use for, for nothing (off by default)
+extern std::string g_BagsNoGiftReason;       // why not, when it is off
+extern std::string g_BagsSupplyReason;       // why it keeps what playerbots gave it
 extern std::vector<std::vector<std::string>> g_BagsNotPhrases;    // "dont", "no thanks"
 extern std::string g_BagsHintGive;
 extern std::string g_BagsHintInvite;
@@ -837,6 +840,17 @@ extern int         g_GuildEventTypeGuildMOTD_Chance;
 // --------------------------------------------
 // Chat v16: bots mingling in /say (mod-ollama-chat_mingle)
 // --------------------------------------------
+// A bot putting on a rare or epic it just got, and saying so in party
+// (mod-ollama-chat_equip)
+extern bool        g_EquipEnable;
+extern uint32_t    g_EquipMinQuality;           // rare (3) and up
+extern uint32_t    g_EquipChance;               // for a chat style not in Equip.Personalities
+extern std::unordered_map<std::string, uint32_t> g_EquipPersonalities;   // chat style -> chance
+extern uint32_t    g_EquipBotCooldownMinutes;
+extern uint32_t    g_EquipGroupCooldownSeconds;
+extern uint32_t    g_EquipLootedMinutes;        // got it this recently: loot, a roll, a quest reward
+extern std::string g_EquipPrompt;
+
 extern bool        g_MingleEnable;
 extern bool        g_MingleCitiesOnly;          // only where a real player is in a city (or inn)
 extern uint32_t    g_MingleGapMinSeconds;       // how often one may start near a real player

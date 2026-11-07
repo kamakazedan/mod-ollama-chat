@@ -74,6 +74,10 @@ bool Bags_IsItemTalk(const std::string& msg);
 // A bot just looted something. Any thread: it only records the item.
 void Bags_NoteLoot(Player* bot, uint32_t entry);
 
+// It got one of these in the last `minutes` (loot, a roll, a quest reward):
+// what Bags_NoteLoot heard. Any thread.
+bool Bags_GotLately(Player* bot, uint32_t entry, uint32_t minutes);
+
 // A bot just offered something in `scopeKey` (OllamaChat.Needs: "anyone
 // want [Linen Cloth]?", recorded when the line goes out): for a few minutes
 // "me!" there claims it.

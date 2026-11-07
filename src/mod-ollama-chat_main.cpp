@@ -6,6 +6,7 @@
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_rag.h"
 #include "mod-ollama-chat_conjure.h"
+#include "mod-ollama-chat_equip.h"
 #include "mod-ollama-chat_rolls.h"
 #include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_partycmd.h"
@@ -51,4 +52,7 @@ void Addmod_ollama_chatScripts()
 
     // Who the dungeon finder put in a group: the ones that leave after a run.
     new OllamaChatFinderJoinScript();
+
+    // A bot putting on a rare or epic it just got: noted as it goes on.
+    new OllamaChatEquipScript();
 }

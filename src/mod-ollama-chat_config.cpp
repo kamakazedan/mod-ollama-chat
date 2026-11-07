@@ -185,6 +185,15 @@ uint32_t g_RepetitionWindowSeconds       = 1800;
 uint32_t g_OpenerHistorySize             = 8;
 uint32_t g_RepetitionShortLineWindowSeconds = 300;
 std::string g_RepetitionOwnRepeatNote;
+bool        g_EquipEnable               = true;
+uint32_t    g_EquipMinQuality           = 3;
+uint32_t    g_EquipChance               = 20;
+std::unordered_map<std::string, uint32_t> g_EquipPersonalities;
+uint32_t    g_EquipBotCooldownMinutes   = 20;
+uint32_t    g_EquipGroupCooldownSeconds = 90;
+uint32_t    g_EquipLootedMinutes        = 10;
+std::string g_EquipPrompt;
+
 bool        g_MingleEnable              = true;
 bool        g_MingleCitiesOnly          = true;
 uint32_t    g_MingleGapMinSeconds       = 80;
@@ -442,6 +451,9 @@ std::vector<std::vector<std::string>> g_BagsYesPhrases;
 std::vector<std::vector<std::string>> g_BagsClaimPhrases;
 uint32_t    g_BagsMaxGiftQuality           = 2;
 uint32_t    g_BagsMaxGiftCopper            = 20000;
+bool        g_BagsGiveAway                 = false;
+std::string g_BagsNoGiftReason;
+std::string g_BagsSupplyReason;
 std::vector<std::vector<std::string>> g_BagsNotPhrases;
 std::string g_BagsHintGive;
 std::string g_BagsHintInvite;
@@ -1309,7 +1321,8 @@ static void LoadNaturalChatV4Settings()
         "lets start|lets begin|lets do this|lets do it|lets roll|lets move|lets continue|"
         "lets carry on|carry on|im back|i am back|back now|good to go|start the run|start the dungeon|"
         "start dungeon|start the instance|start the clear|just start|=start it|lets get started|=get started|"
-        "=start now|start already|=start pls|=start please|begin the run"));
+        "=start now|start already|=start pls|=start please|begin the run|letsgo|lesgo|lezgo|letzgo|lego|leggo|"
+        "lessgo|lets get it|letsgetit|lets get this|lets go again|go again"));
     // A bare "go" is playerbots' own command while it reads plain chat; with
     // Playerbots.CommandPrefix set it no longer does, and "go" is just what
     // people type to start.
@@ -1770,11 +1783,17 @@ static void LoadNaturalChatV7Settings()
     g_BagsMaxKept           = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.MaxKept", 3);
     g_BagsMaxGiftQuality    = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.MaxGiftQuality", 2);
     g_BagsMaxGiftCopper     = sConfigMgr->GetOption<uint32_t>("OllamaChat.Bags.MaxGiftCopper", 20000);
+    g_BagsGiveAway          = sConfigMgr->GetOption<bool>("OllamaChat.Bags.GiveAway", false);
+    g_BagsNoGiftReason = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.NoGiftReason",
+        "you have no use for it, but you don't give your things away");
+    g_BagsSupplyReason = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.SupplyReason",
+        "it is one of your own supplies");
     g_BagsPromptText = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.PromptText",
         "What you have on you (bring up only what fits what they said): you could spare {spare}; you are keeping "
         "{kept}; and you have {money}. Asked for something you can spare, you are happy to let them have it; asked "
-        "for something you are keeping, say no and why. Never offer anything that is not listed here, and name what "
-        "you offer exactly, in square brackets.");
+        "for something you are keeping, say no and why. Never offer anything that is not listed here, and never "
+        "offer to give anything away that is not on the spare list; name what you mention exactly, in square "
+        "brackets.");
     g_BagsTalkPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Bags.TalkWords",
         "trade|trading|tradeable|loot|looted|loots|drop|dropped|drops|bags|inventory|spare|sell|selling|wts|wtb|"
         "for sale|what do you have|what have you got|what you got|what u got|whatcha got|watcha got|got anything|"
@@ -1809,8 +1828,7 @@ static void LoadNaturalChatV7Settings()
         "will be as soon as the window is open. Say so in a few words.");
     g_BagsHandoverText = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.HandoverText",
         "Saying so hands nothing over: things only change hands in a trade window, and you are told when one is "
-        "opening. So never say you have given, sent, traded or put anything in their bags; if they want something "
-        "you can spare, just offer it.");
+        "opening. So never say you have given, sent, traded or put anything in their bags.");
 
     // --- asks with a real reason behind them --------------------------------------------
     g_NeedsEnable              = sConfigMgr->GetOption<bool>("OllamaChat.Needs.Enable", true);
@@ -2524,6 +2542,45 @@ static void LoadNaturalChatV15Settings()
 }
 
 // Chat v16: bots mingling in /say (mod-ollama-chat_mingle).
+// A bot putting on a rare or epic it just got, and saying so in party.
+static void LoadNaturalChatV20Settings()
+{
+    g_EquipEnable     = sConfigMgr->GetOption<bool>("OllamaChat.Equip.Enable", true);
+    g_EquipMinQuality = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Equip.MinQuality", 3), 2, 5);
+    g_EquipChance     = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Equip.Chance", 20));
+    g_EquipPersonalities.clear();
+    for (const std::string& item : ReadPipeList("OllamaChat.Equip.Personalities",
+             "NAT_HYPE:90|NAT_EXCITABLE:90|NAT_BUTTERFLY:70|NAT_NEWBIE:70|NAT_SOCIAL:60|NAT_FRIENDLY:50|"
+             "NAT_MINMAXER:50|NAT_RAIDER:50|NAT_JOKER:45|NAT_BANTER:45|NAT_GOLDMAKER:40|NAT_PRANKSTER:40|"
+             "NAT_REACTOR:40|NAT_PVPER:40|NAT_TROLL:30|NAT_KEYBOARD:30|NAT_GRUMBLER:20|NAT_CONTRARIAN:20|"
+             "NAT_LOWERCASE:20|NAT_ABBREVIATOR:20|NAT_ROLEPLAYER:20|NAT_NOSTALGIC:20|NAT_CHILL:15|NAT_DEADPAN:10|"
+             "NAT_PROPER:10|NAT_HELPFUL_VET:10|NAT_TERSE_VET:5|NAT_QUIET:0|NAT_LONER:0"))
+    {
+        const size_t colon = item.find(':');
+        std::string key = item.substr(0, colon);
+        for (char& ch : key)
+            ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        const uint32_t chance = colon == std::string::npos ? 100
+                              : uint32_t(std::clamp(std::atoi(item.c_str() + colon + 1), 0, 100));
+        if (!key.empty())
+            g_EquipPersonalities[key] = chance;
+    }
+    g_EquipBotCooldownMinutes   = sConfigMgr->GetOption<uint32_t>("OllamaChat.Equip.BotCooldownMinutes", 20);
+    g_EquipGroupCooldownSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Equip.GroupCooldownSeconds", 90);
+    g_EquipLootedMinutes = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Equip.LootedMinutes", 10),
+                                                1, 120);
+    g_EquipPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Equip.Prompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in a group. Your chat style: "
+        "{bot_personality} You just got {item}, {what}, and you are putting it on right now. Say so in party chat "
+        "in your own way, the way players do with a nice bit of new gear: chuffed, excited, a quick finally, or "
+        "showing it off, whatever suits you. Name it as {item}, once. One short line, 3 to 12 words, no quotes, no "
+        "name in front.");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v20: new gear said in party {} ({} and up, {}% for a style "
+             "not listed, {} styles listed).", g_EquipEnable ? "on" : "off",
+             g_EquipMinQuality >= 4 ? "epics" : "rares", g_EquipChance, g_EquipPersonalities.size());
+}
+
 static void LoadNaturalChatV16Settings()
 {
     auto number = [](const char* key, uint32_t def, uint32_t lo, uint32_t hi)
@@ -3284,6 +3341,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV14Settings();
     LoadNaturalChatV15Settings();
     LoadNaturalChatV16Settings();
+    LoadNaturalChatV20Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

@@ -564,7 +564,25 @@ A bot tank leading a dungeon-clear group says
 to let it know when everyone is ready as the group comes in, and says so when
 every boss is down (`OllamaChat.Party.Greet*`, `Party.Done*`). After a mana
 break, "ok im done", "full" or "done drinking" resumes the run; "im ready
-now" starts one too.
+now" starts one too, and so does "lets go" however it's typed: "lego",
+"lesgo", "letsgoooo", "leeggoooo". A word typed long for effect counts as
+itself, so "readyyy" is "ready".
+
+## New Gear
+
+A bot in your group that puts on a rare or epic it just got (loot, a roll it
+won, a quest reward) may say so in party in its own words: "aww yes, [Gloves
+of the Fang] going straight on". Whether it does depends on its chat style:
+an excitable one usually will, a quiet one or a loner never does. Gear
+playerbots hands it doesn't count. See `OllamaChat.Equip.*`.
+
+## Giving Things Away
+
+Players don't hand their things to strangers for nothing, so bots don't
+either. Asked for something they have no use for, they say no, and they never
+offer things free in chat. Their own supplies (ammo, food and drink, potions,
+reagents, sharpening stones, oils and poisons, which playerbots gives them)
+are never handed over. `OllamaChat.Bags.GiveAway = 1` brings free gifts back.
 
 ## With mod-playerbots-plus
 

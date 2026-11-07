@@ -17,6 +17,7 @@
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_conjure.h"
+#include "mod-ollama-chat_equip.h"
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_marks.h"
@@ -769,6 +770,14 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)progress.said,
                              (unsigned long long)progress.shared,
                              (unsigned long long)progress.lapsed);
+    const EquipStats equip = Equip_GetStats();
+    if (show("party"))
+        handler->PSendSysMessage("New gear: {} - {} rares or epics put on, {} by a grouped bot that just got it, {} "
+                             "said so in party",
+                             g_EquipEnable ? "on" : "off",
+                             (unsigned long long)equip.noted,
+                             (unsigned long long)equip.fresh,
+                             (unsigned long long)equip.said);
     if (show("city"))
         handler->PSendSysMessage("City hangouts: {}", PlusStatus());
     const GiftsStats gifts = Gifts_GetStats();

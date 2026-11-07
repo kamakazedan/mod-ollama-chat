@@ -2442,7 +2442,11 @@ OllamaChat.Personality.MaxReplyLength.NAT_EXPERT = 250
 #   Phrase lists are separated by |; words are matched lowercase with
 #   punctuation and apostrophes dropped ("let's go!" = "lets go"); a
 #   trailing * matches any word starting with it; a leading = means the
-#   whole line must be exactly that ("=r" matches "r?", not "r u ok").
+#   whole line must be exactly that ("=r" matches "r?", not "r u ok"). A
+#   word typed long for effect counts as itself: a line that matches nothing
+#   is tried again with every run of one letter cut to one, in the line and
+#   in the phrases, so "letsgoooo" is "letsgo", "leeggoooo" is "lego" and
+#   "readyyy" is "ready".
 #
 ###############################################################################
 
@@ -2459,7 +2463,7 @@ OllamaChat.PartyCommands.Enable = 1
 #        bot to your target), so typing it in a dungeon drags the whole group
 #        onto whatever you have selected. GoPhrases are added for you when a
 #        CommandPrefix is set.
-OllamaChat.PartyCommands.StartPhrases = "=r|=begin|=start|=continue|=resume|=back|ready|rdy|gogo*|lets go|lets start|lets begin|lets do this|lets do it|lets roll|lets move|lets continue|lets carry on|carry on|im back|i am back|back now|good to go|start the run|start the dungeon|start dungeon|start the instance|start the clear|just start|=start it|lets get started|=get started|=start now|start already|=start pls|=start please|begin the run"
+OllamaChat.PartyCommands.StartPhrases = "=r|=begin|=start|=continue|=resume|=back|ready|rdy|gogo*|lets go|lets start|lets begin|lets do this|lets do it|lets roll|lets move|lets continue|lets carry on|carry on|im back|i am back|back now|good to go|start the run|start the dungeon|start dungeon|start the instance|start the clear|just start|=start it|lets get started|=get started|=start now|start already|=start pls|=start please|begin the run|letsgo|lesgo|lezgo|letzgo|lego|leggo|lessgo|lets get it|letsgetit|lets get this|lets go again|go again"
 
 #    OllamaChat.PartyCommands.GoPhrases
 #        Start phrases with "go" in them, added to StartPhrases only when
@@ -3145,6 +3149,55 @@ OllamaChat.State.OwnWay = "Right now you are off doing your own thing -- questin
 
 ###############################################################################
 #
+#   OLLAMA CHAT - NEW GEAR
+#
+#   Playerbots whispers its master "Equipping [Lorekeeper's Ring]" for every
+#   piece a bot puts on (mod-playerbots-plus mutes that). A player with a
+#   nice drop doesn't announce every ring, but with a rare or an epic they
+#   might say so in party, or might not, depending on who they are. So a bot
+#   in a group with a real player that puts on a rare or epic it got in the
+#   last LootedMinutes -- loot, a roll it won, a quest reward; never gear
+#   playerbots handed it -- may say so in party in its own words: "aww yes,
+#   [Gloves of the Fang] going straight on". How likely depends on its chat
+#   style (Personalities, or Chance for one not listed), at most once every
+#   BotCooldownMinutes per bot and one bot every GroupCooldownSeconds per
+#   group. In a fight it waits until the fight is over.
+#
+###############################################################################
+
+#    OllamaChat.Equip.Enable
+#        Default: 1
+OllamaChat.Equip.Enable = 1
+
+#    OllamaChat.Equip.MinQuality
+#        3 rare (blue) and up, 4 epic and up.
+#        Default: 3
+OllamaChat.Equip.MinQuality = 3
+
+#    OllamaChat.Equip.Chance
+#    OllamaChat.Equip.Personalities
+#        Percent chance a bot says so: by chat style (KEY:chance, separated by
+#        |; 0 never), or Chance for a style not listed.
+#        Default: 20, (below)
+OllamaChat.Equip.Chance = 20
+OllamaChat.Equip.Personalities = "NAT_HYPE:90|NAT_EXCITABLE:90|NAT_BUTTERFLY:70|NAT_NEWBIE:70|NAT_SOCIAL:60|NAT_FRIENDLY:50|NAT_MINMAXER:50|NAT_RAIDER:50|NAT_JOKER:45|NAT_BANTER:45|NAT_GOLDMAKER:40|NAT_PRANKSTER:40|NAT_REACTOR:40|NAT_PVPER:40|NAT_TROLL:30|NAT_KEYBOARD:30|NAT_GRUMBLER:20|NAT_CONTRARIAN:20|NAT_LOWERCASE:20|NAT_ABBREVIATOR:20|NAT_ROLEPLAYER:20|NAT_NOSTALGIC:20|NAT_CHILL:15|NAT_DEADPAN:10|NAT_PROPER:10|NAT_HELPFUL_VET:10|NAT_TERSE_VET:5|NAT_QUIET:0|NAT_LONER:0"
+
+#    OllamaChat.Equip.BotCooldownMinutes
+#    OllamaChat.Equip.GroupCooldownSeconds
+#    OllamaChat.Equip.LootedMinutes
+#        Default: 20, 90, 10
+OllamaChat.Equip.BotCooldownMinutes = 20
+OllamaChat.Equip.GroupCooldownSeconds = 90
+OllamaChat.Equip.LootedMinutes = 10
+
+#    OllamaChat.Equip.Prompt
+#        Placeholders: {bot_name}, {bot_level}, {bot_race}, {bot_class},
+#        {bot_personality}, {item} ("[Gloves of the Fang]"), {what} ("a rare
+#        pair of gloves", "an epic two-handed weapon").
+OllamaChat.Equip.Prompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in a group. Your chat style: {bot_personality} You just got {item}, {what}, and you are putting it on right now. Say so in party chat in your own way, the way players do with a nice bit of new gear: chuffed, excited, a quick finally, or showing it off, whatever suits you. Name it as {item}, once. One short line, 3 to 12 words, no quotes, no name in front."
+
+###############################################################################
+#
 #   OLLAMA CHAT - JOINING A GROUP
 #
 #   Playerbots has a bot whisper "Hello" to whoever invited it, every time
@@ -3418,6 +3471,23 @@ OllamaChat.Bags.MaxKept = 3
 OllamaChat.Bags.MaxGiftQuality = 2
 OllamaChat.Bags.MaxGiftCopper = 20000
 
+#    OllamaChat.Bags.GiveAway
+#    OllamaChat.Bags.NoGiftReason
+#    OllamaChat.Bags.SupplyReason
+#        Players don't hand their things to strangers for nothing, so with
+#        GiveAway off (the default) a bot gives nothing away and offers
+#        nothing free: asked for something it has no use for, it says no
+#        (NoGiftReason), and the Needs "spare" offers stop. Whatever
+#        playerbots hands a bot for free -- ammo, food and drink, potions,
+#        class reagents, sharpening stones, weightstones, oils, poisons -- it
+#        never gives away either way (SupplyReason): they are its supplies.
+#        With GiveAway on, what it has no use for goes free again, within
+#        MaxGiftQuality and MaxGiftCopper.
+#        Default: 0, (below), (below)
+OllamaChat.Bags.GiveAway = 0
+OllamaChat.Bags.NoGiftReason = "you have no use for it, but you don't give your things away"
+OllamaChat.Bags.SupplyReason = "it is one of your own supplies"
+
 #    OllamaChat.Bags.PromptText
 #        The list, in a reply prompt: when the line is about items (TalkWords,
 #        or a link), or a trade window between the two is open. Placeholders:
@@ -3428,14 +3498,14 @@ OllamaChat.Bags.MaxGiftCopper = 20000
 #        some [Ankh] if you want") counts as offered, the way a Needs offer
 #        does: "sure yes please", "trade it" or "can you trade me?" next takes
 #        it, and everything else that same line named.
-OllamaChat.Bags.PromptText = "What you have on you (bring up only what fits what they said): you could spare {spare}; you are keeping {kept}; and you have {money}. Asked for something you can spare, you are happy to let them have it; asked for something you are keeping, say no and why. Never offer anything that is not listed here, and name what you offer exactly, in square brackets."
+OllamaChat.Bags.PromptText = "What you have on you (bring up only what fits what they said): you could spare {spare}; you are keeping {kept}; and you have {money}. Asked for something you can spare, you are happy to let them have it; asked for something you are keeping, say no and why. Never offer anything that is not listed here, and never offer to give anything away that is not on the spare list; name what you mention exactly, in square brackets."
 
 #    OllamaChat.Bags.HandoverText
 #        Added after the list, and on its own to the bot's replies for
 #        OfferSeconds after it was shown the list or while a trade window
 #        between the two is open: saying so hands nothing over, so it never
 #        claims to have put something in their bags. Empty: not added.
-OllamaChat.Bags.HandoverText = "Saying so hands nothing over: things only change hands in a trade window, and you are told when one is opening. So never say you have given, sent, traded or put anything in their bags; if they want something you can spare, just offer it."
+OllamaChat.Bags.HandoverText = "Saying so hands nothing over: things only change hands in a trade window, and you are told when one is opening. So never say you have given, sent, traded or put anything in their bags."
 
 #    OllamaChat.Bags.TalkWords
 #        A line with one of these (or with a link) is about trading or what
@@ -4346,7 +4416,8 @@ OllamaChat.Needs.RememberMinutes = 15
 #    OllamaChat.Needs.WeightSpare
 #    OllamaChat.Needs.WeightShort
 #        Among the kinds it has something for, how likely each is. 0 turns a
-#        kind off.
+#        kind off. A spare thing is only ever offered free with
+#        Bags.GiveAway on: off, there is nothing spare to offer.
 #        Default: 40, 25, 25, 10
 OllamaChat.Needs.WeightQuest = 40
 OllamaChat.Needs.WeightErrand = 25
