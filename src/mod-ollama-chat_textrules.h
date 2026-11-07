@@ -54,6 +54,13 @@ namespace TextRules
     std::string StripVocatives(const std::string& text,
                                const std::vector<std::vector<std::string>>& vocatives);
 
+    // "far too quiet for a Tuesday" -- on a Saturday. A weekday said as being
+    // today ("for a tuesday", "on a tuesday", "its tuesday", "it is tuesday",
+    // "happy tuesday", "today is tuesday", "todays tuesday") becomes `today`
+    // (0 Sunday .. 6 Saturday), in the same case. "on tuesday", "next
+    // tuesday", "last tuesday" and "this tuesday" are other days: left alone.
+    std::string FixWeekday(const std::string& text, int today);
+
     // ---- muted bot lines ----------------------------------------------------
 
     // Does `text` match `pattern`? Case-insensitive, the whole text; '*'
@@ -204,6 +211,7 @@ namespace TextRules
         Pull,      // "pull", "go ahead and pull"
         Leave,     // "leave the group", "you can leave now"
         Grind,     // "go grind", "kill stuff", "farm some mobs"
+        Resume,    // "carry on", "do your thing", "ill follow you": back to what it was doing
         Count
     };
 

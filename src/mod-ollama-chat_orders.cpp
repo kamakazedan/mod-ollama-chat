@@ -105,15 +105,66 @@ namespace
             case BotIntent::Pull:    return "pull";
             case BotIntent::Leave:   return "leave the group";
             case BotIntent::Grind:   return "go and grind";
+            case BotIntent::Resume:  return "get on with what you were doing";
             default:                 return "do something";
         }
     }
 
     // Orders for one bot only: said to it by name, whispered, or plainly the
-    // bot the player was talking to.
+    // bot the player was talking to. "ill follow you" is said to one.
     bool OneBotOrder(BotIntent i)
     {
-        return i == BotIntent::Trade || i == BotIntent::Unstuck || i == BotIntent::Leave;
+        return i == BotIntent::Trade || i == BotIntent::Unstuck || i == BotIntent::Leave || i == BotIntent::Resume;
+    }
+
+    // ---- its own routine -------------------------------------------------------
+
+    // What a random bot does when it follows nobody, as playerbots' AiFactory
+    // gives it to one on its own: the new rpg (questing, grinding, wandering
+    // about, flying off now and then), or the old rpg, or moving at random.
+    const char* OwnRoutine()
+    {
+        if (sPlayerbotAIConfig.EnableNewRpgStrategy)
+            return "new rpg";
+        return sPlayerbotAIConfig.AutoDoQuests ? "rpg" : "move random";
+    }
+
+    bool OnOwnRoutine(PlayerbotAI* ai)
+    {
+        return !ai->HasStrategy("follow", BOT_STATE_NON_COMBAT) &&
+               (ai->HasStrategy("new rpg", BOT_STATE_NON_COMBAT) || ai->HasStrategy("rpg", BOT_STATE_NON_COMBAT) ||
+                ai->HasStrategy("move random", BOT_STATE_NON_COMBAT));
+    }
+
+    // "carry on": back to that, with grinding, and no longer following or
+    // staying put. It stays in the group. Changed in place, not through the
+    // "nc" command, which would save it as the bot's strategies for its next
+    // login. Playerbots puts its defaults back when the bot's group changes.
+    void StartOwnRoutine(PlayerbotAI* ai)
+    {
+        ai->ChangeStrategy(std::string("+grind,+") + OwnRoutine() + ",-follow,-stay,-passive", BOT_STATE_NON_COMBAT);
+        if (ai->HasStrategy("stay", BOT_STATE_COMBAT))
+            ai->ChangeStrategy("-stay", BOT_STATE_COMBAT);
+        if (ai->HasStrategy("follow", BOT_STATE_COMBAT))
+            ai->ChangeStrategy("-follow", BOT_STATE_COMBAT);
+    }
+
+    // "follow me" again: off its own routine. Playerbots' follow takes the
+    // grinding off itself.
+    void EndOwnRoutine(PlayerbotAI* ai)
+    {
+        for (const char* s : { "new rpg", "rpg", "move random" })
+            if (ai->HasStrategy(s, BOT_STATE_NON_COMBAT))
+                ai->ChangeStrategy(std::string("-") + s, BOT_STATE_NON_COMBAT);
+    }
+
+    // What it is going back to, for what it says: its quests when it has any.
+    std::string OwnRoutineWords(Player* bot)
+    {
+        for (auto const& [questId, status] : bot->getQuestStatusMap())
+            if (status.Status == QUEST_STATUS_INCOMPLETE || status.Status == QUEST_STATUS_COMPLETE)
+                return "your quests, with a bit of grinding on the way";
+        return "levelling: grinding whatever is about and seeing what turns up";
     }
 
     bool HasPartyBuffs(Player* bot)
@@ -319,6 +370,8 @@ namespace
                 return ai->HasStrategy("passive", BOT_STATE_COMBAT);
             case BotIntent::Grind:
                 return ai->HasStrategy("grind", BOT_STATE_NON_COMBAT);
+            case BotIntent::Resume:
+                return OnOwnRoutine(ai);
             default:
                 known = false;
                 return true;
@@ -390,6 +443,10 @@ namespace
                 if (Unstick(bot))
                     ++g_stats.unstuck;
                 break;
+            case BotIntent::Resume:
+                StartOwnRoutine(ai);
+                ++g_stats.sent;
+                break;
             default:
             {
                 // A dungeon-clear run that has started since leaves its party's
@@ -403,6 +460,8 @@ namespace
                 {
                     if (!p.command.empty())
                         SendCommand(ai, player, p.command);
+                    if (p.intent == BotIntent::Follow)
+                        EndOwnRoutine(ai);
                     if (p.recheck)
                         ++g_stats.redone;
                 }
@@ -515,6 +574,12 @@ namespace
                 if (bot->GetMap() && bot->GetMap()->Instanceable())
                     return "you are in a dungeon, where you fight what the group pulls, not whatever you like";
                 break;
+            case BotIntent::Resume:
+                if (!sRandomPlayerbotMgr.IsRandomBot(bot))
+                    return "you have nothing of your own to get back to: you go where they go";
+                if (bot->GetMap() && bot->GetMap()->Instanceable())
+                    return "you are in a dungeon, where the group sticks together";
+                break;
             default:
                 break;
         }
@@ -596,6 +661,11 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
     }
     const BotIntent intent = order.intent;
 
+    // "carry on" in a dungeon is about the run, not an order to wander off on
+    // its own: ordinary chat there.
+    if (intent == BotIntent::Resume && player->GetMap() && player->GetMap()->Instanceable())
+        return raw;
+
     // Who exactly.
     std::vector<Player*> bots;
     if (intent == BotIntent::Revive)
@@ -618,7 +688,7 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
         return raw;
     }
     else if (OneBotOrder(intent) && !audience.named && audience.bots.size() > 1 &&
-             !(intent == BotIntent::Leave && order.everyone))
+             !((intent == BotIntent::Leave || intent == BotIntent::Resume) && order.everyone))
     {
         // "come trade me" with four bots about: the one they were talking to.
         if (!seq)
@@ -796,6 +866,8 @@ bool Orders_HandleHumanLine(Player* player, const std::string& msg, ChatChannelS
     if (intent == BotIntent::Revive)
         facts.doing = voice->HasPlayerFlag(PLAYER_FLAGS_GHOST) ? "already running back to your body as a ghost"
                                                                 : "releasing your spirit to run back to your body";
+    if (intent == BotIntent::Resume)
+        facts.doing = OwnRoutineWords(voice);
 
     Answer(player, voice, msg, source, scopeKey, seq, HintFor(g_OrdersHint[Index(intent)], player, intent, facts));
 
@@ -844,6 +916,8 @@ void Orders_Update(uint32_t /*diff*/)
             {
                 if (!it->second.following)
                 {
+                    // Off on its own routine: coming over is following again.
+                    EndOwnRoutine(ai);
                     SendCommand(ai, player, "follow");
                     it->second.following = true;
                 }
@@ -962,13 +1036,22 @@ void Orders_ReleaseStays(Player* player, bool (*held)(Player* bot))
 
 std::string Orders_StateTextFor(Player* bot)
 {
-    if (!bot || g_StateStayingText.empty() || !bot->IsAlive())
+    if (!bot || !bot->IsAlive())
         return {};
     PlayerbotAI* ai = AiOf(bot);
-    if (!ai || !ai->HasStrategy("stay", BOT_STATE_NON_COMBAT))
+    if (!ai)
         return {};
     Player* master = ai->GetMaster();
-    const std::string out = SafeFormat(g_StateStayingText,
+    const std::string* templ = nullptr;
+    if (ai->HasStrategy("stay", BOT_STATE_NON_COMBAT))
+        templ = &g_StateStayingText;
+    // Told to get on with its own thing by the real player it is grouped
+    // with -- not a bot leading a group of bots, which always is.
+    else if (bot->GetGroup() && master && master != bot && !OllamaIsBotPlayer(master) && OnOwnRoutine(ai))
+        templ = &g_StateOwnWayText;
+    if (!templ || templ->empty())
+        return {};
+    const std::string out = SafeFormat(*templ,
                                        fmt::arg("player_name", master && master != bot ? master->GetName()
                                                                                          : std::string("your group")));
     return out == "[Format Error]" ? std::string() : out;

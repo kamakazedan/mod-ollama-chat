@@ -33,6 +33,8 @@
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_gear.h"
 #include "mod-ollama-chat_aside.h"
+#include "mod-ollama-chat_knowledge.h"
+#include "mod-ollama-chat_rolls.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
 #include <thread>
@@ -756,6 +758,24 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler)
                              (unsigned long long)aside.whispered,
                              (unsigned long long)aside.onLines,
                              (unsigned long long)aside.idle);
+    const KnowledgeStats known = Knowledge_GetStats();
+    handler->PSendSysMessage("Knowledge: {} - answers put in prompts: {} how to get an item, {} where a place is, {} "
+                             "ask a guard for any trainer, {} a question just before ({} told to get it wrong on "
+                             "purpose); {} guard direction menus, {} items sold by vendors (0 until the first "
+                             "question)",
+                             g_KnowledgeEnable ? "on" : "off",
+                             (unsigned long long)known.items,
+                             (unsigned long long)known.places,
+                             (unsigned long long)known.headings,
+                             (unsigned long long)known.followUps,
+                             (unsigned long long)known.wrong,
+                             known.menus,
+                             known.sold);
+    const RollsStats rolls = Rolls_GetStats();
+    handler->PSendSysMessage("Loot rolls: {} - {} put in a group's chat, {} very low or high ones remarked on",
+                             g_RollsEnable ? "on" : "off",
+                             (unsigned long long)rolls.noted,
+                             (unsigned long long)rolls.reactions);
 
     handler->PSendSysMessage("Roleplay: {} (strictness {})   Emote reactions: {}",
                              g_RoleplayEnable ? "on" : "off",

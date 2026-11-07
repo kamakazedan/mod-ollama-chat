@@ -62,6 +62,8 @@
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_gear.h"
 #include "mod-ollama-chat_aside.h"
+#include "mod-ollama-chat_knowledge.h"
+#include "mod-ollama-chat_clock.h"
 #include <iomanip>
 #include <unordered_set>
 #include "SpellMgr.h"
@@ -3376,6 +3378,15 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         if (!state.empty())
             prompt += " " + state;
     }
+    else if (!publicLine)
+    {
+        // ...and one told to stay put, or to get on with its own thing, knows
+        // why it is not following -- in the group's own chat, where it is the
+        // group's business.
+        const std::string staying = Orders_StateTextFor(bot);
+        if (!staying.empty())
+            prompt += " " + staying;
+    }
 
     // ...and who else in its group is dead, whether it was a wipe and who can
     // bring them back: "we wiped, we need to respawn" is understood.
@@ -3384,14 +3395,6 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         const std::string deaths = Wipe_StateTextFor(bot);
         if (!deaths.empty())
             prompt += " " + deaths;
-    }
-    else if (!publicLine)
-    {
-        // ...and one told to stay put knows why it is not following -- in the
-        // group's own chat, where it is the group's business.
-        const std::string staying = Orders_StateTextFor(bot);
-        if (!staying.empty())
-            prompt += " " + staying;
     }
 
     // Asked what it has, or for something: what is in its bags, what it could
@@ -3444,6 +3447,18 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     const std::string named = Links_Describe(bot, sentMessage);
     if (!named.empty())
         prompt += " " + named;
+
+    // Asked where something is or how to get it -- or answering someone who
+    // just was: the answer as the game has it, not the model's memory of WoW
+    // (mod-ollama-chat_knowledge).
+    const std::string known = Knowledge_PromptFor(bot, player, sentMessage);
+    if (!known.empty())
+        prompt += " " + known;
+
+    // Talk of days or times: what day and what time it really is.
+    const std::string clock = Clock_PromptFor(sentMessage);
+    if (!clock.empty())
+        prompt += " " + clock;
 
     if (spokenTo)
     {

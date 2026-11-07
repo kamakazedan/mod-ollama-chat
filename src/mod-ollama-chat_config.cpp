@@ -655,6 +655,62 @@ std::string g_AsideFactPet;
 std::string g_AsideFactDeaths;
 
 // --------------------------------------------
+// Chat v15
+// --------------------------------------------
+bool        g_KnowledgeEnable          = true;
+std::vector<std::vector<std::string>> g_KnowledgeQuestionWords;
+std::vector<std::vector<std::string>> g_KnowledgeNotAskingWords;
+std::vector<std::vector<std::string>> g_KnowledgeTrainerWords;
+std::vector<KnowledgeSynonym> g_KnowledgeSynonyms;
+float       g_KnowledgeGuardRange      = 500.0f;
+uint32_t    g_KnowledgeMaxGuardChars   = 240;
+uint32_t    g_KnowledgeManyZones       = 8;
+uint32_t    g_KnowledgeFollowSeconds   = 120;
+std::vector<std::string> g_KnowledgeWrongOnPurpose;
+std::string g_KnowledgeItemText;
+std::string g_KnowledgeSpreadManyText;
+std::string g_KnowledgeSpreadSomeText;
+std::string g_KnowledgeSpreadOneText;
+std::string g_KnowledgeKindText;
+std::string g_KnowledgeTokensText;
+std::string g_KnowledgeNearestText;
+std::string g_KnowledgeCraftText;
+std::string g_KnowledgeCraftAlsoText;
+std::string g_KnowledgeNoVendorText;
+std::string g_KnowledgeEnemyOnlyText;
+std::string g_KnowledgeTradeText;
+std::string g_KnowledgeBoundText;
+std::string g_KnowledgePlaceText;
+std::string g_KnowledgeMarkText;
+std::string g_KnowledgeHeadingText;
+std::string g_KnowledgeEarlierText;
+std::string g_KnowledgeFollowText;
+std::string g_KnowledgeAnswerText;
+std::string g_KnowledgeWrongText;
+
+uint32_t    g_LinksRepeatSeconds       = 180;
+std::string g_LinksQuestDoneText;
+std::string g_LinksQuestOnText;
+std::string g_LinksQuestRewardedText;
+std::string g_LinksQuestNoneText;
+std::string g_StateOwnWayText;
+bool        g_ClockFixWeekdays         = true;
+std::vector<std::vector<std::string>> g_ClockWords;
+std::string g_ClockPromptText;
+bool        g_RollsEnable              = true;
+uint32_t    g_RollsLowRoll             = 2;
+uint32_t    g_RollsHighRoll            = 99;
+uint32_t    g_RollsReactChance         = 50;
+uint32_t    g_RollsReactCooldownSeconds = 60;
+std::string g_RollsNoteText;
+std::string g_RollsLowPrompt;
+std::string g_RollsHighPrompt;
+
+std::vector<std::string> g_GuildEnvCommentGuildMOTDUnset;
+std::string g_GuildEventTypeGuildMOTD;
+int         g_GuildEventTypeGuildMOTD_Chance = 100;
+
+// --------------------------------------------
 // Topic engine
 // --------------------------------------------
 uint32_t g_TopicWeightPeople        = 30;
@@ -1386,8 +1442,9 @@ static void LoadNaturalChatV5Settings()
     g_LinksRememberMinutes = sConfigMgr->GetOption<uint32_t>("OllamaChat.Links.RememberMinutes", 60);
     g_LinksUseGameData     = sConfigMgr->GetOption<bool>("OllamaChat.Links.UseGameData", true);
     g_LinksPromptHint      = sConfigMgr->GetOption<std::string>("OllamaChat.Links.PromptHint",
-        "When you name a particular item or quest, write its exact name in square brackets, the way players "
-        "link them in chat.");
+        "Put an item's or quest's exact name in square brackets -- which makes it a link -- only when you are "
+        "offering it, asking for it or showing it off. Just mentioning it, answering a question about it or "
+        "joking about it, write the name plainly, without brackets.");
 
     // --- stock phrases ------------------------------------------------------
     g_ResponseOverusedPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(
@@ -1508,7 +1565,7 @@ static void LoadNaturalChatV7Settings()
     g_ResponseProvokeWords = phrases("OllamaChat.Response.ProvokeWords",
         "fuck*|shit*|bastard*|bollocks|stfu|gtfo|shut up|ur mum|your mum|ur nan|your nan|yo mama|ur mom|"
         "your mom|l2p|learn to play|rekt|cope|useless|clueless|stupid|dumb|bad at|suck|sucks|banter|bants");
-    g_ResponseInsultPersonalities = ReadPipeList("OllamaChat.Response.InsultPersonalities", "NAT_RUDE");
+    g_ResponseInsultPersonalities = ReadPipeList("OllamaChat.Response.InsultPersonalities", "NAT_RUDE|NAT_KEYBOARD");
     g_ResponseInsultCooldownSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Response.InsultCooldownSeconds", 600);
     g_ResponseRarePhrases = phrases("OllamaChat.Response.RarePhrases",
         "40 man|40man|forty man|40 mans|old school|back in vanilla|back in the day|the old days|old days|"
@@ -1587,6 +1644,14 @@ static void LoadNaturalChatV7Settings()
         "you can grind|kill stuff|kill some stuff|kill some mobs|kill things|kill everything|kill everything here|"
         "farm mobs|farm some mobs|=farm|go farm|go level|level up a bit|fight stuff|clear the area|clear this area|"
         "clear the camp|spread out and grind|spread out and kill stuff");
+    slot(BotIntent::Resume) = orders("OllamaChat.Orders.Resume",
+        "carry on|=resume|resume what you were doing|go back to what you were doing|back to what you were doing|"
+        "get back to what you were doing|do what you were doing|go do what you were doing|do your thing|"
+        "do your own thing|go do your thing|go do your own thing|you do you|do your quest|do your quests|"
+        "go do your quest|go do your quests|go do that|go do it|=on|on you go|off you go|be on your way|"
+        "go about your business|crack on|get on with it|get on with your quest|get on with your quests|"
+        "as you were|lead the way|lead on|you lead|you lead the way|ill follow you|i will follow you|ill follow|"
+        "ill tag along|ill come with you|ill go with you|dont mind me|dont let me stop you|dont let me keep you");
     g_OrdersRules.fillers = phrases("OllamaChat.Orders.Fillers",
         "pls|plz|please|pleas|plox|now|right now|here|there|then|again|quick|quickly|asap|for now|for a sec|"
         "a sec|for a second|a second|a moment|for a moment|a minute|for a minute|a bit|for a bit|ok|okay|k|kk|"
@@ -1651,6 +1716,10 @@ static void LoadNaturalChatV7Settings()
     hint(BotIntent::Grind, "OllamaChat.Orders.HintGrind",
         "{player_name} told {who} to go off and grind, so you are going to fight whatever is around here for a "
         "while. Say so in a few words, in your own chat style.");
+    hint(BotIntent::Resume, "OllamaChat.Orders.HintResume",
+        "{player_name} told {who} to get on with what you were doing before, so you are heading off to {doing} -- "
+        "still in their group, and they can tag along if they like. Say so in a few words, in your own chat "
+        "style.");
     hint(BotIntent::Leave, "OllamaChat.Orders.HintLeave",
         "{player_name} said you can leave the group, so you are leaving now. Say a short goodbye, in your own "
         "chat style.");
@@ -2416,7 +2485,7 @@ static void LoadNaturalChatV14Settings()
     for (const std::string& item : ReadPipeList("OllamaChat.Aside.Personalities",
              "NAT_GOSSIP:100|NAT_BUTTERFLY:50|NAT_BANTER:40|NAT_DEADPAN:30|NAT_JOKER:30|NAT_RUDE:30|NAT_GRUMBLER:25|"
              "NAT_RAIDER:25|NAT_SOCIAL:25|NAT_TROLL:20|NAT_CONTRARIAN:20|NAT_MINMAXER:20|NAT_PETLOVER:20|"
-             "NAT_PRANKSTER:20|NAT_HYPE:15"))
+             "NAT_PRANKSTER:20|NAT_KEYBOARD:20|NAT_HYPE:15"))
     {
         const size_t colon = item.find(':');
         std::string key = item.substr(0, colon);
@@ -2461,6 +2530,157 @@ static void LoadNaturalChatV14Settings()
              g_GiftsEnable ? "on" : "off", g_WipeEnable ? "on" : "off", g_WipeTankDownChance, g_WipeApologyChance,
              g_WipeNoRezChance, g_GearEnable ? "on" : "off", g_AsideEnable ? "on" : "off",
              g_AsidePersonalities.size(), g_AsidePlayerMinutes);
+}
+
+static void LoadNaturalChatV15Settings()
+{
+    auto phrases = [](const char* key, const char* def)
+    {
+        return CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(key, def));
+    };
+    auto text = [](const char* key, const char* def)
+    {
+        return sConfigMgr->GetOption<std::string>(key, def);
+    };
+
+    // --- where things are, and how to get them --------------------------------------------
+    g_KnowledgeEnable = sConfigMgr->GetOption<bool>("OllamaChat.Knowledge.Enable", true);
+    g_KnowledgeQuestionWords = phrases("OllamaChat.Knowledge.QuestionWords",
+        "where|wheres|whereabouts|who sells|what sells|anyone sell|anybody sell|anyone selling|anybody selling|"
+        "who has|how do i get|how do you get|how to get|how can i get|how would i get|how do i find|how to find|"
+        "any idea where|know where|cant find|cannot find|can not find");
+    g_KnowledgeNotAskingWords = phrases("OllamaChat.Knowledge.NotAskingWords",
+        "wts|sell it|sell this|sell my|sell these|sell them|sell those|to sell|can i sell|do i sell|im selling|"
+        "i am selling|i sell");
+    g_KnowledgeTrainerWords = phrases("OllamaChat.Knowledge.TrainerWords",
+        "trainer|trainers|train|training|learn|learning|teach|teacher|teaches|teaching|spells|skill|skills");
+    g_KnowledgeSynonyms.clear();
+    for (const std::string& entry : ReadPipeList("OllamaChat.Knowledge.Synonyms",
+             "ah,auctioneer,auctioneers=auction house|banker,bankers,vault=bank|"
+             "fp,flight path,flight paths,flightmaster,flight master,flight masters=flight master gryphon wind rider "
+             "bat handler hippogryph dragonhawk|innkeeper,innkeepers,hearth,tavern=inn|mail,mailbox,mailboxes=mailbox|"
+             "tram,subway=deeprun tram|boat,boats,ship,ships,docks,harbour=harbor|"
+             "zep,zepp,zeppelin,zeppelins=zeppelin master|"
+             "guild charter,charter,tabard,tabards,make a guild,create a guild,start a guild=guild master|"
+             "lockpicking,lockpick=locksmith|stable,stables,pet stable,stablemaster=stable master|"
+             "weapon master,weapon trainer,weapon skill,weapon skills,weapons master=weapons trainer|"
+             "battle master,battlemasters,bg,bgs,battleground,battlegrounds=battlemaster|"
+             "haircut,hair,barbershop,barber shop=barber|pally,pallies=paladin|lock,locks=warlock|sham,shammy=shaman|"
+             "dk,dks=death knight|lw,leather working=leatherworking|bs,black smithing,blacksmith=blacksmithing|"
+             "jc,jewel crafting,jewelcrafter=jewelcrafting|ench,enchanter,enchant=enchanting|"
+             "engi,eng,engy,engineer=engineering|alch,alchemist=alchemy|insc,scribe=inscription|"
+             "herb,herbing,herbalist=herbalism|skin,skinner=skinning|tailor=tailoring|cook,chef=cooking|"
+             "fish,fisher,fisherman=fishing|miner=mining|firstaid=first aid|sw=stormwind|org,orgri=orgrimmar|"
+             "uc=undercity|tb=thunder bluff|darna=darnassus|exo=exodar|smc=silvermoon|shatt=shattrath|dal,dala=dalaran"))
+    {
+        const size_t eq = entry.find('=');
+        if (eq == std::string::npos)
+            continue;
+        std::string triggers = entry.substr(0, eq);
+        std::replace(triggers.begin(), triggers.end(), ',', '|');
+        KnowledgeSynonym s;
+        s.triggers = CrowdText::ParsePhrases(triggers);
+        s.adds     = CrowdText::Words(entry.substr(eq + 1));
+        if (!s.triggers.empty() && !s.adds.empty())
+            g_KnowledgeSynonyms.push_back(std::move(s));
+    }
+    g_KnowledgeGuardRange    = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Knowledge.GuardRange", 500.0f), 0.0f, 5000.0f);
+    g_KnowledgeMaxGuardChars = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Knowledge.MaxGuardChars", 240), 60, 1000);
+    g_KnowledgeManyZones     = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Knowledge.ManyZones", 8), 2, 100);
+    g_KnowledgeFollowSeconds = std::min<uint32_t>(600, sConfigMgr->GetOption<uint32_t>("OllamaChat.Knowledge.FollowSeconds", 120));
+    g_KnowledgeWrongOnPurpose = ReadPipeList("OllamaChat.Knowledge.WrongOnPurpose", "NAT_KEYBOARD");
+    for (std::string& key : g_KnowledgeWrongOnPurpose)
+        for (char& ch : key)
+            ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    g_KnowledgeItemText = text("OllamaChat.Knowledge.ItemText", "How to get {item}, as it is in the game:");
+    g_KnowledgeSpreadManyText = text("OllamaChat.Knowledge.SpreadManyText",
+        "vendors all over sell it, in nearly every city and in many towns");
+    g_KnowledgeSpreadSomeText = text("OllamaChat.Knowledge.SpreadSomeText", "vendors in {zones} sell it");
+    g_KnowledgeSpreadOneText  = text("OllamaChat.Knowledge.SpreadOneText", "only {vendor}, in {place}, sells it");
+    g_KnowledgeKindText       = text("OllamaChat.Knowledge.KindText", "mostly {kinds} vendors");
+    g_KnowledgeTokensText     = text("OllamaChat.Knowledge.TokensText", "It costs tokens or honor rather than gold.");
+    g_KnowledgeNearestText    = text("OllamaChat.Knowledge.NearestText",
+        "The nearest one to {asker} is {vendor}, in {place}.");
+    g_KnowledgeCraftText      = text("OllamaChat.Knowledge.CraftText",
+        "No vendor sells it, but players with {professions} can make it.");
+    g_KnowledgeCraftAlsoText  = text("OllamaChat.Knowledge.CraftAlsoText", "Players with {professions} can make it too.");
+    g_KnowledgeNoVendorText   = text("OllamaChat.Knowledge.NoVendorText",
+        "No vendor sells it and no profession makes it: it is looted, gathered or earned from a quest.");
+    g_KnowledgeEnemyOnlyText  = text("OllamaChat.Knowledge.EnemyOnlyText",
+        "Only the other faction's vendors sell it.");
+    g_KnowledgeTradeText      = text("OllamaChat.Knowledge.TradeText",
+        "Players can trade it, so the auction house might have some.");
+    g_KnowledgeBoundText      = text("OllamaChat.Knowledge.BoundText",
+        "It binds when picked up, so nobody can trade it to anyone.");
+    g_KnowledgePlaceText = text("OllamaChat.Knowledge.PlaceText",
+        "Where {place} is in {town}, as the guards there tell anyone who asks them for directions: '{guard}'{marked} "
+        "Just telling them to ask a guard is a fine answer too.");
+    g_KnowledgeMarkText = text("OllamaChat.Knowledge.MarkText", "A guard also marks it on the minimap ({mark}).");
+    g_KnowledgeHeadingText = text("OllamaChat.Knowledge.HeadingText",
+        "In {town}, a guard asked for directions to the {heading} offers {choices}, and marks the one picked on the "
+        "minimap -- so: ask a guard.");
+    g_KnowledgeEarlierText = text("OllamaChat.Knowledge.EarlierText", "{asker} asked a moment ago: '{question}'.");
+    g_KnowledgeFollowText  = text("OllamaChat.Knowledge.FollowText",
+        "If anyone in the chat said otherwise, they got it wrong.");
+    g_KnowledgeAnswerText = text("OllamaChat.Knowledge.AnswerText",
+        "That is how it is in the game: if you answer, answer from it and add nothing it does not say -- in a few "
+        "words or a bit more, as your style goes.");
+    g_KnowledgeWrongText = text("OllamaChat.Knowledge.WrongText",
+        "That is the right answer and you know it -- but, as you do, give a wrong one with a straight face, to wind "
+        "them up. If someone corrects you, double down.");
+
+    // --- links: not the same one over and over --------------------------------------------
+    g_LinksRepeatSeconds = std::min<uint32_t>(3600, sConfigMgr->GetOption<uint32_t>("OllamaChat.Links.RepeatSeconds", 180));
+    g_LinksQuestDoneText = text("OllamaChat.Links.QuestDoneText",
+        "(you have it in your quest log and it is done: it only needs handing in{ender})");
+    g_LinksQuestOnText = text("OllamaChat.Links.QuestOnText",
+        "(you have it in your quest log, not done yet{progress})");
+    g_LinksQuestRewardedText = text("OllamaChat.Links.QuestRewardedText", "(you did it already)");
+    g_LinksQuestNoneText = text("OllamaChat.Links.QuestNoneText", "(you do not have it in your quest log)");
+    // --- what day and time it is --------------------------------------------------------
+    g_ClockFixWeekdays = sConfigMgr->GetOption<bool>("OllamaChat.Clock.FixWeekdays", true);
+    g_ClockWords = phrases("OllamaChat.Clock.Words",
+        "today|tonight|tomorrow|yesterday|weekend|weekday|this week|monday*|tuesday*|wednesday*|thursday*|friday*|"
+        "saturday*|sunday*|what day|which day|what time|time is it|this morning|this afternoon|this evening|"
+        "morning|afternoon|evening|midnight|bedtime|so late|so early|oclock|o clock|work tomorrow|school night");
+    g_ClockPromptText = text("OllamaChat.Clock.PromptText",
+        "For everyone here it is {now} right now ({time} server time).");
+
+    // --- loot rolls ----------------------------------------------------------------------
+    g_RollsEnable  = sConfigMgr->GetOption<bool>("OllamaChat.Rolls.Enable", true);
+    g_RollsLowRoll = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Rolls.LowRoll", 2));
+    g_RollsHighRoll = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Rolls.HighRoll", 99), 1, 101);
+    g_RollsReactChance = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Rolls.ReactChance", 50));
+    g_RollsReactCooldownSeconds = std::min<uint32_t>(3600, sConfigMgr->GetOption<uint32_t>("OllamaChat.Rolls.ReactCooldownSeconds", 60));
+    g_RollsNoteText = text("OllamaChat.Rolls.NoteText",
+        "loot roll for {item} (1 to 100, highest wins; need beats greed): {rolls} -- {winner} won it.");
+    g_RollsLowPrompt = text("OllamaChat.Rolls.LowPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} In your "
+        "group's loot roll for {item}, {player_name} just rolled {roll} out of 100 -- about as unlucky as a roll "
+        "gets{outcome}. Say something about it in party chat the way players do: a quick tease, or feel their "
+        "pain. Under 10 words, no name in front, no quotes.");
+    g_RollsHighPrompt = text("OllamaChat.Rolls.HighPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} In your "
+        "group's loot roll for {item}, {player_name} just rolled {roll} out of 100 -- about as lucky as a roll "
+        "gets{outcome}. React in party chat the way players do: gz, lucky, nice roll, or a joke about it. Under "
+        "10 words, no name in front, no quotes.");
+
+    g_StateOwnWayText = text("OllamaChat.State.OwnWay",
+        "Right now you are off doing your own thing -- questing and grinding -- because {player_name} told you to, "
+        "instead of following them. You are still in their group, and they may be tagging along.");
+
+    // --- a guild message of the day nobody set ---------------------------------------------
+    g_GuildEnvCommentGuildMOTDUnset = ReadPipeList("OllamaChat.GuildEnvCommentGuildMOTDUnset",
+        "the guild message of the day: nobody has ever set one, so it still shows the game's default text, No "
+        "message set.");
+    g_GuildEventTypeGuildMOTD = sConfigMgr->GetOption<std::string>("OllamaChat.GuildEventTypeGuildMOTD",
+        "set the guild message of the day to:");
+    g_GuildEventTypeGuildMOTD_Chance = std::clamp(sConfigMgr->GetOption<int>("OllamaChat.GuildEventTypeGuildMOTD_Chance", 100), 0, 100);
+
+    LOG_INFO("module.ollamachat",
+             "[Ollama Chat] Chat v15: knowledge {} ({} synonyms, wrong on purpose: {}); links not repeated for {} s.",
+             g_KnowledgeEnable ? "on" : "off", g_KnowledgeSynonyms.size(), g_KnowledgeWrongOnPurpose.size(),
+             g_LinksRepeatSeconds);
 }
 
 void LoadPersonalityExtras()
@@ -2933,7 +3153,7 @@ void LoadOllamaChatConfig()
         "guys|everyone|everybody|yall|folks|cheers|ta|tyty|m8|lads|lad|appreciate*|appreciated";
     static const char* kDefaultPlayful =
         "NAT_JOKER|NAT_TROLL|NAT_CONTRARIAN|NAT_REACTOR|NAT_HYPE|NAT_BANTER|NAT_DEADPAN|"
-        "NAT_EXCITABLE|NAT_GRUMBLER|NAT_PRANKSTER|NAT_GOSSIP|NAT_PVPER|NAT_BINGER|NAT_BUTTERFLY";
+        "NAT_EXCITABLE|NAT_GRUMBLER|NAT_PRANKSTER|NAT_GOSSIP|NAT_PVPER|NAT_BINGER|NAT_BUTTERFLY|NAT_KEYBOARD";
 
     g_CrowdEnable              = sConfigMgr->GetOption<bool>("OllamaChat.Crowd.Enable", true);
     g_CrowdMaxResponders       = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Crowd.MaxResponders", 5), 1, 10);
@@ -2993,6 +3213,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV11Settings();
     LoadNaturalChatV13Settings();
     LoadNaturalChatV14Settings();
+    LoadNaturalChatV15Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

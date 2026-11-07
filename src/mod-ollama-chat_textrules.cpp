@@ -535,6 +535,75 @@ namespace TextRules
         return tidy;
     }
 
+    std::string FixWeekday(const std::string& text, int today)
+    {
+        static const char* const kDays[] = { "sunday", "monday", "tuesday", "wednesday", "thursday", "friday",
+                                             "saturday" };
+        if (today < 0 || today > 6)
+            return text;
+
+        // Words with where they are: letters, digits and apostrophes.
+        struct W
+        {
+            size_t      begin = 0, end = 0;
+            std::string key;   // lowercase, apostrophes out: "it's" is "its"
+        };
+        std::vector<W> words;
+        for (size_t i = 0; i < text.size();)
+        {
+            const unsigned char c = static_cast<unsigned char>(text[i]);
+            if (!std::isalnum(c) && c != '\'')
+            {
+                ++i;
+                continue;
+            }
+            W w;
+            w.begin = i;
+            while (i < text.size() &&
+                   (std::isalnum(static_cast<unsigned char>(text[i])) || text[i] == '\''))
+            {
+                if (text[i] != '\'')
+                    w.key += static_cast<char>(std::tolower(static_cast<unsigned char>(text[i])));
+                ++i;
+            }
+            w.end = i;
+            if (!w.key.empty())
+                words.push_back(std::move(w));
+        }
+
+        std::string out = text;
+        // Back to front, so the places of the earlier ones still hold.
+        for (size_t k = words.size(); k-- > 0;)
+        {
+            int day = -1;
+            for (int d = 0; d < 7; ++d)
+                if (words[k].key == kDays[d])
+                    day = d;
+            if (day < 0 || day == today || k == 0)
+                continue;
+            const std::string& p1 = words[k - 1].key;
+            const std::string p2 = k >= 2 ? words[k - 2].key : std::string();
+            const bool now = p1 == "its" || p1 == "happy" || p1 == "todays" ||
+                             (p1 == "a" && (p2 == "for" || p2 == "on")) ||
+                             (p1 == "is" && (p2 == "it" || p2 == "today"));
+            if (!now)
+                continue;
+
+            // In the case it was written in: "Tuesday", "tuesday", "TUESDAY".
+            const std::string said = text.substr(words[k].begin, words[k].end - words[k].begin);
+            std::string name = kDays[today];
+            const bool allCaps = std::none_of(said.begin(), said.end(),
+                                              [](unsigned char c) { return std::islower(c); });
+            if (allCaps)
+                std::transform(name.begin(), name.end(), name.begin(),
+                               [](unsigned char c) { return char(std::toupper(c)); });
+            else if (std::isupper(static_cast<unsigned char>(said[0])))
+                name[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(name[0])));
+            out.replace(words[k].begin, words[k].end - words[k].begin, name);
+        }
+        return out;
+    }
+
     std::string StripVocatives(const std::string& text,
                                const std::vector<std::vector<std::string>>& vocatives)
     {
@@ -1043,6 +1112,7 @@ namespace TextRules
             case BotIntent::Pull:    return "pull";
             case BotIntent::Leave:   return "leave";
             case BotIntent::Grind:   return "grind";
+            case BotIntent::Resume:  return "resume";
             default:                 return "none";
         }
     }
@@ -2000,7 +2070,14 @@ namespace TextRules
                         ++i;   // malformed: the code goes, the rest stays
                         break;
                     }
-                    raw += female ? text.substr(colon + 1, semi - colon - 1) : text.substr(i + 2, colon - i - 2);
+                    std::string part = female ? text.substr(colon + 1, semi - colon - 1)
+                                              : text.substr(i + 2, colon - i - 2);
+                    // "$glad : lass;" -- the spaces round the colon belong to neither.
+                    while (!part.empty() && part.front() == ' ')
+                        part.erase(0, 1);
+                    while (!part.empty() && part.back() == ' ')
+                        part.pop_back();
+                    raw += part;
                     i = semi;
                     break;
                 }

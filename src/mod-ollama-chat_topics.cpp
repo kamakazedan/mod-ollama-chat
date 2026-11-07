@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_topics.h"
+#include "mod-ollama-chat_clock.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_roleplay.h"
@@ -142,24 +143,10 @@ namespace
         return "traveller";
     }
 
+    // "Saturday afternoon": the weekday too, or the model makes one up.
     std::string TimeOfDayText()
     {
-        const time_t now = static_cast<time_t>(GameTime::GetGameTime().count());
-        tm local{};
-#ifdef _WIN32
-        localtime_s(&local, &now);
-#else
-        localtime_r(&now, &local);
-#endif
-        const int hour = local.tm_hour;
-
-        if (hour < 5)  return "the dead of night";
-        if (hour < 8)  return "early morning";
-        if (hour < 12) return "mid-morning";
-        if (hour < 14) return "midday";
-        if (hour < 18) return "afternoon";
-        if (hour < 21) return "dusk";
-        return "night";
+        return Clock_NowText();
     }
 
     // --- gatherers --------------------------------------------------------
@@ -432,7 +419,9 @@ namespace
         {
             Add(out, TopicCategory::World, "time_of_day", g_EnvCommentTimeOfDay,
                 SafeFormat(PickOne(g_EnvCommentTimeOfDay),
-                           fmt::arg("time_of_day", TimeOfDayText())));
+                           fmt::arg("time_of_day", TimeOfDayText()),
+                           fmt::arg("weekday", Clock_WeekdayName()),
+                           fmt::arg("part_of_day", Clock_PartOfDay())));
         }
 
         if (bot->GetMap() && bot->GetMap()->IsDungeon() && !g_EnvCommentDungeon.empty())
@@ -628,7 +617,20 @@ namespace
             out.push_back({ TopicCategory::Guild, key, std::move(text), true });
         };
 
-        if (!guild->GetMOTD().empty())
+        // "No message set." is the game's own text for a guild whose message
+        // of the day nobody ever wrote -- every bot guild's. Read out as if
+        // someone had written it, it became "no message set is my spirit
+        // animal"; it is talked about as what it is instead.
+        std::string motd = guild->GetMOTD();
+        while (!motd.empty() && (std::isspace(static_cast<unsigned char>(motd.back())) || motd.back() == '.'))
+            motd.pop_back();
+        std::transform(motd.begin(), motd.end(), motd.begin(),
+                       [](unsigned char c) { return char(std::tolower(c)); });
+        if (motd == "no message set")
+            addGuild("guild_motd_unset", g_GuildEnvCommentGuildMOTDUnset,
+                     SafeFormat(PickOne(g_GuildEnvCommentGuildMOTDUnset),
+                                fmt::arg("guild_motd", guild->GetMOTD())));
+        else if (!guild->GetMOTD().empty())
             addGuild("guild_motd", g_GuildEnvCommentGuildMOTD,
                      SafeFormat(PickOne(g_GuildEnvCommentGuildMOTD),
                                 fmt::arg("guild_motd", guild->GetMOTD())));

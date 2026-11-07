@@ -45,8 +45,11 @@ struct LinkedLine
 
 // `text` (plain, no markup) with its "[Name]"s turned into links where one is
 // known, at most Links.MaxPerLine of them. With links off, both texts are the
-// line with its brackets taken off.
-LinkedLine Links_Resolve(Player* bot, const std::string& text);
+// line with its brackets taken off. A thing linked in the chat `scopeKey` in
+// the last Links.RepeatSeconds -- in `replyingTo`, the line being answered,
+// or by a bot -- is named plainly instead of linked again.
+LinkedLine Links_Resolve(Player* bot, const std::string& text, const std::string& scopeKey = std::string(),
+                         const std::string& replyingTo = std::string());
 
 // The line went out: count it in the stats.
 void Links_NoteSent(const LinkedLine& line);
@@ -65,9 +68,14 @@ void Links_NoteSent(const LinkedLine& line);
 struct ItemTemplate;
 class Quest;
 
-// "[Linen Cloth] is an item: cloth for tailoring and first aid, ..."; empty
-// for nullptr.
+// "Linen Cloth is an item: cloth for tailoring and first aid, ..."; empty
+// for nullptr. Names go in plainly: a name in brackets in a prompt is copied,
+// and becomes a link nobody needed.
 std::string Links_DescribeItem(ItemTemplate const* proto);
+
+// The item a name means ("Rune of Teleportation", any case), as a bot of this
+// level would take it when several share the name. Null when no item does.
+ItemTemplate const* Links_ItemNamed(const std::string& name, Player* bot);
 
 // "[The Fargodeep Mine] is a quest in Elwynn Forest, for level 7: Explore ...";
 // `reader` fills in the quest text's $N, $C, $R.

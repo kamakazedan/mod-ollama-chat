@@ -36,6 +36,7 @@
 #include "mod-ollama-chat_gear.h"
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_aside.h"
+#include "mod-ollama-chat_rolls.h"
 
 #include "CellImpl.h"
 #include "Channel.h"
@@ -448,6 +449,9 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 
     // The odd whispered aside about someone else in the group.
     Aside_Update(diff);
+
+    // Loot rolls into their group's transcript; a 1 or a 99 remarked on.
+    Rolls_Update();
 
     // Raid marks: whose mark is whose, saps on the star, the skull moving on.
     Marks_Update(diff);

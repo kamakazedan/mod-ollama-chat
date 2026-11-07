@@ -1390,10 +1390,10 @@ OllamaChat.Response.DropVocatives = "kid|kiddo"
 #        mug, clown) are not on the list: "selling melon" would lose its
 #        melon. Words as CrowdText reads them; a trailing * matches any
 #        ending. Empty InsultWords turns this off.
-#        Default: (below), NAT_RUDE, 600
+#        Default: (below), NAT_RUDE|NAT_KEYBOARD, 600
 OllamaChat.Response.InsultWords = "knob|knobhead|knobend|nob|nobhead|twat|dickhead|bellend|pillock|wanker|tosser|prat|muppet|numpty|plonker|wally|idiot|moron|berk|noob|nub|loser|weirdo"
 OllamaChat.Response.ProvokeWords = "fuck*|shit*|bastard*|bollocks|stfu|gtfo|shut up|ur mum|your mum|ur nan|your nan|yo mama|ur mom|your mom|l2p|learn to play|rekt|cope|useless|clueless|stupid|dumb|bad at|suck|sucks|banter|bants"
-OllamaChat.Response.InsultPersonalities = "NAT_RUDE"
+OllamaChat.Response.InsultPersonalities = "NAT_RUDE|NAT_KEYBOARD"
 OllamaChat.Response.InsultCooldownSeconds = 600
 
 #    OllamaChat.State.Dead
@@ -1871,7 +1871,7 @@ OllamaChat.Crowd.AckWords = "ty|thx|thnx|thanks|thank|tyvm|tysm|you|u|all|ok|oka
 #    OllamaChat.Crowd.PlayfulPersonalities
 #        Personality keys that count as playful when a crowd mixes voices;
 #        every other personality counts as straight. Separated by |.
-OllamaChat.Crowd.PlayfulPersonalities = "NAT_JOKER|NAT_TROLL|NAT_CONTRARIAN|NAT_REACTOR|NAT_HYPE|NAT_BANTER|NAT_DEADPAN|NAT_EXCITABLE|NAT_GRUMBLER|NAT_PRANKSTER|NAT_GOSSIP|NAT_PVPER|NAT_BINGER|NAT_BUTTERFLY"
+OllamaChat.Crowd.PlayfulPersonalities = "NAT_JOKER|NAT_TROLL|NAT_CONTRARIAN|NAT_REACTOR|NAT_HYPE|NAT_BANTER|NAT_DEADPAN|NAT_EXCITABLE|NAT_GRUMBLER|NAT_PRANKSTER|NAT_GOSSIP|NAT_PVPER|NAT_BINGER|NAT_BUTTERFLY|NAT_KEYBOARD"
 
 #    OllamaChat.Crowd.HintOpenCall
 #    OllamaChat.Crowd.HintFollowUp
@@ -2423,6 +2423,7 @@ OllamaChat.Emote.Style.NAT_EXCITABLE = "cheer|cheer|bounce|dance|wave|clap|giggl
 OllamaChat.Emote.Style.NAT_BANTER = "wink|grin|smirk|tease|poke|laugh|chuckle"
 OllamaChat.Emote.Style.NAT_JOKER = "giggle|cackle|laugh|chicken|joke|tickle|moo|wink"
 OllamaChat.Emote.Style.NAT_TROLL = "rasp|rasp|chicken|rude|mock|smirk|fart|pinch"
+OllamaChat.Emote.Style.NAT_KEYBOARD = "smirk|mock|gloat|facepalm|golfclap|snicker|taunt|veto|rude"
 OllamaChat.Emote.Style.NAT_CONTRARIAN = "doubt|disagree|no|eyebrow|shrug|scoff"
 OllamaChat.Emote.Style.NAT_REACTOR = "laugh|laugh|gasp|rofl|cheer|facepalm|applaud|chuckle"
 OllamaChat.Emote.Style.NAT_HYPE = "cheer|cheer|roar|flex|dance|victory|applaud|highfive|bounce"
@@ -2481,7 +2482,9 @@ OllamaChat.Personality.LongReplyNote = "You can write more than most players do:
 
 # The film and TV binger quotes nine replies in ten, and on the tenth just answers.
 # Where the line comes from is picked each time, so it is not the same few films.
-OllamaChat.Personality.Nudge.NAT_BINGER = "90|This time, answer with a famous funny line from {~a sci-fi film|a fantasy film|a comedy|an action film|a horror film|a cartoon|a sitcom|a British comedy|a crime drama|a superhero film|a war film|a kids' film|a musical|a cult classic|a quiz show|a soap} that fits what was said, bent to the moment if need be, and maybe say where it is from. Not one of the lines everyone quotes, and never one you have used already.|This time, no film or TV quote: just answer like anyone would."
+# It never says where a line is from: "to infinity and beyond. toy story." is
+# not how anyone quotes a film -- the ones who know it get it.
+OllamaChat.Personality.Nudge.NAT_BINGER = "90|This time, answer with a famous funny line from {~a sci-fi film|a fantasy film|a comedy|an action film|a horror film|a cartoon|a sitcom|a British comedy|a crime drama|a superhero film|a war film|a kids' film|a musical|a cult classic|a quiz show|a soap} that fits what was said, bent to the moment if need be. Never say what it is from or that it is a quote. Not one of the lines everyone quotes, and never one you have used already.|This time, no film or TV quote: just answer like anyone would."
 
 # The veteran who has played since launch explains things properly.
 OllamaChat.Personality.MaxReplyLength.NAT_EXPERT = 250
@@ -3079,9 +3082,21 @@ OllamaChat.Orders.Enable = 1
 #    OllamaChat.Orders.Pull
 #    OllamaChat.Orders.Leave
 #    OllamaChat.Orders.Grind
+#    OllamaChat.Orders.Resume
 #        The phrases for each order. When phrases of two orders both fit a
 #        line, the one covering more of it wins ("stay close" is follow);
 #        a tie is not an order.
+#
+#        Resume ("carry on", "do your thing", "go do your quest", "lead the
+#        way", "ill follow you"): outside a dungeon, a random bot goes back to
+#        what it does on its own -- playerbots' new rpg (or rpg, or moving at
+#        random, as its config has it) with grinding -- and stops following
+#        or staying put. It stays in the group, so the player can tag along;
+#        "follow me" puts it back to following. Said to one bot (by name,
+#        whispered, or the one being talked to) unless said to everyone
+#        ("guys, carry on"). Its own routine sometimes takes a flight path or
+#        heads for another zone, as it would on its own. In a dungeon these
+#        lines are ordinary chat. "=on" is "go on": "go" is a filler.
 OllamaChat.Orders.Stay = "=stay|=hold|stay here|stay there|stay back|stay put|stay behind|stay where you are|stay where u are|stay right there|stay right here|wait here|wait there|wait right here|wait right there|wait back|wait for me|wait for me here|wait for me there|hold here|hold there|hold position|hold your position|hold up here|stand here|stand there|stand still|stand back|dont move|do not move|stop following|quit following|hang back|camp here|park here|park up"
 OllamaChat.Orders.Follow = "=follow|follow me|follow us|come with me|come with us|come w me|=with me|=on me|come here|come over here|=over here|get over here|come back|come back here|come to me|regroup|regroup on me|=this way|move out|lets move|keep up|catch up|follow again|start following|you can follow|come along|tag along|stick with me|stay with me|stay close|stay close to me|get back here|=get back"
 OllamaChat.Orders.Attack = "attack|attack my target|attack that|attack it|attack him|attack her|attack them|attack this|kill it|kill that|kill him|kill her|kill them|kill this|kill my target|get him|get her|focus my target|focus that|focus it|focus him|focus her|assist me|dps that|dps it|nuke it|nuke that|burn it|burn that|take it down|take that down"
@@ -3094,6 +3109,7 @@ OllamaChat.Orders.Buff = "=buff|=buffs|buff me|buff us|rebuff|need buffs|buff up
 OllamaChat.Orders.Pull = "=pull|pull it|pull that|pull them|you can pull|pull when ready|start pulling|tank pull|pull the next|pull next"
 OllamaChat.Orders.Leave = "leave the group|leave group|leave the party|leave party|you can leave|you can leave now|drop group|drop party"
 OllamaChat.Orders.Grind = "=grind|grind mobs|grind some mobs|grind here|grind for a bit|grind a bit|start grinding|keep grinding|you can grind|kill stuff|kill some stuff|kill some mobs|kill things|kill everything|kill everything here|farm mobs|farm some mobs|=farm|go farm|go level|level up a bit|fight stuff|clear the area|clear this area|clear the camp|spread out and grind|spread out and kill stuff"
+OllamaChat.Orders.Resume = "carry on|=resume|resume what you were doing|go back to what you were doing|back to what you were doing|get back to what you were doing|do what you were doing|go do what you were doing|do your thing|do your own thing|go do your thing|go do your own thing|you do you|do your quest|do your quests|go do your quest|go do your quests|go do that|go do it|=on|on you go|off you go|be on your way|go about your business|crack on|get on with it|get on with your quest|get on with your quests|as you were|lead the way|lead on|you lead|you lead the way|ill follow you|i will follow you|ill follow|ill tag along|ill come with you|ill go with you|dont mind me|dont let me stop you|dont let me keep you"
 
 #    OllamaChat.Orders.Fillers
 #    OllamaChat.Orders.Polite
@@ -3148,6 +3164,8 @@ OllamaChat.Orders.MaxStray = 1
 #    OllamaChat.Orders.HintBuff
 #    OllamaChat.Orders.HintPull
 #    OllamaChat.Orders.HintLeave
+#    OllamaChat.Orders.HintGrind
+#    OllamaChat.Orders.HintResume
 #    OllamaChat.Orders.HintCant
 #        What the bot answering is told. One bot answers for everyone it was
 #        for -- the tank when it is one of them. Placeholders: {player_name};
@@ -3156,9 +3174,10 @@ OllamaChat.Orders.MaxStray = 1
 #        "opening a trade window with them"; HintRevive: "releasing your spirit
 #        to run back to your body" or "already running back"); {where}
 #        (HintUnstuck: "back at the entrance of the dungeon", "at the nearest
-#        graveyard"); {order} and {reason} (HintCant: "use your hearthstone",
-#        "your hearthstone is still on cooldown"). Empty: the order is carried
-#        out without a word.
+#        graveyard"); {doing} for HintResume ("your quests, with a bit of
+#        grinding on the way"); {order} and {reason} (HintCant: "use your
+#        hearthstone", "your hearthstone is still on cooldown"). Empty: the
+#        order is carried out without a word.
 OllamaChat.Orders.HintStay = "{player_name} told {who} to stay put, and you are doing it: you will wait right here until they say to follow again. Say so in a few words, in your own chat style, the way you would tell them to give you a shout when they want you following again."
 OllamaChat.Orders.HintFollow = "{player_name} told {who} to follow them, and you are on your way. Say so in two to six words, in your own chat style."
 OllamaChat.Orders.HintAttack = "{player_name} told {who} to attack {target}, and you are going in. Say so in two to five words, in your own chat style."
@@ -3171,6 +3190,7 @@ OllamaChat.Orders.HintBuff = "{player_name} asked for buffs, and you are buffing
 OllamaChat.Orders.HintPull = "{player_name} told you to pull, and you are pulling {target} now. Say so in two to five words, in your own chat style."
 OllamaChat.Orders.HintLeave = "{player_name} said you can leave the group, so you are leaving now. Say a short goodbye, in your own chat style."
 OllamaChat.Orders.HintGrind = "{player_name} told {who} to go off and grind, so you are going to fight whatever is around here for a while. Say so in a few words, in your own chat style."
+OllamaChat.Orders.HintResume = "{player_name} told {who} to get on with what you were doing before, so you are heading off to {doing} -- still in their group, and they can tag along if they like. Say so in a few words, in your own chat style."
 OllamaChat.Orders.HintCant = "{player_name} asked you to {order}, but you cannot right now: {reason}. Say so in a few words, in your own chat style."
 
 #    OllamaChat.Orders.TradeWalkSeconds
@@ -3202,10 +3222,12 @@ OllamaChat.Orders.NotDoneVerbs = "go|come|spread|kill|farm|grind|loot|sell|repai
 OllamaChat.Orders.HintNotDone = "If {player_name} just told you to do something, you are not doing it: nothing in the game has made you. So do not say you are on it or that you are doing it; say plainly you cannot from here, or answer it some other way, in your own chat style."
 
 #    OllamaChat.State.Staying
-#        Added to the prompt of a bot told to stay, so "why aren't you
-#        coming?" gets a real answer. {player_name}: who it takes orders from.
-#        Empty disables.
+#    OllamaChat.State.OwnWay
+#        Added to the prompt of a bot told to stay (Staying), or to carry on
+#        with its own thing (OwnWay), so "why aren't you coming?" gets a real
+#        answer. {player_name}: who it takes orders from. Empty disables.
 OllamaChat.State.Staying = "Right now you are waiting where {player_name} told you to stay, until they tell you to follow again."
+OllamaChat.State.OwnWay = "Right now you are off doing your own thing -- questing and grinding -- because {player_name} told you to, instead of following them. You are still in their group, and they may be tagging along."
 
 ###############################################################################
 #
@@ -4091,7 +4113,7 @@ OllamaChat.Aside.Enable = 1
 #    OllamaChat.Aside.Personalities
 #        STYLE:weight, separated by |. A style not listed never does it.
 #        Default: (below)
-OllamaChat.Aside.Personalities = "NAT_GOSSIP:100|NAT_BUTTERFLY:50|NAT_BANTER:40|NAT_DEADPAN:30|NAT_JOKER:30|NAT_RUDE:30|NAT_GRUMBLER:25|NAT_RAIDER:25|NAT_SOCIAL:25|NAT_TROLL:20|NAT_CONTRARIAN:20|NAT_MINMAXER:20|NAT_PETLOVER:20|NAT_PRANKSTER:20|NAT_HYPE:15"
+OllamaChat.Aside.Personalities = "NAT_GOSSIP:100|NAT_BUTTERFLY:50|NAT_BANTER:40|NAT_DEADPAN:30|NAT_JOKER:30|NAT_RUDE:30|NAT_GRUMBLER:25|NAT_RAIDER:25|NAT_SOCIAL:25|NAT_TROLL:20|NAT_CONTRARIAN:20|NAT_MINMAXER:20|NAT_PETLOVER:20|NAT_PRANKSTER:20|NAT_KEYBOARD:20|NAT_HYPE:15"
 
 #    OllamaChat.Aside.LineChance
 #    OllamaChat.Aside.MinWords
@@ -4133,6 +4155,271 @@ OllamaChat.Aside.FactLevel = "{subject} is level {level}, {gap} levels {dir} the
 OllamaChat.Aside.FactGear = "{subject} is wearing {item}"
 OllamaChat.Aside.FactPet = "{subject}'s pet is a {family} called {pet}"
 OllamaChat.Aside.FactDeaths = "{subject} has died {deaths} times since joining the group"
+
+###############################################################################
+#
+#   OLLAMA CHAT - WHERE THINGS ARE, AND HOW TO GET THEM
+#
+#   "anyone know where i get Rune of Teleportation" had only the model's own
+#   memory of WoW to go on: it sent the asker to the auction house, then to
+#   kill a dragon, and every answer after the first agreed with it. "where is
+#   the engineering trainer in ironforge" got "near the entrance by the
+#   forge". Now a line asking where something is or how to get it
+#   (QuestionWords, unless it is selling: NotAskingWords) gets the answer
+#   from the game's own data in the reply prompt:
+#
+#     * An item -- linked, in brackets or just named: whether vendors sell it
+#       and how widely (SpreadManyText, SpreadSomeText, SpreadOneText), the
+#       kind most of them are (KindText: "Reagents"), the nearest one to the
+#       asker and where it stands (NearestText), that it costs tokens or
+#       honor rather than gold (TokensText); which professions make it
+#       (CraftText, CraftAlsoText); that nothing sells or makes it, so it is
+#       looted, gathered or earned (NoVendorText), and then that players can
+#       trade it (TradeText) -- or that it binds when picked up (BoundText).
+#       Vendors of the other faction do not count; when only they sell it,
+#       EnemyOnlyText says so.
+#     * A place in a town or city -- a class or profession trainer, the bank,
+#       the auction house, the inn, the flight master and the rest: what the
+#       guards say when asked for directions (the gossip menus behind their
+#       "What do you need directions to?") and what they mark on the minimap
+#       (PlaceText, MarkText). A town, city, district or zone named in the
+#       line ("in ironforge", "in goldshire", "sw") decides whose guards;
+#       else the guards nearest the asker, within GuardRange. A line naming
+#       somewhere with no such guards gets nothing, rather than another
+#       town's answer. "where are the class trainers" gets that a guard
+#       points you to each (HeadingText). Synonyms covers "ah", "fp", "lw"
+#       and the like. A class's trainer is only meant when a trainer is
+#       asked for (TrainerWords: "the mage district" is not the mage
+#       trainer), and a profession's, without that, only by its own name
+#       ("where do i buy fish" is not the fishing trainer).
+#     * For FollowSeconds after such a question, a reply to a line from
+#       whoever asked it, or from a bot that answered it, gets the same
+#       answer (EarlierText) and that anyone who said otherwise got it wrong
+#       (FollowText): a wrong answer gets put right.
+#
+#   Each bot is told this is how it is, and to answer from it in as many
+#   words as its style takes (AnswerText): a blunt one says "reagent
+#   vendors", a chatty one that they are in every city. The styles in
+#   WrongOnPurpose -- the keyboard warrior -- are told the right answer too,
+#   and to give a wrong one with a straight face (WrongText).
+#
+#   Built from the world database the first time anyone asks (well under a
+#   second, once per restart; the log says how long). Zones come from the
+#   world map; a district ("Trade District") only where the map around the
+#   spot is loaded already -- nothing is loaded for this. Holiday-only
+#   vendors and anything in an instance are left out. .ollama status shows
+#   how many answers went into prompts.
+#
+#   Templates take {placeholders} as listed; no other braces, and no double
+#   quotes inside a value (the server's config reader drops every one).
+#
+###############################################################################
+
+#    OllamaChat.Knowledge.Enable
+#        Default: 1
+OllamaChat.Knowledge.Enable = 1
+
+#    OllamaChat.Knowledge.QuestionWords
+#    OllamaChat.Knowledge.NotAskingWords
+#        A line with any of QuestionWords and none of NotAskingWords is a
+#        question about where something is or how to get it. Words and
+#        phrases as CrowdText reads them, separated by |.
+#        Default: (below)
+OllamaChat.Knowledge.QuestionWords = "where|wheres|whereabouts|who sells|what sells|anyone sell|anybody sell|anyone selling|anybody selling|who has|how do i get|how do you get|how to get|how can i get|how would i get|how do i find|how to find|any idea where|know where|cant find|cannot find|can not find"
+OllamaChat.Knowledge.NotAskingWords = "wts|sell it|sell this|sell my|sell these|sell them|sell those|to sell|can i sell|do i sell|im selling|i am selling|i sell"
+
+#    OllamaChat.Knowledge.TrainerWords
+#        Words that ask for a trainer: "where can i learn first aid".
+#        Default: (below)
+OllamaChat.Knowledge.TrainerWords = "trainer|trainers|train|training|learn|learning|teach|teacher|teaches|teaching|spells|skill|skills"
+
+#    OllamaChat.Knowledge.Synonyms
+#        What players' shorthand stands for: TRIGGERS=WORDS, separated by |.
+#        TRIGGERS are words or phrases separated by commas; WORDS are added
+#        to the question when one is in it. "fp" adds every flight master's
+#        name, so it finds the Gryphon Master in Stormwind and the Wind Rider
+#        Master in Orgrimmar.
+#        Default: (below)
+OllamaChat.Knowledge.Synonyms = "ah,auctioneer,auctioneers=auction house|banker,bankers,vault=bank|fp,flight path,flight paths,flightmaster,flight master,flight masters=flight master gryphon wind rider bat handler hippogryph dragonhawk|innkeeper,innkeepers,hearth,tavern=inn|mail,mailbox,mailboxes=mailbox|tram,subway=deeprun tram|boat,boats,ship,ships,docks,harbour=harbor|zep,zepp,zeppelin,zeppelins=zeppelin master|guild charter,charter,tabard,tabards,make a guild,create a guild,start a guild=guild master|lockpicking,lockpick=locksmith|stable,stables,pet stable,stablemaster=stable master|weapon master,weapon trainer,weapon skill,weapon skills,weapons master=weapons trainer|battle master,battlemasters,bg,bgs,battleground,battlegrounds=battlemaster|haircut,hair,barbershop,barber shop=barber|pally,pallies=paladin|lock,locks=warlock|sham,shammy=shaman|dk,dks=death knight|lw,leather working=leatherworking|bs,black smithing,blacksmith=blacksmithing|jc,jewel crafting,jewelcrafter=jewelcrafting|ench,enchanter,enchant=enchanting|engi,eng,engy,engineer=engineering|alch,alchemist=alchemy|insc,scribe=inscription|herb,herbing,herbalist=herbalism|skin,skinner=skinning|tailor=tailoring|cook,chef=cooking|fish,fisher,fisherman=fishing|miner=mining|firstaid=first aid|sw=stormwind|org,orgri=orgrimmar|uc=undercity|tb=thunder bluff|darna=darnassus|exo=exodar|smc=silvermoon|shatt=shattrath|dal,dala=dalaran"
+
+#    OllamaChat.Knowledge.GuardRange
+#        How near the asker the nearest guard has to be, in yards, when the
+#        line names no town.
+#        Default: 500
+OllamaChat.Knowledge.GuardRange = 500
+
+#    OllamaChat.Knowledge.MaxGuardChars
+#        A guard's directions are cut to about this many characters (at the
+#        end of a sentence where one ends late enough).
+#        Default: 240
+OllamaChat.Knowledge.MaxGuardChars = 240
+
+#    OllamaChat.Knowledge.ManyZones
+#        Sold in this many zones or more is "all over" (SpreadManyText);
+#        fewer, and the zones are named (SpreadSomeText).
+#        Default: 8
+OllamaChat.Knowledge.ManyZones = 8
+
+#    OllamaChat.Knowledge.FollowSeconds
+#        For this long after a question, whoever asked it and the bots that
+#        answered it are on it: a reply to a line of theirs gets the answer
+#        too. 0 turns that off.
+#        Default: 120
+OllamaChat.Knowledge.FollowSeconds = 120
+
+#    OllamaChat.Knowledge.WrongOnPurpose
+#        Chat styles that answer such questions wrong on purpose, separated
+#        by |. Empty: nobody does.
+#        Default: NAT_KEYBOARD
+OllamaChat.Knowledge.WrongOnPurpose = "NAT_KEYBOARD"
+
+#    OllamaChat.Knowledge.ItemText
+#    OllamaChat.Knowledge.SpreadManyText
+#    OllamaChat.Knowledge.SpreadSomeText
+#    OllamaChat.Knowledge.SpreadOneText
+#    OllamaChat.Knowledge.KindText
+#    OllamaChat.Knowledge.TokensText
+#    OllamaChat.Knowledge.NearestText
+#    OllamaChat.Knowledge.CraftText
+#    OllamaChat.Knowledge.CraftAlsoText
+#    OllamaChat.Knowledge.NoVendorText
+#    OllamaChat.Knowledge.EnemyOnlyText
+#    OllamaChat.Knowledge.TradeText
+#    OllamaChat.Knowledge.BoundText
+#        An item's answer, in that order: ItemText {item}; then the Spread
+#        that fits -- SomeText {zones}, OneText {vendor} {place} -- with
+#        " -- " and KindText {kinds} after it when most vendors are one or
+#        two kinds; TokensText when none of them takes gold; NearestText
+#        {asker} {vendor} {place}; CraftText or, when vendors sell it too,
+#        CraftAlsoText {professions}; EnemyOnlyText when only the other
+#        faction's vendors sell it; NoVendorText when nothing sells or makes
+#        it; BoundText when it binds when picked up, else TradeText when no
+#        vendor sells it. Empty leaves that part out.
+#        Default: (below)
+OllamaChat.Knowledge.ItemText = "How to get {item}, as it is in the game:"
+OllamaChat.Knowledge.SpreadManyText = "vendors all over sell it, in nearly every city and in many towns"
+OllamaChat.Knowledge.SpreadSomeText = "vendors in {zones} sell it"
+OllamaChat.Knowledge.SpreadOneText = "only {vendor}, in {place}, sells it"
+OllamaChat.Knowledge.KindText = "mostly {kinds} vendors"
+OllamaChat.Knowledge.TokensText = "It costs tokens or honor rather than gold."
+OllamaChat.Knowledge.NearestText = "The nearest one to {asker} is {vendor}, in {place}."
+OllamaChat.Knowledge.CraftText = "No vendor sells it, but players with {professions} can make it."
+OllamaChat.Knowledge.CraftAlsoText = "Players with {professions} can make it too."
+OllamaChat.Knowledge.NoVendorText = "No vendor sells it and no profession makes it: it is looted, gathered or earned from a quest."
+OllamaChat.Knowledge.EnemyOnlyText = "Only the other faction's vendors sell it."
+OllamaChat.Knowledge.TradeText = "Players can trade it, so the auction house might have some."
+OllamaChat.Knowledge.BoundText = "It binds when picked up, so nobody can trade it to anyone."
+
+#    OllamaChat.Knowledge.PlaceText
+#    OllamaChat.Knowledge.MarkText
+#    OllamaChat.Knowledge.HeadingText
+#        A place's answer. PlaceText: {place} ("the leatherworking trainer"),
+#        {town}, {guard} (what the guard says), {marked} (MarkText {mark},
+#        what the guard marks on the minimap, or nothing when it marks
+#        nothing). Under a heading with a few places -- Shattrath's two banks
+#        -- {guard} has what is said of each. HeadingText, for a heading with
+#        more -- every class's trainer: {heading}, {town}, {choices}.
+#        Default: (below)
+OllamaChat.Knowledge.PlaceText = "Where {place} is in {town}, as the guards there tell anyone who asks them for directions: '{guard}'{marked} Just telling them to ask a guard is a fine answer too."
+OllamaChat.Knowledge.MarkText = "A guard also marks it on the minimap ({mark})."
+OllamaChat.Knowledge.HeadingText = "In {town}, a guard asked for directions to the {heading} offers {choices}, and marks the one picked on the minimap -- so: ask a guard."
+
+#    OllamaChat.Knowledge.EarlierText
+#    OllamaChat.Knowledge.FollowText
+#        A reply to a chat where the question was just asked: EarlierText
+#        {asker} {question} before the answer, FollowText after it (not for
+#        the WrongOnPurpose styles).
+#        Default: (below)
+OllamaChat.Knowledge.EarlierText = "{asker} asked a moment ago: '{question}'."
+OllamaChat.Knowledge.FollowText = "If anyone in the chat said otherwise, they got it wrong."
+
+#    OllamaChat.Knowledge.AnswerText
+#    OllamaChat.Knowledge.WrongText
+#        What a bot is told to do with the answer: AnswerText, or WrongText
+#        for the WrongOnPurpose styles.
+#        Default: (below)
+OllamaChat.Knowledge.AnswerText = "That is how it is in the game: if you answer, answer from it and add nothing it does not say -- in a few words or a bit more, as your style goes."
+OllamaChat.Knowledge.WrongText = "That is the right answer and you know it -- but, as you do, give a wrong one with a straight face, to wind them up. If someone corrects you, double down."
+
+#    OllamaChat.Clock.FixWeekdays
+#    OllamaChat.Clock.Words
+#    OllamaChat.Clock.PromptText
+#        "It is far too quiet for a Tuesday" -- on a Saturday. The model has
+#        no calendar. FixWeekdays: a weekday a bot says as being today ("for a
+#        tuesday", "on a tuesday", "its tuesday", "it is tuesday", "happy
+#        tuesday", "today is tuesday") goes out as the server's real weekday;
+#        "on tuesday", "next tuesday" and "last tuesday" are other days and
+#        stay. Words: a line with any of these (CrowdText words, | between, a
+#        trailing * matches any ending) is about days or times, and a bot
+#        replying to it is told PromptText: {now} ("Saturday afternoon"),
+#        {weekday}, {part_of_day}, {time} ("14:51", server time). The
+#        time-of-day topic (EnvCommentTimeOfDay) has the weekday too. Empty
+#        Words or PromptText turns the telling off.
+#        Default: 1, (below)
+OllamaChat.Clock.FixWeekdays = 1
+OllamaChat.Clock.Words = "today|tonight|tomorrow|yesterday|weekend|weekday|this week|monday*|tuesday*|wednesday*|thursday*|friday*|saturday*|sunday*|what day|which day|what time|time is it|this morning|this afternoon|this evening|morning|afternoon|evening|midnight|bedtime|so late|so early|oclock|o clock|work tomorrow|school night"
+OllamaChat.Clock.PromptText = "For everyone here it is {now} right now ({time} server time)."
+
+#    OllamaChat.GuildEnvCommentGuildMOTDUnset
+#        Used instead of GuildEnvCommentGuildMOTD when the guild's
+#        message of the day is still "No message set." -- the text the game
+#        gives every guild whose MOTD nobody ever wrote, which is every bot
+#        guild. Read out as if someone had written it, bots made it a thing:
+#        "no message set is my spirit animal". With this they know it is the
+#        game's default and that nobody set one. Pipe-separated (|) list; empty
+#        turns the topic off for those guilds. (No double quotes inside a value:
+#        the server's config reader drops every one of them.)
+#        Placeholders: {guild_motd}
+#        Default: (below)
+OllamaChat.GuildEnvCommentGuildMOTDUnset = "the guild message of the day: nobody has ever set one, so it still shows the game's default text, No message set."
+
+#    OllamaChat.GuildEventTypeGuildMOTD
+#        Event type for a new guild message of the day. When someone
+#        sets one (/gmotd), a guildmate or two react in guild chat:
+#        "raid tonight 8pm" gets "im in". The game does not say who
+#        set it, so the guild leader stands for it when online,
+#        else a real player of the guild who is; a guild with no
+#        real player online is not told. The game's own "No message
+#        set." is not reacted to. GuildChatterBotCommentChance and
+#        GuildChatterMaxBotsPerEvent apply as for the other events.
+#        Default: set the guild message of the day to:, 100
+OllamaChat.GuildEventTypeGuildMOTD = set the guild message of the day to:
+OllamaChat.GuildEventTypeGuildMOTD_Chance = 100
+
+#    OllamaChat.Rolls.Enable
+#        Loot rolls the bots can see. A player lost a greed roll with a 1,
+#        typed "1 lol", and got "don't spend it all at once": the rolls only
+#        reach the players' chat frames. Now each loot roll in a group with a
+#        real player goes into the group's chat transcript once it is decided
+#        (NoteText), so a reply knows what "1 lol" was about.
+#        Default: 1
+OllamaChat.Rolls.Enable = 1
+
+#    OllamaChat.Rolls.NoteText
+#        {item}, {rolls} ("Ynos 93 (greed), Kami 1 (greed)"), {winner}.
+#        Default: (below)
+OllamaChat.Rolls.NoteText = "loot roll for {item} (1 to 100, highest wins; need beats greed): {rolls} -- {winner} won it."
+
+#    OllamaChat.Rolls.LowRoll
+#    OllamaChat.Rolls.HighRoll
+#    OllamaChat.Rolls.ReactChance
+#    OllamaChat.Rolls.ReactCooldownSeconds
+#    OllamaChat.Rolls.LowPrompt
+#    OllamaChat.Rolls.HighPrompt
+#        A real player's roll of LowRoll or less (as unlucky as it gets) or
+#        HighRoll or more (as lucky): ReactChance percent of the time a bot
+#        in the group says something about it in party chat, not twice in
+#        ReactCooldownSeconds in one group. Prompts: {bot_name}, {bot_level},
+#        {bot_race}, {bot_class}, {bot_personality}, {player_name}, {roll},
+#        {item}, {outcome} (", and won it", ", and Ynos won it on a need
+#        roll"). 0 ReactChance: never.
+#        Default: 2, 99, 50, 60, (below)
+OllamaChat.Rolls.LowRoll = 2
+OllamaChat.Rolls.HighRoll = 99
+OllamaChat.Rolls.ReactChance = 50
+OllamaChat.Rolls.ReactCooldownSeconds = 60
+OllamaChat.Rolls.LowPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} In your group's loot roll for {item}, {player_name} just rolled {roll} out of 100 -- about as unlucky as a roll gets{outcome}. Say something about it in party chat the way players do: a quick tease, or feel their pain. Under 10 words, no name in front, no quotes."
+OllamaChat.Rolls.HighPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} In your group's loot roll for {item}, {player_name} just rolled {roll} out of 100 -- about as lucky as a roll gets{outcome}. React in party chat the way players do: gz, lucky, nice roll, or a joke about it. Under 10 words, no name in front, no quotes."
 
 ###############################################################################
 #
@@ -4366,6 +4653,14 @@ OllamaChat.Links.MaxPerLine = 2
 #        Default: 60
 OllamaChat.Links.RememberMinutes = 60
 
+#    OllamaChat.Links.RepeatSeconds
+#        "anyone know where i get [Rune of Teleportation]?" and every answer
+#        linked it again, a wall of the same link. Once a thing has been
+#        linked in a chat -- in the line being answered, or by a bot -- bots
+#        name it plainly there for this many seconds. 0 turns this off.
+#        Default: 180
+OllamaChat.Links.RepeatSeconds = 180
+
 #    OllamaChat.Links.UseGameData
 #        Look names up in the item and quest tables when nobody posted them
 #        and the bot does not have them. The first lookup builds a name index
@@ -4375,7 +4670,28 @@ OllamaChat.Links.UseGameData = 1
 
 #    OllamaChat.Links.PromptHint
 #        What bots are told, at the end of chat, chatter and event prompts.
-OllamaChat.Links.PromptHint = "When you name a particular item or quest, write its exact name in square brackets, the way players link them in chat."
+#        Told to bracket every item and quest they named, they linked things
+#        nobody needed linked: answering a question about one, or joking about
+#        it. A link is for offering something, asking for it or showing it off.
+#        Default: (below)
+OllamaChat.Links.PromptHint = "Put an item's or quest's exact name in square brackets -- which makes it a link -- only when you are offering it, asking for it or showing it off. Just mentioning it, answering a question about it or joking about it, write the name plainly, without brackets."
+
+#    OllamaChat.Links.QuestDoneText
+#    OllamaChat.Links.QuestOnText
+#    OllamaChat.Links.QuestRewardedText
+#    OllamaChat.Links.QuestNoneText
+#        A quest named in a line (see DescribeText below) comes with whether
+#        the bot has it: done and only to hand in (QuestDoneText, {ender}: "
+#        to Sven", or nothing), on it (QuestOnText, {progress}: ": Skeletal
+#        Raider 7/15, Skeletal Healer 0/3", or nothing), done and handed in
+#        already (QuestRewardedText), or not in its quest log (QuestNoneText).
+#        "do you have [Proving Your Worth]?" read as asking for an item: "no
+#        i need that for the quest". Empty leaves that one out.
+#        Default: (below)
+OllamaChat.Links.QuestDoneText = "(you have it in your quest log and it is done: it only needs handing in{ender})"
+OllamaChat.Links.QuestOnText = "(you have it in your quest log, not done yet{progress})"
+OllamaChat.Links.QuestRewardedText = "(you did it already)"
+OllamaChat.Links.QuestNoneText = "(you do not have it in your quest log)"
 
 #    OllamaChat.Links.DescribeEnable
 #    OllamaChat.Links.DescribeMax
@@ -4999,7 +5315,9 @@ OllamaChat.EnvCommentZoneLandmark = You are in {area_name}, part of {zone_name}.
 
 # OllamaChat.EnvCommentTimeOfDay
 #   Description: A pipe-separated (|) list of template messages for when the bot remarks on the hour.
-#   Placeholders (named): {time_of_day}
+#   Placeholders (named): {time_of_day} ("Saturday afternoon": the server's day and
+#   time -- with the hour alone, bots made the day up), {weekday} ("Saturday"),
+#   {part_of_day} ("afternoon").
 OllamaChat.EnvCommentTimeOfDay = It is {time_of_day}. Remark on the hour.|Comment on it being {time_of_day} and what that means for travelling.|Mention that it is {time_of_day} and how you feel about it.
 
 # OllamaChat.EnvCommentCorpse

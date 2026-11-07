@@ -60,6 +60,42 @@ namespace
         g_seen.erase(oldest);
     }
 
+    // --- what was linked lately, chat by chat -------------------------------
+    // A player linked [Rune of Teleportation] asking where to get it, and
+    // every answer linked it again: a wall of the same link. Once a thing has
+    // been linked in a chat -- in the line being answered, or by a bot -- it is
+    // named plainly there for Links.RepeatSeconds.
+
+    std::unordered_map<std::string, time_t> g_recentLinks;   // scope '\x1f' name key -> when
+    constexpr size_t kMaxRecentLinks = 2000;
+
+    std::string RecentKey(const std::string& scope, const std::string& key)
+    {
+        return scope + '\x1f' + key;
+    }
+
+    bool LinkedLately(const std::string& scope, const std::string& key, time_t now)
+    {
+        if (scope.empty() || g_LinksRepeatSeconds == 0)
+            return false;
+        auto it = g_recentLinks.find(RecentKey(scope, key));
+        return it != g_recentLinks.end() && now - it->second < static_cast<time_t>(g_LinksRepeatSeconds);
+    }
+
+    void NoteLinked(const std::string& scope, const std::string& key, time_t now)
+    {
+        if (scope.empty() || key.empty() || g_LinksRepeatSeconds == 0)
+            return;
+        g_recentLinks[RecentKey(scope, key)] = now;
+        if (g_recentLinks.size() <= kMaxRecentLinks)
+            return;
+        const time_t cutoff = now - static_cast<time_t>(g_LinksRepeatSeconds);
+        for (auto it = g_recentLinks.begin(); it != g_recentLinks.end(); )
+            it = it->second < cutoff ? g_recentLinks.erase(it) : std::next(it);
+        if (g_recentLinks.size() > kMaxRecentLinks)
+            g_recentLinks.clear();
+    }
+
     // --- the item and quest tables ------------------------------------------
 
     uint64_t Hash(const std::string& key)
@@ -274,6 +310,17 @@ void Links_NoteMessage(const std::string& message)
             Remember(TextRules::NameKey(link.name), link.markup, now);
 }
 
+ItemTemplate const* Links_ItemNamed(const std::string& name, Player* bot)
+{
+    if (!bot)
+        return nullptr;
+    const std::string key = TextRules::NameKey(name);
+    if (key.empty() || JunkName(key))
+        return nullptr;
+    BuildIndex();
+    return BestItem(key, bot);
+}
+
 std::string Links_PromptHint()
 {
     if (!g_LinksEnable || g_LinksPromptHint.empty())
@@ -281,7 +328,8 @@ std::string Links_PromptHint()
     return " " + g_LinksPromptHint;
 }
 
-LinkedLine Links_Resolve(Player* bot, const std::string& text)
+LinkedLine Links_Resolve(Player* bot, const std::string& text, const std::string& scopeKey,
+                         const std::string& replyingTo)
 {
     LinkedLine out;
     const std::vector<TextRules::BracketName> names = TextRules::FindBracketNames(text);
@@ -292,6 +340,12 @@ LinkedLine Links_Resolve(Player* bot, const std::string& text)
     }
 
     const time_t now = time(nullptr);
+
+    // What the line being answered linked is linked in this chat already.
+    for (const TextRules::ChatLink& link : TextRules::ExtractChatLinks(replyingTo))
+        NoteLinked(scopeKey, TextRules::NameKey(link.name), now);
+    for (const TextRules::BracketName& n : TextRules::FindBracketNames(TextRules::StripChatMarkup(replyingTo)))
+        NoteLinked(scopeKey, TextRules::NameKey(n.name), now);
 
     // What the line will cost the client with the links so far.
     size_t bytes = text.size();
@@ -304,11 +358,12 @@ LinkedLine Links_Resolve(Player* bot, const std::string& text)
 
         // Only links players posted are remembered: one a bot looked up for
         // itself (its own faction's version of a quest, say) must not become
-        // everyone else's.
+        // everyone else's. One linked in this chat a moment ago is just named.
+        const std::string key = TextRules::NameKey(n.name);
         std::string markup;
-        if (g_LinksEnable && bot && out.linked < g_LinksMaxPerLine)
+        if (g_LinksEnable && bot && out.linked < g_LinksMaxPerLine && !LinkedLately(scopeKey, key, now))
         {
-            markup = Find(bot, TextRules::NameKey(n.name), now);
+            markup = Find(bot, key, now);
             if (markup.empty())
                 ++out.unresolved;
             else if (bytes - (n.end - n.begin) + markup.size() > kMaxLineBytes)
@@ -324,6 +379,7 @@ LinkedLine Links_Resolve(Player* bot, const std::string& text)
 
         bytes = bytes - (n.end - n.begin) + markup.size();
         ++out.linked;
+        NoteLinked(scopeKey, key, now);
         out.text  += markup;
         out.plain += TextRules::StripChatMarkup(markup);   // "[Name]", as a reader sees it
     }
@@ -542,7 +598,7 @@ std::string Links_DescribeItem(ItemTemplate const* p)
 {
     if (!p)
         return {};
-    std::string out = "[" + p->Name1 + "] is an item, not a person or a creature: ";
+    std::string out = p->Name1 + " is an item, not a person or a creature: ";
     const char* quality = QualityWord(p->Quality);
     const std::string kind = KindOf(p);
     const bool gear = p->Class == ITEM_CLASS_WEAPON || p->Class == ITEM_CLASS_ARMOR;
@@ -557,7 +613,7 @@ std::string Links_DescribeItem(ItemTemplate const* p)
         out += ", binds when picked up";
     if (p->Class == ITEM_CLASS_QUEST && p->StartQuest)
         if (Quest const* starts = sObjectMgr->GetQuestTemplate(p->StartQuest))
-            out += ", which starts the quest [" + starts->GetTitle() + "]";
+            out += ", which starts the quest '" + starts->GetTitle() + "'";
     return out;
 }
 
@@ -584,7 +640,7 @@ std::string Links_DescribeQuest(Quest const* quest, Player* reader)
 {
     if (!quest)
         return {};
-    std::string out = "[" + quest->GetTitle() + "] is " + QuestKind(quest);
+    std::string out = "'" + quest->GetTitle() + "' is " + QuestKind(quest);
     const std::string where = AreaOf(quest->GetZoneOrSort());
     if (!where.empty())
         out += " in " + where;
@@ -683,6 +739,82 @@ namespace
         return (out.empty() || out == "[Format Error]") ? std::string() : " " + out;
     }
 
+    // Who a quest is handed in to: " to Sven", or nothing.
+    std::string EnderOf(uint32 questId)
+    {
+        for (auto const& [entry, quest] : *sObjectMgr->GetCreatureQuestInvolvedRelationMap())
+            if (quest == questId)
+                if (CreatureTemplate const* t = sObjectMgr->GetCreatureTemplate(entry))
+                    return " to " + t->Name;
+        return {};
+    }
+
+    // ": Skeletal Raider 7/15, Skeletal Healer 0/3", or nothing.
+    std::string ProgressOf(Player* bot, Quest const* quest)
+    {
+        auto const& log = bot->getQuestStatusMap();
+        auto it = log.find(quest->GetQuestId());
+        if (it == log.end())
+            return {};
+        const QuestStatusData& status = it->second;
+        std::vector<std::string> parts;
+        for (uint8 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
+        {
+            const int32 id = quest->RequiredNpcOrGo[i];
+            if (!id || !quest->RequiredNpcOrGoCount[i])
+                continue;
+            std::string what;
+            if (id > 0)
+            {
+                if (CreatureTemplate const* t = sObjectMgr->GetCreatureTemplate(uint32(id)))
+                    what = t->Name;
+            }
+            else if (GameObjectTemplate const* go = sObjectMgr->GetGameObjectTemplate(uint32(-id)))
+                what = go->name;
+            if (!what.empty())
+                parts.push_back(fmt::format("{} {}/{}", what,
+                                            std::min<uint32>(status.CreatureOrGOCount[i], quest->RequiredNpcOrGoCount[i]),
+                                            quest->RequiredNpcOrGoCount[i]));
+        }
+        for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
+        {
+            if (!quest->RequiredItemId[i] || !quest->RequiredItemCount[i])
+                continue;
+            if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(quest->RequiredItemId[i]))
+                parts.push_back(fmt::format("{} {}/{}", proto->Name1,
+                                            std::min<uint32>(status.ItemCount[i], quest->RequiredItemCount[i]),
+                                            quest->RequiredItemCount[i]));
+        }
+        std::string out;
+        for (size_t i = 0; i < parts.size() && i < 4; ++i)
+            out += (i ? ", " : ": ") + parts[i];
+        return out;
+    }
+
+    // Whether the bot has the quest, and how far along: "do you have [Proving
+    // Your Worth]?" asks about its quest log, not for something to hand over.
+    std::string HaveNote(Player* bot, Quest const* quest)
+    {
+        std::string out;
+        switch (bot->GetQuestStatus(quest->GetQuestId()))
+        {
+            case QUEST_STATUS_COMPLETE:
+                out = SafeFormat(g_LinksQuestDoneText, fmt::arg("ender", EnderOf(quest->GetQuestId())));
+                break;
+            case QUEST_STATUS_INCOMPLETE:
+            case QUEST_STATUS_FAILED:
+                out = SafeFormat(g_LinksQuestOnText, fmt::arg("progress", ProgressOf(bot, quest)));
+                break;
+            case QUEST_STATUS_REWARDED:
+                out = g_LinksQuestRewardedText;
+                break;
+            default:
+                out = g_LinksQuestNoneText;
+                break;
+        }
+        return (out.empty() || out == "[Format Error]") ? std::string() : " " + out;
+    }
+
     std::string QuestNote(Player* bot, Quest const* quest)
     {
         switch (Links_QuestFitFor(bot, quest))
@@ -742,7 +874,7 @@ std::string Links_Describe(Player* bot, const std::string& line)
     std::vector<std::string> parts;
     for (const Named& n : NamedIn(bot, line, g_LinksDescribeMax))
     {
-        std::string text = n.quest ? Links_DescribeQuest(n.quest, bot) + QuestNote(bot, n.quest)
+        std::string text = n.quest ? Links_DescribeQuest(n.quest, bot) + QuestNote(bot, n.quest) + HaveNote(bot, n.quest)
                                    : Links_DescribeItem(n.item) + ItemNote(bot, n.item);
         if (!text.empty())
             parts.push_back(std::move(text));
@@ -759,11 +891,16 @@ std::string Links_Describe(Player* bot, const std::string& line)
 
 void Links_Update()
 {
-    if (g_LinksRememberMinutes == 0)
-        return;
-    const time_t cutoff = time(nullptr) - static_cast<time_t>(g_LinksRememberMinutes) * 60;
-    for (auto it = g_seen.begin(); it != g_seen.end(); )
-        it = (it->second.at < cutoff) ? g_seen.erase(it) : std::next(it);
+    const time_t now = time(nullptr);
+    if (g_LinksRememberMinutes != 0)
+    {
+        const time_t cutoff = now - static_cast<time_t>(g_LinksRememberMinutes) * 60;
+        for (auto it = g_seen.begin(); it != g_seen.end(); )
+            it = (it->second.at < cutoff) ? g_seen.erase(it) : std::next(it);
+    }
+    const time_t recent = now - static_cast<time_t>(g_LinksRepeatSeconds);
+    for (auto it = g_recentLinks.begin(); it != g_recentLinks.end(); )
+        it = (it->second < recent) ? g_recentLinks.erase(it) : std::next(it);
 }
 
 LinksStats Links_GetStats()

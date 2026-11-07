@@ -67,7 +67,8 @@ std::string Bags_Describe(Player* bot);
 std::string Bags_PromptFor(Player* bot, Player* player, const std::string& msg, bool spokenTo);
 
 // Is this line about trading or about what someone has ("anything to
-// trade?", "what did you loot", a linked item)?
+// trade?", "what did you loot", a linked item)? A linked quest with no item
+// is about the quest log ("do you have [Proving Your Worth]?"): no.
 bool Bags_IsItemTalk(const std::string& msg);
 
 // A bot just looted something. Any thread: it only records the item.

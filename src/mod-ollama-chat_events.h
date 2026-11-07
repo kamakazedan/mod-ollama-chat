@@ -118,6 +118,7 @@ public:
     ChatOnGuild();
     void OnAddMember(Guild* guild, Player* player, uint8& plRank) override;
     void OnRemoveMember(Guild* guild, Player* player, bool isDisbanding, bool isKicked) override;
+    void OnMOTDChanged(Guild* guild, std::string const& newMotd) override;
     void OnEvent(Guild* guild, uint8 eventType, ObjectGuid::LowType playerGuid1,
                  ObjectGuid::LowType playerGuid2, uint8 newRank) override;
 };

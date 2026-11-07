@@ -723,8 +723,15 @@ bool Bags_IsItemTalk(const std::string& msg)
 {
     if (!g_BagsEnable || msg.empty())
         return false;
-    if (msg.find("|Hitem:") != std::string::npos || !TextRules::FindBracketNames(msg).empty())
-        return true;   // a link, or one as it reads once the markup is gone: "[Linen Cloth]"
+    if (msg.find("|Hitem:") != std::string::npos)
+        return true;   // an item linked
+    // A quest linked and no item: "do you have [Proving Your Worth]?" asks
+    // about its quest log, and shown its bags a bot answered "no i need that
+    // for the quest".
+    if (msg.find("|Hquest:") != std::string::npos)
+        return false;
+    if (!TextRules::FindBracketNames(msg).empty())
+        return true;   // a link as it reads once the markup is gone: "[Linen Cloth]"
     return CrowdText::ContainsPhrase(CrowdText::Words(msg), g_BagsTalkPhrases);
 }
 

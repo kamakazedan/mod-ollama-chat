@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_dispatch.h"
+#include "mod-ollama-chat_clock.h"
 #include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_congrats.h"
@@ -592,6 +593,17 @@ namespace
             c.text = kept;
         }
 
+        // "far too quiet for a Tuesday" -- on a Saturday. The model has no
+        // calendar: a weekday it uses for today becomes today's.
+        if (g_ClockFixWeekdays)
+        {
+            const std::string dated = TextRules::FixWeekday(c.text, Clock_Weekday());
+            if (g_DebugEnabled && dated != c.text)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} weekday put right: '{}' -> '{}'",
+                         bot->GetName(), c.text, dated);
+            c.text = dated;
+        }
+
         // "nah just chilling here you knob": an insult out of nowhere. One
         // fits banter someone started, or a line that was rude to it, or a
         // bot whose style is just rude -- and even then not every time (the
@@ -772,10 +784,12 @@ namespace
             return;
         }
 
-        // "[Linen Cloth]" becomes a real item link. Last, so every check above
-        // saw words rather than markup; `plain` is the line as a reader sees
-        // it, for the transcript, the history and the bots that hear it.
-        const LinkedLine line = Links_Resolve(bot, c.text);
+        // "[Linen Cloth]" becomes a real item link -- unless this chat had it
+        // linked a moment ago, in the line being answered or by another bot.
+        // Last, so every check above saw words rather than markup; `plain` is
+        // the line as a reader sees it, for the transcript, the history and
+        // the bots that hear it.
+        const LinkedLine line = Links_Resolve(bot, c.text, c.request.scopeKey, c.request.originMessage);
         c.text = line.text;
         const std::string& plain = line.plain;
 

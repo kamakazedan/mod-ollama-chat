@@ -57,7 +57,8 @@ void Orders_Update(uint32_t diff);
 void Orders_ReleaseStays(Player* player, bool (*held)(Player* bot) = nullptr);
 
 // For a bot's prompt: what it was told to do and is still doing ("you are
-// waiting where you were told to"), or empty. OllamaChat.State.Staying.
+// waiting where you were told to", "you are off doing your own thing"), or
+// empty. OllamaChat.State.Staying, OllamaChat.State.OwnWay.
 std::string Orders_StateTextFor(Player* bot);
 
 // For a bot's reply prompt: `msg`, from someone it takes orders from, reads

@@ -817,6 +817,69 @@ extern std::string g_AsideFactPet;
 extern std::string g_AsideFactDeaths;
 
 // --------------------------------------------
+// Chat v15: where things are and how to get them; links not repeated; a guild
+// message of the day nobody set
+// --------------------------------------------
+struct KnowledgeSynonym
+{
+    std::vector<std::vector<std::string>> triggers;   // "ah", "flight path"
+    std::vector<std::string> adds;                    // the words they stand for
+};
+extern bool        g_KnowledgeEnable;
+extern std::vector<std::vector<std::string>> g_KnowledgeQuestionWords;    // "where", "who sells"
+extern std::vector<std::vector<std::string>> g_KnowledgeNotAskingWords;   // "where can i sell my..."
+extern std::vector<std::vector<std::string>> g_KnowledgeTrainerWords;     // "trainer", "learn"
+extern std::vector<KnowledgeSynonym> g_KnowledgeSynonyms;
+extern float       g_KnowledgeGuardRange;
+extern uint32_t    g_KnowledgeMaxGuardChars;
+extern uint32_t    g_KnowledgeManyZones;
+extern uint32_t    g_KnowledgeFollowSeconds;
+extern std::vector<std::string> g_KnowledgeWrongOnPurpose;   // styles that answer wrong on purpose
+extern std::string g_KnowledgeItemText;
+extern std::string g_KnowledgeSpreadManyText;
+extern std::string g_KnowledgeSpreadSomeText;
+extern std::string g_KnowledgeSpreadOneText;
+extern std::string g_KnowledgeKindText;
+extern std::string g_KnowledgeTokensText;
+extern std::string g_KnowledgeNearestText;
+extern std::string g_KnowledgeCraftText;
+extern std::string g_KnowledgeCraftAlsoText;
+extern std::string g_KnowledgeNoVendorText;
+extern std::string g_KnowledgeEnemyOnlyText;
+extern std::string g_KnowledgeTradeText;
+extern std::string g_KnowledgeBoundText;
+extern std::string g_KnowledgePlaceText;
+extern std::string g_KnowledgeMarkText;
+extern std::string g_KnowledgeHeadingText;
+extern std::string g_KnowledgeEarlierText;
+extern std::string g_KnowledgeFollowText;
+extern std::string g_KnowledgeAnswerText;
+extern std::string g_KnowledgeWrongText;
+
+extern uint32_t    g_LinksRepeatSeconds;   // the same thing is not linked again in one chat this soon
+extern std::string g_LinksQuestDoneText;     // a quest named: the bot has it, done
+extern std::string g_LinksQuestOnText;       // ...has it, not done yet
+extern std::string g_LinksQuestRewardedText; // ...did it already
+extern std::string g_LinksQuestNoneText;     // ...does not have it
+extern std::string g_StateOwnWayText;        // a bot told to get on with its own thing
+extern bool        g_ClockFixWeekdays;       // "for a Tuesday" on a Saturday is put right
+extern std::vector<std::vector<std::string>> g_ClockWords;   // a line about days or times
+extern std::string g_ClockPromptText;
+
+extern bool        g_RollsEnable;                 // loot rolls into the group's transcript
+extern uint32_t    g_RollsLowRoll;                // a roll this low or lower is as unlucky as it gets
+extern uint32_t    g_RollsHighRoll;               // ...this high or higher as lucky
+extern uint32_t    g_RollsReactChance;
+extern uint32_t    g_RollsReactCooldownSeconds;
+extern std::string g_RollsNoteText;
+extern std::string g_RollsLowPrompt;
+extern std::string g_RollsHighPrompt;
+
+extern std::vector<std::string> g_GuildEnvCommentGuildMOTDUnset;   // the guild's MOTD is still the default
+extern std::string g_GuildEventTypeGuildMOTD;                       // a new message of the day
+extern int         g_GuildEventTypeGuildMOTD_Chance;
+
+// --------------------------------------------
 // Topic engine
 // --------------------------------------------
 extern uint32_t g_TopicWeightPeople;

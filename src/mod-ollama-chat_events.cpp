@@ -58,7 +58,8 @@ namespace
                 type == g_GuildEventTypeRareGear       ||
                 type == g_GuildEventTypeDungeonComplete||
                 type == g_GuildEventTypeGuildAchievement ||
-                type == g_GuildEventTypeGuildLogin;
+                type == g_GuildEventTypeGuildLogin     ||
+                type == g_GuildEventTypeGuildMOTD;
     }
 
     bool GuildHasRealPlayerOnline(uint32 guildId)
@@ -107,6 +108,7 @@ namespace
         if (type == g_GuildEventTypeGuildAchievement) return g_GuildEventTypeGuildAchievement_Chance;
         if (type == g_GuildEventTypeLevelUp)          return g_GuildEventTypeLevelUp_Chance;
         if (type == g_GuildEventTypeDungeonComplete)  return g_GuildEventTypeDungeonComplete_Chance;
+        if (type == g_GuildEventTypeGuildMOTD)        return g_GuildEventTypeGuildMOTD_Chance;
 
         return 0;
     }
@@ -169,6 +171,8 @@ namespace
             return { SafeFormat("{} was promoted", actor), true };
         if (type == g_GuildEventTypeEpicGear)
             return { SafeFormat("{} looted [{}]", actor, detail), true };
+        if (type == g_GuildEventTypeGuildMOTD)
+            return { SafeFormat("the guild message of the day was changed to: {}", detail), true };
         return { std::string(), false };
     }
 
@@ -689,6 +693,7 @@ ChatOnGuild::ChatOnGuild()
     : GuildScript("ChatOnGuild", {
           GUILDHOOK_ON_ADD_MEMBER,
           GUILDHOOK_ON_REMOVE_MEMBER,
+          GUILDHOOK_ON_MOTD_CHANGED,
           GUILDHOOK_ON_EVENT,
       }) { }
 
@@ -706,6 +711,41 @@ void ChatOnGuild::OnRemoveMember(Guild* guild, Player* player, bool /*isDisbandi
         return;
 
     eventChatter.DispatchGameEvent(player, g_GuildEventTypeGuildLeave, guild->GetName());
+}
+
+// A new message of the day: a guildmate or two react in guild chat -- "raid
+// tonight 8pm" gets "im in". The hook does not say who set it, so the guild
+// leader stands for it when online, else whichever real player is: someone
+// with the right to, and nobody but bots is ever told. The game's own "No
+// message set." -- and an empty one -- is nothing to react to.
+void ChatOnGuild::OnMOTDChanged(Guild* guild, std::string const& newMotd)
+{
+    if (!guild || !g_EnableGuildEventChatter || g_GuildEventTypeGuildMOTD.empty())
+        return;
+    std::string plain = newMotd;
+    while (!plain.empty() && (std::isspace(static_cast<unsigned char>(plain.back())) || plain.back() == '.'))
+        plain.pop_back();
+    std::transform(plain.begin(), plain.end(), plain.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+    if (plain.empty() || plain == "no message set")
+        return;
+
+    Player* setter = ObjectAccessor::FindConnectedPlayer(guild->GetLeaderGUID());
+    if (setter && OllamaIsBotPlayer(setter))
+        setter = nullptr;
+    if (!setter)
+        for (auto const& pair : ObjectAccessor::GetPlayers())
+        {
+            Player* p = pair.second;
+            if (p && p->IsInWorld() && p->GetGuildId() == guild->GetId() && !OllamaIsBotPlayer(p))
+            {
+                setter = p;
+                break;
+            }
+        }
+    if (!setter || !setter->IsInWorld())
+        return;
+
+    eventChatter.DispatchGameEvent(setter, g_GuildEventTypeGuildMOTD, TextRules::StripChatMarkup(newMotd));
 }
 
 void ChatOnGuild::OnEvent(Guild* guild, uint8 eventType, ObjectGuid::LowType playerGuid1,
