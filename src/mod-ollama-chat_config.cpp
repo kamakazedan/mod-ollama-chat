@@ -1367,8 +1367,14 @@ static void LoadNaturalChatV4Settings()
     g_PartyRunQuestionMaxWords = sConfigMgr->GetOption<uint32_t>("OllamaChat.PartyCommands.RunQuestionMaxWords", 14);
     g_PartyCmdRules.pause = TextRules::ParseCommandPhrases(sConfigMgr->GetOption<std::string>(
         "OllamaChat.PartyCommands.PausePhrases",
-        "mb|mana break|manabreak|need mana|need to drink|need a drink|need drink|drinking|=drink|oom|no mana|"
-        "low mana|low on mana|out of mana|outta mana|wait|w8|"
+        "mb|mana break|manabreak|need mana|need some mana|need more mana|need some more mana|need a bit of mana|"
+        "need a bit more mana|need a little mana|need a little more mana|need to get mana|get some mana|get my mana|"
+        "get mana back|let me get mana|lemme get mana|mana low|mana is low|manas low|mana getting low|"
+        "mana is getting low|manas getting low|need to regen|need regen|let me regen|lemme regen|gotta regen|"
+        "regen break|need to drink|need a drink|need drink|need some drink|need a quick drink|quick drink|"
+        "drink break|drink first|let me drink|lemme drink|gotta drink|got to drink|have to drink|gonna drink|"
+        "going to drink|drinking|=drink|oom|no mana|low mana|low on mana|out of mana|outta mana|need to eat|"
+        "let me eat|lemme eat|wait|w8|"
         "=w|hold on|hold up|holdup|hang on|stop|pause|=sec|one sec|1 sec|a sec|one min|1 min|a min|brb|=afk|"
         "need a break|need a sec|gimme a sec|give me a sec|bio break|=bio|lets rest|need to rest|=rest|"
         "dont pull|stop pulling|stay here|stay there|stay back|stay put|hold position|hold here|dont move"));

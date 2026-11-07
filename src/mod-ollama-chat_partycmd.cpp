@@ -259,7 +259,7 @@ namespace
             return false;
         };
 
-        if (has({ "mb", "mana", "manabreak", "drink", "drinking", "oom" }))
+        if (has({ "mb", "mana", "manas", "manabreak", "drink", "drinking", "oom", "regen" }))
             return "a mana break (mb means mana break: they need to drink)";
         if (has({ "brb", "afk", "bio" }))
             return "a short break (they will be right back)";
