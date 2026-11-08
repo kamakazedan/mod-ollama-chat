@@ -554,6 +554,28 @@ OllamaChat.Congrats.ThanksChance = 90
 OllamaChat.Congrats.ThanksDelayMinMs = 2500
 OllamaChat.Congrats.ThanksDelayMaxMs = 6000
 
+# OllamaChat.Congrats.AchievementsRareOnly
+# OllamaChat.Congrats.AchievementRarePoints
+#     Description: Only an achievement worth it gets a gz from the bots around, in /say or in guild chat:
+#                  nobody types gz for Can I Keep Him? or Duel-icious. Worth it is a Feat of Strength or a
+#                  realm first; one that gives a title, a mount, a pet or a tabard; one made of other
+#                  achievements (Glory of the Hero, Loremaster, World Explorer); or one worth
+#                  AchievementRarePoints points or more (0: points never make one worth it). Never a level
+#                  one: the ding gets its own gz. Whoever earned an achievement still says ty when someone does
+#                  gz it. Off (0): every achievement gets them, as before.
+#     Default:     1, 25
+OllamaChat.Congrats.AchievementsRareOnly = 1
+OllamaChat.Congrats.AchievementRarePoints = 25
+
+# OllamaChat.Congrats.AchievementAlways
+# OllamaChat.Congrats.AchievementNever
+#     Description: Achievement ids, separated by |, that always or never get a gz, whatever the above makes
+#                  of them. An achievement's id is the number in its Wowhead link
+#                  (wowhead.com/wotlk/achievement=1017 is Can I Keep Him?).
+#     Default:     "", ""
+OllamaChat.Congrats.AchievementAlways = ""
+OllamaChat.Congrats.AchievementNever = ""
+
 # --------------------------------------------
 # TYPING SIMULATION
 # --------------------------------------------

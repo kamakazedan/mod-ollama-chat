@@ -8,6 +8,7 @@
 
 class Channel;
 class Player;
+struct AchievementEntry;
 
 // --------------------------------------------------------------------------
 // "gz", and the one "ty".
@@ -34,6 +35,16 @@ class Player;
 // fire on map threads.
 void Congrats_NoteCelebrated(Player* who, const std::string& what);
 
+// Whether an achievement is worth a gz from the people around. Nobody types
+// gz for Can I Keep Him? or Duel-icious; they do for a Feat of Strength, a
+// realm first, one that gives a title, a mount, a pet or a tabard, one made
+// of other achievements (Glory of the Hero, Loremaster, World Explorer), or
+// one worth Congrats.AchievementRarePoints points. Never a level one: the
+// ding gets its own gz. Congrats.AchievementAlways / .AchievementNever
+// overrule it by id; Congrats.AchievementsRareOnly off makes them all worth
+// it. Reads only game data loaded at startup: any thread.
+bool Congrats_AchievementWorthIt(AchievementEntry const* achievement);
+
 // A real player's line. True when it is nothing but a congratulation: the
 // one it is for thanks (once), and nobody else answers it. `scopeKey` is
 // where it was said.
@@ -51,6 +62,7 @@ void Congrats_Update();   // maintenance: old dings are forgotten
 struct CongratsStats
 {
     uint64_t celebrated = 0;   // dings and achievements noted
+    uint64_t common     = 0;   // ...achievements of them too common for anyone to gz
     uint64_t heard      = 0;   // congratulations that only the one it was for answers
     uint64_t thanked    = 0;   // thank-yous sent
     uint64_t repeat     = 0;   // more gz after it had thanked already: nothing

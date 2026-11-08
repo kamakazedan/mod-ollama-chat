@@ -709,10 +709,12 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)joined.quiet);
     const CongratsStats cheers = Congrats_GetStats();
     if (show("chat"))
-        handler->PSendSysMessage("Congratulations: {} - {} dings noted, {} gz answered only by the one they were for, {} "
-                             "thank-yous, {} more gz after it ({} for nobody in particular)",
+        handler->PSendSysMessage("Congratulations: {} - {} dings noted ({} achievements too common for a gz), {} gz "
+                             "answered only by the one they were for, {} thank-yous, {} more gz after it ({} for "
+                             "nobody in particular)",
                              g_CongratsEnable ? "on" : "off",
                              (unsigned long long)cheers.celebrated,
+                             (unsigned long long)cheers.common,
                              (unsigned long long)cheers.heard,
                              (unsigned long long)cheers.thanked,
                              (unsigned long long)cheers.repeat,

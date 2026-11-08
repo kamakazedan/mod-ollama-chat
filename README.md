@@ -406,6 +406,7 @@ aren't talking" into a one-command diagnosis.
 
 7. **Random & Event-Based Chatter**  
    In addition to responding to direct chat, bots will occasionally generate random environment-aware lines when real players are nearby, and will also react to key in-game events (e.g., PvP/PvE kills, loot, deaths, quests, duels, level-ups, achievements, using objects) using context-specific templates and personalities.
+   Achievements get a gz only when they're worth one: a Feat of Strength, a realm first, one that gives a title, mount, pet or tabard, a meta-achievement like Glory of the Hero, or one worth 25 points or more. Nobody gz's Can I Keep Him? or Duel-icious, and a level achievement leaves it to the ding (`OllamaChat.Congrats.Achievement*`).
 
 8. **Live Reloading**  
    You can hot-reload the module config and personality packs in-game using the `.ollama reload` GM command or from the server console. All changes take effect immediately without requiring a restart.

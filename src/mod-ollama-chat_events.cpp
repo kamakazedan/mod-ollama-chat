@@ -672,7 +672,13 @@ void ChatOnAchievement::OnPlayerAchievementComplete(Player* player, AchievementE
     if (!player || !achievement || !achievement->name[0])
         return;
 
+    // A gz from someone still gets its "ty", whatever it was for.
     Congrats_NoteCelebrated(player, achievement->name[0]);
+
+    // Nobody types gz for Can I Keep Him? or Duel-icious: only for one worth
+    // it (Congrats.AchievementsRareOnly).
+    if (!Congrats_AchievementWorthIt(achievement))
+        return;
 
     eventChatter.DispatchGameEvent(player, g_EventTypeAchievement, achievement->name[0]);
 

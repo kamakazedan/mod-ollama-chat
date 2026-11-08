@@ -7,7 +7,9 @@
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
 
+#include "AchievementMgr.h"
 #include "Channel.h"
+#include "DBCStructure.h"
 #include "Group.h"
 #include "Log.h"
 #include "ObjectAccessor.h"
@@ -159,6 +161,49 @@ void Congrats_NoteCelebrated(Player* who, const std::string& what)
     c.what = what;
     c.when = now;
     ++g_stats.celebrated;
+}
+
+bool Congrats_AchievementWorthIt(AchievementEntry const* achievement)
+{
+    if (!achievement)
+        return false;
+    bool worth = !g_CongratsAchievementsRareOnly;
+    if (!worth)
+    {
+        constexpr uint32_t kFeatsOfStrength = 81;   // the achievement category
+        if (g_CongratsAchievementAlways.count(achievement->ID))
+            worth = true;
+        else if (g_CongratsAchievementNever.count(achievement->ID))
+            worth = false;
+        else if ((achievement->flags & (ACHIEVEMENT_FLAG_REALM_FIRST_REACH | ACHIEVEMENT_FLAG_REALM_FIRST_KILL)) ||
+                 achievement->categoryId == kFeatsOfStrength)
+            worth = true;
+        else
+        {
+            // What it is made of: a level ("Level 40" -- the ding has its own gz),
+            // or nothing but other achievements (a meta: Glory of the Hero).
+            const uint32_t criteriaOf = achievement->refAchievement ? achievement->refAchievement : achievement->ID;
+            AchievementCriteriaEntryList const* criteria = sAchievementMgr->GetAchievementCriteriaByAchievement(criteriaOf);
+            bool level = false, meta = criteria && !criteria->empty();
+            if (criteria)
+                for (AchievementCriteriaEntry const* c : *criteria)
+                {
+                    level = level || c->requiredType == ACHIEVEMENT_CRITERIA_TYPE_REACH_LEVEL;
+                    meta  = meta && c->requiredType == ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_ACHIEVEMENT;
+                }
+            if (level)
+                worth = false;
+            else
+                worth = meta || (g_CongratsAchievementRarePoints && achievement->points >= g_CongratsAchievementRarePoints) ||
+                        sAchievementMgr->GetAchievementReward(achievement) != nullptr;   // a title, mount, pet, tabard
+        }
+    }
+    if (!worth)
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        ++g_stats.common;
+    }
+    return worth;
 }
 
 bool Congrats_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSourceLocal source,

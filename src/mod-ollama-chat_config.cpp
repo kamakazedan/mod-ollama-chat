@@ -334,6 +334,10 @@ std::vector<std::string> g_CongratsThanksAllLines;
 uint32_t    g_CongratsThanksChance         = 90;
 uint32_t    g_CongratsThanksDelayMinMs     = 2500;
 uint32_t    g_CongratsThanksDelayMaxMs     = 6000;
+bool        g_CongratsAchievementsRareOnly  = true;
+uint32_t    g_CongratsAchievementRarePoints = 25;
+std::unordered_set<uint32_t> g_CongratsAchievementAlways;
+std::unordered_set<uint32_t> g_CongratsAchievementNever;
 
 std::vector<std::vector<std::string>> g_ResponseAssistantPhrases;
 
@@ -1239,6 +1243,31 @@ static void LoadNaturalChatV4Settings()
     g_CongratsThanksChance = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Congrats.ThanksChance", 90));
     g_CongratsThanksDelayMinMs = sConfigMgr->GetOption<uint32_t>("OllamaChat.Congrats.ThanksDelayMinMs", 2500);
     g_CongratsThanksDelayMaxMs = sConfigMgr->GetOption<uint32_t>("OllamaChat.Congrats.ThanksDelayMaxMs", 6000);
+    g_CongratsAchievementsRareOnly =
+        sConfigMgr->GetOption<bool>("OllamaChat.Congrats.AchievementsRareOnly", true);
+    g_CongratsAchievementRarePoints =
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.Congrats.AchievementRarePoints", 25);
+    {
+        // Achievement ids, separated by | or commas.
+        auto ids = [](const char* key)
+        {
+            std::unordered_set<uint32_t> out;
+            std::string token;
+            for (char ch : sConfigMgr->GetOption<std::string>(key, "") + "|")
+            {
+                if (ch >= '0' && ch <= '9')
+                    token += ch;
+                else if (!token.empty())
+                {
+                    out.insert(uint32_t(std::stoul(token)));
+                    token.clear();
+                }
+            }
+            return out;
+        };
+        g_CongratsAchievementAlways = ids("OllamaChat.Congrats.AchievementAlways");
+        g_CongratsAchievementNever  = ids("OllamaChat.Congrats.AchievementNever");
+    }
 
     // --- assistant speak --------------------------------------------------
     g_ResponseAssistantPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(

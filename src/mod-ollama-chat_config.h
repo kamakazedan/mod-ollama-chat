@@ -340,6 +340,10 @@ extern std::vector<std::string> g_CongratsThanksAllLines;            // "ty all"
 extern uint32_t    g_CongratsThanksChance;             // % of dings that get a thank-you at all
 extern uint32_t    g_CongratsThanksDelayMinMs;         // after the first gz: the rest come in first
 extern uint32_t    g_CongratsThanksDelayMaxMs;
+extern bool        g_CongratsAchievementsRareOnly;    // gz an achievement only when it is worth one
+extern uint32_t    g_CongratsAchievementRarePoints;   // ...this many points and up is
+extern std::unordered_set<uint32_t> g_CongratsAchievementAlways;   // ids: always worth a gz
+extern std::unordered_set<uint32_t> g_CongratsAchievementNever;    // ids: never
 
 // Reply cleanup
 extern std::vector<std::vector<std::string>> g_ResponseAssistantPhrases;
