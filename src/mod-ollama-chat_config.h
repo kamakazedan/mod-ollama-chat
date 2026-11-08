@@ -877,6 +877,14 @@ extern uint32_t    g_ResponseFourthWallMinutes;   // after one wink at it, nobod
 extern std::string g_PetsStateText;               // "...: {pets}. ..."
 extern std::vector<std::vector<std::string>> g_PetsWords;   // the talk is about pets
 
+// --------------------------------------------
+// Chat v23: what a bot has been up to lately (mod-ollama-chat_lately)
+// --------------------------------------------
+extern bool        g_LatelyEnable;
+extern uint32_t    g_LatelyMinutes;             // how far back counts as lately
+extern std::string g_LatelyStateText;           // "...: {lately}. ..."
+extern std::vector<std::vector<std::string>> g_LatelyWords;   // someone asks what it has been up to
+
 extern bool        g_MingleEnable;
 extern bool        g_MingleCitiesOnly;          // only where a real player is in a city (or inn)
 extern uint32_t    g_MingleGapMinSeconds;       // how often one may start near a real player
@@ -900,6 +908,7 @@ extern std::vector<std::string> g_MinglePremises;
 extern std::vector<std::string> g_MingleEmotes;   // offered in the prompt, by name
 extern std::string g_MingleSameGuildText;
 extern std::string g_MingleStrangersText;
+extern std::string g_MingleLatelyText;          // a person line's "what they have been doing": {name} {lately}
 extern bool        g_MingleEmoteEnable;         // bots greeting each other without a word
 extern uint32_t    g_MingleEmoteMinSeconds;
 extern uint32_t    g_MingleEmoteMaxSeconds;

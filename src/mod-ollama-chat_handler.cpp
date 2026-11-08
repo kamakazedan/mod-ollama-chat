@@ -47,6 +47,7 @@
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_pets.h"
+#include "mod-ollama-chat_lately.h"
 #include "mod-ollama-chat_needs.h"
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_conversation.h"
@@ -3512,6 +3513,10 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         const std::string pets = Pets_StateTextFor(bot, playerMessage);
         if (!pets.empty())
             prompt += " " + pets;
+        // "what you up to?": what it has actually been doing (mod-ollama-chat_lately).
+        const std::string lately = Lately_StateTextFor(bot, playerMessage);
+        if (!lately.empty())
+            prompt += " " + lately;
     }
 
     // Someone from its own group, talking in General or guild chat: the answer

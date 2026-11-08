@@ -164,6 +164,11 @@ When adding prompt material, prefer things outside the bot — people nearby,
 what just happened, where they are — over facts about the bot itself. The
 weights in `OllamaChat.Topic.*` encode this deliberately.
 
+When a prompt leaves a bot to say what it has been doing, give it the facts
+(`Lately_Text`: its run of kills, last quest, last ding), or the model makes
+something vague up ("just finished some grinds"). Its hooks run on map
+threads and only note names and numbers under a mutex.
+
 Keep the fourth wall out of prompts. As far as any bot knows, everyone on the
 realm is a player like itself: write "players", "people", "someone", never
 "bot" or "AI", and never single someone out as "a real player", which says the

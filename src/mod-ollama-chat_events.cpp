@@ -1,6 +1,7 @@
 #include "mod-ollama-chat_events.h"
 #include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_hangout.h"
+#include "mod-ollama-chat_lately.h"
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
@@ -510,8 +511,10 @@ ChatOnKill::ChatOnKill()
 
 void ChatOnKill::OnPlayerCreatureKill(Player* killer, Creature* victim)
 {
-    if (killer && victim)
-        eventChatter.DispatchGameEvent(killer, g_EventTypeDefeated, victim->GetName());
+    if (!killer || !victim)
+        return;
+    Lately_NoteKill(killer, victim);   // what it was grinding, and where
+    eventChatter.DispatchGameEvent(killer, g_EventTypeDefeated, victim->GetName());
 }
 
 void ChatOnKill::OnPlayerPVPKill(Player* killer, Player* killed)
@@ -522,8 +525,10 @@ void ChatOnKill::OnPlayerPVPKill(Player* killer, Player* killed)
 
 void ChatOnKill::OnPlayerCreatureKilledByPet(Player* owner, Creature* victim)
 {
-    if (owner && victim)
-        eventChatter.DispatchGameEvent(owner, g_EventTypePetDefeated, victim->GetName());
+    if (!owner || !victim)
+        return;
+    Lately_NoteKill(owner, victim);
+    eventChatter.DispatchGameEvent(owner, g_EventTypePetDefeated, victim->GetName());
 }
 
 // --------------------------------------------------------------------------
@@ -578,6 +583,8 @@ void ChatOnQuest::OnPlayerCompleteQuest(Player* player, Quest const* quest)
 {
     if (!player || !quest)
         return;
+
+    Lately_NoteQuest(player, quest);
 
     eventChatter.DispatchGameEvent(player, g_EventTypeCompletedQuest, quest->GetTitle());
 
@@ -644,6 +651,7 @@ void ChatOnLevelUp::OnPlayerLevelChanged(Player* player, uint8 /*oldLevel*/)
         return;
 
     const std::string level = std::to_string(player->GetLevel());
+    Lately_NoteLevel(player);
 
     // The "gz" that follow are for this one: it, and only it, says ty.
     Congrats_NoteCelebrated(player, level);

@@ -465,6 +465,22 @@ suppresses whatever it used in its last few picks.
 near them — kills, deaths, level-ups, loot. This is what lets a bot comment on
 the fight you were both just in rather than reciting a fact about itself.
 
+**What a bot has been up to.** Each bot's last 45 minutes or so is kept: the
+run of kills it was on (where, what and how many), the last quest it handed
+in, the last level it reached. Ask a bot "what you up to?" and it answers with
+what it actually did ("just been grinding murlocs in westfall") instead of
+making something up (`OllamaChat.Lately.*`).
+
+**Bots chatting among themselves.** In a city, now and then two or three bots
+near you have a little chat in /say. There's one every 5 to 30 minutes at
+random, at most one near you at a time, with an emote or none
+(`OllamaChat.Mingle.*`). Each line follows on from the one before: a greeting
+gets a greeting or a "whats up?" back, an answer is what that bot has really
+been doing, and reactions and goodbyes are short and in each one's own style.
+Questions get their question mark. Bots greeting each other without a word,
+and bots waving at you as they pass, are rarer too: every 5 to 20 minutes and
+4 to 12 minutes.
+
 Note that `OllamaChat.Snapshot.IncludeSpells` now defaults to **0**. Listing
 every off-cooldown spell a bot knew put dozens of lines of the most quotable
 text in the prompt, which is why bots talked about their spellbook so much.

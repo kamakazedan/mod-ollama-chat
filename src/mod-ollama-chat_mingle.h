@@ -12,15 +12,18 @@ class Player;
 // In a city a real player had bots talking to them -- a wave as they passed,
 // an answer to their /say -- and bots arguing in General, but two bots
 // standing next to each other never had a word for each other. Now, while a
-// real player is in a city (Mingle.CitiesOnly) and not fighting, every
-// Mingle.GapMinSeconds..GapMaxSeconds (Mingle.StartChance) two or three idle
-// random bots near them -- within Mingle.HearRange of them and
-// Mingle.PairRange of each other, on their side, in no group, not AFK, not
-// busy -- may have a short exchange in /say: Mingle.MinLines to MaxLines
-// lines about something people chat about standing around (Mingle.Premises),
-// ending the way people do: a laugh, "anyway gtg", a wave. Bots hanging out
-// at a spot (mod-ollama-chat_hangout) are picked first; one walking past
-// stops to talk.
+// real player is in a city (Mingle.CitiesOnly) and not fighting, at random
+// intervals of Mingle.GapMinSeconds..GapMaxSeconds (5 to 30 minutes; a minute
+// or so when none could start) two or three idle random bots near them --
+// within Mingle.HearRange of them and Mingle.PairRange of each other, on their
+// side, in no group, not AFK, not busy -- have a short exchange in /say:
+// Mingle.MinLines to MaxLines lines about something people chat about
+// standing around (Mingle.Premises), each following on from the last, ending
+// the way people do: a laugh, "anyway gtg", a wave. Each is told what the
+// others can see of them and what it has been up to lately
+// (mod-ollama-chat_lately), so "what you up to?" gets a real answer. Bots
+// hanging out at a spot (mod-ollama-chat_hangout) are picked first; one
+// walking past stops to talk.
 //
 // One generation writes the whole exchange (Mingle.PromptTemplate), so it has
 // a start and an end and costs one request rather than ten; it is only asked

@@ -213,6 +213,12 @@ uint32_t    g_ResponseFourthWallMinutes = 10;
 std::string g_PetsStateText;
 std::vector<std::vector<std::string>> g_PetsWords;
 
+// Chat v23
+bool        g_LatelyEnable  = true;
+uint32_t    g_LatelyMinutes = 45;
+std::string g_LatelyStateText;
+std::vector<std::vector<std::string>> g_LatelyWords;
+
 bool        g_MingleEnable              = true;
 bool        g_MingleCitiesOnly          = true;
 uint32_t    g_MingleGapMinSeconds       = 80;
@@ -236,6 +242,7 @@ std::vector<std::string> g_MinglePremises;
 std::vector<std::string> g_MingleEmotes;
 std::string g_MingleSameGuildText;
 std::string g_MingleStrangersText;
+std::string g_MingleLatelyText;
 bool        g_MingleEmoteEnable         = true;
 uint32_t    g_MingleEmoteMinSeconds     = 60;
 uint32_t    g_MingleEmoteMaxSeconds     = 160;
@@ -1244,8 +1251,8 @@ static void LoadNaturalChatV4Settings()
     // --- presence ---------------------------------------------------------
     g_PresenceEnable              = sConfigMgr->GetOption<bool>("OllamaChat.Presence.Enable", true);
     g_PresenceRange               = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Presence.Range", 10.0f), 3.0f, 40.0f);
-    g_PresencePlayerIntervalMin   = sConfigMgr->GetOption<uint32_t>("OllamaChat.Presence.PlayerIntervalMinSeconds", 45);
-    g_PresencePlayerIntervalMax   = sConfigMgr->GetOption<uint32_t>("OllamaChat.Presence.PlayerIntervalMaxSeconds", 150);
+    g_PresencePlayerIntervalMin   = sConfigMgr->GetOption<uint32_t>("OllamaChat.Presence.PlayerIntervalMinSeconds", 240);
+    g_PresencePlayerIntervalMax   = sConfigMgr->GetOption<uint32_t>("OllamaChat.Presence.PlayerIntervalMaxSeconds", 720);
     g_PresenceBotCooldownSeconds  = sConfigMgr->GetOption<uint32_t>("OllamaChat.Presence.BotCooldownSeconds", 900);
     g_PresencePairCooldownSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Presence.PairCooldownSeconds", 3600);
     g_PresenceChance              = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Presence.Chance", 60));
@@ -2641,6 +2648,28 @@ static void LoadNaturalChatV21Settings()
              g_PartyBreakEndOthersManaPct, g_EmoteEventText.empty() ? "off" : "on");
 }
 
+static void LoadNaturalChatV23Settings()
+{
+    // --- what a bot has been up to lately --------------------------------------------
+    g_LatelyEnable    = sConfigMgr->GetOption<bool>("OllamaChat.Lately.Enable", true);
+    g_LatelyMinutes   = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Lately.Minutes", 45), 5, 240);
+    g_LatelyStateText = sConfigMgr->GetOption<std::string>("OllamaChat.Lately.StateText",
+        "What you have been doing lately: {lately}. If that is what they ask about, say it the way a player would, "
+        "in a few words of your own: what and where.");
+    g_LatelyWords = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Lately.Words",
+        "up to|what you doing|what u doing|what are you doing|what r u doing|wyd|whats up|sup|wassup|hows it going|"
+        "how is it going|how you doing|how u doing|how are you|how r u|where you been|where have you been|"
+        "been doing|you busy|u busy|any luck|hows the grind|how was it|how did it go|howd it go"));
+    g_MingleLatelyText = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.LatelyText",
+        " What {name} has been doing lately: {lately}.");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v23: what bots have been up to lately {} (the last {} min); "
+             "mingling every {}-{} min near a player, {} at a time, up to {} emote(s) each; bots greeting each other "
+             "every {}-{} min.",
+             g_LatelyEnable ? "on" : "off", g_LatelyMinutes, g_MingleGapMinSeconds / 60, g_MingleGapMaxSeconds / 60,
+             g_MingleMaxNearPlayer, g_MingleMaxEmotes, g_MingleEmoteMinSeconds / 60, g_MingleEmoteMaxSeconds / 60);
+}
+
 static void LoadNaturalChatV22Settings()
 {
     // --- the fourth wall ---------------------------------------------------------------
@@ -2679,17 +2708,17 @@ static void LoadNaturalChatV16Settings()
 
     g_MingleEnable         = sConfigMgr->GetOption<bool>("OllamaChat.Mingle.Enable", true);
     g_MingleCitiesOnly     = sConfigMgr->GetOption<bool>("OllamaChat.Mingle.CitiesOnly", true);
-    g_MingleGapMinSeconds  = number("OllamaChat.Mingle.GapMinSeconds", 80, 5, 3600);
-    g_MingleGapMaxSeconds  = std::max(g_MingleGapMinSeconds, number("OllamaChat.Mingle.GapMaxSeconds", 200, 5, 3600));
-    g_MingleStartChance    = number("OllamaChat.Mingle.StartChance", 70, 0, 100);
+    g_MingleGapMinSeconds  = number("OllamaChat.Mingle.GapMinSeconds", 300, 5, 7200);
+    g_MingleGapMaxSeconds  = std::max(g_MingleGapMinSeconds, number("OllamaChat.Mingle.GapMaxSeconds", 1800, 5, 7200));
+    g_MingleStartChance    = number("OllamaChat.Mingle.StartChance", 100, 0, 100);
     g_MingleMaxActive      = number("OllamaChat.Mingle.MaxActive", 4, 0, 50);
-    g_MingleMaxNearPlayer  = number("OllamaChat.Mingle.MaxNearPlayer", 2, 1, 10);
+    g_MingleMaxNearPlayer  = number("OllamaChat.Mingle.MaxNearPlayer", 1, 1, 10);
     g_MingleHearRange      = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Mingle.HearRange", 25.0f), 5.0f, 60.0f);
     g_MinglePairRange      = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Mingle.PairRange", 9.0f), 2.0f, 30.0f);
     g_MingleThreeChance    = number("OllamaChat.Mingle.ThreeChance", 25, 0, 100);
     g_MingleMinLines       = number("OllamaChat.Mingle.MinLines", 2, 2, 20);
     g_MingleMaxLines       = std::max(g_MingleMinLines, number("OllamaChat.Mingle.MaxLines", 10, 2, 20));
-    g_MingleMaxEmotes      = number("OllamaChat.Mingle.MaxEmotes", 3, 0, 10);
+    g_MingleMaxEmotes      = number("OllamaChat.Mingle.MaxEmotes", 1, 0, 10);
     g_MingleBotCooldownSeconds = number("OllamaChat.Mingle.BotCooldownSeconds", 600, 0, 86400);
     g_MingleQueueLimit     = number("OllamaChat.Mingle.QueueLimit", 4, 0, 1000);
     g_MingleNumPredict     = number("OllamaChat.Mingle.NumPredict", 320, 64, 4096);
@@ -2699,12 +2728,19 @@ static void LoadNaturalChatV16Settings()
         "{count} World of Warcraft players are standing near each other in {where} and get chatting in "
         "/say. It is {when}. They are:{people}{relation} What gets them talking: {premise}. Write what they "
         "type, one message per line, each line starting with the speaker's name and a colon, like this:{example}"
-        "About {lines} lines in all, mostly taking turns. Each line is what that player types into chat: short "
-        "(2 to 15 words), casual, in their own chat style. Instead of words, a line can be just an emote at the "
-        "other one, written as a slash command ({emotes}), at most {max_emotes} in all. It ends the way a chat "
-        "between players does: a laugh, a goodbye, someone heading off, or simply done. No narration, no actions "
-        "in asterisks, no quotation marks, and nothing made up about items or quests. A famous line from a film "
-        "or show is fine now and then, but never say what it is from.");
+        "About {lines} lines in all, mostly taking turns. It reads like a real chat: every line follows on from "
+        "the one before it, answering what was just asked, reacting to what was just said, or asking something "
+        "back, and nobody answers a question nobody asked. A greeting gets a greeting back, or a question. When "
+        "one of them says what they have been doing, it is what they have been doing lately as told above, put "
+        "the way a player would in a few words, what and where; with nothing told, they have not been up to "
+        "much. Each line is what that player types: short (2 to 12 words), casual, in their own chat style, "
+        "mostly lowercase, but a question ends with a question mark, and a line can end with an exclamation mark "
+        "where it fits. Reactions and goodbyes are as short as players make them, in each one's own style. "
+        "Instead of words, a line can be just an emote at the other one, written as a slash command ({emotes}), "
+        "at most {max_emotes} in all. It ends the way a chat between players does: a laugh, a goodbye, someone "
+        "heading off, or simply done. No narration, no actions in asterisks, no quotation marks, and nothing "
+        "made up about items or quests. A famous line from a film or show is fine now and then, but never say "
+        "what it is from.");
     g_MinglePremises = ReadPipeList("OllamaChat.Mingle.Premises",
         "saying hello and asking what the other has been up to|one of them just got back from questing and moans "
         "about it|one of them admires the other's mount, gear or pet|one of them teases the other about their race "
@@ -2737,9 +2773,9 @@ static void LoadNaturalChatV16Settings()
         "They do not know each other, beyond seeing each other around.");
 
     g_MingleEmoteEnable          = sConfigMgr->GetOption<bool>("OllamaChat.Mingle.Emote.Enable", true);
-    g_MingleEmoteMinSeconds      = number("OllamaChat.Mingle.Emote.MinSeconds", 60, 5, 3600);
-    g_MingleEmoteMaxSeconds      = std::max(g_MingleEmoteMinSeconds, number("OllamaChat.Mingle.Emote.MaxSeconds", 160, 5, 3600));
-    g_MingleEmoteChance          = number("OllamaChat.Mingle.Emote.Chance", 60, 0, 100);
+    g_MingleEmoteMinSeconds      = number("OllamaChat.Mingle.Emote.MinSeconds", 300, 5, 7200);
+    g_MingleEmoteMaxSeconds      = std::max(g_MingleEmoteMinSeconds, number("OllamaChat.Mingle.Emote.MaxSeconds", 1200, 5, 7200));
+    g_MingleEmoteChance          = number("OllamaChat.Mingle.Emote.Chance", 50, 0, 100);
     g_MingleEmoteReturnChance    = number("OllamaChat.Mingle.Emote.ReturnChance", 60, 0, 100);
     g_MingleEmoteRange           = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Mingle.Emote.Range", 8.0f), 2.0f, 30.0f);
     g_MingleEmoteBotCooldownSeconds = number("OllamaChat.Mingle.Emote.BotCooldownSeconds", 300, 0, 86400);
@@ -3433,6 +3469,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV20Settings();
     LoadNaturalChatV21Settings();
     LoadNaturalChatV22Settings();
+    LoadNaturalChatV23Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

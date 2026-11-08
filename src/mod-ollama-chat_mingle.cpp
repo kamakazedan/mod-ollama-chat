@@ -8,6 +8,7 @@
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_handler.h"
 #include "mod-ollama-chat_hangout.h"
+#include "mod-ollama-chat_lately.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_presence.h"
 #include "mod-ollama-chat_roleplay.h"
@@ -237,6 +238,14 @@ namespace
             const std::string style = GetPersonalityPromptAddition(GetBotPersonality(p));
             if (!style.empty())
                 out += " " + p->GetName() + "'s chat style, as told to them: " + style;
+            // What they would answer "what you up to?" with, rather than something made up.
+            if (const std::string lately = Lately_Text(p); !lately.empty() && !g_MingleLatelyText.empty())
+            {
+                const std::string text = SafeFormat(g_MingleLatelyText, fmt::arg("name", p->GetName()),
+                                                    fmt::arg("lately", lately));
+                if (text != "[Format Error]")
+                    out += text;
+            }
         }
         return out + "\n";
     }
@@ -297,10 +306,11 @@ namespace
         if (premise.empty())
             return {};
 
-        // The shape of it, with their own names. The emote in it is picked
-        // each time, or every exchange would open with the same one.
+        // The shape of it, with their own names. An emote is in it only now
+        // and then, picked each time: shown one every time, every exchange
+        // opened with one.
         std::string example = "\n" + names[0] + ": <what " + names[0] + " types>\n";
-        if (g_MingleMaxEmotes > 0 && !g_MingleEmotes.empty())
+        if (g_MingleMaxEmotes > 0 && !g_MingleEmotes.empty() && Between(1, 100) <= 30)
             example += names[1] + ": /" + g_MingleEmotes[Between(0, uint32_t(g_MingleEmotes.size() - 1))] + "\n";
         example += names[1] + ": <what " + names[1] + " types>\n";
 
@@ -578,7 +588,8 @@ namespace
     }
 
     // Two or three bots by `real` get talking, if there are two to talk.
-    void Start(Player* real, Clock::time_point now)
+    // False when there are not.
+    bool Start(Player* real, Clock::time_point now)
     {
         std::vector<Player*> pool;
         for (Player* p : BotsNear(real, g_MingleHearRange))
@@ -588,11 +599,11 @@ namespace
 
         const std::vector<Player*> group = PickGroup(pool, g_MinglePairRange, true);
         if (group.size() < 2)
-            return;
+            return false;
 
         const std::string prompt = BuildPrompt(group);
         if (prompt.empty())
-            return;
+            return false;
 
         Exchange e;
         e.id       = g_nextId++;
@@ -607,7 +618,7 @@ namespace
         }
 
         if (!OllamaDispatch_SubmitScript(e.id, prompt, g_MingleNumPredict))
-            return;
+            return false;
 
         e.waiting   = true;
         e.waitUntil = now + std::chrono::seconds(kScriptWaitSec);
@@ -637,6 +648,7 @@ namespace
                      real->GetName());
         }
         g_exchanges.emplace(e.id, std::move(e));
+        return true;
     }
 
     // Two bots near `real` greet each other without a word, and often one back.
@@ -718,21 +730,34 @@ namespace
                 continue;
             const uint64_t key = real->GetGUID().GetRawValue();
 
-            if (g_MingleEmoteEnable && Due(g_playerNextNod, key, now, 5, 20))
+            // The first of each a while after someone turns up, then at
+            // random intervals of MinSeconds..MaxSeconds (GapMin..GapMax).
+            if (g_MingleEmoteEnable &&
+                Due(g_playerNextNod, key, now, std::min<uint32_t>(60, g_MingleEmoteMinSeconds), g_MingleEmoteMinSeconds))
             {
                 g_playerNextNod[key] = now + std::chrono::seconds(Between(g_MingleEmoteMinSeconds, g_MingleEmoteMaxSeconds));
                 if (Between(1, 100) <= g_MingleEmoteChance)
                     Greet(real, now);
             }
 
-            if (!Due(g_playerNext, key, now, 10, 30))
+            if (!Due(g_playerNext, key, now, std::min<uint32_t>(60, g_MingleGapMinSeconds), g_MingleGapMinSeconds))
                 continue;
-            g_playerNext[key] = now + std::chrono::seconds(Between(g_MingleGapMinSeconds, g_MingleGapMaxSeconds));
-            if (g_DisableForSayYell || g_exchanges.size() >= g_MingleMaxActive || Between(1, 100) > g_MingleStartChance)
+            const auto gap   = std::chrono::seconds(Between(g_MingleGapMinSeconds, g_MingleGapMaxSeconds));
+            const auto retry = std::chrono::seconds(Between(45, 90));
+            // Not now -- one going on near them already, the model busy, nobody
+            // free to talk: a minute or so on, not a whole gap.
+            if (g_DisableForSayYell || g_exchanges.size() >= g_MingleMaxActive ||
+                OllamaDispatch_QueueDepth() > g_MingleQueueLimit || RunningNear(real) >= g_MingleMaxNearPlayer)
+            {
+                g_playerNext[key] = now + retry;
                 continue;
-            if (OllamaDispatch_QueueDepth() > g_MingleQueueLimit || RunningNear(real) >= g_MingleMaxNearPlayer)
+            }
+            if (Between(1, 100) > g_MingleStartChance)
+            {
+                g_playerNext[key] = now + gap;
                 continue;
-            Start(real, now);
+            }
+            g_playerNext[key] = now + (Start(real, now) ? gap : retry);
         }
     }
 

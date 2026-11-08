@@ -2242,6 +2242,39 @@ OllamaChat.Pets.Words = "pet|pets|companion|companions|critter|critters|minion|m
 
 ###############################################################################
 #
+#   OLLAMA CHAT - WHAT A BOT HAS BEEN UP TO
+#
+#   "what you up to?" -- "nothing much just finished some grinds" is a bot
+#   with nothing to go on making something up. Players say what they did and
+#   where: grinding murlocs in Westfall, a quest in Duskwood, a ding. So each
+#   bot's last while is kept: the run of kills it was on (the zone, what it
+#   killed and how many), the last quest it handed in and where, and the last
+#   level it reached. Bots chatting among themselves (MINGLING) are told it,
+#   and a bot asked what it has been up to (Words) knows it.
+#
+###############################################################################
+
+#    OllamaChat.Lately.Enable
+#    OllamaChat.Lately.Minutes
+#        How far back counts as lately.
+#        Default: 1, 45
+OllamaChat.Lately.Enable = 1
+OllamaChat.Lately.Minutes = 45
+
+#    OllamaChat.Lately.StateText
+#    OllamaChat.Lately.Words
+#        Added to the reply prompt when the line it answers asks what it has
+#        been up to (Words: phrases separated by |, matched on whole words)
+#        and there is something from the last Minutes. {lately}: "out in
+#        Westfall for about 25 minutes killing Murloc Coastrunner (12) and
+#        Murloc Tidehunter (5), until a few minutes ago". Empty StateText
+#        leaves it out.
+#        Default: (below)
+OllamaChat.Lately.StateText = "What you have been doing lately: {lately}. If that is what they ask about, say it the way a player would, in a few words of your own: what and where."
+OllamaChat.Lately.Words = "up to|what you doing|what u doing|what are you doing|what r u doing|wyd|whats up|sup|wassup|hows it going|how is it going|how you doing|how u doing|how are you|how r u|where you been|where have you been|been doing|you busy|u busy|any luck|hows the grind|how was it|how did it go|howd it go"
+
+###############################################################################
+#
 #   OLLAMA CHAT - PRESENCE
 #
 #   Bots noticing the real players around them. A bot walking past a real
@@ -2269,10 +2302,11 @@ OllamaChat.Presence.Range = 10
 
 #    OllamaChat.Presence.PlayerIntervalMinSeconds
 #    OllamaChat.Presence.PlayerIntervalMaxSeconds
-#        At most one such moment per real player in this many seconds.
-#        Default: 45, 150
-OllamaChat.Presence.PlayerIntervalMinSeconds = 45
-OllamaChat.Presence.PlayerIntervalMaxSeconds = 150
+#        At most one such moment per real player in this many seconds: a
+#        bot waving at you every minute is not what strangers do.
+#        Default: 240, 720
+OllamaChat.Presence.PlayerIntervalMinSeconds = 240
+OllamaChat.Presence.PlayerIntervalMaxSeconds = 720
 
 #    OllamaChat.Presence.BotCooldownSeconds
 #    OllamaChat.Presence.PairCooldownSeconds
@@ -4341,20 +4375,23 @@ OllamaChat.Mingle.CitiesOnly = 1
 #    OllamaChat.Mingle.GapMinSeconds
 #    OllamaChat.Mingle.GapMaxSeconds
 #    OllamaChat.Mingle.StartChance
-#        Every GapMin..GapMax seconds near each real player, an exchange
-#        starts with StartChance (0-100), if two bots are free to have it. The
-#        first one near someone who just arrived waits 10 to 30 seconds.
-#        Default: 80, 200, 70
-OllamaChat.Mingle.GapMinSeconds = 80
-OllamaChat.Mingle.GapMaxSeconds = 200
-OllamaChat.Mingle.StartChance = 70
+#        Every GapMin..GapMax seconds near each real player, at random, an
+#        exchange starts with StartChance (0-100): one little chat every 5
+#        to 30 minutes. When none can start just then (two bots free to have
+#        it, one already going on near them, the model busy) it tries again
+#        a minute or so later, not a whole gap. The first near someone who
+#        has just turned up waits a minute to GapMin.
+#        Default: 300, 1800, 100
+OllamaChat.Mingle.GapMinSeconds = 300
+OllamaChat.Mingle.GapMaxSeconds = 1800
+OllamaChat.Mingle.StartChance = 100
 
 #    OllamaChat.Mingle.MaxActive
 #    OllamaChat.Mingle.MaxNearPlayer
 #        At most this many at once on the realm, and near any one real player.
-#        Default: 4, 2
+#        Default: 4, 1
 OllamaChat.Mingle.MaxActive = 4
-OllamaChat.Mingle.MaxNearPlayer = 2
+OllamaChat.Mingle.MaxNearPlayer = 1
 
 #    OllamaChat.Mingle.HearRange
 #    OllamaChat.Mingle.PairRange
@@ -4374,10 +4411,10 @@ OllamaChat.Mingle.ThreeChance = 25
 #        twice between MinLines and MaxLines and the lower taken, so most are
 #        short. A model that needs a line or two more to finish properly gets
 #        them -- never more than MaxLines + 4. At most MaxEmotes are emotes.
-#        Default: 2, 10, 3
+#        Default: 2, 10, 1
 OllamaChat.Mingle.MinLines = 2
 OllamaChat.Mingle.MaxLines = 10
-OllamaChat.Mingle.MaxEmotes = 3
+OllamaChat.Mingle.MaxEmotes = 1
 
 #    OllamaChat.Mingle.BotCooldownSeconds
 #        A bot that took part waits this long before the next one.
@@ -4420,7 +4457,7 @@ OllamaChat.Mingle.ReadMaxMs = 3500
 #        (No double quotes inside it: the server's config reader drops every
 #        one of them.)
 #        Default: (below)
-OllamaChat.Mingle.PromptTemplate = "{count} World of Warcraft players are standing near each other in {where} and get chatting in /say. It is {when}. They are:{people}{relation} What gets them talking: {premise}. Write what they type, one message per line, each line starting with the speaker's name and a colon, like this:{example}About {lines} lines in all, mostly taking turns. Each line is what that player types into chat: short (2 to 15 words), casual, in their own chat style. Instead of words, a line can be just an emote at the other one, written as a slash command ({emotes}), at most {max_emotes} in all. It ends the way a chat between players does: a laugh, a goodbye, someone heading off, or simply done. No narration, no actions in asterisks, no quotation marks, and nothing made up about items or quests. A famous line from a film or show is fine now and then, but never say what it is from."
+OllamaChat.Mingle.PromptTemplate = "{count} World of Warcraft players are standing near each other in {where} and get chatting in /say. It is {when}. They are:{people}{relation} What gets them talking: {premise}. Write what they type, one message per line, each line starting with the speaker's name and a colon, like this:{example}About {lines} lines in all, mostly taking turns. It reads like a real chat: every line follows on from the one before it, answering what was just asked, reacting to what was just said, or asking something back, and nobody answers a question nobody asked. A greeting gets a greeting back, or a question. When one of them says what they have been doing, it is what they have been doing lately as told above, put the way a player would in a few words, what and where; with nothing told, they have not been up to much. Each line is what that player types: short (2 to 12 words), casual, in their own chat style, mostly lowercase, but a question ends with a question mark, and a line can end with an exclamation mark where it fits. Reactions and goodbyes are as short as players make them, in each one's own style. Instead of words, a line can be just an emote at the other one, written as a slash command ({emotes}), at most {max_emotes} in all. It ends the way a chat between players does: a laugh, a goodbye, someone heading off, or simply done. No narration, no actions in asterisks, no quotation marks, and nothing made up about items or quests. A famous line from a film or show is fine now and then, but never say what it is from."
 
 #    OllamaChat.Mingle.Premises
 #        What gets them talking, one picked each time: a premise only the
@@ -4445,6 +4482,14 @@ OllamaChat.Mingle.Emotes = "wave|laugh|bow|nod|cheer|grin|shrug|flex|chuckle|win
 OllamaChat.Mingle.SameGuildText = "{names} are in the same guild, {guild}."
 OllamaChat.Mingle.StrangersText = "They do not know each other, beyond seeing each other around."
 
+#    OllamaChat.Mingle.LatelyText
+#        Added to each of them in {people} when there is something from the
+#        last Lately.Minutes (see WHAT A BOT HAS BEEN UP TO): what it would
+#        answer "what you up to?" with, instead of something made up.
+#        {name}, {lately}. Empty leaves it out.
+#        Default: (below)
+OllamaChat.Mingle.LatelyText = " What {name} has been doing lately: {lately}."
+
 #    OllamaChat.Mingle.Emote.Enable
 #    OllamaChat.Mingle.Emote.MinSeconds
 #    OllamaChat.Mingle.Emote.MaxSeconds
@@ -4458,12 +4503,13 @@ OllamaChat.Mingle.StrangersText = "They do not know each other, beyond seeing ea
 #        within Range yards of each other -- one of Greetings at the other,
 #        and with ReturnChance one back a moment later (a wave for a wave, a
 #        bow for a bow). A bot greets again after BotCooldownSeconds. No
-#        model is asked: it costs nothing.
-#        Default: 1, 60, 160, 60, 60, 8, 300, (below)
+#        model is asked: it costs nothing. The first near someone who has
+#        just turned up waits a minute to MinSeconds.
+#        Default: 1, 300, 1200, 50, 60, 8, 300, (below)
 OllamaChat.Mingle.Emote.Enable = 1
-OllamaChat.Mingle.Emote.MinSeconds = 60
-OllamaChat.Mingle.Emote.MaxSeconds = 160
-OllamaChat.Mingle.Emote.Chance = 60
+OllamaChat.Mingle.Emote.MinSeconds = 300
+OllamaChat.Mingle.Emote.MaxSeconds = 1200
+OllamaChat.Mingle.Emote.Chance = 50
 OllamaChat.Mingle.Emote.ReturnChance = 60
 OllamaChat.Mingle.Emote.Range = 8
 OllamaChat.Mingle.Emote.BotCooldownSeconds = 300
