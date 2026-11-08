@@ -28,4 +28,9 @@ bool PersonalityExists(const std::string& personality);
 // Clear all personality assignments (used when RP personalities are disabled)
 void ClearAllBotPersonalities();
 
+// A canned line -- a quick gz, a ty, a gg -- typed the way this bot's
+// personality types (OllamaChat.Personality.CannedStyles): a proper one
+// spells it out, an abbreviator shortens it, a terse one drops the "!".
+std::string Personality_StyleCanned(Player* bot, const std::string& line);
+
 #endif // MOD_OLLAMA_CHAT_PERSONALITY_H

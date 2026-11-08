@@ -246,6 +246,8 @@ std::string g_MingleStrangersText;
 std::string g_MingleLatelyText;
 std::string g_MingleThingsText;
 std::string g_MingleLinksText;
+std::string g_OutlookFactsText;
+std::unordered_map<std::string, std::string> g_PersonalityCannedStyles;
 bool        g_MingleEmoteEnable         = true;
 uint32_t    g_MingleEmoteMinSeconds     = 60;
 uint32_t    g_MingleEmoteMaxSeconds     = 160;
@@ -1334,27 +1336,26 @@ static void LoadNaturalChatV4Settings()
     g_ConversationAllowSay          = sConfigMgr->GetOption<bool>("OllamaChat.Conversation.AllowSay", true);
     // A "[70+]" or "[10-39]" in front: only bots of those levels bring it up.
     g_ConversationPremises = ReadChoiceList("OllamaChat.Conversation.Premises",
-        "which class is the most overpowered right now|whether death knights ruined everything now that every "
-        "other player is one|[70+] the best tank class for heroics|whether ret paladins need a nerf|[15+] the "
-        "worst wipe you ever had in a dungeon|[15+] a ninja looter who rolled need on everything in a pug|"
-        "[75+] Wintergrasp and who keeps winning it|the best profession "
-        "for making gold|[60+] whether epic flying is worth the gold|the coolest looking mount in the game|the "
-        "funniest hunter pet name you have seen|whether Arthas was always evil|whether Illidan was right all "
-        "along|[80] the hardest boss in Naxxramas|[80] getting into Ulduar runs without much gear|what everyone "
-        "is farming right now|the most pointless achievement|where Mankrik's wife could be|[68+] the best place "
-        "to level from 70 to 80|how expensive the auction house has got|guild drama|the cutest companion pet|[75+] "
-        "whether the Lich King fight will be any good|[15+] people who stand in fire|what you do on long flight "
-        "paths|a name for a new alt|fishing: relaxing or the most boring thing in the game|[77+] the Argent "
-        "Tournament dailies|whether gnomes or goblins make better engineers|[10+] whether {other_faction} is "
-        "winning more battlegrounds lately|[80] a heroic you want a group for|the best food and drink in {zone}|"
-        "[1-19] which starting zone is the best|[10-29] the elite around here that keeps killing people|[15-39] "
-        "the first dungeon you ever ran|[20-59] the most annoying levelling zone|[58-69] how crowded Hellfire "
-        "Peninsula gets");
+        "which class is the most overpowered right now|whether death knights ruined everything now that "
+        "every other player is one|[70+] the best tank class for heroics|whether ret paladins need a "
+        "nerf|[15+] the worst wipe you ever had in a dungeon|[15+] a ninja looter who rolled need on "
+        "everything in a pug|[75+] Wintergrasp and who keeps winning it|the best profession for making "
+        "gold|[60+] whether epic flying is worth the gold|the funniest hunter pet name you have seen|whether "
+        "Arthas was always evil|whether Illidan was right all along|[80] the hardest boss in Naxxramas|[80] "
+        "getting into Ulduar runs without much gear|whether achievements are worth chasing|where Mankrik's "
+        "wife could be|[68+] the best place to level from 70 to 80|how expensive the auction house has "
+        "got|guild drama|[75+] whether the Lich King fight will be any good|[15+] people who stand in "
+        "fire|what you do on long flight paths|a name for a new alt|fishing: relaxing or the most boring "
+        "thing in the game|[77+] the Argent Tournament dailies|whether gnomes or goblins make better "
+        "engineers|[10+] whether {other_faction} is winning more battlegrounds lately|[80] a heroic you want "
+        "a group for|[1-19] which starting zone is the best|[15-39] the first dungeon you ever ran|[20-59] "
+        "the most annoying levelling zone|[58-69] how crowded Hellfire Peninsula gets");
     g_ConversationHintTurn = sConfigMgr->GetOption<std::string>("OllamaChat.Conversation.HintTurn",
-        "You are chatting in {where} with {others} (see the chat above){about}. Carry it on as yourself "
-        "with one short line: answer the last line, agree or disagree, joke, ask something back, or "
-        "take it somewhere related. Do not repeat anything already said. If you really have nothing to add, "
-        "reply with just {pass_token}.");
+        "You are chatting in {where} with {others} (see the chat above){about}. Carry it on as yourself with "
+        "one short line: answer the last line, disagree, joke, ask something back, or take it somewhere "
+        "related. Never make a point someone has already made, not even in other words: if you agree, add "
+        "something new to it (a reason, a story, a joke) instead of saying it again. If you really have "
+        "nothing to add, reply with just {pass_token}.");
     g_ConversationHintJoin = sConfigMgr->GetOption<std::string>("OllamaChat.Conversation.HintJoin",
         "You have been reading the chat above in {where}{about}, and now you jump in with your own take, a "
         "joke or a question. One short line.");
@@ -2542,8 +2543,9 @@ static void LoadNaturalChatV15Settings()
         "That is how it is in the game: if you answer, answer from it and add nothing it does not say -- in a few "
         "words or a bit more, as your style goes.");
     g_KnowledgeWrongText = text("OllamaChat.Knowledge.WrongText",
-        "That is the right answer and you know it -- but, as you do, give a wrong one with a straight face, to wind "
-        "them up. If someone corrects you, double down.");
+        "That is the right answer and you know it -- but, as you do, give a wrong one with a straight face, "
+        "to wind them up: another real place, vendor or way from the game, never one you made up. If someone "
+        "corrects you, double down.");
 
     // --- links: not the same one over and over --------------------------------------------
     g_LinksRepeatSeconds = std::min<uint32_t>(3600, sConfigMgr->GetOption<uint32_t>("OllamaChat.Links.RepeatSeconds", 180));
@@ -2679,6 +2681,50 @@ static void LoadNaturalChatV21Settings()
              "players and healers, {}% for other bots), emotes in the transcript {}.",
              g_PartyBreakEndEnable ? "on" : "off", g_PartyBreakEndHealthPct, g_PartyBreakEndManaPct,
              g_PartyBreakEndOthersManaPct, g_EmoteEventText.empty() ? "off" : "on");
+}
+
+static void LoadNaturalChatV25Settings()
+{
+    // --- nothing made up from the game ---------------------------------------------------
+    g_OutlookFactsText = sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.FactsText",
+        "Anything from the game you name -- an item, quest, NPC, creature, boss, dungeon, zone, mount, pet, "
+        "spell or drop -- must really be in Wrath of the Lich King, called what it is really called. Never "
+        "make one up, and never state a fact about one (where it drops, what it does, who can use it, or that "
+        "it is not in the game) unless you are sure of it: when you do not know or cannot remember, say so, "
+        "or ask. Made-up fun is fine when it is plainly made up, like imagine if murlocs were ten feet tall.");
+
+    // --- canned lines in each personality's own way ------------------------------------
+    g_PersonalityCannedStyles.clear();
+    {
+        std::stringstream ss(sConfigMgr->GetOption<std::string>("OllamaChat.Personality.CannedStyles",
+            "NAT_PROPER:proper|NAT_ROLEPLAYER:proper|NAT_HELPFUL_VET:proper|NAT_LOWERCASE:lower|NAT_CHILL:lower|"
+            "NAT_TERSE_VET:flat|NAT_QUIET:flat|NAT_DEADPAN:flat|NAT_LONER:flat|NAT_GRUMBLER:flat|NAT_KEYBOARD:flat|"
+            "NAT_ABBREVIATOR:short|NAT_MINMAXER:short|NAT_EXCITABLE:excited|NAT_HYPE:excited|NAT_BUTTERFLY:excited|"
+            "NAT_NEWBIE:excited"));
+        std::string entry;
+        while (std::getline(ss, entry, '|'))
+        {
+            const size_t colon = entry.find(':');
+            if (colon == std::string::npos)
+                continue;
+            std::string key = entry.substr(0, colon), style = entry.substr(colon + 1);
+            auto trim = [](std::string& t)
+            {
+                while (!t.empty() && std::isspace(static_cast<unsigned char>(t.front())))
+                    t.erase(t.begin());
+                while (!t.empty() && std::isspace(static_cast<unsigned char>(t.back())))
+                    t.pop_back();
+            };
+            trim(key);
+            trim(style);
+            if (!key.empty() && !style.empty())
+                g_PersonalityCannedStyles[key] = style;
+        }
+    }
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v25: nothing made up from the game ({}); canned lines "
+             "in {} personalities' own way.", g_OutlookFactsText.empty() ? "off" : "on",
+             g_PersonalityCannedStyles.size());
 }
 
 static void LoadNaturalChatV24Settings()
@@ -2817,36 +2863,39 @@ static void LoadNaturalChatV16Settings()
     g_MingleReadMinMs      = number("OllamaChat.Mingle.ReadMinMs", 1200, 0, 60000);
     g_MingleReadMaxMs      = std::max(g_MingleReadMinMs, number("OllamaChat.Mingle.ReadMaxMs", 3500, 0, 60000));
     g_MinglePromptTemplate = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.PromptTemplate",
-        "{count} World of Warcraft players are standing near each other in {where} and get chatting in "
-        "/say. It is {when}. They are:{people}{relation} What gets them talking: {premise}. Write what they "
-        "type, one message per line, each line starting with the speaker's name and a colon, like this:{example}"
-        "About {lines} lines in all, mostly taking turns. It reads like a real chat: every line follows on from "
-        "the one before it, answering what was just asked, reacting to what was just said, or asking something "
-        "back, and nobody answers a question nobody asked. A greeting gets a greeting back, or a question. When "
-        "one of them says what they have been doing, it is what they have been doing lately as told above, put "
-        "the way a player would in a few words, what and where; with nothing told, they have not been up to "
-        "much. Each line is what that player types: short (2 to 12 words), casual, in their own chat style, "
-        "mostly lowercase, but a question ends with a question mark, and a line can end with an exclamation mark "
-        "where it fits. Reactions and goodbyes are as short as players make them, in each one's own style. "
-        "Instead of words, a line can be just an emote at the other one, written as a slash command ({emotes}), "
-        "at most {max_emotes} in all. It ends the way a chat between players does: a laugh, a goodbye, someone "
-        "heading off, or simply done. No narration, no actions in asterisks, no quotation marks, and nothing "
-        "made up about items, quests, mounts or pets: nobody is riding a mount or has a pet out but as told "
-        "above, and a hunter's pet, a warlock's demon or a companion pet is no mount. A famous line from a film "
-        "or show is fine now and then, but never say what it is from.");
+        "{count} World of Warcraft players are standing near each other in {where} and get chatting in /say. "
+        "It is {when}. They are:{people}{relation} What gets them talking: {premise}. Write what they type, "
+        "one message per line, each line starting with the speaker's name and a colon, like "
+        "this:{example}About {lines} lines in all, mostly taking turns. It reads like a real chat: every "
+        "line follows on from the one before it, answering what was just asked, reacting to what was just "
+        "said, or asking something back, and nobody answers a question nobody asked. A greeting gets a "
+        "greeting back, or a question. When one of them says what they have been doing, it is what they have "
+        "been doing lately as told above, put the way a player would in a few words, what and where; with "
+        "nothing told, they have not been up to much. Each line is what that player types: short (2 to 12 "
+        "words), casual, in their own chat style, mostly lowercase, but a question ends with a question "
+        "mark, and a line can end with an exclamation mark where it fits. Reactions and goodbyes are as "
+        "short as players make them, in each one's own style. Instead of words, a line can be just an emote "
+        "at the other one, written as a slash command ({emotes}), at most {max_emotes} in all. It ends the "
+        "way a chat between players does: a laugh, a goodbye, someone heading off, or simply done. No "
+        "narration, no actions in asterisks, no quotation marks, and nothing made up from the game -- no "
+        "item, quest, NPC, creature, place, mount or pet that is not really in it, and nobody riding a mount "
+        "or with a pet out but as told above (a hunter's pet, a warlock's demon or a companion pet is no "
+        "mount); plainly made-up fun is fine as an imagine-if. A famous line from a film or show is fine now "
+        "and then, but never say what it is from.");
     g_MinglePremises = ReadPipeList("OllamaChat.Mingle.Premises",
-        "saying hello and asking what the other has been up to|[quest] one of them just got back from questing "
-        "and moans about it|[quest] one of them asks the other about the quest they just handed in|[mount] one "
-        "of them admires the mount the other is riding|[pet] one of them admires the other's pet or companion|"
-        "one of them admires the other's gear|one of them teases the other about their race or class, all in "
-        "good fun|swapping tips about levelling their classes|one of them is waiting for a group and getting "
-        "bored|one of them asks the other for a duel|one of them asks the other if they have a few silver to "
-        "spare|[loot] one of them shows off something they got lately|people-watching: the players walking "
-        "past|the auction house prices|levelling their professions|which zone is the worst to quest in|being "
-        "lost in this city|what they are saving their gold for|a funny death one of them had today|one of them "
-        "is about to log off|their guilds, or not having one|a rumour one of them heard|gnomes|murlocs|"
-        "[15+] whether to run a dungeon together later|[15+] a dungeon one of them ran earlier|"
-        "[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] flying mounts");
+        "saying hello and asking what the other has been up to|[quest] one of them just got back from "
+        "questing and moans about it|[quest] one of them asks the other about the quest they just handed "
+        "in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's "
+        "pet or companion|one of them admires the other's gear|one of them teases the other about their race "
+        "or class, all in good fun|swapping tips about levelling their classes|one of them is waiting for a "
+        "group and getting bored|one of them asks the other for a duel|one of them asks the other if they "
+        "have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: "
+        "the players walking past|levelling their professions|which zone is the worst to quest in|being lost "
+        "in this city|what they are saving their gold for|a funny death one of them had today|one of them is "
+        "about to log off|their guilds, or not having one|an imagine-if one of them dreams up, plainly made "
+        "up for a laugh|gnomes|murlocs|[15+] whether to run a dungeon together later|[15+] a dungeon one of "
+        "them ran earlier|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] "
+        "flying mounts");
     g_MingleEmotes.clear();
     {
         std::string unknown;
@@ -3566,6 +3615,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV22Settings();
     LoadNaturalChatV23Settings();
     LoadNaturalChatV24Settings();
+    LoadNaturalChatV25Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

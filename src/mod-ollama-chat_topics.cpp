@@ -298,6 +298,10 @@ namespace
             // The old code took whatever the searcher landed on first.
             if (c->GetCreatureType() == CREATURE_TYPE_CRITTER)
                 continue;
+            // Not the guards and townsfolk: "an Orgrimmar Grunt is close by"
+            // reads to a model as an enemy to watch out for.
+            if (c->IsFriendlyTo(bot))
+                continue;
 
             int score = 0;
             if (c->isWorldBoss())                        score += 100;

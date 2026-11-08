@@ -1,3 +1,4 @@
+#include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
@@ -383,7 +384,8 @@ void Congrats_Tick()
         // "ty" back to whoever whispered first.
         const bool whisper = d.c.source == SRC_WHISPER_LOCAL;
         const bool many = d.c.from > 1 && !whisper;
-        const std::string line = many ? Pick(g_CongratsThanksAllLines, {}) : Pick(g_CongratsThanksLines, d.c.firstName);
+        const std::string line = Personality_StyleCanned(
+            bot, many ? Pick(g_CongratsThanksAllLines, {}) : Pick(g_CongratsThanksLines, d.c.firstName));
         if (line.empty())
             continue;
 

@@ -366,6 +366,13 @@ namespace TextRules
     // Felsteed" is a Felsteed.
     std::string MountFromSpell(const std::string& spellName);
 
+    // A canned line ("gz Gotlun", "ty all", "my bad") typed the way a
+    // personality types: "proper" ("Congratulations Gotlun."), "caps" ("GZ
+    // GOTLUN"), "lower" ("gz gotlun", no full stop), "flat" (no exclamation
+    // marks), "short" ("congrats" is "gz", "thanks" is "ty"), "excited"
+    // ("gz gotlun!"). Any other style leaves it as it is.
+    std::string StyleCanned(const std::string& line, const std::string& style);
+
     // A phrase only players of some levels say: "[40+] repair bill",
     // "[70+] heroic". Entries without a level tag are skipped.
     struct LevelPhrase

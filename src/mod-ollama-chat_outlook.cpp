@@ -108,6 +108,8 @@ std::string Outlook_ForBot(Player* bot)
     if (g_OutlookClassRoles && PlayerbotsMgr::instance().GetPlayerbotAI(bot))
         add(RoleText(bot));
     add(g_OutlookKnowledgeText);
+    // Nothing made up from the game: no Trinket of the Hidden Sun.
+    add(g_OutlookFactsText);
     return out;
 }
 

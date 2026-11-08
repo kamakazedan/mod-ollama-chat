@@ -918,6 +918,8 @@ extern std::string g_MingleStrangersText;
 extern std::string g_MingleLatelyText;          // a person line's "what they have been doing": {name} {lately}
 extern std::string g_MingleThingsText;          // what the quests and items they have done or got are: {things}
 extern std::string g_MingleLinksText;           // names in square brackets, as links
+extern std::string g_OutlookFactsText;          // nothing made up from the game
+extern std::unordered_map<std::string, std::string> g_PersonalityCannedStyles;   // personality -> canned style
 extern bool        g_MingleEmoteEnable;         // bots greeting each other without a word
 extern uint32_t    g_MingleEmoteMinSeconds;
 extern uint32_t    g_MingleEmoteMaxSeconds;

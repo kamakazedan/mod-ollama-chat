@@ -458,7 +458,7 @@ suppresses whatever it used in its last few picks.
 | Category | Default weight | Examples |
 |---|---|---|
 | **People** | 30 | Nearby players by name, class and what they are doing; group members; guildmates online; something the bot just watched happen |
-| **World** | 30 | The nearest *interesting* creature (elite, rare, or a real level threat — never a critter); named NPCs by role; landmarks; corpses; time of day |
+| **World** | 30 | The nearest *interesting* creature (elite, rare, or a real level threat — never a critter, a guard or a townsperson); named NPCs by role; landmarks; corpses; time of day |
 | **Activity** | 25 | Current quest objectives; danger assessment; group needs (someone low, someone out of mana) |
 | **Self** | 15 | Spells, equipped items, bag space — the original topics, kept but demoted |
 
@@ -504,6 +504,20 @@ their name, level, race, class, spec and guild.
 Conversation premises can carry a level tag (`[80] getting into Ulduar runs`,
 `[10-29] the elite around here that keeps killing people`), so a city
 argument about Ulduar starts between level 80s.
+
+**Nothing made up.** Asked about trinkets, a model will happily invent
+"Trinket of the Hidden Sun", and "which race makes the best shaman" got
+humans. Every bot is told (`Outlook.FactsText`) that anything from the game
+it names -- item, quest, NPC, creature, boss, dungeon, zone, mount or pet --
+must really be in Wrath of the Lich King, that it should say it can't remember
+rather than make an answer up, and that made-up fun is fine when it is plainly
+made up ("imagine if murlocs were ten feet tall"). Premises that need
+something specific are handed the real thing from the game's own data
+instead of a category to invent from: `{trinket}`, `{itemset}` and `{rare}`
+near the bot's level, `{bosses}` after a dungeon or raid, and `{class_races}`
+after a class. Premises that could only be answered by inventing something
+(the best prize from the Darkmoon Faire, a ninja-looting story with the item
+in it) are gone.
 
 ## Item and Quest Links
 
@@ -676,6 +690,13 @@ Any chat style can have `OllamaChat.Personality.Nudge.<KEY>`
 replies) and `OllamaChat.Personality.MaxReplyLength.<KEY>` (a longer reply
 limit, for a style that explains things). A personality prompt alone tends to
 get all or nothing from a small model; a nudge rolls for each reply.
+
+Typed lines -- a "gz", a "ty all", a wipe's "my bad", the tank's "ok lets go"
+-- are written once for everyone, so each style types them its own way
+(`OllamaChat.Personality.CannedStyles`): the proper speaker says
+"Congratulations.", the abbreviator "gz", the lowercase typer drops the
+capitals, the excitable one adds a "!". Everything the model writes already
+goes through the bot's own personality prompt.
 
 ## Memory and Relationships
 

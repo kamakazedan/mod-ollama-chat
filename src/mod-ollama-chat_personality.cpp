@@ -3,9 +3,19 @@
 #include "PlayerbotMgr.h"
 #include "Log.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_textrules.h"
 #include "DatabaseEnv.h"
 #include <random>
 #include <vector>
+
+// The way a personality types a canned line (OllamaChat.Personality.CannedStyles).
+std::string Personality_StyleCanned(Player* bot, const std::string& line)
+{
+    if (!bot || line.empty() || g_PersonalityCannedStyles.empty())
+        return line;
+    auto it = g_PersonalityCannedStyles.find(GetBotPersonality(bot));
+    return it == g_PersonalityCannedStyles.end() ? line : TextRules::StyleCanned(line, it->second);
+}
 
 // Internal personality map
 std::string GetBotPersonality(Player* bot)

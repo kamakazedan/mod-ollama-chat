@@ -210,9 +210,9 @@ namespace
                                       player, nullptr);
             else if (!g_RoleplayEnable && !g_JoinedGreetLines.empty() && g_JoinedCannedChance > 0 &&
                      urand(1, 100) <= g_JoinedCannedChance)
-                request.fixedText = TextRules::FormatCannedLine(
+                request.fixedText = Personality_StyleCanned(bot, TextRules::FormatCannedLine(
                     g_JoinedGreetLines[std::uniform_int_distribution<size_t>(0, g_JoinedGreetLines.size() - 1)(Rng())],
-                    player->GetName(), Rng());
+                    player->GetName(), Rng()));
             else
                 request.prompt = Fill(g_JoinedGreetPrompt, bot, ai, player, nullptr);
         }

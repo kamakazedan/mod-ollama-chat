@@ -930,6 +930,7 @@ namespace
             must.fallback = SafeFormat(pick, fmt::arg("dungeon", dungeon), fmt::arg("bosses", bosses));
             if (must.fallback == "[Format Error]")
                 must.fallback.clear();
+            must.fallback = Personality_StyleCanned(tank, must.fallback);
         }
         return SubmitTankLine(tank, situation, false, &must);
     }
@@ -1026,7 +1027,7 @@ namespace
             request.extraDelayMs      = delay;
             request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
             if (nextTyped < typed.size() && Between(1, 100) <= g_PartyCheerCannedChance)
-                request.fixedText = typed[nextTyped++];
+                request.fixedText = Personality_StyleCanned(bot, typed[nextTyped++]);
             else
             {
                 request.prompt = CheerPrompt(bot, ai, w, tank->GetName());
@@ -1034,7 +1035,7 @@ namespace
                 {
                     if (nextTyped >= typed.size())
                         continue;
-                    request.fixedText = typed[nextTyped++];
+                    request.fixedText = Personality_StyleCanned(bot, typed[nextTyped++]);
                 }
             }
             if (OllamaDispatch_Submit(std::move(request)))
@@ -1180,7 +1181,8 @@ namespace
         must.phrases      = g_PartyBreakEndWords;
         must.breakEndCall = true;
         if (!g_PartyBreakEndLines.empty())
-            must.fallback = g_PartyBreakEndLines[Between(0, uint32_t(g_PartyBreakEndLines.size() - 1))];
+            must.fallback = Personality_StyleCanned(
+                tank, g_PartyBreakEndLines[Between(0, uint32_t(g_PartyBreakEndLines.size() - 1))]);
         return SubmitTankLine(tank, TextRules::ExpandChoices(g_PartyBreakEndSituation, WrapRng()), false, &must);
     }
 

@@ -1996,6 +1996,156 @@ namespace TextRules
         return name;
     }
 
+    namespace
+    {
+        // Words and two-word phrases swapped for others, matched whole and
+        // whatever their case; the rest of the line is left as it is. A
+        // capitalised word after the first is a name ("gz Ty") and is kept.
+        std::string SwapWords(const std::string& line, const std::vector<std::pair<std::string, std::string>>& swaps)
+        {
+            // Words (letters, digits, ' and /) and what is between them.
+            std::vector<std::string> parts;
+            std::vector<bool> isWord;
+            for (size_t i = 0; i < line.size();)
+            {
+                auto wordy = [&](char c)
+                { return std::isalnum(static_cast<unsigned char>(c)) || c == '\'' || c == '/'; };
+                const bool w = wordy(line[i]);
+                size_t j = i;
+                while (j < line.size() && wordy(line[j]) == w)
+                    ++j;
+                parts.push_back(line.substr(i, j - i));
+                isWord.push_back(w);
+                i = j;
+            }
+            std::string out;
+            bool first = true;
+            for (size_t i = 0; i < parts.size(); ++i)
+            {
+                bool done = false;
+                const bool name = isWord[i] && !first && std::isupper(static_cast<unsigned char>(parts[i][0]));
+                if (isWord[i])
+                    first = false;
+                if (isWord[i] && !name)
+                    for (const auto& [from, to] : swaps)
+                    {
+                        const size_t space = from.find(' ');
+                        if (space == std::string::npos)
+                        {
+                            if (LowerAscii(parts[i]) == from)
+                            {
+                                out += to;
+                                done = true;
+                                break;
+                            }
+                        }
+                        else if (i + 2 < parts.size() && parts[i + 1] == " " && isWord[i + 2] &&
+                                 !std::isupper(static_cast<unsigned char>(parts[i + 2][0])) &&
+                                 LowerAscii(parts[i]) == from.substr(0, space) &&
+                                 LowerAscii(parts[i + 2]) == from.substr(space + 1))
+                        {
+                            out += to;
+                            i += 2;
+                            done = true;
+                            break;
+                        }
+                    }
+                if (!done)
+                    out += parts[i];
+            }
+            return out;
+        }
+
+        std::string TrimEnd(std::string s, const char* chars)
+        {
+            while (!s.empty() && std::strchr(chars, s.back()))
+                s.pop_back();
+            return s;
+        }
+
+        // The line ends on a word, not on ":)", "o/" or punctuation: a full
+        // stop or an exclamation mark can go after it.
+        bool EndsOnWord(const std::string& s)
+        {
+            const size_t start = s.find_last_of(' ') == std::string::npos ? 0 : s.find_last_of(' ') + 1;
+            if (start >= s.size())
+                return false;
+            for (size_t i = start; i < s.size(); ++i)
+                if (!std::isalnum(static_cast<unsigned char>(s[i])) && s[i] != '\'')
+                    return false;
+            return true;
+        }
+    }
+
+    std::string StyleCanned(const std::string& line, const std::string& style)
+    {
+        if (line.empty() || style.empty())
+            return line;
+        std::string out = line;
+        if (style == "proper")
+        {
+            static const std::vector<std::pair<std::string, std::string>> kProper = {
+                { "gg wp", "good game, well played" }, { "gg ty", "good game, thank you" },
+                { "ty gg", "thank you, good game" },   { "gg thanks", "good game, thanks" },
+                { "hey hey", "hello there" },
+                { "ty ty", "thank you" },  { "thank u", "thank you" }, { "gzz", "congratulations" },
+                { "gz", "congratulations" }, { "grats", "congratulations" }, { "gratz", "congratulations" },
+                { "congratz", "congratulations" }, { "congrats", "congratulations" }, { "tyty", "thank you" },
+                { "ty", "thank you" },    { "thx", "thanks" },         { "gg", "good game" },
+                { "gj", "good job" },     { "wp", "well played" },     { "cya", "see you" },
+                { "laters", "see you later" }, { "hiya", "hello" },     { "heya", "hello" },
+                { "hey", "hello" },       { "yo", "hello" },           { "sup", "hello" },
+                { "o/", "hello" },        { "ok", "okay" },            { "brb", "back in a moment" },
+                { "whats", "what's" },    { "im", "I'm" },              { "ill", "I'll" },
+                { "ive", "I've" },        { "i", "I" },                 { "lets", "let's" },
+                { "thats", "that's" },    { "dont", "don't" },          { "cant", "can't" },
+                { "wont", "won't" },      { "youre", "you're" },        { "u", "you" },
+            };
+            out = SwapWords(out, kProper);
+            if (!out.empty())
+                out[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(out[0])));
+            out = TrimEnd(out, " ");
+            if (EndsOnWord(out))
+                out += '.';
+        }
+        else if (style == "caps")
+            std::transform(out.begin(), out.end(), out.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+        else if (style == "lower")
+            out = TrimEnd(LowerAscii(out), ".! ");
+        else if (style == "flat")
+        {
+            // "Full clear! nice work" -> "full clear, nice work"; "gz!!" -> "gz".
+            std::string flat;
+            for (size_t i = 0; i < out.size(); ++i)
+                if (out[i] != '!')
+                    flat += out[i];
+                else if (i + 1 < out.size() && out[i + 1] == ' ' &&
+                         out.find_first_not_of("! ", i) != std::string::npos && (flat.empty() || flat.back() != ','))
+                    flat += ',';
+            out = TrimEnd(flat, ". ");
+            if (!out.empty())
+                out[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(out[0])));
+        }
+        else if (style == "short")
+        {
+            static const std::vector<std::pair<std::string, std::string>> kShort = {
+                { "thank you", "ty" },   { "see you", "cya" },    { "good game", "gg" },  { "good job", "gj" },
+                { "well played", "wp" }, { "congratulations", "gz" }, { "congrats", "gz" }, { "congratz", "gz" },
+                { "grats", "gz" },       { "gratz", "gz" },       { "thanks", "ty" },     { "please", "pls" },
+                { "okay", "k" },         { "ok", "k" },
+            };
+            out = TrimEnd(LowerAscii(SwapWords(out, kShort)), ".! ");
+        }
+        else if (style == "excited")
+        {
+            out = TrimEnd(out, ". ");
+            if (EndsOnWord(out))
+                out += '!';
+        }
+        return out;
+    }
+
     std::vector<std::string> AnimalPhrases(const Animals& a, bool own, bool onFoot)
     {
         std::vector<std::string> out;

@@ -216,7 +216,7 @@ std::string Events_PickCongrats(Player* bot, const std::string& scopeKey, const 
 
     for (const std::string& raw : lines)
     {
-        const std::string line = TextRules::FormatCannedLine(raw, name, CongratsRng());
+        const std::string line = Personality_StyleCanned(bot, TextRules::FormatCannedLine(raw, name, CongratsRng()));
         if (line.empty())
             continue;
         // Two bots typing "gz" is normal; the same bot typing it twice in a

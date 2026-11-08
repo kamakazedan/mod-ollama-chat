@@ -1,5 +1,6 @@
 #include "mod-ollama-chat_premises.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_facts.h"
 #include "mod-ollama-chat_textrules.h"
 
 #include "Player.h"
@@ -119,6 +120,26 @@ std::string Premises_Pick(Player* bot)
                         return alliance ? "the Alliance" : "the Horde";
                     if (slot == "other_faction")
                         return alliance ? "the Horde" : "the Alliance";
+                    // Real names from the game's data, not ones a model would
+                    // make up (mod-ollama-chat_facts).
+                    if (slot == "trinket")
+                        return Facts_Trinket(level, taken);
+                    if (slot == "itemset")
+                        return Facts_ItemSet(level, taken);
+                    if (slot == "rare")
+                        return Facts_Rare(level, taken);
+                    if (slot == "bosses" || slot == "class_races")
+                    {
+                        // About the dungeon, raid or class picked just before it.
+                        for (auto it = picked.rbegin(); it != picked.rend(); ++it)
+                        {
+                            if (slot == "bosses" && (it->first == "dungeon" || it->first == "raid"))
+                                return Facts_Bosses(it->second);
+                            if (slot == "class_races" && it->first == "class")
+                                return Facts_ClassRaces(it->second);
+                        }
+                        return slot == "bosses" ? std::string(" ") : std::string();
+                    }
                     return FromPool(slot, taken, level, picked);
                 });
             if (filled.empty())

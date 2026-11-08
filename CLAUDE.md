@@ -177,6 +177,20 @@ mentions one: build the words with `Pets_Seen` and `TextRules::AnimalPhrases`
 called Howler"). "with their Wolf Howler" beside talk of a mount had a bot
 take a hunter's wolf for a mount.
 
+Nothing from the game is made up. A prompt or premise that needs something
+specific -- an item, quest, creature, boss, place -- hands the model the real
+thing (`mod-ollama-chat_facts.cpp`'s `{trinket}`, `{itemset}`, `{rare}`,
+`{bosses}`, `{class_races}`, or a conversation pool) rather than a category to
+invent from: "a would-you-rather about trinkets" got "Trinket of the Hidden
+Sun". `Outlook.FactsText` tells every bot to say it can't remember rather than
+make an answer up; made-up fun is only fine as a plain imagine-if. The facts
+pools are built from the server's own data on the world thread, on first use.
+
+Every line a bot says is in its own style. The model's lines are, through its
+personality prompt; a typed (canned) line goes through
+`Personality_StyleCanned(bot, line)` (`OllamaChat.Personality.CannedStyles`),
+and a new place that says one must too.
+
 Keep the fourth wall out of prompts. As far as any bot knows, everyone on the
 realm is a player like itself: write "players", "people", "someone", never
 "bot" or "AI", and never single someone out as "a real player", which says the

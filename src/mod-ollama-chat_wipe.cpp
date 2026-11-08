@@ -152,7 +152,7 @@ namespace
 
         std::string stock;
         if (!typed.empty() && !g_RoleplayEnable)   // a bare "uh oh" would break character
-            stock = typed[Between(0, uint32_t(typed.size() - 1))];
+            stock = Personality_StyleCanned(bot, typed[Between(0, uint32_t(typed.size() - 1))]);
 
         OllamaChatRequest request;
         request.botGuid           = bot->GetGUID().GetRawValue();
