@@ -762,7 +762,7 @@ bool Conjure_HandleHumanLine(Player* player, const std::string& msg, ChatChannel
     // trade the moment it hears of one.
     if (sPlayerbotAIConfig.EnableRandomBotTrading == 0 &&
         (sRandomPlayerbotMgr.IsRandomBot(mage) || sRandomPlayerbotMgr.IsAddclassBot(mage)))
-        return cant("bots like you are not allowed to trade on this realm");
+        return cant("you cannot trade with anyone on this realm");
     if (!mage->IsAlive())
         return cant("you are dead");
     if (!player->IsAlive())
@@ -1033,7 +1033,7 @@ std::string Conjure_GiveItems(Player* bot, Player* player, const std::vector<std
         return "you only trade with people in your group";
     if (sPlayerbotAIConfig.EnableRandomBotTrading == 0 &&
         (sRandomPlayerbotMgr.IsRandomBot(bot) || sRandomPlayerbotMgr.IsAddclassBot(bot)))
-        return "bots like you are not allowed to trade on this realm";
+        return "you cannot trade with anyone on this realm";
     if (!bot->IsAlive())
         return "you are dead";
     if (!player->IsAlive())
@@ -1053,7 +1053,7 @@ std::string Conjure_GiveItems(Player* bot, Player* player, const std::vector<std
         for (const auto& [entry, count] : items)
             if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(entry))
                 if (proto->SellPrice && count)
-                    return "bots like you are not allowed to sell or give things away on this realm";
+                    return "you cannot sell or give things away on this realm";
 
     const auto now = Clock::now();
     Gift gift;

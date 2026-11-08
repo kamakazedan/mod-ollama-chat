@@ -164,6 +164,14 @@ When adding prompt material, prefer things outside the bot — people nearby,
 what just happened, where they are — over facts about the bot itself. The
 weights in `OllamaChat.Topic.*` encode this deliberately.
 
+Keep the fourth wall out of prompts. As far as any bot knows, everyone on the
+realm is a player like itself: write "players", "people", "someone", never
+"bot" or "AI", and never single someone out as "a real player", which says the
+rest are not ("the way a real player would", about the bot itself, is fine). A
+model repeats what it is told, and `Response.FourthWallPhrases` then drops the
+line. The one opening is a real player raising it (`Phrases_Check`'s
+`answeringPlayer`).
+
 ## Conventions
 
 - Log to `module.ollamachat`, not `server.loading`. It falls back to the

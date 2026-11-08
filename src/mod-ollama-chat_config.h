@@ -867,6 +867,16 @@ extern std::string g_PartyBreakEndSituation;      // the tank's "lets go", for P
 extern std::vector<std::vector<std::string>> g_PartyBreakEndWords;   // the line has one of these, or...
 extern std::vector<std::string> g_PartyBreakEndLines;                 // ...one of these goes out instead
 
+// --------------------------------------------
+// Chat v22: the fourth wall (mod-ollama-chat_phrases), and a bot knowing its
+// own pets (mod-ollama-chat_pets)
+// --------------------------------------------
+extern std::vector<std::vector<std::string>> g_ResponseFourthWallPhrases;   // bots, AI, "real players"
+extern std::vector<std::vector<std::string>> g_ResponseFourthWallAllow;     // "rocket bot", "repair bot"
+extern uint32_t    g_ResponseFourthWallMinutes;   // after one wink at it, nobody else for this long
+extern std::string g_PetsStateText;               // "...: {pets}. ..."
+extern std::vector<std::vector<std::string>> g_PetsWords;   // the talk is about pets
+
 extern bool        g_MingleEnable;
 extern bool        g_MingleCitiesOnly;          // only where a real player is in a city (or inn)
 extern uint32_t    g_MingleGapMinSeconds;       // how often one may start near a real player

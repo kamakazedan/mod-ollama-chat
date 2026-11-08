@@ -20,6 +20,13 @@
 // line owed to someone -- otherwise a nostalgic bot answers everything with
 // the same memory.
 //
+// Response.FourthWallPhrases is the fourth wall -- bots, AI, "real players"
+// -- on a realm where everyone is a player: a line with one never goes out.
+// The one opening is a real player bringing it up: the line answering them
+// may wink at it, and then no other bot does for Response.FourthWallMinutes.
+// Response.FourthWallAllow are names that only look like it ("Clockwork Rocket
+// Bot", "Field Repair Bot").
+//
 // Outlook.LevelPhrases holds things only some levels say ("[40+] repair
 // bill", "[70+] heroic"): a bot outside that range does not say them, so a
 // level 6 never complains about repair bills even when the model slips.
@@ -36,6 +43,7 @@
 enum class PhraseCheck : uint8_t
 {
     Ok,
+    FourthWall, // bots, AI, "real players": only when someone else brought it up
     OffEra,     // never in Wrath
     OffLevel,   // not something a player of the bot's level says
     Overused,   // said somewhere on the realm too recently
@@ -44,8 +52,10 @@ enum class PhraseCheck : uint8_t
 
 // `answering` is the line the bot is replying to, plain text (empty for
 // chatter). `which` gets the phrase that matched, for the debug log.
-PhraseCheck Phrases_Check(const std::string& text, const std::string& answering, bool directAddress,
-                          uint32_t level, std::string& which);
+//
+// `answeringPlayer`: `answering` is a real player's line, not another bot's.
+PhraseCheck Phrases_Check(const std::string& text, const std::string& answering, bool answeringPlayer,
+                          bool directAddress, uint32_t level, std::string& which);
 
 // The line went out: its stock phrases start their cooldown now.
 void Phrases_NoteSaid(const std::string& text);
@@ -65,6 +75,8 @@ void Phrases_Update();   // forget cooldowns that have run out
 
 struct PhrasesStats
 {
+    uint64_t droppedFourthWall = 0;
+    uint64_t fourthWallWinks   = 0;   // went out, answering a player who brought it up
     uint64_t droppedOffEra   = 0;
     uint64_t droppedOffLevel = 0;
     uint64_t droppedOverused = 0;

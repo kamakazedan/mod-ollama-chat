@@ -1313,6 +1313,26 @@ OllamaChat.Response.OverusedCooldownSeconds = 1200
 #        counts as "mythic". Empty disables.
 OllamaChat.Response.OffEraPhrases = "mythic|keystone|transmog*|xmog|world quest|world quests|dragonriding|dragonflying|skyriding|timewalking|torghast|azerite|shadowlands|dragonflight|pandaria|warlords of draenor|battle for azeroth|war within|my garrison|class hall|artifact weapon|covenant ability"
 
+#    OllamaChat.Response.FourthWallPhrases
+#    OllamaChat.Response.FourthWallAllow
+#    OllamaChat.Response.FourthWallMinutes
+#        The fourth wall. As far as any bot knows, everyone on the realm is a
+#        player like itself, so a bot does not talk about bots, AI or "real
+#        players": a line with one of FourthWallPhrases is never said (one
+#        owed to someone gets another go without it: RetryOwed). It is a rule
+#        that can be broken, but only when a perfect opportunity appears: a
+#        real player bringing it up ("are you a bot?") -- another bot raising
+#        it is no opening -- and then only the first answer gets to wink at
+#        it; no other bot does for FourthWallMinutes. FourthWallAllow are
+#        names that only look like it and are fine anywhere: an engineer's
+#        Field Repair Bot, a Clockwork Rocket Bot, Mimiron's bomb bots.
+#        Matched like the lists above, on whole words, so "bot" is not
+#        "bottle". An empty FourthWallPhrases disables.
+#        Default: (below), (below), 10
+OllamaChat.Response.FourthWallPhrases = "bot|bots|botting|botter|botters|botted|playerbot|playerbots|ai|chatbot|chatbots|chatgpt|llm|language model|artificial intelligence|programmed|my programming|real player|real players|real person|real people|actual player|actual players|actual person|actual people|fake player|fake players"
+OllamaChat.Response.FourthWallAllow = "repair bot|repair bots|rocket bot|rocket bots|bomb bot|bomb bots|assault bot|assault bots|junk bot|junk bots|fire bot|fire bots|scrap bot|scrap bots|boom bot|boom bots"
+OllamaChat.Response.FourthWallMinutes = 10
+
 #    OllamaChat.Response.RarePhrases
 #    OllamaChat.Response.RareCooldownSeconds
 #        A chat style's hobby horse, or a joke everyone has heard: once any bot
@@ -2189,6 +2209,36 @@ OllamaChat.City.ConversationBoost = 2
 #        that it has just come back.
 OllamaChat.Hangout.StateText = "Right now you are hanging around {spot}, {doing}, with nowhere in particular to be."
 OllamaChat.Hangout.AwayText = "You had stepped away from your keyboard there (AFK) and have only just come back to it."
+
+###############################################################################
+#
+#   OLLAMA CHAT - A BOT'S OWN PETS
+#
+#   A hunter's pet has a name -- mod-playerbots-plus gives random bots' pets
+#   the kind players give theirs -- and a bot may have a companion pet
+#   trotting along (PlayerbotsPlus.Pets.* and Companions.* in its conf).
+#   "cute cat!", "whats your wolf called?", "is that a snake following
+#   you?": the bot asked knows what its pet is and what it is called, and
+#   what is following it. Only when it was spoken to and the line is about
+#   them -- Words, or the pet's or companion's own name or kind: a pet in
+#   every prompt is what a bot would end up talking about. Bots chatting
+#   among themselves (Mingle) already see each other's pets and companions.
+#
+###############################################################################
+
+#    OllamaChat.Pets.StateText
+#        Added to the reply prompt. {pets}: "your cat Aslan (your hunter pet)
+#        and a little Mechanical Squirrel following you (a companion pet)".
+#        Empty disables.
+#        Default: (below)
+OllamaChat.Pets.StateText = "Your own pets, with you right now: {pets}. If the talk is about them, you know what they are and what they are called, and talk about them the way players do about their own."
+
+#    OllamaChat.Pets.Words
+#        Words that make a line about pets, besides the pet's and the
+#        companion's own names and kinds. Phrases separated by |, matched on
+#        whole words.
+#        Default: (below)
+OllamaChat.Pets.Words = "pet|pets|companion|companions|critter|critters|minion|minions|demon|demons|tame|tamed|taming|following you|following u|follows you|follow you around"
 
 ###############################################################################
 #
@@ -3958,7 +4008,7 @@ OllamaChat.Aside.BotMinutes = 45
 #    OllamaChat.Aside.Prompt
 #        {bot_name}, {bot_level}, {bot_race}, {bot_class}, {bot_personality},
 #        {player_name} (whispered), {subject} (talked about), {fact}.
-OllamaChat.Aside.Prompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} You are in a group with {player_name}, a real player, and with {subject}. Whisper {player_name} privately: a quick aside about {subject}, the cheeky, gossipy or slightly catty kind of remark you would only make in a whisper, to get a laugh out of them. Base it on this, and nothing else: {fact}. Keep it playful, never cruel, nothing about anyone's real life, and make up nothing about {subject} beyond that. Do not say you are whispering. One short line, under 20 words, no name in front, no quotes."
+OllamaChat.Aside.Prompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} You are in a group with {player_name} and with {subject}. Whisper {player_name} privately: a quick aside about {subject}, the cheeky, gossipy or slightly catty kind of remark you would only make in a whisper, to get a laugh out of them. Base it on this, and nothing else: {fact}. Keep it playful, never cruel, nothing about anyone's real life, and make up nothing about {subject} beyond that. Do not say you are whispering. One short line, under 20 words, no name in front, no quotes."
 
 #    OllamaChat.Aside.HistoryNote
 OllamaChat.Aside.HistoryNote = "(nothing yet: you whispered them first)"

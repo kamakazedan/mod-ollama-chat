@@ -770,7 +770,9 @@ namespace
         // few minutes.
         {
             std::string which;
-            PhraseCheck verdict = Phrases_Check(c.text, origin, directAddress, bot->GetLevel(), which);
+            const bool answeringPlayer = c.request.chainDepth == 0;   // not a bot's line
+            PhraseCheck verdict =
+                Phrases_Check(c.text, origin, answeringPlayer, directAddress, bot->GetLevel(), which);
             if (verdict != PhraseCheck::Ok && !c.request.fallbackText.empty() && c.text != c.request.fallbackText)
             {
                 // It has to go out: in its stock words, then.
@@ -786,7 +788,8 @@ namespace
                 if (g_DebugEnabled)
                     LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} reply dropped, {} '{}': '{}'",
                              bot->GetName(),
-                             verdict == PhraseCheck::OffEra   ? "not in Wrath:"
+                             verdict == PhraseCheck::FourthWall ? "breaks the fourth wall:"
+                           : verdict == PhraseCheck::OffEra   ? "not in Wrath:"
                            : verdict == PhraseCheck::OffLevel ? "not at its level:"
                            : verdict == PhraseCheck::Rare     ? "hobby horse said lately:"
                                                               : "said lately:",

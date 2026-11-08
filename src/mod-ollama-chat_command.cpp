@@ -739,11 +739,14 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              links.remembered, links.indexed ? ", names indexed" : "");
     if (show("chat"))
         handler->PSendSysMessage("Stock phrases: {} dropped as said lately, {} as a hobby horse said lately, {} as "
-                             "not in Wrath, {} as not at the bot's level, {} cooling down",
+                             "not in Wrath, {} as not at the bot's level, {} as breaking the fourth wall ({} winks "
+                             "at it let through), {} cooling down",
                              (unsigned long long)phrases.droppedOverused,
                              (unsigned long long)phrases.droppedRare,
                              (unsigned long long)phrases.droppedOffEra,
                              (unsigned long long)phrases.droppedOffLevel,
+                             (unsigned long long)phrases.droppedFourthWall,
+                             (unsigned long long)phrases.fourthWallWinks,
                              phrases.coolingDown);
     const PremiseStats premises = Premises_GetStats();
     if (show("chat"))

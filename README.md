@@ -502,6 +502,15 @@ Wrath (`OffEraPhrases`: keystones, transmog, world quests) are never said. A
 chat style's hobby horse (`RarePhrases`: "40 man", "back in vanilla") gets
 through once an hour, even in a reply owed to someone.
 
+**The fourth wall.** As far as any bot knows, everyone on the realm is a player
+like itself, so no bot talks about bots, AI or "real players"
+(`FourthWallPhrases`). It's a rule that can be broken, but only when a perfect
+opportunity appears: a real player bringing it up ("are you a bot?"), never
+another bot, and then only the first answer gets to wink at it; nobody else
+does for `FourthWallMinutes`. Names that only look like it, such as Field
+Repair Bot, Clockwork Rocket Bot and Mimiron's bomb bots, are fine anywhere
+(`FourthWallAllow`).
+
 `DropVocatives` takes "kid" out wherever it addresses someone ("just cave mobs
 kid" goes out as "just cave mobs"), and a thank-you on its own ("ty", "cheers
 mate") gets no reply unless it asks something too (`Crowd.ThanksReplyChance`).
@@ -617,6 +626,14 @@ With both modules in the same build, the bots talk about what it has them do:
   it's back (`OllamaChat.Hangout.StateText`, `AwayText`).
 - **Stuck on a mount:** a bot that was stuck knows it if asked, and may laugh
   it off (`OllamaChat.Stuck.*`).
+- **Pets and companions:** random bots' hunters name their pets the way
+  players do (Aslan, Mr Bigglesworth), and bots own and walk companion pets
+  that suit their side and level. Ask a bot about its pet ("cute cat, whats
+  it called?") and it knows what the pet is and what it's called, and what is
+  trotting along behind it (`OllamaChat.Pets.*`). Bots chatting among
+  themselves see each other's pets and companions too.
+- **Duels:** bots with nothing on duel each other outside the cities, the
+  way players practise. The chat side is the usual duel banter.
 - **Raid marks:** a rogue that can't sap the star says why in party
   (`OllamaChat.Marks.Say*` and the `Sap*` situations).
 - **Muted lines:** this module has the bots say "Staying", "Following", hello

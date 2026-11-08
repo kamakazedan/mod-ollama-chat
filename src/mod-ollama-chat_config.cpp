@@ -206,6 +206,13 @@ std::string g_PartyBreakEndSituation;
 std::vector<std::vector<std::string>> g_PartyBreakEndWords;
 std::vector<std::string> g_PartyBreakEndLines;
 
+// Chat v22
+std::vector<std::vector<std::string>> g_ResponseFourthWallPhrases;
+std::vector<std::vector<std::string>> g_ResponseFourthWallAllow;
+uint32_t    g_ResponseFourthWallMinutes = 10;
+std::string g_PetsStateText;
+std::vector<std::vector<std::string>> g_PetsWords;
+
 bool        g_MingleEnable              = true;
 bool        g_MingleCitiesOnly          = true;
 uint32_t    g_MingleGapMinSeconds       = 80;
@@ -2373,9 +2380,9 @@ static void LoadNaturalChatV14Settings()
     g_AsideMinWords      = std::min<uint32_t>(20, sConfigMgr->GetOption<uint32_t>("OllamaChat.Aside.MinWords", 4));
     g_AsidePrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Aside.Prompt",
         "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} You are "
-        "in a group with {player_name}, a real player, and with {subject}. Whisper {player_name} privately: a quick "
-        "aside about {subject}, the cheeky, gossipy or slightly catty kind of remark you would only make in a "
-        "whisper, to get a laugh out of them. Base it on this, and nothing else: {fact}. Keep it playful, never "
+        "in a group with {player_name} and with {subject}. Whisper {player_name} privately: a quick aside about "
+        "{subject}, the cheeky, gossipy or slightly catty kind of remark you would only make in a whisper, to get "
+        "a laugh out of them. Base it on this, and nothing else: {fact}. Keep it playful, never "
         "cruel, nothing about anyone's real life, and make up nothing about {subject} beyond that. Do not say you "
         "are whispering. One short line, under 20 words, no name in front, no quotes.");
     g_AsideHistoryNote = sConfigMgr->GetOption<std::string>("OllamaChat.Aside.HistoryNote",
@@ -2632,6 +2639,35 @@ static void LoadNaturalChatV21Settings()
              "players and healers, {}% for other bots), emotes in the transcript {}.",
              g_PartyBreakEndEnable ? "on" : "off", g_PartyBreakEndHealthPct, g_PartyBreakEndManaPct,
              g_PartyBreakEndOthersManaPct, g_EmoteEventText.empty() ? "off" : "on");
+}
+
+static void LoadNaturalChatV22Settings()
+{
+    // --- the fourth wall ---------------------------------------------------------------
+    g_ResponseFourthWallPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(
+        "OllamaChat.Response.FourthWallPhrases",
+        "bot|bots|botting|botter|botters|botted|playerbot|playerbots|ai|chatbot|chatbots|chatgpt|llm|"
+        "language model|artificial intelligence|programmed|my programming|real player|real players|real person|"
+        "real people|actual player|actual players|actual person|actual people|fake player|fake players"));
+    g_ResponseFourthWallAllow = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(
+        "OllamaChat.Response.FourthWallAllow",
+        "repair bot|repair bots|rocket bot|rocket bots|bomb bot|bomb bots|assault bot|assault bots|junk bot|"
+        "junk bots|fire bot|fire bots|scrap bot|scrap bots|boom bot|boom bots"));
+    g_ResponseFourthWallMinutes =
+        std::min<uint32_t>(1440, sConfigMgr->GetOption<uint32_t>("OllamaChat.Response.FourthWallMinutes", 10));
+
+    // --- a bot's own pets --------------------------------------------------------------
+    g_PetsStateText = sConfigMgr->GetOption<std::string>("OllamaChat.Pets.StateText",
+        "Your own pets, with you right now: {pets}. If the talk is about them, you know what they are and what "
+        "they are called, and talk about them the way players do about their own.");
+    g_PetsWords = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Pets.Words",
+        "pet|pets|companion|companions|critter|critters|minion|minions|demon|demons|tame|tamed|taming|"
+        "following you|following u|follows you|follow you around"));
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v22: the fourth wall {} ({} phrases, {} names that only "
+             "look like it, one wink in {} min), bots knowing their own pets {}.",
+             g_ResponseFourthWallPhrases.empty() ? "off" : "on", g_ResponseFourthWallPhrases.size(),
+             g_ResponseFourthWallAllow.size(), g_ResponseFourthWallMinutes, g_PetsStateText.empty() ? "off" : "on");
 }
 
 static void LoadNaturalChatV16Settings()
@@ -3396,6 +3432,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV16Settings();
     LoadNaturalChatV20Settings();
     LoadNaturalChatV21Settings();
+    LoadNaturalChatV22Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

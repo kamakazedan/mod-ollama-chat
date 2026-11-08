@@ -558,7 +558,7 @@ namespace
                     return "you are nowhere near them";
                 if (sPlayerbotAIConfig.EnableRandomBotTrading == 0 &&
                     (sRandomPlayerbotMgr.IsRandomBot(bot) || sRandomPlayerbotMgr.IsAddclassBot(bot)))
-                    return "bots like you are not allowed to trade on this realm";
+                    return "you cannot trade with anyone on this realm";
                 if ((bot->GetTradeData() || player->GetTradeData()) && bot->GetTrader() != player)
                     return "one of you is already in a trade";
                 break;

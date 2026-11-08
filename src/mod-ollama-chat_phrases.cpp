@@ -1,5 +1,6 @@
 #include "mod-ollama-chat_phrases.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_textrules.h"
 
 #include <algorithm>
@@ -14,6 +15,9 @@ namespace
     std::unordered_map<std::string, time_t> g_lastSaid;
     std::unordered_map<std::string, time_t> g_lastRare;
 
+    uint64_t g_fourthWall = 0;
+    uint64_t g_winks      = 0;
+    time_t   g_lastWink   = 0;   // a bot last leaned on the fourth wall
     uint64_t g_offEra   = 0;
     uint64_t g_offLevel = 0;
     uint64_t g_overused = 0;
@@ -28,12 +32,81 @@ namespace
     };
     std::unordered_map<std::string, std::deque<Use>> g_grams;
     constexpr size_t kMaxGrams = 60000;
+
+    // As CrowdText matches a phrase's word: "bot*" is any word starting "bot".
+    bool WordMatches(const std::string& pattern, const std::string& word)
+    {
+        if (pattern.empty())
+            return false;
+        if (pattern.back() == '*')
+        {
+            const size_t len = pattern.size() - 1;
+            return len > 0 && word.size() >= len && word.compare(0, len, pattern, 0, len) == 0;
+        }
+        return word == pattern;
+    }
+
+    // The words of a line, with the names that only look like the fourth
+    // wall ("my clockwork rocket bot", "drop a repair bot") taken out, joined
+    // up again.
+    std::string WithoutAllowed(const std::string& text)
+    {
+        std::vector<std::string> words = CrowdText::Words(text);
+        for (size_t i = 0; i < words.size();)
+        {
+            size_t len = 0;
+            for (const std::vector<std::string>& phrase : g_ResponseFourthWallAllow)
+            {
+                if (phrase.empty() || i + phrase.size() > words.size())
+                    continue;
+                bool all = true;
+                for (size_t j = 0; j < phrase.size() && all; ++j)
+                    all = WordMatches(phrase[j], words[i + j]);
+                if (all)
+                {
+                    len = phrase.size();
+                    break;
+                }
+            }
+            if (len)
+                words.erase(words.begin() + i, words.begin() + i + len);
+            else
+                ++i;
+        }
+        std::string out;
+        for (const std::string& w : words)
+            out += (out.empty() ? "" : " ") + w;
+        return out;
+    }
+
+    // The fourth-wall phrases in a line, by index.
+    std::vector<size_t> FourthWallIn(const std::string& text)
+    {
+        if (g_ResponseFourthWallPhrases.empty() || text.empty())
+            return {};
+        return TextRules::FindPhraseIndexes(WithoutAllowed(text), g_ResponseFourthWallPhrases);
+    }
 }
 
-PhraseCheck Phrases_Check(const std::string& text, const std::string& answering, bool directAddress,
-                          uint32_t level, std::string& which)
+PhraseCheck Phrases_Check(const std::string& text, const std::string& answering, bool answeringPlayer,
+                          bool directAddress, uint32_t level, std::string& which)
 {
     which.clear();
+
+    // The fourth wall: everyone here is a player. A real player bringing it
+    // up is the one opening to wink at it, and then only one bot in a while.
+    if (const std::vector<size_t> wall = FourthWallIn(text); !wall.empty())
+    {
+        const bool opening = answeringPlayer && !FourthWallIn(answering).empty() &&
+                             (g_lastWink == 0 ||
+                              time(nullptr) - g_lastWink >= time_t(g_ResponseFourthWallMinutes) * 60);
+        if (!opening)
+        {
+            which = TextRules::PhraseKey(g_ResponseFourthWallPhrases[wall.front()]);
+            ++g_fourthWall;
+            return PhraseCheck::FourthWall;
+        }
+    }
 
     // Words the line being answered used are fair game: "can you transmog
     // in wrath?" gets "no transmog in wrath lol".
@@ -94,6 +167,11 @@ PhraseCheck Phrases_Check(const std::string& text, const std::string& answering,
 void Phrases_NoteSaid(const std::string& text)
 {
     const time_t now = time(nullptr);
+    if (!FourthWallIn(text).empty())
+    {
+        g_lastWink = now;
+        ++g_winks;
+    }
     if (g_ResponseOverusedCooldownSeconds > 0)
         for (size_t i : TextRules::FindPhraseIndexes(text, g_ResponseOverusedPhrases))
             g_lastSaid[TextRules::PhraseKey(g_ResponseOverusedPhrases[i])] = now;
@@ -173,6 +251,8 @@ void Phrases_Update()
 PhrasesStats Phrases_GetStats()
 {
     PhrasesStats s;
+    s.droppedFourthWall = g_fourthWall;
+    s.fourthWallWinks   = g_winks;
     s.droppedOffEra   = g_offEra;
     s.droppedOffLevel = g_offLevel;
     s.droppedOverused = g_overused;

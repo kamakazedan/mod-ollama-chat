@@ -46,6 +46,7 @@
 #include "mod-ollama-chat_random.h"
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_bags.h"
+#include "mod-ollama-chat_pets.h"
 #include "mod-ollama-chat_needs.h"
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_conversation.h"
@@ -3506,6 +3507,11 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         const std::string hangout = Hangout_StateTextFor(bot);
         if (!hangout.empty())
             prompt += " " + hangout;
+        // "cute cat, whats it called?": its own pet and companion, when they
+        // are what the line is about (mod-ollama-chat_pets).
+        const std::string pets = Pets_StateTextFor(bot, playerMessage);
+        if (!pets.empty())
+            prompt += " " + pets;
     }
 
     // Someone from its own group, talking in General or guild chat: the answer
