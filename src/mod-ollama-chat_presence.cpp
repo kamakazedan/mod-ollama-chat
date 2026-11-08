@@ -8,6 +8,7 @@
 #include "mod-ollama-chat_handler.h"
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_personality.h"
+#include "mod-ollama-chat_pets.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
@@ -67,19 +68,6 @@ namespace
     {
         auto it = map.find(key);
         return it == map.end() || now >= it->second;
-    }
-
-    std::string MountName(Player* p)
-    {
-        if (!p->IsMounted())
-            return "";
-        const Unit::AuraEffectList& auras = p->GetAuraEffectsByType(SPELL_AURA_MOUNTED);
-        if (auras.empty())
-            return "a mount";
-        SpellInfo const* info = auras.front()->GetSpellInfo();
-        if (!info || !info->SpellName[0] || !*info->SpellName[0])
-            return "a mount";
-        return info->SpellName[0];
     }
 
     std::string ClassAndRace(Player* subject, Player* observer)
@@ -167,55 +155,30 @@ std::string Presence_Describe(Player* subject, Player* observer, ObjectGuid* out
     std::string text = SafeFormat("{}, a level {} {}", subject->GetName(), subject->GetLevel(),
                                   ClassAndRace(subject, observer));
 
-    if (subject->IsMounted())
-        text += ", riding " + MountName(subject);
-    else if (subject->GetUInt32Value(UNIT_NPC_EMOTESTATE) == EMOTE_STATE_DANCE)
-        text += ", dancing";
-    else if (subject->IsSitState())
-        text += ", sitting down";
-    else if (subject->isAFK())
-        text += ", standing there AFK";
-    else if (subject->isMoving())
-        text += ", walking past";
-    else
-        text += ", standing around";
+    // Each as what it is: "riding their mount, a Swift Brown Horse", "with
+    // their hunter pet, a wolf called Howler", "with their companion pet, a
+    // Mechanical Squirrel, following them" (mod-ollama-chat_pets). The mount
+    // comes first, as what they are doing.
+    const PetsSeen seen = Pets_Seen(subject);
+    if (seen.animals.mount.empty())
+    {
+        if (subject->GetUInt32Value(UNIT_NPC_EMOTESTATE) == EMOTE_STATE_DANCE)
+            text += ", dancing";
+        else if (subject->IsSitState())
+            text += ", sitting down";
+        else if (subject->isAFK())
+            text += ", standing there AFK";
+        else if (subject->isMoving())
+            text += ", walking past";
+        else
+            text += ", standing around";
+    }
+    for (const std::string& part : TextRules::AnimalPhrases(seen.animals, false, false))
+        text += ", " + part;
 
     // Their own pet, or else a companion: the thing people coo over.
-    if (Pet* pet = subject->GetPet())
-    {
-        if (pet->IsInWorld() && pet->IsAlive() && pet->IsWithinDistInMap(subject, 20.0f))
-        {
-            std::string family;
-            if (CreatureTemplate const* ct = pet->GetCreatureTemplate())
-                if (CreatureFamilyEntry const* fe = sCreatureFamilyStore.LookupEntry(ct->family))
-                    if (fe->Name[0] && *fe->Name[0])
-                        family = fe->Name[0];
-
-            if (!family.empty() && family != pet->GetName())
-                text += SafeFormat(", with their {} {}", family, pet->GetName());
-            else
-                text += SafeFormat(", with their pet {}", pet->GetName());
-
-            if (outPetGuid)
-                *outPetGuid = pet->GetGUID();
-            return text;
-        }
-    }
-
-    const ObjectGuid critterGuid = subject->GetCritterGUID();
-    if (!critterGuid.IsEmpty())
-    {
-        if (Creature* critter = ObjectAccessor::GetCreature(*subject, critterGuid))
-        {
-            if (critter->IsInWorld() && critter->IsWithinDistInMap(subject, 20.0f))
-            {
-                text += SafeFormat(", with a little {} following them", critter->GetName());
-                if (outPetGuid)
-                    *outPetGuid = critter->GetGUID();
-            }
-        }
-    }
-
+    if (outPetGuid)
+        *outPetGuid = !seen.petGuid.IsEmpty() ? seen.petGuid : seen.companionGuid;
     return text;
 }
 

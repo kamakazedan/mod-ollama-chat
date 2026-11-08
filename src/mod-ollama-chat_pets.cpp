@@ -8,6 +8,8 @@
 #include "ObjectAccessor.h"
 #include "Pet.h"
 #include "Player.h"
+#include "SpellAuraEffects.h"
+#include "SpellInfo.h"
 
 #include <algorithm>
 #include <cctype>
@@ -32,6 +34,33 @@ namespace
         return (f && f->Name[0] && *f->Name[0]) ? std::string(f->Name[0]) : std::string();
     }
 
+    // What a pet is to the one it belongs to: a hunter's is its pet, a
+    // warlock's a demon, a death knight's a ghoul, a mage's a water elemental.
+    std::string KindOf(Pet* pet, Player* owner)
+    {
+        if (pet->getPetType() == HUNTER_PET)
+            return "hunter pet";
+        switch (owner->getClass())
+        {
+            case CLASS_WARLOCK:      return "demon";
+            case CLASS_DEATH_KNIGHT: return "ghoul";
+            case CLASS_MAGE:         return "water elemental";
+            default:                 return "pet";
+        }
+    }
+
+    // What they are riding, as people call it ("Swift Brown Horse"); "Mount"
+    // when the game does not say.
+    std::string MountOf(Player* p)
+    {
+        const Unit::AuraEffectList& auras = p->GetAuraEffectsByType(SPELL_AURA_MOUNTED);
+        SpellInfo const* info = auras.empty() ? nullptr : auras.front()->GetSpellInfo();
+        if (!info || !info->SpellName[0] || !*info->SpellName[0])
+            return "Mount";
+        const std::string name = TextRules::MountFromSpell(info->SpellName[0]);
+        return name.empty() ? std::string("Mount") : name;
+    }
+
     // Words in companions' names that say nothing on their own: "great run"
     // is not about a Great Horned Owl.
     bool Plain(const std::string& w)
@@ -39,7 +68,8 @@ namespace
         static const char* const kPlain[] = { "the", "and", "with", "tiny", "little", "lil", "mini", "baby", "great",
                                               "small", "big", "young", "old", "black", "white", "brown", "green",
                                               "blue", "red", "pink", "golden", "gold", "silver", "grey", "gray",
-                                              "crimson", "dark", "light", "wood", "wing", "horned", "spotted" };
+                                              "crimson", "dark", "light", "wood", "wing", "horned", "spotted",
+                                              "swift", "fast", "mount", "summon", "war" };
         for (const char* p : kPlain)
             if (w == p)
                 return true;
@@ -55,42 +85,77 @@ namespace
     }
 }
 
+PetsSeen Pets_Seen(Player* who, float range)
+{
+    PetsSeen seen;
+    if (!who)
+        return seen;
+    TextRules::Animals& a = seen.animals;
+
+    if (who->IsMounted())
+        a.mount = MountOf(who);
+
+    if (Pet* pet = who->GetPet();
+        pet && pet->IsInWorld() && pet->IsAlive() && pet->IsWithinDistInMap(who, range))
+    {
+        a.petKind = KindOf(pet, who);
+        std::string family = Lower(FamilyOf(pet));
+        std::string name   = pet->GetName();
+        if (family == a.petKind)
+            family.clear();   // a ghoul's kind is Ghoul
+        if (Lower(name) == a.petKind || (!family.empty() && Lower(name) == family))
+            name.clear();     // "Water Elemental", a cat still called Cat
+        a.petFamily  = family;
+        a.petName    = name;
+        seen.petGuid = pet->GetGUID();
+    }
+
+    const ObjectGuid critterGuid = who->GetCritterGUID();
+    if (!critterGuid.IsEmpty())
+        if (Creature* critter = ObjectAccessor::GetCreature(*who, critterGuid);
+            critter && critter->IsInWorld() && critter->IsWithinDistInMap(who, range))
+        {
+            a.companion        = critter->GetName();
+            seen.companionGuid = critter->GetGUID();
+        }
+    return seen;
+}
+
 std::string Pets_StateTextFor(Player* bot, const std::string& message)
 {
     if (!g_Enable || !bot || g_PetsStateText.empty() || message.empty())
         return {};
 
-    std::vector<std::string> parts;
-    std::vector<std::vector<std::string>> about = g_PetsWords;
+    const PetsSeen seen = Pets_Seen(bot);
+    const TextRules::Animals& a = seen.animals;
+    const std::vector<std::string> words = CrowdText::Words(message);
 
-    if (Pet* pet = bot->GetPet(); pet && pet->IsInWorld() && pet->IsAlive())
+    // Talk of mounts: "nice mount" to one on foot gets that it is on foot.
+    std::vector<std::vector<std::string>> mountTalk = g_PetsMountWords;
+    if (!a.mount.empty())
+        AddWords(mountTalk, a.mount);
+    const bool aboutMount = CrowdText::ContainsPhrase(words, mountTalk);
+
+    bool aboutPets = false;
+    if (!a.petKind.empty() || !a.companion.empty())
     {
-        const std::string family = FamilyOf(pet);
-        const std::string name   = pet->GetName();
-        std::string part = (!family.empty() && family != name) ? "your " + Lower(family) + " " + name : "your " + name;
-        if (pet->getPetType() == HUNTER_PET)
-            part += " (your hunter pet)";
-        else if (bot->getClass() == CLASS_WARLOCK)
-            part += " (your demon)";
-        parts.push_back(std::move(part));
-        AddWords(about, name);
-        AddWords(about, family);
+        std::vector<std::vector<std::string>> about = g_PetsWords;
+        if (!a.petKind.empty())
+            about.push_back(CrowdText::Words(a.petKind));   // "hunter pet", "water elemental"
+        AddWords(about, a.petName);
+        AddWords(about, a.petFamily);
+        AddWords(about, a.companion);
+        aboutPets = CrowdText::ContainsPhrase(words, about);
     }
-
-    const ObjectGuid critterGuid = bot->GetCritterGUID();
-    if (!critterGuid.IsEmpty())
-        if (Creature* critter = ObjectAccessor::GetCreature(*bot, critterGuid); critter && critter->IsInWorld())
-        {
-            parts.push_back("a little " + critter->GetName() + " following you (a companion pet)");
-            AddWords(about, critter->GetName());
-        }
-
-    if (parts.empty() || !CrowdText::ContainsPhrase(CrowdText::Words(message), about))
+    if (!aboutMount && !aboutPets)
         return {};
 
+    const std::vector<std::string> parts = TextRules::AnimalPhrases(a, true, aboutMount);
+    if (parts.empty())
+        return {};
     std::string pets = parts[0];
     for (size_t i = 1; i < parts.size(); ++i)
-        pets += " and " + parts[i];
+        pets += "; " + parts[i];
     const std::string out = SafeFormat(g_PetsStateText, fmt::arg("pets", pets));
     return out == "[Format Error]" ? std::string() : out;
 }

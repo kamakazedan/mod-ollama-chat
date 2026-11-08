@@ -406,7 +406,7 @@ aren't talking" into a one-command diagnosis.
 
 7. **Random & Event-Based Chatter**  
    In addition to responding to direct chat, bots will occasionally generate random environment-aware lines when real players are nearby, and will also react to key in-game events (e.g., PvP/PvE kills, loot, deaths, quests, duels, level-ups, achievements, using objects) using context-specific templates and personalities.
-   Achievements get a gz only when they're worth one: a Feat of Strength, a realm first, one that gives a title, mount, pet or tabard, a meta-achievement like Glory of the Hero, or one worth 25 points or more. Nobody gz's Can I Keep Him? or Duel-icious, and a level achievement leaves it to the ding (`OllamaChat.Congrats.Achievement*`).
+   Achievements get a gz only when they're worth one: a Feat of Strength, a realm first, one that gives a title, mount, pet or tabard, a meta-achievement like Glory of the Hero, or one worth 25 points or more. Nobody gz's Can I Keep Him? or Duel-icious, and a level achievement leaves it to the ding (`OllamaChat.Congrats.Achievement*`). The same goes in guild chat, which never hears of a ding at all, only of the Level 10, 20 ... 80 achievements: guild bots gz a ding only at 80 (`OllamaChat.Congrats.GuildLevels`). A random bot set up at its level is not a ding, so nobody congratulates that either.
 
 8. **Live Reloading**  
    You can hot-reload the module config and personality packs in-game using the `.ollama reload` GM command or from the server console. All changes take effect immediately without requiring a restart.
@@ -478,7 +478,11 @@ random, at most one near you at a time, with an emote or none
 (`OllamaChat.Mingle.*`). Each line follows on from the one before: a greeting
 gets a greeting or a "whats up?" back, an answer is what that bot has really
 been doing, and reactions and goodbyes are short and in each one's own style.
-Questions get their question mark. Bots greeting each other without a word,
+Questions get their question mark. Quests and items they ask about or show
+off are linked, as players link them ("how long does [Are We There, Yeti?]
+take?"), and they know what each one is: what they handed in or got lately is
+described to them. Talk of someone's mount, pet or loot only comes up when
+there is one: two bots on foot don't admire each other's mounts. Bots greeting each other without a word,
 and bots waving at you as they pass, are rarer too: every 5 to 20 minutes and
 4 to 12 minutes.
 
@@ -643,12 +647,14 @@ With both modules in the same build, the bots talk about what it has them do:
   it's back (`OllamaChat.Hangout.StateText`, `AwayText`).
 - **Stuck on a mount:** a bot that was stuck knows it if asked, and may laugh
   it off (`OllamaChat.Stuck.*`).
-- **Pets and companions:** random bots' hunters name their pets the way
-  players do (Aslan, Mr Bigglesworth), and bots own and walk companion pets
-  that suit their side and level. Ask a bot about its pet ("cute cat, whats
-  it called?") and it knows what the pet is and what it's called, and what is
-  trotting along behind it (`OllamaChat.Pets.*`). Bots chatting among
-  themselves see each other's pets and companions too.
+- **Pets, companions and mounts:** random bots' hunters name their pets the
+  way players do (Aslan, Mr Bigglesworth), and bots own and walk companion
+  pets that suit their side and level. Ask a bot about its pet ("cute cat,
+  whats it called?") and it knows what the pet is and what it's called, and
+  what is trotting along behind it; say "nice mount" and it knows whether
+  it's riding one (`OllamaChat.Pets.*`). Bots chatting among themselves see
+  each other's mounts, pets and companions too, each named as what it is: a
+  hunter's wolf is a pet, a warlock's imp a demon, and neither is a mount.
 - **Duels:** bots gather outside the gates of Orgrimmar and Stormwind and
   duel each other there, as on any realm. The chat side is the usual duel
   banter, and a bot at the gates knows it is there watching the duels.

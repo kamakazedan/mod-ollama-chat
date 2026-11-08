@@ -6,6 +6,8 @@
 
 #include "Creature.h"
 #include "DBCStores.h"
+#include "ItemTemplate.h"
+#include "ObjectMgr.h"
 #include "Player.h"
 #include "QuestDef.h"
 
@@ -33,8 +35,13 @@ namespace
     {
         Run         kills;
         std::string quest;
+        uint32_t    questId   = 0;
         uint32_t    questZone = 0;
         time_t      questAt   = 0;
+        uint32_t    item        = 0;   // the best thing it got lately
+        uint32_t    itemQuality = 0;
+        uint32_t    itemLevel   = 0;
+        time_t      itemAt      = 0;
         uint32_t    level     = 0;
         time_t      levelAt   = 0;
         time_t      touched   = 0;
@@ -128,8 +135,34 @@ void Lately_NoteQuest(Player* player, Quest const* quest)
     std::lock_guard<std::mutex> lock(g_mutex);
     Lately& l   = Entry(player->GetGUID().GetRawValue(), now);
     l.quest     = quest->GetTitle();
+    l.questId   = quest->GetQuestId();
     l.questZone = zone;
     l.questAt   = now;
+}
+
+void Lately_NoteItem(Player* player, ItemTemplate const* item)
+{
+    if (!g_LatelyEnable || !player || !item)
+        return;
+    // Something to show off: a green or better piece of gear, or anything
+    // rare and up (a recipe, a mount, a companion). Not quest items.
+    const bool gear = item->Class == ITEM_CLASS_WEAPON || item->Class == ITEM_CLASS_ARMOR;
+    if (item->Class == ITEM_CLASS_QUEST || item->Quality < (gear ? ITEM_QUALITY_UNCOMMON : ITEM_QUALITY_RARE) ||
+        !OllamaIsBotPlayer(player))
+        return;
+    const time_t now = time(nullptr);
+    std::lock_guard<std::mutex> lock(g_mutex);
+    Lately& l = Entry(player->GetGUID().GetRawValue(), now);
+    // The best of the last while: a blue over a green, then the higher item
+    // level, then the newer.
+    const bool stale = now - l.itemAt > time_t(g_LatelyMinutes) * 60;
+    if (stale || item->Quality > l.itemQuality || (item->Quality == l.itemQuality && item->ItemLevel >= l.itemLevel))
+    {
+        l.item        = item->ItemId;
+        l.itemQuality = item->Quality;
+        l.itemLevel   = item->ItemLevel;
+        l.itemAt      = now;
+    }
 }
 
 void Lately_NoteLevel(Player* player)
@@ -180,12 +213,34 @@ std::string Lately_Text(Player* bot)
         facts.push_back("handed in the quest " + l.quest + (zone.empty() ? std::string() : " in " + zone) + " " +
                         Ago(now - l.questAt));
     }
+    if (l.item && now - l.itemAt <= window)
+        if (ItemTemplate const* t = sObjectMgr->GetItemTemplate(l.item))
+            facts.push_back("got " + t->Name1 + " " + Ago(now - l.itemAt));
     if (l.level && l.level == bot->GetLevel() && now - l.levelAt <= window)
         facts.push_back("reached level " + std::to_string(l.level) + " " + Ago(now - l.levelAt));
 
     std::string out;
     for (const std::string& f : facts)
         out += (out.empty() ? "" : "; ") + f;
+    return out;
+}
+
+LatelyNamed Lately_Named(Player* bot)
+{
+    LatelyNamed out;
+    if (!g_LatelyEnable || !bot)
+        return out;
+    const time_t now    = time(nullptr);
+    const time_t window = time_t(g_LatelyMinutes) * 60;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    auto it = g_lately.find(bot->GetGUID().GetRawValue());
+    if (it == g_lately.end())
+        return out;
+    const Lately& l = it->second;
+    if (l.questId && !l.quest.empty() && now - l.questAt <= window)
+        out.quest = l.questId;
+    if (l.item && now - l.itemAt <= window)
+        out.item = l.item;
     return out;
 }
 

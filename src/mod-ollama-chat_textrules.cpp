@@ -1955,6 +1955,78 @@ namespace TextRules
         return level >= lo && level <= hi;
     }
 
+    std::vector<std::string> TakePremiseTags(std::string& premise)
+    {
+        std::vector<std::string> tags;
+        std::string levelTag;
+        std::string p = Trim(premise);
+        while (!p.empty() && p[0] == '[')
+        {
+            const size_t close = p.find(']');
+            if (close == std::string::npos)
+                break;
+            const std::string inner = Trim(p.substr(1, close - 1));
+            uint32_t lo = 0, hi = 0;
+            if (levelTag.empty() && ParseLevelRange(inner, lo, hi))
+                levelTag = p.substr(0, close + 1);
+            else if (!inner.empty() && std::all_of(inner.begin(), inner.end(),
+                                                   [](unsigned char c) { return c >= 'a' && c <= 'z'; }))
+                tags.push_back(inner);
+            else
+                break;   // "[Hogger] ..." -- part of the premise
+            p = Trim(p.substr(close + 1));
+        }
+        premise = levelTag.empty() ? p : levelTag + " " + p;
+        return tags;
+    }
+
+    std::string WithArticle(const std::string& noun)
+    {
+        if (noun.empty())
+            return noun;
+        const char c = char(std::tolower(static_cast<unsigned char>(noun[0])));
+        return (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' ? "an " : "a ") + noun;
+    }
+
+    std::string MountFromSpell(const std::string& spellName)
+    {
+        std::string name = Trim(spellName);
+        if (name.rfind("Summon ", 0) == 0)
+            name = Trim(name.substr(7));
+        return name;
+    }
+
+    std::vector<std::string> AnimalPhrases(const Animals& a, bool own, bool onFoot)
+    {
+        std::vector<std::string> out;
+        const std::string their = own ? "your" : "their";
+
+        if (!a.mount.empty() && LowerAscii(a.mount) == "mount")   // the game did not say which
+            out.push_back(own ? "your mount, which you are riding" : "riding their mount");
+        else if (!a.mount.empty())
+            out.push_back(own ? "your mount, " + WithArticle(a.mount) + ", which you are riding"
+                              : "riding their mount, " + WithArticle(a.mount));
+        else if (onFoot)
+            out.push_back(own ? "no mount out: you are on foot" : "on foot, with no mount out");
+
+        if (!a.petKind.empty())
+        {
+            // "their hunter pet, a wolf called Howler", "their ghoul called
+            // Drakz", "their water elemental".
+            std::string pet = their + " " + a.petKind;
+            if (!a.petFamily.empty())
+                pet += ", " + WithArticle(a.petFamily);
+            if (!a.petName.empty())
+                pet += " called " + a.petName;
+            out.push_back(own ? pet : "with " + pet);
+        }
+
+        if (!a.companion.empty())
+            out.push_back(own ? "your companion pet, " + WithArticle(a.companion) + ", following you"
+                              : "with their companion pet, " + WithArticle(a.companion) + ", following them");
+        return out;
+    }
+
     std::vector<LevelPhrase> ParseLevelPhrases(const std::string& raw)
     {
         std::vector<LevelPhrase> out;

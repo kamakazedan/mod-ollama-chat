@@ -576,6 +576,15 @@ OllamaChat.Congrats.AchievementRarePoints = 25
 OllamaChat.Congrats.AchievementAlways = ""
 OllamaChat.Congrats.AchievementNever = ""
 
+# OllamaChat.Congrats.GuildLevels
+#     Description: The dings guild chat says gz to, levels separated by |. The game never tells a guild about a
+#                  ding, only about the Level 10, 20 ... 80 achievements that come with some, and those are as
+#                  common as any other: a ding to any other level gets no gz in guild chat (in /say and party
+#                  it still does). A level only counts when it is reached by levelling, never when a new bot
+#                  is set up at it. Empty: no guild gz for dings at all.
+#     Default:     "80"
+OllamaChat.Congrats.GuildLevels = "80"
+
 # --------------------------------------------
 # TYPING SIMULATION
 # --------------------------------------------
@@ -2234,26 +2243,36 @@ OllamaChat.Hangout.AwayText = "You had stepped away from your keyboard there (AF
 
 ###############################################################################
 #
-#   OLLAMA CHAT - A BOT'S OWN PETS
+#   OLLAMA CHAT - A BOT'S OWN PETS (AND MOUNT)
 #
 #   A hunter's pet has a name -- mod-playerbots-plus gives random bots' pets
 #   the kind players give theirs -- and a bot may have a companion pet
 #   trotting along (PlayerbotsPlus.Pets.* and Companions.* in its conf).
 #   "cute cat!", "whats your wolf called?", "is that a snake following
-#   you?": the bot asked knows what its pet is and what it is called, and
-#   what is following it. Only when it was spoken to and the line is about
-#   them -- Words, or the pet's or companion's own name or kind: a pet in
-#   every prompt is what a bot would end up talking about. Bots chatting
-#   among themselves (Mingle) already see each other's pets and companions.
+#   you?", "nice mount": the bot asked knows what its pet is and what it is
+#   called, what is following it, and whether it is riding anything at all.
+#   Only when it was spoken to and the line is about them -- Words,
+#   MountWords, or the name or kind of one of them: a pet in every prompt is
+#   what a bot would end up talking about. Bots chatting among themselves
+#   (Mingle) already see each other's mounts, pets and companions.
+#
+#   Every prompt that tells a bot about someone names each of these as what
+#   it is: "riding their mount, a Swift Brown Horse", "with their hunter pet,
+#   a wolf called Howler", "with their demon, an imp called Zigzag", "with
+#   their companion pet, a Mechanical Squirrel, following them". Told only
+#   "with their Wolf Howler" next to talk of a mount, a bot took a hunter's
+#   wolf for one.
 #
 ###############################################################################
 
 #    OllamaChat.Pets.StateText
-#        Added to the reply prompt. {pets}: "your cat Aslan (your hunter pet)
-#        and a little Mechanical Squirrel following you (a companion pet)".
-#        Empty disables.
+#        Added to the reply prompt. {pets}: "your mount, a Swift Brown Horse,
+#        which you are riding; your hunter pet, a cat called Aslan; your
+#        companion pet, a Mechanical Squirrel, following you" -- and, when the
+#        talk is of mounts and it is riding none, "no mount out: you are on
+#        foot". Empty disables.
 #        Default: (below)
-OllamaChat.Pets.StateText = "Your own pets, with you right now: {pets}. If the talk is about them, you know what they are and what they are called, and talk about them the way players do about their own."
+OllamaChat.Pets.StateText = "What you have with you right now: {pets}. If the talk is about them, you know what each one is and what it is called, and talk about them the way players do about their own: a mount is what you ride, and a hunter's pet, a demon or a companion pet is no mount."
 
 #    OllamaChat.Pets.Words
 #        Words that make a line about pets, besides the pet's and the
@@ -2261,6 +2280,14 @@ OllamaChat.Pets.StateText = "Your own pets, with you right now: {pets}. If the t
 #        whole words.
 #        Default: (below)
 OllamaChat.Pets.Words = "pet|pets|companion|companions|critter|critters|minion|minions|demon|demons|tame|tamed|taming|following you|following u|follows you|follow you around"
+
+#    OllamaChat.Pets.MountWords
+#        Words that make a line about mounts, besides the name of the one it is
+#        riding. Then it also knows when it is riding nothing: "nice mount" to
+#        a bot on foot is a mix-up it can point out, not a thank-you. Phrases
+#        separated by |, matched on whole words.
+#        Default: (below)
+OllamaChat.Pets.MountWords = "mount|mounts|mounted|ride|rides|riding|horse|horses|steed|steeds|kodo|kodos|raptor|raptors|mechanostrider|ram|rams|elekk|hawkstrider|nightsaber|frostsaber|charger|warhorse|felsteed|dreadsteed|deathcharger|mammoth|drake|proto drake|gryphon|wyvern|flying mount|epic mount"
 
 ###############################################################################
 #
@@ -4468,8 +4495,11 @@ OllamaChat.Mingle.ReadMaxMs = 3500
 #          {where}       the spot they are at, or the area and city
 #          {when}        the day and the time of day ("Saturday afternoon")
 #          {people}      a line each: what the others can see of them (level,
-#                        race, class, mount, pet, sitting on a bench) and
-#                        their chat style -- each on a new line
+#                        race, class, the mount they are riding, their hunter
+#                        pet, demon or companion pet -- each named as what it
+#                        is -- sitting on a bench) and their chat style --
+#                        each on a new line; then, with ThingsText, what the
+#                        quests and items in their "lately" are
 #          {relation}    MingleSameGuildText or MingleStrangersText
 #          {premise}     what gets them talking (Premises)
 #          {example}     the format, with their names -- on new lines
@@ -4479,15 +4509,22 @@ OllamaChat.Mingle.ReadMaxMs = 3500
 #        (No double quotes inside it: the server's config reader drops every
 #        one of them.)
 #        Default: (below)
-OllamaChat.Mingle.PromptTemplate = "{count} World of Warcraft players are standing near each other in {where} and get chatting in /say. It is {when}. They are:{people}{relation} What gets them talking: {premise}. Write what they type, one message per line, each line starting with the speaker's name and a colon, like this:{example}About {lines} lines in all, mostly taking turns. It reads like a real chat: every line follows on from the one before it, answering what was just asked, reacting to what was just said, or asking something back, and nobody answers a question nobody asked. A greeting gets a greeting back, or a question. When one of them says what they have been doing, it is what they have been doing lately as told above, put the way a player would in a few words, what and where; with nothing told, they have not been up to much. Each line is what that player types: short (2 to 12 words), casual, in their own chat style, mostly lowercase, but a question ends with a question mark, and a line can end with an exclamation mark where it fits. Reactions and goodbyes are as short as players make them, in each one's own style. Instead of words, a line can be just an emote at the other one, written as a slash command ({emotes}), at most {max_emotes} in all. It ends the way a chat between players does: a laugh, a goodbye, someone heading off, or simply done. No narration, no actions in asterisks, no quotation marks, and nothing made up about items or quests. A famous line from a film or show is fine now and then, but never say what it is from."
+OllamaChat.Mingle.PromptTemplate = "{count} World of Warcraft players are standing near each other in {where} and get chatting in /say. It is {when}. They are:{people}{relation} What gets them talking: {premise}. Write what they type, one message per line, each line starting with the speaker's name and a colon, like this:{example}About {lines} lines in all, mostly taking turns. It reads like a real chat: every line follows on from the one before it, answering what was just asked, reacting to what was just said, or asking something back, and nobody answers a question nobody asked. A greeting gets a greeting back, or a question. When one of them says what they have been doing, it is what they have been doing lately as told above, put the way a player would in a few words, what and where; with nothing told, they have not been up to much. Each line is what that player types: short (2 to 12 words), casual, in their own chat style, mostly lowercase, but a question ends with a question mark, and a line can end with an exclamation mark where it fits. Reactions and goodbyes are as short as players make them, in each one's own style. Instead of words, a line can be just an emote at the other one, written as a slash command ({emotes}), at most {max_emotes} in all. It ends the way a chat between players does: a laugh, a goodbye, someone heading off, or simply done. No narration, no actions in asterisks, no quotation marks, and nothing made up about items, quests, mounts or pets: nobody is riding a mount or has a pet out but as told above, and a hunter's pet, a warlock's demon or a companion pet is no mount. A famous line from a film or show is fine now and then, but never say what it is from."
 
 #    OllamaChat.Mingle.Premises
 #        What gets them talking, one picked each time: a premise only the
 #        lowest level among them fits (a tag like [15+] or [10-39] in front,
 #        as for Conversation.Premises), and not one used lately. Things people
 #        standing about chat about -- not the arguments General has. | separated.
+#        A premise can also need something to be there, so it is about
+#        something real: [mount] one of them is riding a mount, [pet] one of
+#        them has a pet or companion out, [loot] one of them got something
+#        worth showing off lately, [quest] one of them handed in a quest
+#        lately (what a bot has been up to, Lately). "[mount] one of them
+#        admires the mount the other is riding" is never picked for two on
+#        foot. Tags go in front, with a level tag or without.
 #        Default: (below)
-OllamaChat.Mingle.Premises = "saying hello and asking what the other has been up to|one of them just got back from questing and moans about it|one of them admires the other's mount, gear or pet|one of them teases the other about their race or class, all in good fun|swapping tips about levelling their classes|one of them is waiting for a group and getting bored|one of them asks the other for a duel|one of them asks the other if they have a few silver to spare|one of them shows off something they just looted|people-watching: the players walking past|the auction house prices|levelling their professions|which zone is the worst to quest in|being lost in this city|what they are saving their gold for|a funny death one of them had today|one of them is about to log off|their guilds, or not having one|a rumour one of them heard|gnomes|murlocs|[15+] whether to run a dungeon together later|[15+] a dungeon one of them ran earlier|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] flying mounts"
+OllamaChat.Mingle.Premises = "saying hello and asking what the other has been up to|[quest] one of them just got back from questing and moans about it|[quest] one of them asks the other about the quest they just handed in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's pet or companion|one of them admires the other's gear|one of them teases the other about their race or class, all in good fun|swapping tips about levelling their classes|one of them is waiting for a group and getting bored|one of them asks the other for a duel|one of them asks the other if they have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: the players walking past|the auction house prices|levelling their professions|which zone is the worst to quest in|being lost in this city|what they are saving their gold for|a funny death one of them had today|one of them is about to log off|their guilds, or not having one|a rumour one of them heard|gnomes|murlocs|[15+] whether to run a dungeon together later|[15+] a dungeon one of them ran earlier|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] flying mounts"
 
 #    OllamaChat.Mingle.Emotes
 #        The emotes an exchange can use, offered in the prompt. One the model
@@ -4511,6 +4548,24 @@ OllamaChat.Mingle.StrangersText = "They do not know each other, beyond seeing ea
 #        {name}, {lately}. Empty leaves it out.
 #        Default: (below)
 OllamaChat.Mingle.LatelyText = " What {name} has been doing lately: {lately}."
+
+#    OllamaChat.Mingle.ThingsText
+#        After the people, when what they have been up to lately names a quest
+#        or an item (a quest handed in, something got): what each one is, so a
+#        line about it is about what it really is -- a quest in Duskwood for
+#        level 32, not a person; a pair of bracers, not a boss. {things}: as
+#        Links.DescribeText's. Empty leaves it out.
+#        Default: (below)
+OllamaChat.Mingle.ThingsText = "So they know what those are: {things}."
+
+#    OllamaChat.Mingle.LinksText
+#        Added to the prompt while Links.Enable is on: names in square
+#        brackets, which become links when the line goes out, as in any other
+#        bot line -- "how long does [Are We There, Yeti?] take?". A name
+#        nothing in the game matches loses its brackets. Empty: no links in
+#        these.
+#        Default: (below)
+OllamaChat.Mingle.LinksText = "When a line asks about, offers, asks for or shows off a particular item or quest, its exact name goes in square brackets, the way players link things in chat; named in passing or in a joke, it is written plainly."
 
 #    OllamaChat.Mingle.Emote.Enable
 #    OllamaChat.Mingle.Emote.MinSeconds
@@ -4789,9 +4844,10 @@ OllamaChat.Links.UseGameData = 1
 #        What bots are told, at the end of chat, chatter and event prompts.
 #        Told to bracket every item and quest they named, they linked things
 #        nobody needed linked: answering a question about one, or joking about
-#        it. A link is for offering something, asking for it or showing it off.
+#        it. A link is for asking about something, offering it, asking for it
+#        or showing it off.
 #        Default: (below)
-OllamaChat.Links.PromptHint = "Put an item's or quest's exact name in square brackets -- which makes it a link -- only when you are offering it, asking for it or showing it off. Just mentioning it, answering a question about it or joking about it, write the name plainly, without brackets."
+OllamaChat.Links.PromptHint = "Put an item's or quest's exact name in square brackets -- which makes it a link -- only when you are asking about it, offering it, asking for it or showing it off. Just mentioning it, answering a question about it or joking about it, write the name plainly, without brackets."
 
 #    OllamaChat.Links.QuestDoneText
 #    OllamaChat.Links.QuestOnText

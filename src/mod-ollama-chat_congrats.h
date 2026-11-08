@@ -45,6 +45,13 @@ void Congrats_NoteCelebrated(Player* who, const std::string& what);
 // it. Reads only game data loaded at startup: any thread.
 bool Congrats_AchievementWorthIt(AchievementEntry const* achievement);
 
+// Whether guild chat congratulates a guild member's ding to `level`. The
+// game never tells a guild about a ding, only about the Level 10, 20 ... 80
+// achievements that come with some, and those are as common as any: only the
+// levels in Congrats.GuildLevels (the top one, by default) get a gz there.
+// Any thread.
+bool Congrats_GuildHearsDing(uint32_t level);
+
 // A real player's line. True when it is nothing but a congratulation: the
 // one it is for thanks (once), and nobody else answers it. `scopeKey` is
 // where it was said.
@@ -63,6 +70,7 @@ struct CongratsStats
 {
     uint64_t celebrated = 0;   // dings and achievements noted
     uint64_t common     = 0;   // ...achievements of them too common for anyone to gz
+    uint64_t guildQuiet = 0;   // dings a guild was not told of: no gz there
     uint64_t heard      = 0;   // congratulations that only the one it was for answers
     uint64_t thanked    = 0;   // thank-yous sent
     uint64_t repeat     = 0;   // more gz after it had thanked already: nothing

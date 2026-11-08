@@ -165,9 +165,17 @@ what just happened, where they are — over facts about the bot itself. The
 weights in `OllamaChat.Topic.*` encode this deliberately.
 
 When a prompt leaves a bot to say what it has been doing, give it the facts
-(`Lately_Text`: its run of kills, last quest, last ding), or the model makes
-something vague up ("just finished some grinds"). Its hooks run on map
-threads and only note names and numbers under a mutex.
+(`Lately_Text`: its run of kills, last quest, best thing it got, last ding),
+or the model makes something vague up ("just finished some grinds"). Its
+hooks run on map threads and only note names and numbers under a mutex. A
+mingle premise that needs something real carries a tag (`[mount]`, `[pet]`,
+`[loot]`, `[quest]`) and is only picked when it is there.
+
+Name mounts, pets and companions as what they are, everywhere a prompt
+mentions one: build the words with `Pets_Seen` and `TextRules::AnimalPhrases`
+("riding their mount, a Swift Brown Horse", "with their hunter pet, a wolf
+called Howler"). "with their Wolf Howler" beside talk of a mount had a bot
+take a hunter's wolf for a mount.
 
 Keep the fourth wall out of prompts. As far as any bot knows, everyone on the
 realm is a player like itself: write "players", "people", "someone", never

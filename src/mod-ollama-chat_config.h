@@ -11,6 +11,7 @@
 #include <utility>
 #include <mutex>
 #include <ctime>
+#include <bitset>
 #include "ScriptMgr.h"  // Ensure WorldScript is defined
 #include "mod-ollama-chat_textrules.h"
 
@@ -344,6 +345,7 @@ extern bool        g_CongratsAchievementsRareOnly;    // gz an achievement only 
 extern uint32_t    g_CongratsAchievementRarePoints;   // ...this many points and up is
 extern std::unordered_set<uint32_t> g_CongratsAchievementAlways;   // ids: always worth a gz
 extern std::unordered_set<uint32_t> g_CongratsAchievementNever;    // ids: never
+extern std::bitset<256> g_CongratsGuildLevels;    // dings guild chat says gz to (it only hears of those)
 
 // Reply cleanup
 extern std::vector<std::vector<std::string>> g_ResponseAssistantPhrases;
@@ -880,6 +882,7 @@ extern std::vector<std::vector<std::string>> g_ResponseFourthWallAllow;     // "
 extern uint32_t    g_ResponseFourthWallMinutes;   // after one wink at it, nobody else for this long
 extern std::string g_PetsStateText;               // "...: {pets}. ..."
 extern std::vector<std::vector<std::string>> g_PetsWords;   // the talk is about pets
+extern std::vector<std::vector<std::string>> g_PetsMountWords;   // ...or about mounts
 
 // --------------------------------------------
 // Chat v23: what a bot has been up to lately (mod-ollama-chat_lately)
@@ -913,6 +916,8 @@ extern std::vector<std::string> g_MingleEmotes;   // offered in the prompt, by n
 extern std::string g_MingleSameGuildText;
 extern std::string g_MingleStrangersText;
 extern std::string g_MingleLatelyText;          // a person line's "what they have been doing": {name} {lately}
+extern std::string g_MingleThingsText;          // what the quests and items they have done or got are: {things}
+extern std::string g_MingleLinksText;           // names in square brackets, as links
 extern bool        g_MingleEmoteEnable;         // bots greeting each other without a word
 extern uint32_t    g_MingleEmoteMinSeconds;
 extern uint32_t    g_MingleEmoteMaxSeconds;

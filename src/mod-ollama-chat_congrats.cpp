@@ -206,6 +206,15 @@ bool Congrats_AchievementWorthIt(AchievementEntry const* achievement)
     return worth;
 }
 
+bool Congrats_GuildHearsDing(uint32_t level)
+{
+    if (level < g_CongratsGuildLevels.size() && g_CongratsGuildLevels.test(level))
+        return true;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    ++g_stats.guildQuiet;
+    return false;
+}
+
 bool Congrats_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSourceLocal source,
                               Channel* channel, Player* receiver, const std::string& scopeKey)
 {

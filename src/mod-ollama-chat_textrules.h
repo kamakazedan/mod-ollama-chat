@@ -327,6 +327,45 @@ namespace TextRules
     // and says whether `level` fits; a premise without one fits everyone.
     bool PremiseFits(std::string& premise, uint32_t level);
 
+    // A premise may also need something to be there: "[mount] one of them
+    // admires the mount the other is riding" is for when one of them is
+    // riding one. Takes those tags (lowercase words) off the front of
+    // `premise` and returns them; a level tag, in any order with them, stays
+    // for PremiseFits.
+    std::vector<std::string> TakePremiseTags(std::string& premise);
+
+    // --------------------------------------------------------------------------
+    // Mounts, pets and companions, each as what it is.
+    //
+    // "with their Wolf Howler" next to talk of someone's mount got "wolf
+    // howler is a solid choice": a hunter's pet taken for a mount. Each is
+    // named as what it is, every time.
+    // --------------------------------------------------------------------------
+
+    struct Animals
+    {
+        std::string mount;       // what they are riding ("Swift Brown Horse"); empty: on foot
+        std::string petKind;     // "hunter pet", "demon", "ghoul", "water elemental", "pet"; empty: none out
+        std::string petFamily;   // "wolf", "imp"; empty when it would only say the kind again
+        std::string petName;     // "Howler"; empty when it is only the kind ("Water Elemental")
+        std::string companion;   // the companion pet following them ("Mechanical Squirrel")
+    };
+
+    // About someone else: "riding their mount, a Swift Brown Horse", "with
+    // their hunter pet, a wolf called Howler", "with their companion pet, a
+    // Mechanical Squirrel, following them". With `own`, to the one who has
+    // them: "your mount, a Swift Brown Horse, which you are riding", "your
+    // hunter pet, a wolf called Howler", ... With `onFoot` and no mount, that
+    // is said too ("no mount out: you are on foot"). Mount first.
+    std::vector<std::string> AnimalPhrases(const Animals& animals, bool own, bool onFoot);
+
+    // "a wolf", "an imp", "an Acherus Deathcharger".
+    std::string WithArticle(const std::string& noun);
+
+    // A mount as people call it, from the spell that summons it: "Summon
+    // Felsteed" is a Felsteed.
+    std::string MountFromSpell(const std::string& spellName);
+
     // A phrase only players of some levels say: "[40+] repair bill",
     // "[70+] heroic". Entries without a level tag are skipped.
     struct LevelPhrase

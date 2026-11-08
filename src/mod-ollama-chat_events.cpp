@@ -543,8 +543,10 @@ void ChatOnLoot::OnPlayerStoreNewItem(Player* player, Item* item, uint32 /*count
 
     ItemTemplate const* tmpl = item->GetTemplate();
 
-    // What it just looted is what it offers first (mod-ollama-chat_bags).
+    // What it just looted is what it offers first (mod-ollama-chat_bags), and
+    // something worth showing off is what it has been up to (mod-ollama-chat_lately).
     Bags_NoteLoot(player, tmpl->ItemId);
+    Lately_NoteItem(player, tmpl);
 
     if (tmpl->Quality >= ITEM_QUALITY_UNCOMMON)
         eventChatter.DispatchGameEvent(player, g_EventTypeGotItem, tmpl->Name1);
@@ -645,9 +647,15 @@ void ChatOnDuel::OnPlayerDuelEnd(Player* winner, Player* loser, DuelCompleteType
 ChatOnLevelUp::ChatOnLevelUp()
     : PlayerScript("ChatOnLevelUp", { PLAYERHOOK_ON_LEVEL_CHANGED }) { }
 
-void ChatOnLevelUp::OnPlayerLevelChanged(Player* player, uint8 /*oldLevel*/)
+void ChatOnLevelUp::OnPlayerLevelChanged(Player* player, uint8 oldLevel)
 {
     if (!player)
+        return;
+
+    // A ding is one level up. A random bot set up at its level jumps there in
+    // one go (playerbots' factory), and a GM command can do the same: nobody
+    // dinged, so nobody says gz and nobody remembers it.
+    if (player->GetLevel() != uint32(oldLevel) + 1)
         return;
 
     const std::string level = std::to_string(player->GetLevel());
@@ -658,7 +666,11 @@ void ChatOnLevelUp::OnPlayerLevelChanged(Player* player, uint8 /*oldLevel*/)
 
     eventChatter.DispatchGameEvent(player, g_EventTypeLeveledUp, level);
 
-    if (player->GetGuild() && g_EnableGuildEventChatter && !g_GuildEventTypeLevelUp.empty())
+    // The guild is never told of a ding, only of the Level 10, 20 ... 80
+    // achievements, as common as any other: a gz there only at
+    // Congrats.GuildLevels.
+    if (player->GetGuild() && g_EnableGuildEventChatter && !g_GuildEventTypeLevelUp.empty() &&
+        Congrats_GuildHearsDing(player->GetLevel()))
         eventChatter.DispatchGameEvent(player, g_GuildEventTypeLevelUp, level);
 }
 

@@ -212,6 +212,7 @@ std::vector<std::vector<std::string>> g_ResponseFourthWallAllow;
 uint32_t    g_ResponseFourthWallMinutes = 10;
 std::string g_PetsStateText;
 std::vector<std::vector<std::string>> g_PetsWords;
+std::vector<std::vector<std::string>> g_PetsMountWords;
 
 // Chat v23
 bool        g_LatelyEnable  = true;
@@ -243,6 +244,8 @@ std::vector<std::string> g_MingleEmotes;
 std::string g_MingleSameGuildText;
 std::string g_MingleStrangersText;
 std::string g_MingleLatelyText;
+std::string g_MingleThingsText;
+std::string g_MingleLinksText;
 bool        g_MingleEmoteEnable         = true;
 uint32_t    g_MingleEmoteMinSeconds     = 60;
 uint32_t    g_MingleEmoteMaxSeconds     = 160;
@@ -338,6 +341,7 @@ bool        g_CongratsAchievementsRareOnly  = true;
 uint32_t    g_CongratsAchievementRarePoints = 25;
 std::unordered_set<uint32_t> g_CongratsAchievementAlways;
 std::unordered_set<uint32_t> g_CongratsAchievementNever;
+std::bitset<256> g_CongratsGuildLevels;
 
 std::vector<std::vector<std::string>> g_ResponseAssistantPhrases;
 
@@ -1523,8 +1527,8 @@ static void LoadNaturalChatV5Settings()
     g_LinksUseGameData     = sConfigMgr->GetOption<bool>("OllamaChat.Links.UseGameData", true);
     g_LinksPromptHint      = sConfigMgr->GetOption<std::string>("OllamaChat.Links.PromptHint",
         "Put an item's or quest's exact name in square brackets -- which makes it a link -- only when you are "
-        "offering it, asking for it or showing it off. Just mentioning it, answering a question about it or "
-        "joking about it, write the name plainly, without brackets.");
+        "asking about it, offering it, asking for it or showing it off. Just mentioning it, answering a "
+        "question about it or joking about it, write the name plainly, without brackets.");
 
     // --- stock phrases ------------------------------------------------------
     g_ResponseOverusedPhrases = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(
@@ -2677,6 +2681,64 @@ static void LoadNaturalChatV21Settings()
              g_PartyBreakEndOthersManaPct, g_EmoteEventText.empty() ? "off" : "on");
 }
 
+static void LoadNaturalChatV24Settings()
+{
+    // --- a mount is not a pet -----------------------------------------------------------
+    g_PetsMountWords = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Pets.MountWords",
+        "mount|mounts|mounted|ride|rides|riding|horse|horses|steed|steeds|kodo|kodos|raptor|raptors|"
+        "mechanostrider|ram|rams|elekk|hawkstrider|nightsaber|frostsaber|charger|warhorse|felsteed|dreadsteed|"
+        "deathcharger|mammoth|drake|proto drake|gryphon|wyvern|flying mount|epic mount"));
+
+    // --- the dings a guild is told of ---------------------------------------------------
+    g_CongratsGuildLevels.reset();
+    std::string levels;
+    {
+        std::string token;
+        for (char ch : sConfigMgr->GetOption<std::string>("OllamaChat.Congrats.GuildLevels", "80") + "|")
+        {
+            if (ch >= '0' && ch <= '9')
+                token += ch;
+            else if (!token.empty())
+            {
+                const unsigned long level = token.size() <= 3 ? std::stoul(token) : 0;
+                if (level > 0 && level < g_CongratsGuildLevels.size())
+                {
+                    g_CongratsGuildLevels.set(level);
+                    levels += (levels.empty() ? "" : ", ") + token;
+                }
+                token.clear();
+            }
+        }
+        if (levels.empty())
+            levels = "none";
+    }
+
+    // --- /say mingles: what the things they name are, and links -------------------------
+    g_MingleThingsText = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.ThingsText",
+        "So they know what those are: {things}.");
+    g_MingleLinksText = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.LinksText",
+        "When a line asks about, offers, asks for or shows off a particular item or quest, its exact name goes "
+        "in square brackets, the way players link things in chat; named in passing or in a joke, it is written "
+        "plainly.");
+
+    // Mingle.Premises tags: what each one needs to be there.
+    static const char* const kKnown[] = { "mount", "pet", "loot", "quest" };
+    std::string unknown;
+    for (std::string premise : g_MinglePremises)
+        for (const std::string& tag : TextRules::TakePremiseTags(premise))
+            if (std::find_if(std::begin(kKnown), std::end(kKnown), [&tag](const char* k) { return tag == k; }) ==
+                std::end(kKnown))
+                unknown += (unknown.empty() ? "[" : ", [") + tag + "]";
+    if (!unknown.empty())
+        LOG_WARN("module.ollamachat", "[Ollama Chat] OllamaChat.Mingle.Premises: tags it does not know (a premise "
+                 "with one is never picked): {}", unknown);
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v24: mounts told from pets and companions ({} mount words); "
+             "guild chat gz for dings at level {}; mingles say what they name {} and link it {}.",
+             g_PetsMountWords.size(), levels, g_MingleThingsText.empty() ? "off" : "on",
+             (g_LinksEnable && !g_MingleLinksText.empty()) ? "on" : "off");
+}
+
 static void LoadNaturalChatV23Settings()
 {
     // --- what a bot has been up to lately --------------------------------------------
@@ -2716,8 +2778,9 @@ static void LoadNaturalChatV22Settings()
 
     // --- a bot's own pets --------------------------------------------------------------
     g_PetsStateText = sConfigMgr->GetOption<std::string>("OllamaChat.Pets.StateText",
-        "Your own pets, with you right now: {pets}. If the talk is about them, you know what they are and what "
-        "they are called, and talk about them the way players do about their own.");
+        "What you have with you right now: {pets}. If the talk is about them, you know what each one is and what "
+        "it is called, and talk about them the way players do about their own: a mount is what you ride, and a "
+        "hunter's pet, a demon or a companion pet is no mount.");
     g_PetsWords = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Pets.Words",
         "pet|pets|companion|companions|critter|critters|minion|minions|demon|demons|tame|tamed|taming|"
         "following you|following u|follows you|follow you around"));
@@ -2768,14 +2831,17 @@ static void LoadNaturalChatV16Settings()
         "Instead of words, a line can be just an emote at the other one, written as a slash command ({emotes}), "
         "at most {max_emotes} in all. It ends the way a chat between players does: a laugh, a goodbye, someone "
         "heading off, or simply done. No narration, no actions in asterisks, no quotation marks, and nothing "
-        "made up about items or quests. A famous line from a film or show is fine now and then, but never say "
-        "what it is from.");
+        "made up about items, quests, mounts or pets: nobody is riding a mount or has a pet out but as told "
+        "above, and a hunter's pet, a warlock's demon or a companion pet is no mount. A famous line from a film "
+        "or show is fine now and then, but never say what it is from.");
     g_MinglePremises = ReadPipeList("OllamaChat.Mingle.Premises",
-        "saying hello and asking what the other has been up to|one of them just got back from questing and moans "
-        "about it|one of them admires the other's mount, gear or pet|one of them teases the other about their race "
-        "or class, all in good fun|swapping tips about levelling their classes|one of them is waiting for a group "
-        "and getting bored|one of them asks the other for a duel|one of them asks the other if they have a few "
-        "silver to spare|one of them shows off something they just looted|people-watching: the players walking "
+        "saying hello and asking what the other has been up to|[quest] one of them just got back from questing "
+        "and moans about it|[quest] one of them asks the other about the quest they just handed in|[mount] one "
+        "of them admires the mount the other is riding|[pet] one of them admires the other's pet or companion|"
+        "one of them admires the other's gear|one of them teases the other about their race or class, all in "
+        "good fun|swapping tips about levelling their classes|one of them is waiting for a group and getting "
+        "bored|one of them asks the other for a duel|one of them asks the other if they have a few silver to "
+        "spare|[loot] one of them shows off something they got lately|people-watching: the players walking "
         "past|the auction house prices|levelling their professions|which zone is the worst to quest in|being "
         "lost in this city|what they are saving their gold for|a funny death one of them had today|one of them "
         "is about to log off|their guilds, or not having one|a rumour one of them heard|gnomes|murlocs|"
@@ -3499,6 +3565,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV21Settings();
     LoadNaturalChatV22Settings();
     LoadNaturalChatV23Settings();
+    LoadNaturalChatV24Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

@@ -9,7 +9,9 @@
 #include "mod-ollama-chat_handler.h"
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_lately.h"
+#include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_personality.h"
+#include "mod-ollama-chat_pets.h"
 #include "mod-ollama-chat_presence.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_textrules.h"
@@ -27,6 +29,7 @@
 #include "Map.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
+#include "ObjectMgr.h"
 #include "Player.h"
 
 #include "PlayerbotAI.h"
@@ -42,6 +45,7 @@
 #include <list>
 #include <mutex>
 #include <random>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -139,6 +143,12 @@ namespace
                bot->GetGuildIdInvited() || bot->GetArenaTeamIdInvited() || Queued(bot);
     }
 
+    bool HangingOut(Player* bot)
+    {
+        std::string spot, doing;
+        return Hangout_WhereAndDoing(bot, spot, doing);
+    }
+
     // One of the random bots standing about, on `listener`'s side: not
     // someone's own bot, not grouped, not AFK, not wanted, not in an exchange.
     bool Idle(Player* bot, Player* listener)
@@ -150,6 +160,10 @@ namespace
             return false;
         if (Wanted(bot) || bot->isAFK() || Hangout_IsAway(bot) || bot->IsFlying() || bot->GetTransport())
             return false;
+        // One riding up to a city hangout gets off its mount when it gets
+        // there: "nice mount" would be about one it no longer has.
+        if (bot->IsMounted() && HangingOut(bot))
+            return false;
         return bot->GetTeamId() == listener->GetTeamId() && !g_busy.count(bot->GetGUID().GetRawValue());
     }
 
@@ -157,12 +171,6 @@ namespace
     {
         auto it = rest.find(key);
         return it == rest.end() || now >= it->second;
-    }
-
-    bool HangingOut(Player* bot)
-    {
-        std::string spot, doing;
-        return Hangout_WhereAndDoing(bot, spot, doing);
     }
 
     std::vector<Player*> BotsNear(Player* listener, float range)
@@ -223,6 +231,32 @@ namespace
         return !zoneName.empty() ? zoneName : areaName;
     }
 
+    // What the quests and items in their "lately" are, so a line about one
+    // -- linked or not -- is about what it really is: "[The Legend of
+    // Stalvan]" is a quest in Duskwood, not a person.
+    std::string ThingsText(const std::vector<Player*>& group)
+    {
+        if (g_MingleThingsText.empty())
+            return {};
+        std::string things;
+        for (Player* p : group)
+        {
+            const LatelyNamed named = Lately_Named(p);
+            std::string quest, item;
+            if (named.quest)
+                quest = Links_DescribeQuest(sObjectMgr->GetQuestTemplate(named.quest), p);
+            if (named.item)
+                item = Links_DescribeItem(sObjectMgr->GetItemTemplate(named.item));
+            for (const std::string* t : { &quest, &item })
+                if (!t->empty())
+                    things += (things.empty() ? "" : "; ") + *t;
+        }
+        if (things.empty())
+            return {};
+        const std::string text = SafeFormat(g_MingleThingsText, fmt::arg("things", things));
+        return text == "[Format Error]" ? std::string() : text;
+    }
+
     // One line each: what the others can see of them, and their chat style.
     std::string PeopleText(const std::vector<Player*>& group)
     {
@@ -247,6 +281,8 @@ namespace
                     out += text;
             }
         }
+        if (const std::string things = ThingsText(group); !things.empty())
+            out += "\n" + things;
         return out + "\n";
     }
 
@@ -270,13 +306,39 @@ namespace
         return g_MingleStrangersText;
     }
 
-    // One that fits the lowest level among them, not one heard lately.
-    std::string PickPremise(uint32_t level)
+    // What there is among them for a premise to need: "[mount]" one of them
+    // riding one, "[pet]" a pet or companion out, "[loot]" something got
+    // lately, "[quest]" a quest handed in lately.
+    std::set<std::string> FactsOf(const std::vector<Player*>& group)
+    {
+        std::set<std::string> facts;
+        for (Player* p : group)
+        {
+            const TextRules::Animals a = Pets_Seen(p).animals;
+            if (!a.mount.empty())
+                facts.insert("mount");
+            if (!a.petKind.empty() || !a.companion.empty())
+                facts.insert("pet");
+            const LatelyNamed named = Lately_Named(p);
+            if (named.item)
+                facts.insert("loot");
+            if (named.quest)
+                facts.insert("quest");
+        }
+        return facts;
+    }
+
+    // One that fits the lowest level among them and what they have, not one
+    // heard lately.
+    std::string PickPremise(uint32_t level, const std::set<std::string>& facts)
     {
         std::vector<std::string> fit, any;
         for (std::string p : g_MinglePremises)
         {
-            if (!TextRules::PremiseFits(p, level))
+            bool there = true;
+            for (const std::string& tag : TextRules::TakePremiseTags(p))
+                there = there && facts.count(tag) != 0;
+            if (!there || !TextRules::PremiseFits(p, level))
                 continue;
             any.push_back(p);
             if (std::find(g_recentPremises.begin(), g_recentPremises.end(), p) == g_recentPremises.end())
@@ -302,7 +364,7 @@ namespace
             names.push_back(p->GetName());
         }
 
-        const std::string premise = PickPremise(level);
+        const std::string premise = PickPremise(level, FactsOf(group));
         if (premise.empty())
             return {};
 
@@ -333,7 +395,13 @@ namespace
                                               fmt::arg("lines", lines),
                                               fmt::arg("emotes", emotes),
                                               fmt::arg("max_emotes", g_MingleMaxEmotes));
-        return prompt == "[Format Error]" ? std::string() : prompt;
+        if (prompt == "[Format Error]")
+            return {};
+        // "[Are We There, Yeti?]" is linked when the line goes out, as any
+        // other bot line is (mod-ollama-chat_links).
+        if (g_LinksEnable && !g_MingleLinksText.empty())
+            return prompt + " " + g_MingleLinksText;
+        return prompt;
     }
 
     // ---- running one ------------------------------------------------------
