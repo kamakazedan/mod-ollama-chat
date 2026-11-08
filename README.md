@@ -632,8 +632,9 @@ With both modules in the same build, the bots talk about what it has them do:
   it called?") and it knows what the pet is and what it's called, and what is
   trotting along behind it (`OllamaChat.Pets.*`). Bots chatting among
   themselves see each other's pets and companions too.
-- **Duels:** bots with nothing on duel each other outside the cities, the
-  way players practise. The chat side is the usual duel banter.
+- **Duels:** bots gather outside the gates of Orgrimmar and Stormwind and
+  duel each other there, as on any realm. The chat side is the usual duel
+  banter, and a bot at the gates knows it is there watching the duels.
 - **Raid marks:** a rogue that can't sap the star says why in party
   (`OllamaChat.Marks.Say*` and the `Sap*` situations).
 - **Muted lines:** this module has the bots say "Staying", "Following", hello
