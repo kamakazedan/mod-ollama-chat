@@ -142,6 +142,10 @@ together here. mod-playerbots-plus knows nothing of mod-dungeon-clear.
   for a build without it, so their callers need not care.
 - `Revive_RunDecides` and `Revive_KnowsResurrect` are this module's own copies:
   orders and the wipe lines need them with or without mod-playerbots-plus.
+- A duel two bots talk themselves into (mingle's `[duel]` premise) is only
+  ever talked of when `Hangout_CanGoDuel` says they could go (API 3), and
+  `Hangout_GoDuel` at the end of the exchange hands them over: the walk out
+  to the gates and the duel are mod-playerbots-plus's.
 
 ## Performance traps specific to this module
 
@@ -185,6 +189,13 @@ invent from: "a would-you-rather about trinkets" got "Trinket of the Hidden
 Sun". `Outlook.FactsText` tells every bot to say it can't remember rather than
 make an answer up; made-up fun is only fine as a plain imagine-if. The facts
 pools are built from the server's own data on the world thread, on first use.
+The same goes for replies: "need a wand" gets the bosses that really drop one
+(`mod-ollama-chat_wants.cpp`, loot read from the world DB once), a quest is
+described by its listed goals and its ender, never the quest log's sentence
+("Kill 15 Blackrock Champions and Guard Howe in Lakeshire will reward you"
+became "kill Guard Howe"), and a remark about a passer-by is handed something
+real to remark on, with what is not there (`OllamaChatRequest::mustNotSay`:
+mount words for someone on foot) dropped at delivery.
 
 Every line a bot says is in its own style. The model's lines are, through its
 personality prompt; a typed (canned) line goes through

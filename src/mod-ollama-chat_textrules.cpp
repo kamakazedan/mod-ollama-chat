@@ -7,6 +7,7 @@
 #include <cstring>
 #include <cmath>
 #include <sstream>
+#include <tuple>
 
 namespace
 {
@@ -3130,5 +3131,265 @@ namespace TextRules
         else
             out << rest << 'c';
         return out.str();
+    }
+
+    // ---- what a quest asks, plainly ------------------------------------------
+
+    std::string PluralName(const std::string& name, uint32_t count)
+    {
+        if (count <= 1 || name.empty())
+            return name;
+        const size_t space = name.find_last_of(' ');
+        const std::string head = space == std::string::npos ? std::string() : name.substr(0, space + 1);
+        const std::string word = space == std::string::npos ? name : name.substr(space + 1);
+        std::string low = word;
+        for (char& c : low)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (low.empty() || !std::isalpha(static_cast<unsigned char>(low.back())))
+            return name;
+
+        static const std::vector<std::pair<std::string, std::string>> kOdd = {
+            { "wolf", "wolves" }, { "elf", "elves" },     { "dwarf", "dwarves" }, { "thief", "thieves" },
+            { "leaf", "leaves" }, { "calf", "calves" },   { "half", "halves" },   { "loaf", "loaves" },
+            { "knife", "knives" }, { "wife", "wives" },   { "life", "lives" },    { "foot", "feet" },
+            { "tooth", "teeth" }, { "mouse", "mice" },    { "goose", "geese" },   { "ox", "oxen" },
+            { "child", "children" }, { "person", "people" }, { "man", "men" },    { "woman", "women" },
+        };
+        static const char* const kSame[] = { "vermin", "sheep", "deer", "moose", "fish", "kin", "dragonkin",
+                                             "undead", "infantry", "cavalry", "remains", "scum", "spawn" };
+        std::string plural;
+        for (const auto& [one, many] : kOdd)
+            if (low == one)
+                plural = many;
+        if (plural.empty())
+        {
+            for (const char* same : kSame)
+                if (low == same)
+                    return name;
+            const auto ends = [&low](const char* tail)
+            {
+                const size_t n = std::strlen(tail);
+                return low.size() >= n && low.compare(low.size() - n, n, tail) == 0;
+            };
+            if (ends("s"))
+                return name;   // already plural, or best left alone
+            if (ends("man") && low != "shaman" && low != "talisman" && low != "human" && low != "caiman")
+                plural = low.substr(0, low.size() - 3) + "men";   // footman, watchman
+            else if (ends("x") || ends("z") || ends("ch") || ends("sh"))
+                plural = low + "es";
+            else if (ends("y") && low.size() > 1 && std::string("aeiou").find(low[low.size() - 2]) == std::string::npos)
+                plural = low.substr(0, low.size() - 1) + "ies";
+            else
+                plural = low + "s";
+        }
+        // In the word's own case: "Wolf" -> "Wolves", "WOLF" -> "WOLVES".
+        const bool allUpper = std::all_of(word.begin(), word.end(), [](unsigned char c) { return !std::islower(c); });
+        if (allUpper && word.size() > 1)
+            for (char& c : plural)
+                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        else if (std::isupper(static_cast<unsigned char>(word[0])))
+            plural[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(plural[0])));
+        return head + plural;
+    }
+
+    std::string QuestPlainly(const std::vector<QuestGoal>& goals, const std::string& ender,
+                             const std::string& fallback)
+    {
+        std::vector<std::string> parts;
+        for (const QuestGoal& g : goals)
+        {
+            const std::string what = Trim(g.what);
+            if (what.empty())
+                continue;
+            if (g.verb.empty())
+                parts.push_back(g.count > 1 ? what + " (" + std::to_string(g.count) + ")" : what);
+            else if (g.count > 1)
+                parts.push_back(g.verb + " " + std::to_string(g.count) + " " + PluralName(what, g.count));
+            else
+                parts.push_back(g.verb + " " + what);
+        }
+        const std::string to = Trim(ender);
+        if (parts.empty())
+        {
+            std::string text = Trim(fallback);
+            if (to.empty())
+                return text;
+            std::string lowText = text, lowTo = to;
+            for (char& c : lowText)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            for (char& c : lowTo)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (lowText.find(lowTo) != std::string::npos)
+                return text;
+            if (text.empty())
+                return "hand it in to " + to;
+            while (!text.empty() && (text.back() == '.' || text.back() == ' '))
+                text.pop_back();
+            return text + " (it is handed in to " + to + ")";
+        }
+        std::string out;
+        for (size_t i = 0; i < parts.size(); ++i)
+            out += (i == 0 ? "" : (i + 1 == parts.size() ? " and " : ", ")) + parts[i];
+        if (!to.empty())
+            out += ", then hand it in to " + to;
+        return out;
+    }
+
+    // ---- wanting a kind of item ----------------------------------------------
+
+    const std::vector<ItemKindWords>& ItemKinds()
+    {
+        static const std::vector<ItemKindWords> kinds = []
+        {
+            const std::vector<std::tuple<const char*, const char*, const char*>> raw = {
+                { "wand", "a wand", "wand|wands" },
+                { "staff", "a staff", "staff|staves|stave" },
+                { "crossbow", "a crossbow", "crossbow|crossbows|xbow|xbows" },
+                { "bow", "a bow", "bow|bows|longbow|shortbow" },
+                { "gun", "a gun", "gun|guns|rifle|rifles" },
+                { "thrown weapon", "a throwing weapon", "throwing weapon|throwing weapons|thrown weapon|thrown" },
+                { "ranged weapon", "a ranged weapon", "ranged weapon|ranged weapons|ranged" },
+                { "fist weapon", "a fist weapon", "fist weapon|fist weapons|fists|fist" },
+                { "two-hander", "a two-hander",
+                  "2h|2hs|2 hander|2hander|two hander|two handed|two handed weapon|2h weapon|two hand" },
+                { "sword", "a sword", "sword|swords|greatsword|blade" },
+                { "axe", "an axe", "axe|axes" },
+                { "mace", "a mace", "mace|maces" },
+                { "dagger", "a dagger", "dagger|daggers|dirk" },
+                { "polearm", "a polearm", "polearm|polearms|pole arm|spear|halberd" },
+                { "shield", "a shield", "shield|shields" },
+                { "off-hand", "an off-hand", "offhand|off hand|offhand item" },
+                { "weapon", "a weapon", "weapon|weapons|wep|weap|wpn|weps" },
+                { "cloak", "a cloak", "cloak|cloaks|cape|capes" },
+                { "ring", "a ring", "ring|rings" },
+                { "necklace", "a necklace", "necklace|neck|amulet|pendant|neck piece|necklaces" },
+                { "trinket", "a trinket", "trinket|trinkets" },
+                { "helm", "a helm", "helm|helmet|helms|helmets|hat|headpiece|head piece" },
+                { "shoulders", "new shoulders", "shoulders|shoulder|pauldrons|shoulderpads|shoulder pads|spaulders" },
+                { "chest piece", "a chest piece",
+                  "chestpiece|chest piece|chest armor|chest armour|a chest|new chest|better chest|good chest|"
+                  "decent chest|robe|breastplate|tunic|vest|chest slot" },
+                { "bracers", "bracers", "bracers|bracer|wrist|wrists|bracelets|wristguards" },
+                { "gloves", "gloves", "gloves|gauntlets|handwraps|handguards" },
+                { "belt", "a belt", "belt|belts|girdle|waist" },
+                { "leggings", "leggings", "pants|legs|leggings|trousers|legplates|kilt|britches|leg armor" },
+                { "boots", "boots", "boots|shoes|sandals|treads|footwear" },
+                { "relic", "a relic", "relic|relics|idol|libram|totem|sigil" },
+            };
+            std::vector<ItemKindWords> out;
+            for (const auto& [key, phrase, words] : raw)
+            {
+                ItemKindWords k;
+                k.key    = key;
+                k.phrase = phrase;
+                std::string word;
+                std::vector<std::string> current;
+                for (const char* c = words;; ++c)
+                {
+                    if (*c == ' ' || *c == '|' || *c == '\0')
+                    {
+                        if (!word.empty())
+                            current.push_back(word);
+                        word.clear();
+                        if ((*c == '|' || *c == '\0') && !current.empty())
+                        {
+                            k.words.push_back(current);
+                            current.clear();
+                        }
+                        if (*c == '\0')
+                            break;
+                    }
+                    else
+                        word += *c;
+                }
+                out.push_back(std::move(k));
+            }
+            return out;
+        }();
+        return kinds;
+    }
+
+    const ItemKindWords* FindItemWant(const std::vector<std::string>& words,
+                                      const std::vector<std::vector<std::string>>& wanting)
+    {
+        if (words.empty() || wanting.empty())
+            return nullptr;
+        // A word ending in '*' matches any word that starts with the rest.
+        const auto at = [&words](size_t i, const std::vector<std::string>& phrase)
+        {
+            if (phrase.empty() || i + phrase.size() > words.size())
+                return false;
+            for (size_t k = 0; k < phrase.size(); ++k)
+            {
+                const std::string& p = phrase[k];
+                const std::string& w = words[i + k];
+                if (!p.empty() && p.back() == '*')
+                {
+                    if (w.compare(0, p.size() - 1, p, 0, p.size() - 1) != 0 || w.size() < p.size() - 1)
+                        return false;
+                }
+                else if (w != p)
+                    return false;
+            }
+            return true;
+        };
+        const auto oneOf = [](const std::string& w, std::initializer_list<const char*> list)
+        {
+            for (const char* x : list)
+                if (w == x)
+                    return true;
+            return false;
+        };
+        // Where each want ends -- not one asking someone else, or denied.
+        std::vector<size_t> wantEnds;
+        for (size_t i = 0; i < words.size(); ++i)
+            for (const std::vector<std::string>& w : wanting)
+            {
+                if (!at(i, w))
+                    continue;
+                // Someone else asked ("anyone need a wand?", "do you need
+                // one?") just before it; told no ("dont really need one") a
+                // word or two before.
+                bool other = i >= 1 && oneOf(words[i - 1], { "anyone", "any1", "anybody", "who", "you", "u", "ya",
+                                                             "yall", "nobody", "noone", "somebody", "someone" });
+                for (size_t back = 1; back <= 2 && back <= i; ++back)
+                    other = other || oneOf(words[i - back], { "dont", "don", "not", "no", "never", "doesnt", "didnt",
+                                                               "wont", "cant" });
+                if (!other)
+                    wantEnds.push_back(i + w.size());
+            }
+        if (wantEnds.empty())
+            return nullptr;
+        // Between the want and the thing: only words like these ("need a
+        // fukin wand", "where can i get a good shield") -- so not "need to
+        // rest my legs", nor "need it, got a wand".
+        const auto filler = [&oneOf](const std::string& w)
+        {
+            return oneOf(w, { "a", "an", "the", "some", "new", "good", "better", "decent", "nice", "proper", "real",
+                              "any", "my", "me", "to", "get", "find", "buy", "for", "one", "more", "another",
+                              "f", "fkn", "fkin", "fking", "fukin", "fuking", "fucking", "fuckin", "freaking",
+                              "frigging", "damn", "bloody", "flipping", "still", "really", "epic", "blue",
+                              "purple", "green", "rare", "cool", "shiny", "i", "can", "could", "do", "would",
+                              "should", "go", "pick", "up", "low", "lvl", "level", "lowbie", "starter",
+                              "first", "proper", "replacement", "upgraded", "upgrade", "of", "pair" });
+        };
+        for (const ItemKindWords& kind : ItemKinds())
+            for (const std::vector<std::string>& phrase : kind.words)
+                for (size_t i = 0; i < words.size(); ++i)
+                {
+                    if (!at(i, phrase))
+                        continue;
+                    for (size_t end : wantEnds)
+                    {
+                        if (end > i || i - end > 6)
+                            continue;
+                        bool between = true;
+                        for (size_t k = end; k < i && between; ++k)
+                            between = filler(words[k]);
+                        if (between)
+                            return &kind;
+                    }
+                }
+        return nullptr;
     }
 }

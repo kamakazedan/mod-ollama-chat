@@ -79,6 +79,7 @@ namespace
         size_t                   next = 0;
         Clock::time_point        nextAt{};
         std::string              lastText;  // the line before: what the next one answers
+        bool                     duel = false;   // they talk themselves into a duel: at the end, off they go
     };
 
     std::unordered_map<uint64_t, Exchange>          g_exchanges;      // by id
@@ -308,10 +309,15 @@ namespace
 
     // What there is among them for a premise to need: "[mount]" one of them
     // riding one, "[pet]" a pet or companion out, "[loot]" something got
-    // lately, "[quest]" a quest handed in lately.
-    std::set<std::string> FactsOf(const std::vector<Player*>& group)
+    // lately, "[quest]" a quest handed in lately, "[duel]" two who could go
+    // out to the gates and duel there now (mod-playerbots-plus), and where
+    // that is.
+    std::set<std::string> FactsOf(const std::vector<Player*>& group, std::string& duelWhere)
     {
         std::set<std::string> facts;
+        duelWhere.clear();
+        if (group.size() == 2 && Hangout_CanGoDuel(group[0], group[1], duelWhere) && !duelWhere.empty())
+            facts.insert("duel");
         for (Player* p : group)
         {
             const TextRules::Animals a = Pets_Seen(p).animals;
@@ -329,32 +335,43 @@ namespace
     }
 
     // One that fits the lowest level among them and what they have, not one
-    // heard lately.
-    std::string PickPremise(uint32_t level, const std::set<std::string>& facts)
+    // heard lately. Two who could go and duel talk about that
+    // Mingle.DuelChance of the time. `duel`: the one picked is the duel's.
+    std::string PickPremise(uint32_t level, const std::set<std::string>& facts, bool& duel)
     {
-        std::vector<std::string> fit, any;
+        duel = false;
+        const bool duelFirst = facts.count("duel") && Between(1, 100) <= g_MingleDuelChance;
+        std::vector<std::string> fit, any, duels;
+        std::set<std::string> isDuel;
         for (std::string p : g_MinglePremises)
         {
             bool there = true;
-            for (const std::string& tag : TextRules::TakePremiseTags(p))
+            const std::vector<std::string> tags = TextRules::TakePremiseTags(p);
+            for (const std::string& tag : tags)
                 there = there && facts.count(tag) != 0;
             if (!there || !TextRules::PremiseFits(p, level))
                 continue;
+            if (std::find(tags.begin(), tags.end(), "duel") != tags.end())
+            {
+                isDuel.insert(p);
+                duels.push_back(p);
+            }
             any.push_back(p);
             if (std::find(g_recentPremises.begin(), g_recentPremises.end(), p) == g_recentPremises.end())
                 fit.push_back(p);
         }
-        const std::vector<std::string>& from = fit.empty() ? any : fit;
+        const std::vector<std::string>& from = (duelFirst && !duels.empty()) ? duels : (fit.empty() ? any : fit);
         if (from.empty())
             return {};
         const std::string pick = from[Between(0, uint32_t(from.size() - 1))];
+        duel = isDuel.count(pick) != 0;
         g_recentPremises.push_back(pick);
         while (g_recentPremises.size() > std::min<size_t>(8, g_MinglePremises.size() / 2 + 1))
             g_recentPremises.pop_front();
         return pick;
     }
 
-    std::string BuildPrompt(const std::vector<Player*>& group)
+    std::string BuildPrompt(const std::vector<Player*>& group, bool& duel)
     {
         uint32_t level = group.front()->GetLevel();
         std::vector<std::string> names;
@@ -364,9 +381,14 @@ namespace
             names.push_back(p->GetName());
         }
 
-        const std::string premise = PickPremise(level, FactsOf(group));
+        std::string duelWhere;
+        std::string premise = PickPremise(level, FactsOf(group, duelWhere), duel);
         if (premise.empty())
             return {};
+        // Where they will go and fight it out: the real place, "outside the
+        // gates of Stormwind".
+        for (size_t at = premise.find("{duel_where}"); at != std::string::npos; at = premise.find("{duel_where}"))
+            premise.replace(at, 12, duelWhere);
 
         // The shape of it, with their own names. An emote is in it only now
         // and then, picked each time: shown one every time, every exchange
@@ -494,6 +516,19 @@ namespace
             if (Player* p = Find(e.members[i]))
                 if (PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(p))
                     ai->SetNextCheckDelay(0);
+        }
+        // Talked themselves into a duel, and said all of it: out to the
+        // gates they go, to fight it out there (mod-playerbots-plus).
+        if (natural && e.duel && e.members.size() == 2)
+        {
+            Player* a = Find(e.members[0]);
+            Player* b = Find(e.members[1]);
+            const bool off = a && b && Hangout_GoDuel(a, b);
+            if (off)
+                ++g_stats.duels;
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Mingle {}: {} and {} {}.", e.id, e.names[0], e.names[1],
+                         off ? "head out to duel" : "talked of a duel, but cannot go just now");
         }
         if (!e.waiting)
             ++(natural ? g_stats.finished : g_stats.cut);
@@ -669,12 +704,14 @@ namespace
         if (group.size() < 2)
             return false;
 
-        const std::string prompt = BuildPrompt(group);
+        bool duel = false;
+        const std::string prompt = BuildPrompt(group, duel);
         if (prompt.empty())
             return false;
 
         Exchange e;
         e.id       = g_nextId++;
+        e.duel     = duel;
         e.mapId    = group.front()->GetMapId();
         e.scopeKey = Governor_MakeScopeKey(ChatChannelSourceLocalStr[SRC_SAY_LOCAL], 0, std::string(), 0,
                                            group.front()->GetZoneId());

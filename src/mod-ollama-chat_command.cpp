@@ -32,6 +32,7 @@
 #include "mod-ollama-chat_gear.h"
 #include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_knowledge.h"
+#include "mod-ollama-chat_wants.h"
 #include "mod-ollama-chat_mingle.h"
 #include "mod-ollama-chat_rolls.h"
 #include "mod-ollama-chat_market.h"
@@ -840,6 +841,16 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)known.wrong,
                              known.menus,
                              known.sold);
+    const WantsStats wants = Wants_GetStats();
+    if (show("chat"))
+        handler->PSendSysMessage("Wanted gear: {} - {} lines saying someone is after a kind of item, {} reply prompts "
+                             "told where one comes from ({} follow-ups); {} bosses in {} dungeons with gear known (0 "
+                             "until the first such line)",
+                             g_WantsEnable ? "on" : "off",
+                             (unsigned long long)wants.heard,
+                             (unsigned long long)wants.prompts,
+                             (unsigned long long)wants.followUps,
+                             wants.bosses, wants.dungeons);
     const RollsStats rolls = Rolls_GetStats();
     if (show("party"))
         handler->PSendSysMessage("Loot rolls: {} - {} put in a group's chat, {} very low or high ones remarked on",
@@ -849,7 +860,8 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
     const MingleStats mingle = Mingle_GetStats();
     if (show("city"))
         handler->PSendSysMessage("Mingling: {} - {} running, {} asked for, {} written ({} unusable), {} ran to the end, "
-                             "{} cut short, {} lines, {} emotes at each other; {} greetings between bots",
+                             "{} cut short, {} lines, {} emotes at each other; {} greetings between bots; {} pairs "
+                             "talked themselves into a duel and went out to the gates",
                              g_MingleEnable ? "on" : "off", mingle.running,
                              (unsigned long long)mingle.asked,
                              (unsigned long long)mingle.written,
@@ -858,7 +870,8 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)mingle.cut,
                              (unsigned long long)mingle.lines,
                              (unsigned long long)mingle.emotes,
-                             (unsigned long long)mingle.greetings);
+                             (unsigned long long)mingle.greetings,
+                             (unsigned long long)mingle.duels);
 
     if (show("chat"))
         handler->PSendSysMessage("Roleplay: {} (strictness {})   Emote reactions: {}",

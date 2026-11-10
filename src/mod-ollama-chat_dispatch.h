@@ -156,6 +156,11 @@ struct OllamaChatRequest
     std::vector<std::vector<std::string>> mustSay;
     std::string fallbackText;
 
+    // A line with one of these in it (CrowdText phrases) is not said: what
+    // it would be about is not there. A passer-by on foot is not told "nice
+    // mount" (mod-ollama-chat_presence).
+    std::vector<std::vector<std::string>> mustNotSay;
+
     // The tank calling the end of a dungeon-clear run (mod-ollama-chat_partycmd):
     // once it is out, the rest of the group says gg.
     bool doneCall = false;

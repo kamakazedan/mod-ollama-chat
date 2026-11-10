@@ -1,5 +1,6 @@
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat-utilities.h"
 
@@ -617,6 +618,46 @@ std::string Links_DescribeItem(ItemTemplate const* p)
     return out;
 }
 
+namespace
+{
+    // Who each quest is handed in to: the first NPC (else object) the game
+    // has it end at. Built once, on first use.
+    std::string EnderName(uint32 questId)
+    {
+        static std::unordered_map<uint32, std::string> enders;
+        static bool built = false;
+        if (!built)
+        {
+            built = true;
+            for (auto const& [entry, quest] : *sObjectMgr->GetCreatureQuestInvolvedRelationMap())
+                if (!enders.count(quest))
+                    if (CreatureTemplate const* t = sObjectMgr->GetCreatureTemplate(entry))
+                        enders[quest] = t->Name;
+            for (auto const& [entry, quest] : *sObjectMgr->GetGOQuestInvolvedRelationMap())
+                if (!enders.count(quest))
+                    if (GameObjectTemplate const* t = sObjectMgr->GetGameObjectTemplate(entry))
+                        enders[quest] = t->name;
+        }
+        auto it = enders.find(questId);
+        return it == enders.end() ? std::string() : it->second;
+    }
+
+    // A creature a quest counts that nobody sees -- a trigger, a credit
+    // marker: its name is no goal to tell anyone.
+    bool Hidden(CreatureTemplate const* t)
+    {
+        if (!t || (t->flags_extra & CREATURE_FLAG_EXTRA_TRIGGER))
+            return true;
+        std::string name = t->Name;
+        for (char& c : name)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        for (const char* word : { "credit", "bunny", "trigger", "[dnd]", "[ph]", "dnd ", "(dnd)", "invisible" })
+            if (name.find(word) != std::string::npos)
+                return true;
+        return false;
+    }
+}
+
 std::string Links_QuestObjective(Quest const* quest, Player* reader, size_t maxLen)
 {
     if (!quest)
@@ -632,8 +673,87 @@ std::string Links_QuestObjective(Quest const* quest, Player* reader, size_t maxL
         if (ChrRacesEntry const* r = sChrRacesStore.LookupEntry(reader->getRace()))
             race = r->name[0];
     }
+    const std::string who = name.empty() ? std::string("you") : name;
+
+    // Its goals as the game lists them -- what to kill, collect or use, each
+    // on its own -- and who it is handed in to: "Kill 15 Blackrock Champions
+    // and Guard Howe in Lakeshire will reward you" had a bot tell someone to
+    // kill Guard Howe. The quest log's own text only for a quest whose goals
+    // the game does not list (talk to someone, go somewhere), or one that
+    // counts something nobody sees.
     const std::string& raw = quest->GetObjectives().empty() ? quest->GetDetails() : quest->GetObjectives();
-    return TextRules::QuestText(raw, name.empty() ? std::string("you") : name, cls, race, female, maxLen);
+    // A creature counted is one to kill when the quest says so; one to use
+    // something on, free or talk to is better told in the quest's own words.
+    bool killing = false;
+    {
+        const std::vector<std::string> words = CrowdText::Words(raw);
+        for (const std::string& w : words)
+            for (const char* k : { "kill", "kills", "slay", "slain", "destroy", "defeat", "hunt", "cull", "eliminate",
+                                   "dispatch", "exterminate", "execute", "assassinate", "vanquish", "murder" })
+                killing = killing || w == k;
+    }
+    std::vector<TextRules::QuestGoal> goals;
+    bool unlisted = false;
+    for (uint8 i = 0; i < QUEST_OBJECTIVES_COUNT && !unlisted; ++i)
+    {
+        const int32 id = quest->RequiredNpcOrGo[i];
+        if (!id || !quest->RequiredNpcOrGoCount[i])
+            continue;
+        TextRules::QuestGoal g;
+        g.count = quest->RequiredNpcOrGoCount[i];
+        if (!quest->ObjectiveText[i].empty())
+            g.what = TextRules::QuestText(quest->ObjectiveText[i], who, cls, race, female, 0);
+        else if (id > 0)
+        {
+            CreatureTemplate const* t = sObjectMgr->GetCreatureTemplate(uint32(id));
+            if (Hidden(t) || !killing)
+                unlisted = true;
+            else
+            {
+                g.verb = "kill";
+                g.what = t->Name;
+            }
+        }
+        else if (GameObjectTemplate const* go = sObjectMgr->GetGameObjectTemplate(uint32(-id)))
+        {
+            g.verb = "use";
+            g.what = go->name;
+        }
+        else
+            unlisted = true;
+        goals.push_back(std::move(g));
+    }
+    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT && !unlisted; ++i)
+    {
+        if (!quest->RequiredItemId[i] || !quest->RequiredItemCount[i])
+            continue;
+        ItemTemplate const* proto = sObjectMgr->GetItemTemplate(quest->RequiredItemId[i]);
+        if (!proto)
+        {
+            unlisted = true;
+            break;
+        }
+        TextRules::QuestGoal g;
+        g.verb  = "collect";
+        g.what  = proto->Name1;
+        g.count = quest->RequiredItemCount[i];
+        goals.push_back(std::move(g));
+    }
+    if (!unlisted && quest->GetPlayersSlain())
+        goals.push_back(TextRules::QuestGoal{ "kill", "enemy player", quest->GetPlayersSlain() });
+    if (unlisted)
+        goals.clear();
+
+    std::string out = TextRules::QuestPlainly(goals, EnderName(quest->GetQuestId()),
+                                              goals.empty() ? TextRules::QuestText(raw, who, cls, race, female, maxLen)
+                                                            : std::string());
+    if (maxLen && out.size() > maxLen)
+    {
+        size_t cut = out.rfind(' ', maxLen);
+        out.resize(cut == std::string::npos || cut < maxLen / 2 ? maxLen : cut);
+        out += "...";
+    }
+    return out;
 }
 
 std::string Links_DescribeQuest(Quest const* quest, Player* reader)
@@ -742,11 +862,8 @@ namespace
     // Who a quest is handed in to: " to Sven", or nothing.
     std::string EnderOf(uint32 questId)
     {
-        for (auto const& [entry, quest] : *sObjectMgr->GetCreatureQuestInvolvedRelationMap())
-            if (quest == questId)
-                if (CreatureTemplate const* t = sObjectMgr->GetCreatureTemplate(entry))
-                    return " to " + t->Name;
-        return {};
+        const std::string name = EnderName(questId);
+        return name.empty() ? std::string() : " to " + name;
     }
 
     // ": Skeletal Raider 7/15, Skeletal Healer 0/3", or nothing.

@@ -2408,9 +2408,14 @@ OllamaChat.Presence.SkipEmotes = "rude|spit|threaten|insult|mock|taunt|chicken|r
 #    OllamaChat.Presence.PromptTemplate
 #        Placeholders: {bot_name} {bot_level} {bot_race} {bot_class}
 #        {bot_personality} {bot_personality_name} {player_name}
-#        {observation} ("Kami, a level 23 Human Warrior, riding a Brown
-#        Horse, with their Cat Whiskers") {pass_token}.
-OllamaChat.Presence.PromptTemplate = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} You are walking past {player_name}: {observation}. Say one short thing to them about it, the way a passing player might in /say: a compliment, a joke, a tease or a quick question, 2 to 10 words. Do not start with their name, and do not describe what you are doing."
+#        {observation} ("Kami, a level 23 Human Warrior, riding their
+#        mount, a Brown Horse, their [Gnarled Staff] (white staff) catching
+#        the eye": what they are doing, the mount, pet or companion they
+#        have with them, and the one piece of what they wear a passer-by
+#        notices first) {pass_token}. A remark that talks of a mount to
+#        someone on foot, or of a pet to someone with none out
+#        (Pets.MountWords, Pets.Words), is not said.
+OllamaChat.Presence.PromptTemplate = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} You are walking past {player_name}: {observation}. Say one short thing to them about something in that, the way a passing player might in /say: a compliment, a joke, a tease or a quick question, 2 to 10 words, and never about anything it does not mention. Do not start with their name, and do not describe what you are doing."
 
 ###############################################################################
 #
@@ -4326,6 +4331,65 @@ OllamaChat.Knowledge.FollowText = "If anyone in the chat said otherwise, they go
 OllamaChat.Knowledge.AnswerText = "That is how it is in the game: if you answer, answer from it and add nothing it does not say -- in a few words or a bit more, as your style goes."
 OllamaChat.Knowledge.WrongText = "That is the right answer and you know it -- but, as you do, give a wrong one with a straight face, to wind them up: another real place, vendor or way from the game, never one you made up. If someone corrects you, double down."
 
+###################################################################################################
+# WANTED GEAR: "I NEED A WAND"
+#
+# In Wailing Caverns someone said they still needed a wand, and a bot sent
+# them to kill a few more murlocs in the south, past the big bridge in the
+# east -- none of it real, and asked "south of where?" it made up more. A
+# line saying its speaker is after a kind of item now has each reply prompt
+# told what is really so for the speaker's level and class, from the game's
+# own data: in a dungeon, which of its bosses can drop one they could use
+# (and whether it is down already this run), or that none does; a dungeon or
+# two around their level where a boss can; what a profession makes of the
+# kind around their level; and whether the bot answering could use one
+# itself. It answers from that in its own way: the boss here, another
+# dungeon, a crafter, hoping one drops, needing one too.
+#
+# The kinds: wands, staves, bows, guns, crossbows, thrown and ranged
+# weapons, fist weapons, two-handers, swords, axes, maces, daggers,
+# polearms, any weapon, shields, off-hands, cloaks, rings, necklaces,
+# trinkets, and helms, shoulders, chest pieces, bracers, gloves, belts,
+# leggings and boots of the armour they wear, and relics.
+#
+# Boss loot is read from the world database once, on the first such line
+# (a few small queries): the dungeon finder's dungeons, their bosses as the
+# instance encounters credit them, and the green-or-better gear their own
+# loot tables drop -- not the world-drop tables half the world refers to.
+###################################################################################################
+
+#    OllamaChat.Wants.Enable
+#        Default: 1
+OllamaChat.Wants.Enable = 1
+
+#    OllamaChat.Wants.Words
+#        Saying you are after something: one of these (| between, a trailing *
+#        matches any ending) comes before what you call the kind of item,
+#        with only words like "a", "new", "good", "fukin", "to get" between
+#        ("i still need a fukin wand", "where can i get a good shield", "lf
+#        cloak"). Not a line asking someone else ("do you need a wand?",
+#        "anyone need a wand?") or saying no ("dont need a wand").
+#        Default: (below)
+OllamaChat.Wants.Words = "need|needs|needed|needing|neeed|want|wants|wanna|looking for|lookin for|looking 4|lf|hunting for|after|could use|could do with|where|wish i had"
+
+#    OllamaChat.Wants.FollowSeconds
+#        For this long after, the speaker's next lines ("south of where?")
+#        and their group's replies carry the same facts. 0: only the line
+#        itself. At most 600.
+#        Default: 120
+OllamaChat.Wants.FollowSeconds = 120
+
+#    OllamaChat.Wants.Text
+#    OllamaChat.Wants.FollowText
+#        What a reply prompt is told: Text for the line that says it,
+#        FollowText for one a moment after (which may be about something
+#        else). {speaker} {kind} ("a wand", "new shoulders") {level} {class}
+#        {facts} (what is so, as sentences) {self} (whether the bot answering
+#        could use one itself). Empty: nothing told.
+#        Default: (below)
+OllamaChat.Wants.Text = "{speaker} is after {kind}. What is really so about getting one, for a level {level} {class}: {facts} {self} Answer in your own way and style, from that: the boss here that can drop one, one of those dungeons, a crafter, the auction house, hoping one drops for them, needing one too, or just a word of sympathy. Never send them anywhere, or tell them to kill or buy anything, that is not in this."
+OllamaChat.Wants.FollowText = "A moment ago {speaker} said they are after {kind}. What is really so about getting one, for a level {level} {class}: {facts} {self} If what you are answering is about that, answer from this, in your own way, and never send them anywhere, or tell them to kill or buy anything, that is not in it; if it is about something else, leave this be."
+
 #    OllamaChat.Clock.FixWeekdays
 #    OllamaChat.Clock.Words
 #    OllamaChat.Clock.PromptText
@@ -4554,9 +4618,23 @@ OllamaChat.Mingle.PromptTemplate = "{count} World of Warcraft players are standi
 #        worth showing off lately, [quest] one of them handed in a quest
 #        lately (what a bot has been up to, Lately). "[mount] one of them
 #        admires the mount the other is riding" is never picked for two on
-#        foot. Tags go in front, with a level tag or without.
+#        foot. [duel]: the two of them could go out to the gates and duel
+#        there now (mod-playerbots-plus's Duels.*: of a side, within
+#        Duels.LevelGap levels, near a duel spot) -- {duel_where} in it is
+#        where ("outside the gates of Stormwind"), and once the last line is
+#        said they walk out there and fight it out; with no duel spot near,
+#        or without mod-playerbots-plus, nobody talks of a duel at all.
+#        Tags go in front, with a level tag or without.
 #        Default: (below)
-OllamaChat.Mingle.Premises = "saying hello and asking what the other has been up to|[quest] one of them just got back from questing and moans about it|[quest] one of them asks the other about the quest they just handed in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's pet or companion|one of them admires the other's gear|one of them teases the other about their race or class, all in good fun|swapping tips about levelling their classes|one of them is waiting for a group and getting bored|one of them asks the other for a duel|one of them asks the other if they have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: the players walking past|levelling their professions|which zone is the worst to quest in|being lost in this city|what they are saving their gold for|a funny death one of them had today|one of them is about to log off|their guilds, or not having one|an imagine-if one of them dreams up, plainly made up for a laugh|gnomes|murlocs|[15+] whether to run a dungeon together later|[15+] a dungeon one of them ran earlier|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] flying mounts"
+OllamaChat.Mingle.Premises = "saying hello and asking what the other has been up to|[quest] one of them just got back from questing and moans about it|[quest] one of them asks the other about the quest they just handed in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's pet or companion|one of them admires the other's gear|one of them teases the other about their race or class, all in good fun|swapping tips about levelling their classes|one of them is waiting for a group and getting bored|[duel] one of them challenges the other to a duel, and they agree to head {duel_where} and fight it out|one of them asks the other if they have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: the players walking past|levelling their professions|which zone is the worst to quest in|being lost in this city|what they are saving their gold for|a funny death one of them had today|one of them is about to log off|their guilds, or not having one|an imagine-if one of them dreams up, plainly made up for a laugh|gnomes|murlocs|[15+] whether to run a dungeon together later|[15+] a dungeon one of them ran earlier|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] flying mounts"
+
+#    OllamaChat.Mingle.DuelChance
+#        Two who could go out to the gates and duel ([duel] in
+#        Mingle.Premises) talk themselves into one this share of the time
+#        (percent); otherwise the duel is one premise among the rest. When
+#        they do, they walk out there at the end and fight it out.
+#        Default: 25
+OllamaChat.Mingle.DuelChance = 25
 
 #    OllamaChat.Mingle.Emotes
 #        The emotes an exchange can use, offered in the prompt. One the model

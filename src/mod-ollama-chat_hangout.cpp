@@ -76,3 +76,32 @@ bool Hangout_WhereAndDoing(Player* /*bot*/, std::string& /*spot*/, std::string& 
 }
 
 #endif
+
+// Duels talked into: mod-playerbots-plus walks them out to the gates and has
+// them fight it out there (Duels.* there).
+
+#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 3
+
+bool Hangout_CanGoDuel(Player* a, Player* b, std::string& where)
+{
+    return PlayerbotsPlus::CanGoDuel(a, b, where);
+}
+
+bool Hangout_GoDuel(Player* a, Player* b)
+{
+    return PlayerbotsPlus::GoDuel(a, b);
+}
+
+#else
+
+bool Hangout_CanGoDuel(Player* /*a*/, Player* /*b*/, std::string& /*where*/)
+{
+    return false;
+}
+
+bool Hangout_GoDuel(Player* /*a*/, Player* /*b*/)
+{
+    return false;
+}
+
+#endif

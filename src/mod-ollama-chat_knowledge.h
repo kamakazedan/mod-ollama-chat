@@ -3,6 +3,8 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 class Player;
 
@@ -56,6 +58,10 @@ std::string Knowledge_PromptFor(Player* bot, Player* speaker, const std::string&
 
 // Does the line ask where something is or how to get it?
 bool Knowledge_IsQuestion(const std::string& msg);
+
+// Every item a profession makes, and which ones make it (SkillLine ids): the
+// same index the answers come from, built on first use if it is not yet.
+const std::unordered_map<uint32_t, std::vector<uint32_t>>& Knowledge_MadeBy();
 
 struct KnowledgeStats
 {

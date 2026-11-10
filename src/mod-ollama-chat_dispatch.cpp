@@ -547,6 +547,18 @@ namespace
         // What they said, as they saw it: a link in it is its "[Name]".
         const std::string origin = TextRules::StripChatMarkup(c.request.originMessage);
 
+        // About something that is not there -- "nice mount" to someone on
+        // foot: not said at all.
+        if (!c.request.mustNotSay.empty() &&
+            CrowdText::ContainsPhrase(CrowdText::Words(c.text), c.request.mustNotSay))
+        {
+            ++g_droppedPhrase;
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} named something that is not there; line dropped: "
+                         "'{}'", bot->GetName(), c.text);
+            return;
+        }
+
         // A line that has to say something in particular: the model's, if it
         // did say it, else the stock one.
         if (!c.request.fallbackText.empty() && c.text != c.request.fallbackText &&

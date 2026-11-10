@@ -512,6 +512,53 @@ namespace TextRules
     std::string QuestText(const std::string& text, const std::string& name, const std::string& cls,
                           const std::string& race, bool female, size_t maxLen);
 
+    // What a quest asks, plainly. "Kill 15 Blackrock Champions and Guard
+    // Howe in Lakeshire will reward you." -- the quest log's own sentence --
+    // had a bot tell someone to kill the champions and Guard Howe. The goals
+    // as the game lists them, each on its own, and who it is handed in to,
+    // cannot be read that way.
+    struct QuestGoal
+    {
+        std::string verb;        // "kill", "collect", "use"; empty when `what` is the game's own words for it
+        std::string what;        // "Blackrock Champion", "Gnoll Paw", "Lakeshire Bridge inspected"
+        uint32_t    count = 0;
+    };
+
+    // "Blackrock Champions", "Wolves", "Harpies", "Footmen" for more than
+    // one; `name` as it is for one. A name that already ends in s stays.
+    std::string PluralName(const std::string& name, uint32_t count);
+
+    // "kill 15 Blackrock Champions, then hand it in to Guard Howe". With no
+    // goals, `fallback` (the quest log's own text) -- and who it is handed
+    // in to after it, unless the text names them already.
+    std::string QuestPlainly(const std::vector<QuestGoal>& goals, const std::string& ender,
+                             const std::string& fallback);
+
+    // ---- wanting a kind of item ----------------------------------------------
+
+    // A kind of item people say they need: `key` names it ("wand",
+    // "shoulders"), `phrase` says it in a sentence ("a wand", "new
+    // shoulders"), `words` are what people call it (lowercase phrases).
+    struct ItemKindWords
+    {
+        std::string key;
+        std::string phrase;
+        std::vector<std::vector<std::string>> words;
+    };
+
+    // Every kind there is, the narrower first ("fist weapon" before
+    // "weapon").
+    const std::vector<ItemKindWords>& ItemKinds();
+
+    // The kind of item a line says its speaker is after -- "i still need a
+    // fukin wand", "anyone know where to get a good shield", "lf cloak" -- or
+    // null. One of `wanting` ("need", "looking for", "where") comes before
+    // what they call it, at most five words before, with nothing like "got"
+    // or "dropped" in between; and nobody else is asked ("do you need a
+    // wand?", "anyone need a wand?") or told no ("dont need a wand").
+    const ItemKindWords* FindItemWant(const std::vector<std::string>& words,
+                                      const std::vector<std::vector<std::string>>& wanting);
+
     // ---- emoticons -----------------------------------------------------------
 
     // A text emoticon standing as a word of its own -- ":)", ":D", "xD",

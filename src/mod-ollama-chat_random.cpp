@@ -25,6 +25,7 @@
 #include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_mingle.h"
 #include "mod-ollama-chat_needs.h"
+#include "mod-ollama-chat_wants.h"
 #include "mod-ollama-chat_orders.h"
 #include "mod-ollama-chat_partycmd.h"
 #include "mod-ollama-chat_premises.h"
@@ -471,6 +472,7 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
         Gifts_Update();
         Gear_Update();
         Needs_Update();
+        Wants_Update();
         Congrats_Update();
         Joined_Maintain();
         OllamaMarket_Update();

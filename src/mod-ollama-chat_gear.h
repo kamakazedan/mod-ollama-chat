@@ -49,6 +49,12 @@ std::string Gear_PromptFor(Player* bot, Player* speaker, const std::string& msg,
 // Cloak] (grey cloak)". Empty when they wear none of those.
 std::string Gear_OnePiece(Player* p);
 
+// The piece of what `p` wears that a passer-by would notice first: the best
+// of their weapons, shield, helm and cloak (unless they hide them),
+// shoulders, chest piece and tabard -- "[Arcanite Reaper] (purple two-handed
+// axe)". Of two as good, either. Empty when they wear none of those.
+std::string Gear_ShowPiece(Player* p);
+
 // A real player's line: noted when they feel picked on.
 void Gear_NoteHumanLine(Player* player, const std::string& msg);
 

@@ -66,6 +66,7 @@
 #include "mod-ollama-chat_gear.h"
 #include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_knowledge.h"
+#include "mod-ollama-chat_wants.h"
 #include "mod-ollama-chat_clock.h"
 #include <iomanip>
 #include <unordered_set>
@@ -3492,6 +3493,13 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     const std::string known = Knowledge_PromptFor(bot, player, sentMessage);
     if (!known.empty())
         prompt += " " + known;
+
+    // "need a wand": where one really comes from for them -- a boss here, a
+    // dungeon near their level, a crafter -- not murlocs past a made-up
+    // bridge (mod-ollama-chat_wants).
+    const std::string wants = Wants_PromptFor(bot, player, sentMessage);
+    if (!wants.empty())
+        prompt += " " + wants;
 
     // Talk of days or times: what day and what time it really is.
     const std::string clock = Clock_PromptFor(sentMessage);

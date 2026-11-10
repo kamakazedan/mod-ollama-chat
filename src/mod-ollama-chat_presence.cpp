@@ -4,6 +4,7 @@
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_expression.h"
+#include "mod-ollama-chat_gear.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_handler.h"
 #include "mod-ollama-chat_outlook.h"
@@ -139,6 +140,15 @@ namespace
         request.kind              = OllamaRequestKind::RandomChatter;
         request.triggerBotReplies = true;
         request.gentle            = true;   // a stranger: nothing rude goes with it
+
+        // Only what it was told of: someone on foot is not told "nice mount"
+        // (a compliment with nothing real to go on was one), nor someone
+        // with no pet out "cute pet".
+        const PetsSeen seen = Pets_Seen(subject);
+        if (seen.animals.mount.empty())
+            request.mustNotSay = g_PetsMountWords;
+        if (seen.animals.petKind.empty() && seen.animals.companion.empty())
+            request.mustNotSay.insert(request.mustNotSay.end(), g_PetsWords.begin(), g_PetsWords.end());
 
         if (OllamaDispatch_Submit(std::move(request)))
             ++g_stats.remarks;
@@ -282,7 +292,12 @@ void Presence_Update(uint32_t diff)
         Player* bot = bots[urand(0, static_cast<uint32>(bots.size() - 1))];
 
         ObjectGuid petGuid;
-        const std::string observation = Presence_Describe(real, bot, &petGuid);
+        std::string observation = Presence_Describe(real, bot, &petGuid);
+        // Something real to remark on, what catches the eye of what they
+        // wear: told to pay a compliment with nothing to go on, a bot paid
+        // one to a mount nobody was riding.
+        if (const std::string piece = Gear_ShowPiece(real); !piece.empty())
+            observation += ", their " + piece + " catching the eye";
 
         // Nothing rude or gross at a stranger (Presence.SkipEmotes): another
         // of its style's emotes, or none.

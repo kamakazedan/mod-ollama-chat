@@ -180,6 +180,47 @@ std::string Gear_OnePiece(Player* p)
     return PieceWords(Worn(p, slot), slot);
 }
 
+std::string Gear_ShowPiece(Player* p)
+{
+    if (!p || !p->IsInWorld())
+        return {};
+    std::vector<uint8_t> slots = { EQUIPMENT_SLOT_MAINHAND, EQUIPMENT_SLOT_OFFHAND, EQUIPMENT_SLOT_RANGED,
+                                   EQUIPMENT_SLOT_SHOULDERS, EQUIPMENT_SLOT_CHEST,  EQUIPMENT_SLOT_TABARD };
+    if (!p->HasPlayerFlag(PLAYER_FLAGS_HIDE_HELM))
+        slots.push_back(EQUIPMENT_SLOT_HEAD);
+    if (!p->HasPlayerFlag(PLAYER_FLAGS_HIDE_CLOAK))
+        slots.push_back(EQUIPMENT_SLOT_BACK);
+    std::vector<uint8_t> best;
+    uint32_t bestQuality = 0;
+    for (uint8_t slot : slots)
+    {
+        ItemTemplate const* proto = Worn(p, slot);
+        // A wand or a thrown dagger is out of sight on a belt; a ranged one on the back is not.
+        if (!proto || (slot == EQUIPMENT_SLOT_RANGED && (proto->SubClass == ITEM_SUBCLASS_WEAPON_WAND ||
+                                                         proto->SubClass == ITEM_SUBCLASS_WEAPON_THROWN)))
+            continue;
+        if (best.empty() || proto->Quality > bestQuality)
+        {
+            best.assign(1, slot);
+            bestQuality = proto->Quality;
+        }
+        else if (proto->Quality == bestQuality)
+            best.push_back(slot);
+    }
+    if (best.empty())
+        return {};
+    const uint8_t slot = best[urand(0, uint32(best.size() - 1))];
+    ItemTemplate const* proto = Worn(p, slot);
+    if (slot == EQUIPMENT_SLOT_TABARD)
+        return "[" + proto->Name1 + "] (a tabard)";
+    if (slot == EQUIPMENT_SLOT_BACK)
+    {
+        const char* quality = Quality(proto->Quality);
+        return "[" + proto->Name1 + "] (" + (*quality ? std::string(quality) + " " : std::string()) + "cloak)";
+    }
+    return PieceWords(proto, slot);
+}
+
 bool Gear_IsGearTalk(const std::string& msg)
 {
     return g_GearEnable && Talks(CrowdText::Words(Context_CleanText(msg)));

@@ -519,6 +519,33 @@ after a class. Premises that could only be answered by inventing something
 (the best prize from the Darkmoon Faire, a ninja-looting story with the item
 in it) are gone.
 
+**Quests, plainly.** "Kill 15 Blackrock Champions and Guard Howe in Lakeshire
+will reward you" -- the quest log's own sentence -- had a bot tell someone to
+kill the champions *and Guard Howe*. A quest is now described to the model by
+its goals as the game lists them, each on its own, and who it is handed in
+to: "kill 15 Blackrock Champions, then hand it in to Guard Howe". The quest
+log's text is used only for a quest whose goals the game does not list (talk
+to someone, go somewhere).
+
+**"I need a wand."** Someone in Wailing Caverns said they still needed a
+wand, and a bot sent them to kill murlocs past a big bridge that doesn't
+exist. When a line says its speaker is after a kind of item -- a wand, a
+shield, a cloak, boots, any of thirty kinds (`OllamaChat.Wants.*`) -- each
+reply prompt is told what is really so for their level and class, from the
+world database's loot tables: which boss in the dungeon they're in can drop
+one (and whether it's down already this run), a dungeon or two around their
+level where a boss can, what a profession makes, and whether the bot
+answering could use one itself. Bots answer from that in their own style --
+"i think mutanus drops one", "sfk has one off arugal", "hope one drops for
+ya", "need one too lol" -- and a follow-up ("south of where?") gets the same
+facts. The loot tables are read once, on the first such line.
+
+**Passers-by.** A bot remarking on someone it walks past is told the one piece
+of what they wear that catches the eye, so a compliment has something real to
+go on, and a remark about a mount to someone on foot (or a pet to someone with
+none out) is never said: one told to pay a compliment with nothing to go on
+admired a mount nobody was riding.
+
 ## Item and Quest Links
 
 Bots are asked to put exact item and quest names in square brackets, and each
@@ -671,7 +698,13 @@ With both modules in the same build, the bots talk about what it has them do:
   hunter's wolf is a pet, a warlock's imp a demon, and neither is a mount.
 - **Duels:** bots gather outside the gates of Orgrimmar and Stormwind and
   duel each other there, as on any realm. The chat side is the usual duel
-  banter, and a bot at the gates knows it is there watching the duels.
+  banter, and a bot at the gates knows it is there watching the duels. Two
+  bots chatting in the city may talk themselves into a duel -- only two of a
+  side within a few levels of each other, near a city whose gates have a
+  duel spot (`[duel]` in `OllamaChat.Mingle.Premises`,
+  `Mingle.DuelChance`) -- and when they're done talking they walk out to the
+  gates and fight it out there. If the crowd at the gates is full, two of it
+  head off to make room. Anywhere else, nobody talks of a duel.
 - **Raid marks:** a rogue that can't sap the star says why in party
   (`OllamaChat.Marks.Say*` and the `Sap*` situations).
 - **Muted lines:** this module has the bots say "Staying", "Following", hello

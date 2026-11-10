@@ -1122,3 +1122,9 @@ KnowledgeStats Knowledge_GetStats()
 {
     return g_stats;
 }
+
+const std::unordered_map<uint32_t, std::vector<uint32_t>>& Knowledge_MadeBy()
+{
+    Build();
+    return g.madeBy;
+}

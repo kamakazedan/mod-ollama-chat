@@ -920,6 +920,12 @@ extern std::string g_MingleThingsText;          // what the quests and items the
 extern std::string g_MingleLinksText;           // names in square brackets, as links
 extern std::string g_OutlookFactsText;          // nothing made up from the game
 extern std::unordered_map<std::string, std::string> g_PersonalityCannedStyles;   // personality -> canned style
+extern bool        g_WantsEnable;               // "need a wand": where one really comes from
+extern std::vector<std::vector<std::string>> g_WantsWords;   // ...said before the kind of item
+extern uint32_t    g_WantsFollowSeconds;        // ...and for this long after, for follow-ups
+extern std::string g_WantsText;                 // {speaker} {kind} {level} {class} {facts} {self}
+extern std::string g_WantsFollowText;           // ...for a line a moment after
+extern uint32_t    g_MingleDuelChance;          // two who could go and duel: how often that is the talk
 extern bool        g_MingleEmoteEnable;         // bots greeting each other without a word
 extern uint32_t    g_MingleEmoteMinSeconds;
 extern uint32_t    g_MingleEmoteMaxSeconds;

@@ -248,6 +248,12 @@ std::string g_MingleThingsText;
 std::string g_MingleLinksText;
 std::string g_OutlookFactsText;
 std::unordered_map<std::string, std::string> g_PersonalityCannedStyles;
+bool        g_WantsEnable          = true;
+std::vector<std::vector<std::string>> g_WantsWords;
+uint32_t    g_WantsFollowSeconds   = 120;
+std::string g_WantsText;
+std::string g_WantsFollowText;
+uint32_t    g_MingleDuelChance     = 25;
 bool        g_MingleEmoteEnable         = true;
 uint32_t    g_MingleEmoteMinSeconds     = 60;
 uint32_t    g_MingleEmoteMaxSeconds     = 160;
@@ -1295,9 +1301,10 @@ static void LoadNaturalChatV4Settings()
     g_PresenceCityOnly            = sConfigMgr->GetOption<bool>("OllamaChat.Presence.CityOnly", false);
     g_PresencePromptTemplate      = sConfigMgr->GetOption<std::string>("OllamaChat.Presence.PromptTemplate",
         "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} "
-        "You are walking past {player_name}: {observation}. Say one short thing to them about it, the way a "
-        "passing player might in /say: a compliment, a joke, a tease or a quick question, 2 to 10 words. Do not "
-        "start with their name, and do not describe what you are doing.");
+        "You are walking past {player_name}: {observation}. Say one short thing to them about something in that, "
+        "the way a passing player might in /say: a compliment, a joke, a tease or a quick question, 2 to 10 words, "
+        "and never about anything it does not mention. Do not start with their name, and do not describe what you "
+        "are doing.");
 
     // --- cities -----------------------------------------------------------
     g_CityEnable                  = sConfigMgr->GetOption<bool>("OllamaChat.City.Enable", true);
@@ -2727,6 +2734,33 @@ static void LoadNaturalChatV25Settings()
              g_PersonalityCannedStyles.size());
 }
 
+static void LoadNaturalChatV26Settings()
+{
+    // --- "need a wand": where one really comes from ------------------------------------
+    g_WantsEnable = sConfigMgr->GetOption<bool>("OllamaChat.Wants.Enable", true);
+    g_WantsWords = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Wants.Words",
+        "need|needs|needed|needing|neeed|want|wants|wanna|looking for|lookin for|looking 4|lf|"
+        "hunting for|after|could use|could do with|where|wish i had"));
+    g_WantsFollowSeconds = std::min<uint32_t>(600, sConfigMgr->GetOption<uint32_t>("OllamaChat.Wants.FollowSeconds", 120));
+    g_WantsText = sConfigMgr->GetOption<std::string>("OllamaChat.Wants.Text",
+        "{speaker} is after {kind}. What is really so about getting one, for a level {level} {class}: {facts} {self} "
+        "Answer in your own way and style, from that: the boss here that can drop one, one of those dungeons, a "
+        "crafter, the auction house, hoping one drops for them, needing one too, or just a word of sympathy. Never "
+        "send them anywhere, or tell them to kill or buy anything, that is not in this.");
+    g_WantsFollowText = sConfigMgr->GetOption<std::string>("OllamaChat.Wants.FollowText",
+        "A moment ago {speaker} said they are after {kind}. What is really so about getting one, for a level {level} "
+        "{class}: {facts} {self} If what you are answering is about that, answer from this, in your own way, and "
+        "never send them anywhere, or tell them to kill or buy anything, that is not in it; if it is about something "
+        "else, leave this be.");
+
+    // --- duel talk that ends in a duel ---------------------------------------------------
+    g_MingleDuelChance = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Mingle.DuelChance", 25));
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v26: where wanted gear comes from {} ({} want words, "
+             "{}s follow-ups); duel talk {}% of the time when two could go and duel.",
+             g_WantsEnable ? "on" : "off", g_WantsWords.size(), g_WantsFollowSeconds, g_MingleDuelChance);
+}
+
 static void LoadNaturalChatV24Settings()
 {
     // --- a mount is not a pet -----------------------------------------------------------
@@ -2888,7 +2922,8 @@ static void LoadNaturalChatV16Settings()
         "in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's "
         "pet or companion|one of them admires the other's gear|one of them teases the other about their race "
         "or class, all in good fun|swapping tips about levelling their classes|one of them is waiting for a "
-        "group and getting bored|one of them asks the other for a duel|one of them asks the other if they "
+        "group and getting bored|[duel] one of them challenges the other to a duel, and they agree to head "
+        "{duel_where} and fight it out|one of them asks the other if they "
         "have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: "
         "the players walking past|levelling their professions|which zone is the worst to quest in|being lost "
         "in this city|what they are saving their gold for|a funny death one of them had today|one of them is "
@@ -3616,6 +3651,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV23Settings();
     LoadNaturalChatV24Settings();
     LoadNaturalChatV25Settings();
+    LoadNaturalChatV26Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

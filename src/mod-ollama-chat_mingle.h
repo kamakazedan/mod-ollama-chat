@@ -69,6 +69,7 @@ struct MingleStats
     uint64_t lines      = 0;   // lines said
     uint64_t emotes     = 0;   // emotes at each other in them
     uint64_t greetings  = 0;   // greetings between bots without a word
+    uint64_t duels      = 0;   // pairs that talked themselves into a duel and went out to the gates
     uint32_t running    = 0;
 };
 MingleStats Mingle_GetStats();
