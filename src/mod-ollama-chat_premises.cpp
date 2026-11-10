@@ -31,16 +31,25 @@ namespace
 
     PremiseStats g_stats;
 
-    // `list`'s entries that fit `level`, as (raw, untagged): off cooldown if
-    // any are, else the one used longest ago.
+    // Whether a tagged premise or value is for this bot: its side always (a
+    // Horde player does not go AFK in Stormwind), its level while the outlook
+    // is on.
+    bool Fits(std::string& premise, uint32_t level, const std::string& side)
+    {
+        const TextRules::PremiseTags fit = TextRules::TakeLevelAndSide(premise, level, side);
+        return fit.sideFits && (fit.levelFits || !g_OutlookEnable);
+    }
+
+    // `list`'s entries that fit `level` and `side`, as (raw, untagged): off
+    // cooldown if any are, else the one used longest ago.
     std::vector<std::pair<std::string, std::string>> Candidates(const std::vector<std::string>& list, uint32_t level,
-                                                                time_t now)
+                                                                const std::string& side, time_t now)
     {
         std::vector<std::pair<std::string, std::string>> fits, fresh;
         for (const std::string& raw : list)
         {
             std::string p = raw;
-            if (!TextRules::PremiseFits(p, level) && g_OutlookEnable)
+            if (!Fits(p, level, side))
                 continue;
             if (p.empty())
                 continue;
@@ -57,10 +66,10 @@ namespace
         return { *oldest };
     }
 
-    // A value for the pool `name`, fitting `level`, not one of the pool's
-    // latest picks nor already in this premise.
+    // A value for the pool `name`, fitting `level` and `side`, not one of the
+    // pool's latest picks nor already in this premise.
     std::string FromPool(const std::string& name, const std::vector<std::string>& taken, uint32_t level,
-                         std::vector<std::pair<std::string, std::string>>& picked)
+                         const std::string& side, std::vector<std::pair<std::string, std::string>>& picked)
     {
         auto pool = g_PremisePools.find(name);
         if (pool == g_PremisePools.end())
@@ -70,7 +79,7 @@ namespace
         for (const std::string& raw : pool->second)
         {
             std::string v = raw;
-            if (!TextRules::PremiseFits(v, level) && g_OutlookEnable)
+            if (!Fits(v, level, side))
                 continue;
             if (v.empty() || std::find(taken.begin(), taken.end(), v) != taken.end())
                 continue;
@@ -98,6 +107,7 @@ std::string Premises_Pick(Player* bot)
     AreaTableEntry const* zone = ai ? ai->GetCurrentZone() : nullptr;
     const std::string zoneName = zone ? PlayerbotAI::GetLocalizedAreaName(zone) : std::string("town");
     const bool alliance = bot->GetTeamId() == TEAM_ALLIANCE;
+    const std::string side = TextRules::SideTag(alliance);
 
     const bool templatesFirst = !g_PremiseTemplates.empty() && !g_PremisePools.empty() &&
                                 g_PremiseTemplateChance > 0 &&
@@ -105,7 +115,7 @@ std::string Premises_Pick(Player* bot)
 
     auto tryList = [&](const std::vector<std::string>& list, bool templated) -> std::string
     {
-        std::vector<std::pair<std::string, std::string>> cands = Candidates(list, level, now);
+        std::vector<std::pair<std::string, std::string>> cands = Candidates(list, level, side, now);
         std::shuffle(cands.begin(), cands.end(), Rng());
         for (size_t i = 0; i < cands.size() && i < 6; ++i)
         {
@@ -140,7 +150,7 @@ std::string Premises_Pick(Player* bot)
                         }
                         return slot == "bosses" ? std::string(" ") : std::string();
                     }
-                    return FromPool(slot, taken, level, picked);
+                    return FromPool(slot, taken, level, side, picked);
                 });
             if (filled.empty())
                 continue;

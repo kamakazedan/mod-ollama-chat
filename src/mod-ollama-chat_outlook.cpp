@@ -1,8 +1,11 @@
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat-utilities.h"
 
+#include "DBCStores.h"
+#include "Map.h"
 #include "Player.h"
 #include "PlayerbotAI.h"
 #include "PlayerbotMgr.h"
@@ -15,6 +18,7 @@
 namespace
 {
     std::vector<TextRules::LevelBand> g_bands;
+    uint64_t g_homeCityPrompts = 0;   // prompts that said a bot was in its own side's city
 
     const char* ClassName(uint8 cls)
     {
@@ -92,6 +96,63 @@ std::string Outlook_LevelText(uint32_t level)
     return text == "[Format Error]" ? std::string() : text;
 }
 
+std::string Outlook_SideCities(bool alliance)
+{
+    return CrowdText::JoinNames(alliance ? g_OutlookCitiesAlliance : g_OutlookCitiesHorde);
+}
+
+std::string Outlook_HomeCity(Player* bot)
+{
+    if (!bot || !bot->IsInWorld())
+        return "";
+    Map* map = bot->GetMap();
+    if (!map || map->Instanceable())
+        return "";
+    // The game's own say: a capital (AREA_FLAG_CAPITAL, where it lets a
+    // character rest) of this character's side -- the same test that makes
+    // the other side's capital hostile ground for it.
+    AreaTableEntry const* zone = sAreaTableStore.LookupEntry(bot->GetZoneId());
+    if (!zone || !(zone->flags & AREA_FLAG_CAPITAL))
+        return "";
+    const uint32 mine = bot->GetTeamId() == TEAM_ALLIANCE ? uint32(AREATEAM_ALLY) : uint32(AREATEAM_HORDE);
+    if (zone->team != mine)
+        return "";
+    return PlayerbotAI::GetLocalizedAreaName(zone);
+}
+
+std::string Outlook_SideText(Player* bot)
+{
+    if (!bot)
+        return "";
+    const bool alliance = bot->GetTeamId() == TEAM_ALLIANCE;
+    const char* side = alliance ? "Alliance" : "Horde";
+
+    std::string out;
+    const std::string cities = Outlook_SideCities(alliance);
+    if (!g_OutlookSideText.empty() && !cities.empty())
+    {
+        const std::string text = SafeFormat(g_OutlookSideText, fmt::arg("side", side), fmt::arg("cities", cities));
+        if (text != "[Format Error]")
+            out = text;
+    }
+    const std::string city = g_OutlookHomeCityText.empty() ? std::string() : Outlook_HomeCity(bot);
+    if (!city.empty())
+    {
+        const std::string text = SafeFormat(g_OutlookHomeCityText, fmt::arg("city", city), fmt::arg("side", side));
+        if (text != "[Format Error]")
+        {
+            out += (out.empty() ? "" : " ") + text;
+            ++g_homeCityPrompts;
+        }
+    }
+    return out;
+}
+
+uint64_t Outlook_HomeCityPrompts()
+{
+    return g_homeCityPrompts;
+}
+
 std::string Outlook_ForBot(Player* bot)
 {
     if (!g_OutlookEnable || !bot)
@@ -105,6 +166,10 @@ std::string Outlook_ForBot(Player* bot)
     };
 
     add(Outlook_LevelText(bot->GetLevel()));
+    // Its side, and in one of its own cities that it is home: no "loads of
+    // grunts around here, too high level" in Orgrimmar, no "afk in stormwind?"
+    // from a Horde player.
+    add(Outlook_SideText(bot));
     if (g_OutlookClassRoles && PlayerbotsMgr::instance().GetPlayerbotAI(bot))
         add(RoleText(bot));
     add(g_OutlookKnowledgeText);

@@ -4,6 +4,8 @@
 #include "ScriptMgr.h"
 #include "ObjectGuid.h"
 
+#include <cstdint>
+
 // Drives ambient bot chatter, and hosts the module's world tick: the
 // dispatcher, governor and topic memory are all pumped from here.
 class OllamaBotRandomChatter : public WorldScript
@@ -19,5 +21,9 @@ private:
 // Drops a bot's random-chatter schedule on logout. The old map keyed every
 // bot GUID the server had ever seen and never released one.
 void OllamaRandomChatter_ForgetBot(ObjectGuid botGuid);
+
+// Unprompted lines held back because a real player had just spoken where
+// they would go (OllamaChat.Context.AmbientHoldSeconds).
+uint64_t OllamaRandomChatter_HeldBack();
 
 #endif // MOD_OLLAMA_CHAT_RANDOM_H

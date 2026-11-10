@@ -254,6 +254,15 @@ uint32_t    g_WantsFollowSeconds   = 120;
 std::string g_WantsText;
 std::string g_WantsFollowText;
 uint32_t    g_MingleDuelChance     = 25;
+std::string g_OutlookSideText;
+std::string g_OutlookHomeCityText;
+std::vector<std::string> g_OutlookCitiesHorde;
+std::vector<std::string> g_OutlookCitiesAlliance;
+std::string g_MingleSideText;
+std::string g_MingleHomeCityText;
+uint32_t    g_ContextAmbientHoldSeconds = 60;
+std::string g_ContextLeadUpText;
+uint32_t    g_ContextLeadUpMaxWords     = 8;
 bool        g_MingleEmoteEnable         = true;
 uint32_t    g_MingleEmoteMinSeconds     = 60;
 uint32_t    g_MingleEmoteMaxSeconds     = 160;
@@ -1341,7 +1350,8 @@ static void LoadNaturalChatV4Settings()
     g_ConversationObserveChance     = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.ObserveChance", 30));
     g_ConversationAllowTrade        = sConfigMgr->GetOption<bool>("OllamaChat.Conversation.AllowTrade", true);
     g_ConversationAllowSay          = sConfigMgr->GetOption<bool>("OllamaChat.Conversation.AllowSay", true);
-    // A "[70+]" or "[10-39]" in front: only bots of those levels bring it up.
+    // A "[70+]" or "[10-39]" in front: only bots of those levels bring it up;
+    // a "[horde]" or "[alliance]", only that side's.
     g_ConversationPremises = ReadChoiceList("OllamaChat.Conversation.Premises",
         "which class is the most overpowered right now|whether death knights ruined everything now that "
         "every other player is one|[70+] the best tank class for heroics|whether ret paladins need a "
@@ -1349,8 +1359,8 @@ static void LoadNaturalChatV4Settings()
         "everything in a pug|[75+] Wintergrasp and who keeps winning it|the best profession for making "
         "gold|[60+] whether epic flying is worth the gold|the funniest hunter pet name you have seen|whether "
         "Arthas was always evil|whether Illidan was right all along|[80] the hardest boss in Naxxramas|[80] "
-        "getting into Ulduar runs without much gear|whether achievements are worth chasing|where Mankrik's "
-        "wife could be|[68+] the best place to level from 70 to 80|how expensive the auction house has "
+        "getting into Ulduar runs without much gear|whether achievements are worth chasing|[horde] where "
+        "Mankrik's wife could be|[68+] the best place to level from 70 to 80|how expensive the auction house has "
         "got|guild drama|[75+] whether the Lich King fight will be any good|[15+] people who stand in "
         "fire|what you do on long flight paths|a name for a new alt|fishing: relaxing or the most boring "
         "thing in the game|[77+] the Argent Tournament dailies|whether gnomes or goblins make better "
@@ -2761,6 +2771,37 @@ static void LoadNaturalChatV26Settings()
              g_WantsEnable ? "on" : "off", g_WantsWords.size(), g_WantsFollowSeconds, g_MingleDuelChance);
 }
 
+static void LoadNaturalChatV27Settings()
+{
+    // --- which side a bot plays, and its own cities ------------------------------------
+    g_OutlookSideText = sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.SideText",
+        "You play {side}: your own side's cities are {cities}.");
+    g_OutlookHomeCityText = sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.HomeCityText",
+        "You are in {city}, one of your side's own cities: you are safe here, and its guards are on your side.");
+    g_OutlookCitiesHorde = ReadPipeList("OllamaChat.Outlook.Cities.Horde",
+        "Orgrimmar|Thunder Bluff|the Undercity|Silvermoon City");
+    g_OutlookCitiesAlliance = ReadPipeList("OllamaChat.Outlook.Cities.Alliance",
+        "Stormwind|Ironforge|Darnassus|the Exodar");
+    g_MingleSideText = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.SideText",
+        "They all play {side}: their own side's cities are {cities}.");
+    g_MingleHomeCityText = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.HomeCityText",
+        "{city} is one of those, so they are safe here, and its guards are on their side.");
+
+    // --- party chat that keeps the thread ------------------------------------------------
+    g_ContextAmbientHoldSeconds = std::min<uint32_t>(600,
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.AmbientHoldSeconds", 60));
+    g_ContextLeadUpText = sConfigMgr->GetOption<std::string>("OllamaChat.Context.LeadUpText",
+        "{player_name} typed that right after {lead_up}, so it is most likely about that.");
+    g_ContextLeadUpMaxWords = sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.LeadUpMaxWords", 8);
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v27: bots told their side {} ({} Horde and {} Alliance "
+             "cities), home in their own city {}; unprompted lines held {}s after a real player speaks; short lines "
+             "tied to what they follow {} (up to {} words).",
+             g_OutlookSideText.empty() ? "off" : "on", g_OutlookCitiesHorde.size(), g_OutlookCitiesAlliance.size(),
+             g_OutlookHomeCityText.empty() ? "off" : "on", g_ContextAmbientHoldSeconds,
+             g_ContextLeadUpText.empty() ? "off" : "on", g_ContextLeadUpMaxWords);
+}
+
 static void LoadNaturalChatV24Settings()
 {
     // --- a mount is not a pet -----------------------------------------------------------
@@ -2802,7 +2843,7 @@ static void LoadNaturalChatV24Settings()
         "plainly.");
 
     // Mingle.Premises tags: what each one needs to be there.
-    static const char* const kKnown[] = { "mount", "pet", "loot", "quest" };
+    static const char* const kKnown[] = { "mount", "pet", "loot", "quest", "duel", "horde", "alliance" };
     std::string unknown;
     for (std::string premise : g_MinglePremises)
         for (const std::string& tag : TextRules::TakePremiseTags(premise))
@@ -3652,6 +3693,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV24Settings();
     LoadNaturalChatV25Settings();
     LoadNaturalChatV26Settings();
+    LoadNaturalChatV27Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

@@ -450,6 +450,24 @@ config file.
 If bots are looping, the setting to reach for first is
 `OllamaChat.BotConversation.RequireRecentHuman`.
 
+**Keeping the thread.** You rolled a 1, a bot said "1 out of 100 is a proper
+joke", you typed "\*luck intensifies\*" -- and got "this place is a proper
+maze". Two things went wrong, and both are fixed:
+
+- A bot's unprompted line (ambient chatter, an ask) no longer lands in the
+  middle of an exchange you have going. After a real player says something in
+  a party, a channel, /say or guild chat, bots say nothing unprompted there
+  for a minute, and a line that was written before you spoke is not sent at
+  all (`OllamaChat.Context.AmbientHoldSeconds`).
+- A short line means little on its own. The transcript had the roll and the
+  joke, but further up, as background. Now a line of up to eight words is
+  tied to what it came right after, next to the instruction to answer it:
+  "Kami typed that right after this happened: loot roll for Gloves of the
+  Fang ... Lanik won it, and then you said "1 out of 100 is a proper joke.",
+  so it is most likely about that." (`OllamaChat.Context.LeadUpText`,
+  `LeadUpMaxWords`). Game events in the transcript (a five-way roll runs
+  long) are no longer cut off before who won.
+
 ## What Bots Talk About
 
 Topics are chosen from weighted categories rather than uniformly, and each bot
@@ -504,6 +522,22 @@ their name, level, race, class, spec and guild.
 Conversation premises can carry a level tag (`[80] getting into Ulduar runs`,
 `[10-29] the elite around here that keeps killing people`), so a city
 argument about Ulduar starts between level 80s.
+
+**Which side.** A Horde bot in Orgrimmar asked General who was going AFK in
+Stormwind, and bots there talked about the guards as if they were the
+enemy's ("these grunts are too high level"). Every bot is now told which side
+it plays and which cities are its own (`Outlook.SideText`,
+`Outlook.Cities.Horde`/`.Alliance`), and while it stands in one of them --
+the game's own say: the zone is a capital, and that side's -- that it is
+safe there and the guards are on its side (`Outlook.HomeCityText`). Bots
+chatting in /say are told the same (`Mingle.SideText`). Premises and pool
+entries about one side's places and people carry that side's tag, `[horde]`
+or `[alliance]`, and only that side's bots pick them: the `{city}`, `{spot}`,
+`{zone}`, `{quest}`, `{npc}` and `{mount}` pools are tagged, so "the best
+spot in {city} to stand around in" is never Stormwind for a Horde bot, and
+nobody in Orgrimmar wonders what is down the Deeprun Tram. (The guards
+themselves stopped being named as "a creature close by" in v25: friendly
+creatures are never the topic.)
 
 **Nothing made up.** Asked about trinkets, a model will happily invent
 "Trinket of the Hidden Sun", and "which race makes the best shaman" got

@@ -926,6 +926,15 @@ extern uint32_t    g_WantsFollowSeconds;        // ...and for this long after, f
 extern std::string g_WantsText;                 // {speaker} {kind} {level} {class} {facts} {self}
 extern std::string g_WantsFollowText;           // ...for a line a moment after
 extern uint32_t    g_MingleDuelChance;          // two who could go and duel: how often that is the talk
+extern std::string g_OutlookSideText;           // which side a bot plays, and its own cities: {side} {cities}
+extern std::string g_OutlookHomeCityText;       // ...standing in one of them, that it is home: {city} {side}
+extern std::vector<std::string> g_OutlookCitiesHorde;      // the Horde's own cities, by name
+extern std::vector<std::string> g_OutlookCitiesAlliance;   // the Alliance's
+extern std::string g_MingleSideText;            // the same for a /say exchange between bots: {side} {cities}
+extern std::string g_MingleHomeCityText;        // ...{city}
+extern uint32_t    g_ContextAmbientHoldSeconds; // no unprompted line where a real player spoke this lately
+extern std::string g_ContextLeadUpText;         // what a short line came right after: {player_name} {lead_up}
+extern uint32_t    g_ContextLeadUpMaxWords;     // ...for lines of up to this many words (0: any)
 extern bool        g_MingleEmoteEnable;         // bots greeting each other without a word
 extern uint32_t    g_MingleEmoteMinSeconds;
 extern uint32_t    g_MingleEmoteMaxSeconds;

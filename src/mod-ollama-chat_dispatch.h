@@ -173,6 +173,13 @@ struct OllamaChatRequest
     // A line of a /say exchange between bots (mod-ollama-chat_mingle): a
     // conversation running nearby does not take it for a turn of its own.
     bool mingle = false;
+
+    // An unprompted line -- ambient chatter, an ask: Context_NextSeq() when
+    // it was asked for. A real player who spoke where it goes after that was
+    // not heard by it, so it is not sent: it would talk over them ("this
+    // place is a proper maze" straight after a joke about a roll of 1). 0 for
+    // any other line.
+    uint64_t writtenAtSeq = 0;
 };
 
 // Submit a request. Returns false when the queue is at MaxQueueDepth, in which
@@ -246,6 +253,7 @@ struct OllamaDispatchStats
     uint64_t totalDroppedGovernor;
     uint64_t totalDroppedPassed;      // the bot chose not to reply (pass token)
     uint64_t totalDroppedPhrase;      // a stock phrase said lately, or one Wrath never had
+    uint64_t totalDroppedOvertaken;   // unprompted lines written before a real player spoke there
     uint64_t totalRetried;            // owed lines asked for again without a stock phrase
     uint64_t totalFailed;
     std::string lastError;

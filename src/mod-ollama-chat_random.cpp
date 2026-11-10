@@ -77,6 +77,20 @@ namespace
         return static_cast<size_t>(urand(0, static_cast<uint32>(count - 1)));
     }
 
+    uint64_t g_heldBack = 0;   // unprompted lines held back where a real player had just spoken
+
+    // A real player said something there a moment ago (Context.AmbientHoldSeconds):
+    // an unprompted line would land in the middle of whatever answers them --
+    // "this place is a proper maze" straight after a joke about a roll of 1.
+    bool HeldBack(Player* bot, ChatChannelSourceLocal source, const std::string& channelName)
+    {
+        if (!g_ContextAmbientHoldSeconds ||
+            !Context_HumanSpokeSince(bot, source, channelName, 0, g_ContextAmbientHoldSeconds))
+            return false;
+        ++g_heldBack;
+        return true;
+    }
+
     // Decide where an ambient line would go, before spending an LLM call on it.
     bool ChooseDestination(Player* bot, const OllamaWorldSnapshot& world, bool guildTopic,
                            ChatChannelSourceLocal& outSource,
@@ -89,6 +103,9 @@ namespace
         if (guildTopic && bot->GetGuild() && !g_DisableForGuild &&
             world.GuildHasRealPlayer(bot->GetGuildId()))
         {
+            // Held, a guild topic waits: it is not said somewhere else instead.
+            if (HeldBack(bot, SRC_GUILD_LOCAL, std::string()))
+                return false;
             outSource = SRC_GUILD_LOCAL;
             return true;
         }
@@ -99,6 +116,9 @@ namespace
         // spend a generation talking to five other bots.
         if (bot->GetGroup() && !g_DisableForParty && OllamaGroupHasRealPlayer(bot))
         {
+            // Its group's own talk comes first: it says nothing for now.
+            if (HeldBack(bot, SRC_PARTY_LOCAL, std::string()))
+                return false;
             outSource = SRC_PARTY_LOCAL;
             return true;
         }
@@ -111,7 +131,8 @@ namespace
         };
         std::vector<Option> options;
 
-        if (!g_DisableForSayYell && world.RealPlayerWithin(bot, g_SayDistance))
+        if (!g_DisableForSayYell && world.RealPlayerWithin(bot, g_SayDistance) &&
+            !HeldBack(bot, SRC_SAY_LOCAL, std::string()))
             options.push_back({ SRC_SAY_LOCAL, std::string(), 0 });
 
         // RealPlayerInZoneAndFaction is only a cheap pre-filter here. Being in
@@ -139,7 +160,7 @@ namespace
 
                 // The audience test that matters, and it happens here --
                 // before any prompt is built and before the LLM is touched.
-                if (!world.RealPlayerInChannel(ch))
+                if (!world.RealPlayerInChannel(ch) || HeldBack(bot, SRC_GENERAL_LOCAL, ch->GetName()))
                     return;
 
                 // A conversation is going on in there: an unrelated line
@@ -296,7 +317,7 @@ namespace
 
         if (bot->GetGroup() && OllamaGroupHasRealPlayer(bot))
         {
-            if (!need.party || g_DisableForParty)
+            if (!need.party || g_DisableForParty || HeldBack(bot, SRC_PARTY_LOCAL, std::string()))
                 return false;
             outSource = SRC_PARTY_LOCAL;
             return true;
@@ -309,7 +330,7 @@ namespace
                 if (!enabled)
                     return false;
                 Channel* ch = OllamaResolveZoneChannel(bot, chanId);
-                if (!ch || !world.RealPlayerInChannel(ch))
+                if (!ch || !world.RealPlayerInChannel(ch) || HeldBack(bot, SRC_GENERAL_LOCAL, ch->GetName()))
                     return false;
                 const std::string scope = Governor_MakeScopeKey(
                     ChatChannelSourceLocalStr[SRC_GENERAL_LOCAL], ch->GetChannelId(), ch->GetName(), 0,
@@ -330,7 +351,8 @@ namespace
                 return true;
         }
 
-        if (!g_DisableForSayYell && world.RealPlayerWithin(bot, g_SayDistance))
+        if (!g_DisableForSayYell && world.RealPlayerWithin(bot, g_SayDistance) &&
+            !HeldBack(bot, SRC_SAY_LOCAL, std::string()))
         {
             outSource = SRC_SAY_LOCAL;
             return true;
@@ -391,6 +413,11 @@ namespace
 }
 
 // --------------------------------------------------------------------------
+
+uint64_t OllamaRandomChatter_HeldBack()
+{
+    return g_heldBack;
+}
 
 void OllamaRandomChatter_ForgetBot(ObjectGuid botGuid)
 {
@@ -638,6 +665,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
                     request.kind        = OllamaRequestKind::RandomChatter;
                     request.triggerBotReplies = true;
                     request.offerEntry  = need.kind == NeedKind::Spare ? need.itemEntry : 0;
+                    request.writtenAtSeq = Context_NextSeq();
                     if (OllamaDispatch_Submit(std::move(request)))
                     {
                         Needs_NoteAsked(bot, need);
@@ -769,6 +797,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
         request.kind        = OllamaRequestKind::RandomChatter;
         request.triggerBotReplies = true;
         request.openerKey   = openerKey;
+        request.writtenAtSeq = Context_NextSeq();
 
         if (OllamaDispatch_Submit(std::move(request)))
             Topics_NoteUsed(bot->GetGUID(), topic.key);

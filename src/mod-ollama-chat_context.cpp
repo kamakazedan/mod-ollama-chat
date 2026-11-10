@@ -52,6 +52,7 @@ namespace
     std::mutex g_mutex;
     std::unordered_map<std::string, std::deque<Line>> g_spaces;
     uint64_t g_nextSeq = 1;
+    ContextThreadStats g_threadStats;
 
     // bot guid -> filler pattern -> when that bot last used it
     std::unordered_map<uint64_t, std::unordered_map<std::string, Clock::time_point>> g_fillerUse;
@@ -61,6 +62,10 @@ namespace
 
     constexpr size_t kMaxStoredPerSpace = 80;
     constexpr size_t kMaxLineChars      = 160;
+    // An event is the module's own note, not someone's chat line, and what
+    // goes past the cap is its end: a five-way loot roll ran past 160, and
+    // the transcript lost who won and the 1 everyone was talking about.
+    constexpr size_t kMaxEventChars     = 400;
 
     double SecondsBetween(Clock::time_point older, Clock::time_point newer)
     {
@@ -139,7 +144,7 @@ namespace
     // Keep the visible "[Linen Cloth]" and drop the rest; also fold line breaks
     // and runs of spaces, and cap the length so one long line cannot crowd the
     // rest of the transcript out of the prompt.
-    std::string CleanText(const std::string& in)
+    std::string CleanText(const std::string& in, size_t maxChars = kMaxLineChars)
     {
         std::string out;
         out.reserve(in.size());
@@ -204,11 +209,11 @@ namespace
         while (!out.empty() && out.back() == ' ')
             out.pop_back();
 
-        if (out.size() > kMaxLineChars)
+        if (out.size() > maxChars)
         {
-            size_t cut = out.rfind(' ', kMaxLineChars);
-            if (cut == std::string::npos || cut < kMaxLineChars / 2)
-                cut = kMaxLineChars;
+            size_t cut = out.rfind(' ', maxChars);
+            if (cut == std::string::npos || cut < maxChars / 2)
+                cut = maxChars;
             // Never split a UTF-8 sequence.
             while (cut > 0 && (static_cast<unsigned char>(out[cut]) & 0xC0) == 0x80)
                 --cut;
@@ -379,7 +384,7 @@ void Context_RecordEvent(Player* actor, const std::string& note, bool toGuild, P
     if (!g_ContextEnable || !actor || !actor->IsInWorld() || note.empty())
         return;
 
-    const std::string clean = CleanText(note);
+    const std::string clean = CleanText(note, kMaxEventChars);
     if (clean.empty())
         return;
 
@@ -468,6 +473,148 @@ std::vector<ContextRecentLine> Context_RecentLines(Player* viewer, ChatChannelSo
 std::string Context_ChannelLabel(ChatChannelSourceLocal source, const std::string& channelName)
 {
     return SpaceLabel(source, channelName);
+}
+
+uint64_t Context_NextSeq()
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    return g_nextSeq;
+}
+
+bool Context_HumanSpokeSince(Player* viewer, ChatChannelSourceLocal source, const std::string& channelName,
+                             uint64_t fromSeq, uint32_t withinSeconds)
+{
+    if (!g_ContextEnable || !viewer)
+        return false;
+    const std::string key = SpaceKey(viewer, source, channelName);
+    if (key.empty())
+        return false;
+    const auto now = Clock::now();
+
+    std::lock_guard<std::mutex> lock(g_mutex);
+    auto it = g_spaces.find(key);
+    if (it == g_spaces.end())
+        return false;
+    for (auto line = it->second.rbegin(); line != it->second.rend(); ++line)
+    {
+        if (line->seq < fromSeq)
+            break;   // and everything before it
+        if (withinSeconds && SecondsBetween(line->when, now) > double(withinSeconds))
+            break;
+        if (line->kind == ContextLineKind::Human && VisibleTo(*line, viewer))
+            return true;
+    }
+    return false;
+}
+
+std::string Context_LeadUpText(Player* viewer, Player* speaker, ChatChannelSourceLocal source,
+                               const std::string& channelName, uint64_t seq)
+{
+    if (!g_ContextEnable || !viewer || !speaker || !seq || g_ContextLeadUpText.empty() ||
+        g_ContextReplyWindowSeconds == 0)
+        return {};
+    const std::string key = SpaceKey(speaker, source, channelName);
+    if (key.empty())
+        return {};
+
+    const uint64_t speakerGuid = speaker->GetGUID().GetRawValue();
+    const uint64_t viewerGuid  = viewer->GetGUID().GetRawValue();
+    const double   window      = double(g_ContextReplyWindowSeconds);
+
+    // Oldest first once done: the event the line before was about, then that line.
+    std::vector<Line> before;
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        auto it = g_spaces.find(key);
+        if (it == g_spaces.end())
+            return {};
+
+        bool found = false;
+        Clock::time_point turnStart;
+        for (auto line = it->second.rbegin(); line != it->second.rend(); ++line)
+        {
+            if (line->seq > seq)
+                continue;
+            if (line->seq == seq)
+            {
+                // A line that says enough on its own needs no help.
+                size_t words = 0;
+                for (const std::string& token : SplitSpaces(line->text))
+                    if (!NormalizeWord(token).empty())
+                        ++words;
+                if (g_ContextLeadUpMaxWords && words > g_ContextLeadUpMaxWords)
+                    return {};
+                found     = true;
+                turnStart = line->when;
+                continue;
+            }
+            if (!found)
+                return {};   // the line itself is gone
+            if (!VisibleTo(*line, viewer))
+                continue;
+            // Too long a pause: what came before is another conversation. The
+            // event a line was about came just before it (a roll, then the
+            // remark on it), or it was about something else.
+            const Clock::time_point after = before.empty() ? turnStart : before.back().when;
+            if (SecondsBetween(line->when, after) > (before.empty() ? window : std::min(window, 30.0)))
+                break;
+
+            if (before.empty())
+            {
+                // The speaker's own lines just before are the same turn.
+                if (line->speakerGuid == speakerGuid && line->kind != ContextLineKind::Event)
+                {
+                    turnStart = line->when;
+                    continue;
+                }
+                before.push_back(*line);
+                if (line->kind == ContextLineKind::Event)
+                    break;
+                continue;
+            }
+
+            // The line before it, when that was about something that had just happened.
+            if (line->kind == ContextLineKind::Event)
+                before.push_back(*line);
+            break;
+        }
+    }
+    if (before.empty())
+        return {};
+
+    std::string leadUp;
+    for (auto line = before.rbegin(); line != before.rend(); ++line)
+    {
+        std::string piece;
+        if (line->kind == ContextLineKind::Event)
+        {
+            std::string what = line->text;
+            while (!what.empty() && (what.back() == '.' || what.back() == ' '))
+                what.pop_back();
+            piece = "this happened: " + what;
+        }
+        else if (line->speakerGuid == viewerGuid)
+            piece = "you said \"" + line->text + "\"";
+        else
+            piece = line->speakerName + " said \"" + line->text + "\"";
+        leadUp += (leadUp.empty() ? "" : ", and then ") + piece;
+    }
+
+    const std::string text = SafeFormat(g_ContextLeadUpText, fmt::arg("player_name", speaker->GetName()),
+                                        fmt::arg("lead_up", leadUp));
+    if (text.empty() || text == "[Format Error]")
+        return {};
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        ++g_threadStats.leadUps;
+    }
+    return text;
+}
+
+ContextThreadStats Context_GetThreadStats()
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    return g_threadStats;
 }
 
 std::string Context_BuildTranscript(Player* viewer, ChatChannelSourceLocal source,

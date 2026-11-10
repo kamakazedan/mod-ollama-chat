@@ -28,6 +28,13 @@ How to add a new kind of bot utterance:
 Do **not** call `QueryOllama()` directly from anywhere that could be the world
 thread — it blocks for a full LLM round trip.
 
+A line nobody asked for (ambient chatter, an ask) sets
+`OllamaChatRequest::writtenAtSeq = Context_NextSeq()` and checks
+`Context_HumanSpokeSince` before it picks a place to go: one written before a
+real player spoke there is dropped at delivery, and none starts within
+`Context.AmbientHoldSeconds` of one. A new kind of unprompted line does both,
+or it talks over people.
+
 `EventProcessor::AddEvent` (`bot->m_Events`) is **not** a way around this. It
 mutates a container that `Player::Update` walks, so calling it off-thread is the
 same race it looks like it avoids.
@@ -201,6 +208,15 @@ Every line a bot says is in its own style. The model's lines are, through its
 personality prompt; a typed (canned) line goes through
 `Personality_StyleCanned(bot, line)` (`OllamaChat.Personality.CannedStyles`),
 and a new place that says one must too.
+
+Every bot knows its side. `Outlook_ForBot` says which side it plays and its
+own side's cities, and, standing in one of them, that it is safe and the
+guards are its own (`Outlook_SideText`, `Outlook_HomeCity`: the zone's
+capital flag and team, as the core decides hostile ground). A premise or pool
+value about one side's places or people -- a city, a spot, a starting zone, a
+quest, an NPC, a race's mount -- carries `[horde]` or `[alliance]`, read by
+`TextRules::TakeLevelAndSide` beside the level tag: untagged, a Horde bot
+asked who was going AFK in Stormwind.
 
 Keep the fourth wall out of prompts. As far as any bot knows, everyone on the
 realm is a player like itself: write "players", "people", "someone", never

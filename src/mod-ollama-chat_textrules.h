@@ -323,15 +323,31 @@ namespace TextRules
     // "10-19", "80+", "80" -> [lo, hi]. False when it is not a range.
     bool ParseLevelRange(const std::string& raw, uint32_t& lo, uint32_t& hi);
 
-    // A premise may start with a level tag, "[70+]" or "[10-39]". Strips it
-    // and says whether `level` fits; a premise without one fits everyone.
-    bool PremiseFits(std::string& premise, uint32_t level);
+    // A premise, or a pool's value, may start with a level tag, "[70+]" or
+    // "[10-39]", and a side, "[horde]" or "[alliance]", in either order: a
+    // Horde player does not go AFK in Stormwind, nor wonder what is down the
+    // Deeprun Tram. Strips both and says whether each fits: `level`, and
+    // `side` ("horde" or "alliance"; empty fits either). Without a tag it
+    // fits every level and both sides.
+    struct PremiseTags
+    {
+        bool levelFits = true;
+        bool sideFits  = true;
+    };
+    PremiseTags TakeLevelAndSide(std::string& premise, uint32_t level, const std::string& side);
+
+    // Both at once.
+    bool PremiseFits(std::string& premise, uint32_t level, const std::string& side = std::string());
+
+    // "alliance" or "horde": a side as the tags above write it.
+    std::string SideTag(bool alliance);
 
     // A premise may also need something to be there: "[mount] one of them
     // admires the mount the other is riding" is for when one of them is
     // riding one. Takes those tags (lowercase words) off the front of
-    // `premise` and returns them; a level tag, in any order with them, stays
-    // for PremiseFits.
+    // `premise` and returns them -- a side among them, "[horde]", is one
+    // more thing that has to be so; a level tag, in any order with them,
+    // stays for PremiseFits.
     std::vector<std::string> TakePremiseTags(std::string& premise);
 
     // --------------------------------------------------------------------------

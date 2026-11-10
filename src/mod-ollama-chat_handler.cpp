@@ -2111,8 +2111,11 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
                 replyHint.clear();
         }
 
+        // A short line from a person is about what it came right after.
+        const std::string leadUp = senderIsBot ? std::string()
+                                 : Context_LeadUpText(bot, player, sourceLocal, contextChannel, contextSeq);
         std::string prompt = GenerateBotPrompt(bot, msg, player, sourceLocal, contextChannel,
-                                               contextSeq, replyHint);
+                                               contextSeq, replyHint, leadUp);
         if (prompt.empty())
             continue;
         // Nothing here carried out what the line told it to do: no "on it".
@@ -3089,8 +3092,17 @@ bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
             hint += (hint.empty() ? "" : " ") + shout;
     }
 
+    // A short line from a person -- "*luck intensifies*" -- is about what it
+    // came right after: the roll, and the joke about it. Not a line to the
+    // room ("anyone up for deadmines?"), and not one answered with an
+    // instruction of its own.
+    std::string leadUp;
+    if (!slot.replyBack && slot.hint.empty() && plan.kind != CrowdLineKind::Open &&
+        plan.kind != CrowdLineKind::Greeting && OllamaIsRealPlayer(speaker))
+        leadUp = Context_LeadUpText(bot, speaker, plan.source, plan.channelName, plan.messageSeq);
+
     std::string prompt = GenerateBotPrompt(bot, message, speaker, plan.source, plan.channelName,
-                                           excludeSeq, hint);
+                                           excludeSeq, hint, leadUp);
     if (prompt.empty())
         return false;
     // An order or a favour is answered with its own instruction (slot.hint),
@@ -3221,7 +3233,8 @@ static std::string OllamaPersonalityNote(Player* bot, const std::string& persona
 
 std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player,
                               ChatChannelSourceLocal source, const std::string& channelName,
-                              uint64_t contextExcludeSeq, const std::string& replyHint)
+                              uint64_t contextExcludeSeq, const std::string& replyHint,
+                              const std::string& leadUp)
 {
     if (!bot || !player) {
         return "";
@@ -3551,6 +3564,13 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     const std::string smiley = Context_EmoticonNudgeFor(bot);
     if (!smiley.empty())
         prompt += " " + smiley;
+
+    // What a short line came right after -- the roll, and the joke about it --
+    // next to the instruction to answer it: further up, in the transcript, it
+    // was only background, and "*luck intensifies*" was answered as if it came
+    // out of nowhere.
+    if (!leadUp.empty())
+        prompt += " " + leadUp;
 
     // Last, so it is the freshest instruction: is this bot being spoken to?
     if (!replyHint.empty() && g_ChatPromptTemplate.find("{reply_hint}") == std::string::npos)

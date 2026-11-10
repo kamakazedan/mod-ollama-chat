@@ -1938,22 +1938,45 @@ namespace TextRules
         return nullptr;
     }
 
-    bool PremiseFits(std::string& premise, uint32_t level)
+    PremiseTags TakeLevelAndSide(std::string& premise, uint32_t level, const std::string& side)
     {
-        const std::string p = Trim(premise);
-        if (p.empty() || p[0] != '[')
-            return true;
+        PremiseTags fit;
+        std::string p = Trim(premise);
+        bool levelSeen = false, sideSeen = false;
+        while (!p.empty() && p[0] == '[')
+        {
+            const size_t close = p.find(']');
+            if (close == std::string::npos)
+                break;
+            const std::string inner = Trim(p.substr(1, close - 1));
+            uint32_t lo = 0, hi = 0;
+            if (!levelSeen && ParseLevelRange(inner, lo, hi))
+            {
+                levelSeen     = true;
+                fit.levelFits = level >= lo && level <= hi;
+            }
+            else if (!sideSeen && (inner == "horde" || inner == "alliance"))
+            {
+                sideSeen     = true;
+                fit.sideFits = side.empty() || side == inner;
+            }
+            else
+                break;   // "[Hogger] ...", or a tag for someone else to read: part of the premise
+            p = Trim(p.substr(close + 1));
+        }
+        premise = p;
+        return fit;
+    }
 
-        const size_t close = p.find(']');
-        if (close == std::string::npos)
-            return true;
+    bool PremiseFits(std::string& premise, uint32_t level, const std::string& side)
+    {
+        const PremiseTags fit = TakeLevelAndSide(premise, level, side);
+        return fit.levelFits && fit.sideFits;
+    }
 
-        uint32_t lo = 0, hi = 0;
-        if (!ParseLevelRange(p.substr(1, close - 1), lo, hi))
-            return true;   // "[something]" that is not a level tag: part of the premise
-
-        premise = Trim(p.substr(close + 1));
-        return level >= lo && level <= hi;
+    std::string SideTag(bool alliance)
+    {
+        return alliance ? "alliance" : "horde";
     }
 
     std::vector<std::string> TakePremiseTags(std::string& premise)

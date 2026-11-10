@@ -54,12 +54,14 @@ void AppendBotConversation(uint64_t botGuid, uint64_t playerGuid,
 // the transcript line being answered, left out because the prompt quotes it
 // as {player_message}. replyHint tells the bot whether it is being spoken to
 // ({reply_hint}). A template without those placeholders gets the transcript
-// in front and the hint at the end.
+// in front and the hint at the end. leadUp: what a short line came right
+// after (Context_LeadUpText), put just before the hint.
 std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player,
                               ChatChannelSourceLocal source = SRC_UNDEFINED_LOCAL,
                               const std::string& channelName = std::string(),
                               uint64_t contextExcludeSeq = 0,
-                              const std::string& replyHint = std::string());
+                              const std::string& replyHint = std::string(),
+                              const std::string& leadUp = std::string());
 std::string BuildEmoteReactionPrompt(Player* bot, Player* player, uint32_t textEmote);
 
 // The reply length this bot's chat style allows

@@ -82,6 +82,44 @@ std::vector<ContextRecentLine> Context_RecentLines(Player* viewer, ChatChannelSo
 // (for "General - Elwynn Forest"), "/say nearby".
 std::string Context_ChannelLabel(ChatChannelSourceLocal source, const std::string& channelName);
 
+// The sequence number the next line, anywhere, will get. An unprompted line
+// notes it when it is asked for (OllamaChatRequest::writtenAtSeq).
+uint64_t Context_NextSeq();
+
+// Did a real player say something in that space that `viewer` could hear, as
+// line `fromSeq` or later (0: any line) and no more than `withinSeconds` ago
+// (0: however long ago)?
+//
+// "*luck intensifies*" after a roll of 1 was followed in party by "this place
+// is a proper maze": a bot's unprompted line, written before the joke and
+// sent after it. An unprompted line now waits Context.AmbientHoldSeconds
+// after a real player speaks where it would go, and one written before they
+// spoke is not sent at all.
+bool Context_HumanSpokeSince(Player* viewer, ChatChannelSourceLocal source, const std::string& channelName,
+                             uint64_t fromSeq, uint32_t withinSeconds);
+
+// For a reply prompt of `viewer`: what line `seq` by `speaker` came right
+// after (Context.LeadUpText) -- the line before their turn, someone else's
+// or an event, and the event that line was about when it came just after one:
+//
+//   Kami typed that right after this happened: loot roll for Gloves of the
+//   Fang (...) -- Lanik won it, and then you said "1 out of 100 is a proper
+//   joke.", so it is most likely about that.
+//
+// The transcript has all of it, but further up, as background: a short line
+// means little on its own, and the model answered "*luck intensifies*" as if
+// it came out of nowhere. So only for lines of up to Context.LeadUpMaxWords
+// words, and only what came within Context.ReplyWindowSeconds before it.
+// Empty otherwise.
+std::string Context_LeadUpText(Player* viewer, Player* speaker, ChatChannelSourceLocal source,
+                               const std::string& channelName, uint64_t seq);
+
+struct ContextThreadStats
+{
+    uint64_t leadUps = 0;   // reply prompts told what a short line came right after
+};
+ContextThreadStats Context_GetThreadStats();
+
 struct ContextAddressee
 {
     uint64_t    guid  = 0;      // 0 = said to the room, no clear addressee

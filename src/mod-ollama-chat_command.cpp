@@ -4,6 +4,7 @@
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_capability.h"
+#include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_conversation.h"
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
@@ -13,6 +14,7 @@
 #include "mod-ollama-chat_partycmd.h"
 #include "mod-ollama-chat_phrases.h"
 #include "mod-ollama-chat_presence.h"
+#include "mod-ollama-chat_random.h"
 #include "mod-ollama-chat_response.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat-utilities.h"
@@ -857,6 +859,20 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              g_RollsEnable ? "on" : "off",
                              (unsigned long long)rolls.noted,
                              (unsigned long long)rolls.reactions);
+    const ContextThreadStats thread = Context_GetThreadStats();
+    if (show("party"))
+        handler->PSendSysMessage("Keeping the thread: {} unprompted lines held back where a real player had just "
+                             "spoken (for {}s), {} dropped as written before one did; {} replies told what a short "
+                             "line came right after",
+                             (unsigned long long)OllamaRandomChatter_HeldBack(), g_ContextAmbientHoldSeconds,
+                             (unsigned long long)dispatch.totalDroppedOvertaken,
+                             (unsigned long long)thread.leadUps);
+    if (show("chat"))
+        handler->PSendSysMessage("Sides: {} - Horde cities {}; Alliance cities {}; {} prompts said a bot was in its "
+                             "own side's city",
+                             (g_OutlookEnable && !g_OutlookSideText.empty()) ? "on" : "off",
+                             Outlook_SideCities(false), Outlook_SideCities(true),
+                             (unsigned long long)Outlook_HomeCityPrompts());
     const MingleStats mingle = Mingle_GetStats();
     if (show("city"))
         handler->PSendSysMessage("Mingling: {} - {} running, {} asked for, {} written ({} unusable), {} ran to the end, "

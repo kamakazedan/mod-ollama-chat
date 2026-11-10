@@ -115,6 +115,7 @@ namespace
     std::atomic<uint64_t> g_droppedGovernor{ 0 };
     std::atomic<uint64_t> g_droppedPassed{ 0 };
     std::atomic<uint64_t> g_droppedPhrase{ 0 };
+    std::atomic<uint64_t> g_droppedOvertaken{ 0 };
     std::atomic<uint64_t> g_retried{ 0 };
     std::atomic<uint64_t> g_totalFailed{ 0 };
 
@@ -519,6 +520,18 @@ namespace
         // it was being written.
         if (c.request.breakEndCall && !PartyCmd_BreakEndStillDue(bot))
             return;
+
+        // An unprompted line written before a real player said something
+        // there: it would talk straight over them, about something else.
+        if (c.request.writtenAtSeq &&
+            Context_HumanSpokeSince(bot, c.request.source, c.request.channelName, c.request.writtenAtSeq, 0))
+        {
+            ++g_droppedOvertaken;
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {}'s unprompted line was overtaken by a real "
+                         "player's; dropped: '{}'", bot->GetName(), c.text);
+            return;
+        }
 
         const ObjectGuid botGuid = bot->GetGUID();
 
@@ -1354,6 +1367,7 @@ OllamaDispatchStats OllamaDispatch_GetStats()
     stats.totalDroppedGovernor  = g_droppedGovernor.load();
     stats.totalDroppedPassed    = g_droppedPassed.load();
     stats.totalDroppedPhrase    = g_droppedPhrase.load();
+    stats.totalDroppedOvertaken = g_droppedOvertaken.load();
     stats.totalRetried          = g_retried.load();
     stats.totalFailed           = g_totalFailed.load();
 

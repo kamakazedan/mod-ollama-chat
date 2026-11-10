@@ -24,7 +24,11 @@ class Player;
 //     longest ago); a pool's last PremiseValueMemory picks are not picked
 //     again;
 //   * both may say "{~this|that}" for wording that changes each time, and be
-//     level-tagged ("[15+] ..."), pool entries too.
+//     level-tagged ("[15+] ..."), pool entries too;
+//   * a premise or pool entry about one side's places and people is tagged
+//     with that side, "[horde]" or "[alliance]", and only that side's bots
+//     pick it: "the best spot in {city} to stand around in" is Orgrimmar for
+//     a Horde bot, never Stormwind.
 //
 // {zone} is where the bot is, {faction} and {other_faction} its side and the
 // other. World thread only.

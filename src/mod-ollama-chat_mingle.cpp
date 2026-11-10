@@ -10,6 +10,7 @@
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_lately.h"
 #include "mod-ollama-chat_links.h"
+#include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_pets.h"
 #include "mod-ollama-chat_presence.h"
@@ -311,11 +312,14 @@ namespace
     // riding one, "[pet]" a pet or companion out, "[loot]" something got
     // lately, "[quest]" a quest handed in lately, "[duel]" two who could go
     // out to the gates and duel there now (mod-playerbots-plus), and where
-    // that is.
+    // that is -- and their side, "[horde]" or "[alliance]" (only one side
+    // mingles together).
     std::set<std::string> FactsOf(const std::vector<Player*>& group, std::string& duelWhere)
     {
         std::set<std::string> facts;
         duelWhere.clear();
+        if (!group.empty())
+            facts.insert(TextRules::SideTag(group.front()->GetTeamId() == TEAM_ALLIANCE));
         if (group.size() == 2 && Hangout_CanGoDuel(group[0], group[1], duelWhere) && !duelWhere.empty())
             facts.insert("duel");
         for (Player* p : group)
@@ -371,6 +375,31 @@ namespace
         return pick;
     }
 
+    // Their side and its cities, and when they stand in one of those, that
+    // they are home there: no "too many guards about" from a Horde pair in
+    // Orgrimmar. Only one side mingles together, so the first speaks for all.
+    std::string SideText(Player* bot)
+    {
+        const bool alliance = bot->GetTeamId() == TEAM_ALLIANCE;
+        const char* side = alliance ? "Alliance" : "Horde";
+        std::string out;
+        const std::string cities = Outlook_SideCities(alliance);
+        if (!g_MingleSideText.empty() && !cities.empty())
+        {
+            const std::string text = SafeFormat(g_MingleSideText, fmt::arg("side", side), fmt::arg("cities", cities));
+            if (text != "[Format Error]")
+                out += " " + text;
+        }
+        const std::string city = g_MingleHomeCityText.empty() ? std::string() : Outlook_HomeCity(bot);
+        if (!city.empty())
+        {
+            const std::string text = SafeFormat(g_MingleHomeCityText, fmt::arg("city", city), fmt::arg("side", side));
+            if (text != "[Format Error]")
+                out += " " + text;
+        }
+        return out;
+    }
+
     std::string BuildPrompt(const std::vector<Player*>& group, bool& duel)
     {
         uint32_t level = group.front()->GetLevel();
@@ -421,9 +450,10 @@ namespace
             return {};
         // "[Are We There, Yeti?]" is linked when the line goes out, as any
         // other bot line is (mod-ollama-chat_links).
+        std::string out = prompt + SideText(group.front());
         if (g_LinksEnable && !g_MingleLinksText.empty())
-            return prompt + " " + g_MingleLinksText;
-        return prompt;
+            out += " " + g_MingleLinksText;
+        return out;
     }
 
     // ---- running one ------------------------------------------------------
