@@ -218,6 +218,13 @@ quest, an NPC, a race's mount -- carries `[horde]` or `[alliance]`, read by
 `TextRules::TakeLevelAndSide` beside the level tag: untagged, a Horde bot
 asked who was going AFK in Stormwind.
 
+A race is more than a word in the prompt. What each race says comes from the
+game -- its NPCs' greetings and farewells, its language's attested phrases
+(`Race.Phrases.<Race>`, read by `mod-ollama-chat_race.cpp`) -- never made up:
+check a new one against the game or the Warcraft wiki before adding it. A
+bot is reminded of its own only on a small share of lines (`Race.UseChance`):
+a list in every prompt is what every line would be about.
+
 Keep the fourth wall out of prompts. As far as any bot knows, everyone on the
 realm is a player like itself: write "players", "people", "someone", never
 "bot" or "AI", and never single someone out as "a real player", which says the

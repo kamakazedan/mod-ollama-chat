@@ -1469,6 +1469,22 @@ OllamaChat.Response.ProvokeWords = "fuck*|shit*|bastard*|bollocks|stfu|gtfo|shut
 OllamaChat.Response.InsultPersonalities = "NAT_RUDE|NAT_KEYBOARD"
 OllamaChat.Response.InsultCooldownSeconds = 600
 
+#    OllamaChat.Banter.Words
+#    OllamaChat.Banter.Text
+#        A bot called a noob answered "Fair point, I'll keep farming". A real
+#        player's line with one of Words (| separated, lowercase; a word
+#        ending in * matches any word it starts), or with one of
+#        Response.InsultWords, is a tease: each reply prompt is told so, near
+#        the end, with Text -- it is banter, not a real complaint, and a bot it
+#        was aimed at gives as good as it gets, in its own style, with one
+#        kind of comeback picked each time ("{~a|b}"). {player_name} said it,
+#        {tease} is the word. Someone who said they feel picked on
+#        (Gear.BackOffWords) gets none of this for Gear.BackOffMinutes. No
+#        double quotes inside it. Empty Text turns it off.
+#        Default: (below)
+OllamaChat.Banter.Words = "noob|noobs|nub|newb|n00b|scrub|clown|git gud|get good|l2p|learn to play|ur mum|your mum|ur mom|your mom|yo mama|ur nan|your nan|you suck|u suck|ur bad|youre bad|you are bad|tryhard|try hard|cringe"
+OllamaChat.Banter.Text = "{player_name} is having a go ('{tease}'): that is banter, not a real complaint, and players here give as good as they get. If it was at you, fire one back in your own style -- {~a cheeky comeback about something real|mock outrage|turning it right back on them|a your mum joke|a daft threat to duel them over it|calling them a noob right back} -- and if it was at someone else, you can pile in on either side. Do not take it seriously, agree with it or apologise."
+
 #    OllamaChat.State.Dead
 #    OllamaChat.State.Ghost
 #        Added to a dead bot's prompt, so what it says fits: lying where it
@@ -4684,6 +4700,13 @@ OllamaChat.Mingle.DuelChance = 25
 OllamaChat.Mingle.SideText = "They all play {side}: their own side's cities are {cities}."
 OllamaChat.Mingle.HomeCityText = "{city} is one of those, so they are safe here, and its guards are on their side."
 
+#    OllamaChat.Mingle.RaceText
+#        Race.UseText for one of the people in a /say exchange between bots,
+#        on the same chance: {name}, {a_race}, {race_plural}, {phrases}. Two
+#        orcs meeting might zug zug each other. Empty turns it off.
+#        Default: (below)
+OllamaChat.Mingle.RaceText = "{name} is {a_race}: if it fits, they could slip in something {race_plural} say in the game, just for fun: {phrases}."
+
 #    OllamaChat.Mingle.Emotes
 #        The emotes an exchange can use, offered in the prompt. One the model
 #        uses that is not a WotLK emote is left out; one in Presence.SkipEmotes
@@ -4989,6 +5012,80 @@ OllamaChat.Outlook.SideText = "You play {side}: your own side's cities are {citi
 OllamaChat.Outlook.HomeCityText = "You are in {city}, one of your side's own cities: you are safe here, and its guards are on your side."
 OllamaChat.Outlook.Cities.Horde = "Orgrimmar|Thunder Bluff|the Undercity|Silvermoon City"
 OllamaChat.Outlook.Cities.Alliance = "Stormwind|Ironforge|Darnassus|the Exodar"
+
+#    OllamaChat.Sides.Cries.Horde
+#    OllamaChat.Sides.Cries.Alliance
+#    OllamaChat.Sides.OwnCryText
+#    OllamaChat.Sides.EnemyCryText
+#        Battle cries, | separated. A real player's short line that is one --
+#        "FOR THE HORDE!!", "lok'tar ogar" -- is said to everyone, so a few
+#        bots answer, and each reply prompt is told what it is: their own
+#        side's (OwnCryText: shout it back, cheer, join in) or, said in their
+#        side's chat, the other side's (EnemyCryText: give them stick for it,
+#        all in fun). {player_name} said it, {cry} is the cry, {side} the
+#        bot's side (Horde, Alliance) and {the_side} the same with "the".
+#        A line is a cry when it is the cry and at most three other words,
+#        not a sentence that mentions one. An empty text leaves that one out.
+#        Default: "for the horde|lok'tar ogar|loktar ogar|lok-tar ogar", "for the alliance", (below)
+OllamaChat.Sides.Cries.Horde = "for the horde|lok'tar ogar|loktar ogar|lok-tar ogar"
+OllamaChat.Sides.Cries.Alliance = "for the alliance"
+OllamaChat.Sides.OwnCryText = "{player_name} just shouted {the_side}'s battle cry ('{cry}'), and you are {side} too: shout it back, cheer or join in, in your own style."
+OllamaChat.Sides.EnemyCryText = "{player_name} just shouted the other side's battle cry ('{cry}') among {the_side}: give them some stick for it, all in fun -- boo, call them a traitor or a spy, or ask whose side they are on -- in your own style."
+
+#    OllamaChat.Race.Phrases.<Race>
+#        What each race says in the game -- its NPCs' greetings and farewells,
+#        and the best-known phrases of its own language -- so a bot knows its
+#        race as more than a word: "zug zug" is an orc's okay, "hello mon" is
+#        how trolls talk, "ishnu-alah" is darnassian for good fortune to you.
+#        | separated entries, each "spellings=what it is": the spellings
+#        comma-separated, the first as it is shown, the rest as players
+#        might type it (apostrophes count for nothing, a hyphen splits a
+#        word). The same spelling under two races ("well met") is both
+#        theirs. <Race> is Human, Orc, Dwarf, NightElf, Undead, Tauren, Gnome,
+#        Troll, BloodElf or Draenei. Only what really is in the game: these
+#        come from its own NPC lines and its languages.
+#        A real player's short line with one (at most four other words) is
+#        said to everyone, a bot of that race answers first if one is there,
+#        and each reply prompt is told what it is (HeardText) -- and a bot of
+#        that race that saying it back is part of the joke (HeardSameText).
+#        Default: (below)
+OllamaChat.Race.Phrases.Human = "well met=a greeting human and dwarf NPCs give you|light bless you=a human NPC's farewell"
+OllamaChat.Race.Phrases.Orc = "zug zug, zug-zug, zugzug=an orc's okay, the greeting orc NPCs give you, and what peons said in the old Warcraft games|lok'tar, lok-tar, loktar=orcish for victory, a war cry and an orc NPC's greeting|aka'magosh, akamagosh=orcish for a blessing on you and yours|dabu=orcish for I obey, what orc grunts said in the old Warcraft games|swobu=orcish for as you command, what orc peons and grunts said in the old Warcraft games|work work=what orc peons said in Warcraft III|go with honor, go with honour=an orc NPC's farewell"
+OllamaChat.Race.Phrases.Dwarf = "well met=a greeting human and dwarf NPCs give you|off with ye=a dwarf NPC's farewell"
+OllamaChat.Race.Phrases.NightElf = "ishnu-alah, ishnu alah, ishnualah=darnassian for good fortune to you, a greeting|elune-adore, elune adore=darnassian for Elune be with you, a greeting|ande'thoras-ethil, andethoras ethil=darnassian for may your troubles be diminished, a farewell|shan'do=darnassian for honoured teacher|shaha lor'ma=darnassian for thank you|elune be with you=a night elf NPC's greeting"
+OllamaChat.Race.Phrases.Undead = "dark lady watch over you=a Forsaken NPC's farewell, the Dark Lady being Sylvanas"
+OllamaChat.Race.Phrases.Tauren = "walk with the earth mother=a tauren NPC's farewell|ish-ne-alo por-ah, ishne alo porah, ishnealo porah=taur-ahe for may the days ahead be guided by the elders of long ago, Cairne Bloodhoof's greeting|moo=the cow joke every tauren hears"
+OllamaChat.Race.Phrases.Gnome = "salutations=a gnome NPC's greeting|for gnomeregan=the gnomes' battle cry"
+OllamaChat.Race.Phrases.Troll = "hello mon, hey mon, hi mon, greetings mon, ya mon, yah mon, yeh mon, yeah mon=how trolls talk in the game, in their Caribbean-sounding accent: troll NPCs greet you with hello mon|stay away from the voodoo, stay away from da voodoo, stay away from de voodoo=a troll NPC's farewell|see ya layta=a troll NPC's farewell"
+OllamaChat.Race.Phrases.BloodElf = "bal'a dash malanore, bal'a dash, bala dash=thalassian for greetings, traveller|anaria shola=thalassian for speak your business, a blood elf NPC's greeting|shorel'aran, shorelaran=thalassian for farewell|selama ashal'anore=thalassian for justice for our people|sinu a'manore=thalassian for well met|anu belore dela'na=thalassian for the sun guides us|al diel shala=thalassian for safe travels"
+OllamaChat.Race.Phrases.Draenei = "archenon poros, arkanon poros=draenei for good fortune|blessings upon you=a draenei NPC's greeting|dioniss aca=draenei for safe journey"
+
+#    OllamaChat.Race.HeardText
+#    OllamaChat.Race.HeardSameText
+#        What a reply prompt is told about a race's phrase a real player said:
+#        {player_name}, {phrase} (as listed), {meaning}, {race_plural} (whose:
+#        orcs, humans and dwarves), and {same}, HeardSameText for a bot of
+#        that race ({a_race}: an orc; {race_plural}: orcs), else nothing.
+#        Default: (below)
+OllamaChat.Race.HeardText = "{player_name} said '{phrase}': {meaning}. Players say these for fun, so play along if it suits your style.{same}"
+OllamaChat.Race.HeardSameText = "You are {a_race} too: saying it back, or something else {race_plural} say, is part of the joke."
+
+#    OllamaChat.Race.UseText
+#    OllamaChat.Race.UseChance
+#    OllamaChat.Race.StyleChance
+#        Now and then a bot's own line -- a reply, or something it says
+#        unprompted -- is told it could slip in something its own race says,
+#        if it fits: UseChance percent of its lines, or its style's share in
+#        StyleChance ("KEY:percent", space separated: the roleplayer more,
+#        the quiet ones never). {a_race}, {race_plural}, and {phrases}: up to
+#        three of its race's phrases, picked at random, each with what it is.
+#        Not when the line it answers is one already. Mingle.RaceText is the
+#        same for a /say exchange between bots. UseChance 0 or an empty text
+#        turns it off.
+#        Default: (below), 3, "NAT_ROLEPLAYER:25 NAT_LOREBUFF:10 NAT_JOKER:6 NAT_BANTER:6 NAT_PRANKSTER:6 NAT_HYPE:5"
+OllamaChat.Race.UseText = "You are {a_race}. If it fits this line and your style, you could slip in something {race_plural} say in the game, just for fun: {phrases}."
+OllamaChat.Race.UseChance = 3
+OllamaChat.Race.StyleChance = "NAT_ROLEPLAYER:25 NAT_LOREBUFF:10 NAT_JOKER:6 NAT_BANTER:6 NAT_PRANKSTER:6 NAT_HYPE:5"
 
 ###############################################################################
 #

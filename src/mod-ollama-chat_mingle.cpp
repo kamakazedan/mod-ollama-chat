@@ -14,6 +14,7 @@
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_pets.h"
 #include "mod-ollama-chat_presence.h"
+#include "mod-ollama-chat_race.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
@@ -274,6 +275,8 @@ namespace
             const std::string style = GetPersonalityPromptAddition(GetBotPersonality(p));
             if (!style.empty())
                 out += " " + p->GetName() + "'s chat style, as told to them: " + style;
+            // Now and then, something their race says ("zug zug").
+            out += Race_MingleFor(p);
             // What they would answer "what you up to?" with, rather than something made up.
             if (const std::string lately = Lately_Text(p); !lately.empty() && !g_MingleLatelyText.empty())
             {

@@ -14,11 +14,13 @@
 #include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_marks.h"
 #include "mod-ollama-chat_outlook.h"
+#include "mod-ollama-chat_race.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_stuck.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat-utilities.h"
+#include "SharedDefines.h"
 #include <fmt/core.h>
 #include <algorithm>
 #include <cctype>
@@ -263,6 +265,19 @@ std::string g_MingleHomeCityText;
 uint32_t    g_ContextAmbientHoldSeconds = 60;
 std::string g_ContextLeadUpText;
 uint32_t    g_ContextLeadUpMaxWords     = 8;
+std::vector<std::vector<std::string>> g_SidesCriesHorde;
+std::vector<std::vector<std::string>> g_SidesCriesAlliance;
+std::string g_SidesOwnCryText;
+std::string g_SidesEnemyCryText;
+std::vector<std::pair<uint8_t, std::string>> g_RacePhrasesRaw;
+std::string g_RaceHeardText;
+std::string g_RaceHeardSameText;
+std::string g_RaceUseText;
+uint32_t    g_RaceUseChance             = 3;
+std::unordered_map<std::string, uint32_t> g_RaceStyleChance;
+std::string g_MingleRaceText;
+std::vector<std::vector<std::string>> g_BanterWords;
+std::string g_BanterText;
 bool        g_MingleEmoteEnable         = true;
 uint32_t    g_MingleEmoteMinSeconds     = 60;
 uint32_t    g_MingleEmoteMaxSeconds     = 160;
@@ -2802,6 +2817,123 @@ static void LoadNaturalChatV27Settings()
              g_ContextLeadUpText.empty() ? "off" : "on", g_ContextLeadUpMaxWords);
 }
 
+// What each race says in the game: its NPCs' greetings and farewells, and its
+// own language's best-known phrases, from the game and its lore.
+static const char* const kRacePhrasesHuman =
+    "well met=a greeting human and dwarf NPCs give you|light bless you=a human NPC's farewell";
+static const char* const kRacePhrasesOrc =
+    "zug zug, zug-zug, zugzug=an orc's okay, the greeting orc NPCs give you, and what peons said in the old "
+    "Warcraft games|lok'tar, lok-tar, loktar=orcish for victory, a war cry and an orc NPC's greeting|"
+    "aka'magosh, akamagosh=orcish for a blessing on you and yours|dabu=orcish for I obey, what orc grunts said in "
+    "the old Warcraft games|swobu=orcish for as you command, what orc peons and grunts said in the old Warcraft "
+    "games|work work=what orc peons said in Warcraft III|go with honor, go with honour=an orc NPC's farewell";
+static const char* const kRacePhrasesDwarf =
+    "well met=a greeting human and dwarf NPCs give you|off with ye=a dwarf NPC's farewell";
+static const char* const kRacePhrasesNightElf =
+    "ishnu-alah, ishnu alah, ishnualah=darnassian for good fortune to you, a greeting|elune-adore, elune adore="
+    "darnassian for Elune be with you, a greeting|ande'thoras-ethil, andethoras ethil=darnassian for may your "
+    "troubles be diminished, a farewell|shan'do=darnassian for honoured teacher|shaha lor'ma=darnassian for thank "
+    "you|elune be with you=a night elf NPC's greeting";
+static const char* const kRacePhrasesUndead =
+    "dark lady watch over you=a Forsaken NPC's farewell, the Dark Lady being Sylvanas";
+static const char* const kRacePhrasesTauren =
+    "walk with the earth mother=a tauren NPC's farewell|ish-ne-alo por-ah, ishne alo porah, ishnealo porah="
+    "taur-ahe for may the days ahead be guided by the elders of long ago, Cairne Bloodhoof's greeting|moo=the cow "
+    "joke every tauren hears";
+static const char* const kRacePhrasesGnome =
+    "salutations=a gnome NPC's greeting|for gnomeregan=the gnomes' battle cry";
+static const char* const kRacePhrasesTroll =
+    "hello mon, hey mon, hi mon, greetings mon, ya mon, yah mon, yeh mon, yeah mon=how trolls talk in the game, "
+    "in their Caribbean-sounding accent: troll NPCs greet you with hello mon|stay away from the voodoo, stay away "
+    "from da voodoo, stay away from de voodoo=a troll NPC's farewell|see ya layta=a troll NPC's farewell";
+static const char* const kRacePhrasesBloodElf =
+    "bal'a dash malanore, bal'a dash, bala dash=thalassian for greetings, traveller|anaria shola=thalassian for "
+    "speak your business, a blood elf NPC's greeting|shorel'aran, shorelaran=thalassian for farewell|selama "
+    "ashal'anore=thalassian for justice for our people|sinu a'manore=thalassian for well met|anu belore dela'na="
+    "thalassian for the sun guides us|al diel shala=thalassian for safe travels";
+static const char* const kRacePhrasesDraenei =
+    "archenon poros, arkanon poros=draenei for good fortune|blessings upon you=a draenei NPC's greeting|dioniss aca="
+    "draenei for safe journey";
+
+static void LoadNaturalChatV28Settings()
+{
+    // --- battle cries --------------------------------------------------------------------
+    g_SidesCriesHorde = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Sides.Cries.Horde",
+        "for the horde|lok'tar ogar|loktar ogar|lok-tar ogar"));
+    g_SidesCriesAlliance = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(
+        "OllamaChat.Sides.Cries.Alliance", "for the alliance"));
+    g_SidesOwnCryText = sConfigMgr->GetOption<std::string>("OllamaChat.Sides.OwnCryText",
+        "{player_name} just shouted {the_side}'s battle cry ('{cry}'), and you are {side} too: shout it back, cheer "
+        "or join in, in your own style.");
+    g_SidesEnemyCryText = sConfigMgr->GetOption<std::string>("OllamaChat.Sides.EnemyCryText",
+        "{player_name} just shouted the other side's battle cry ('{cry}') among {the_side}: give them some stick for "
+        "it, all in fun -- boo, call them a traitor or a spy, or ask whose side they are on -- in your own style.");
+
+    // --- what each race says ---------------------------------------------------------------
+    g_RacePhrasesRaw.clear();
+    const std::pair<uint8_t, std::pair<const char*, const char*>> races[] = {
+        { RACE_HUMAN,         { "OllamaChat.Race.Phrases.Human",    kRacePhrasesHuman } },
+        { RACE_ORC,           { "OllamaChat.Race.Phrases.Orc",      kRacePhrasesOrc } },
+        { RACE_DWARF,         { "OllamaChat.Race.Phrases.Dwarf",    kRacePhrasesDwarf } },
+        { RACE_NIGHTELF,      { "OllamaChat.Race.Phrases.NightElf", kRacePhrasesNightElf } },
+        { RACE_UNDEAD_PLAYER, { "OllamaChat.Race.Phrases.Undead",   kRacePhrasesUndead } },
+        { RACE_TAUREN,        { "OllamaChat.Race.Phrases.Tauren",   kRacePhrasesTauren } },
+        { RACE_GNOME,         { "OllamaChat.Race.Phrases.Gnome",    kRacePhrasesGnome } },
+        { RACE_TROLL,         { "OllamaChat.Race.Phrases.Troll",    kRacePhrasesTroll } },
+        { RACE_BLOODELF,      { "OllamaChat.Race.Phrases.BloodElf", kRacePhrasesBloodElf } },
+        { RACE_DRAENEI,       { "OllamaChat.Race.Phrases.Draenei",  kRacePhrasesDraenei } },
+    };
+    for (const auto& [race, keyAndDefault] : races)
+        g_RacePhrasesRaw.emplace_back(race, sConfigMgr->GetOption<std::string>(keyAndDefault.first,
+                                                                                keyAndDefault.second));
+    g_RaceHeardText = sConfigMgr->GetOption<std::string>("OllamaChat.Race.HeardText",
+        "{player_name} said '{phrase}': {meaning}. Players say these for fun, so play along if it suits your "
+        "style.{same}");
+    g_RaceHeardSameText = sConfigMgr->GetOption<std::string>("OllamaChat.Race.HeardSameText",
+        "You are {a_race} too: saying it back, or something else {race_plural} say, is part of the joke.");
+    g_RaceUseText = sConfigMgr->GetOption<std::string>("OllamaChat.Race.UseText",
+        "You are {a_race}. If it fits this line and your style, you could slip in something {race_plural} say in "
+        "the game, just for fun: {phrases}.");
+    g_RaceUseChance = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Race.UseChance", 3));
+    g_RaceStyleChance.clear();
+    for (const std::string& pair : ReadSpaceList("OllamaChat.Race.StyleChance",
+             "NAT_ROLEPLAYER:25 NAT_LOREBUFF:10 NAT_JOKER:6 NAT_BANTER:6 NAT_PRANKSTER:6 NAT_HYPE:5"))
+    {
+        const size_t colon = pair.find(':');
+        if (colon == std::string::npos || colon == 0 || colon + 1 >= pair.size())
+            continue;
+        std::string key = pair.substr(0, colon);
+        for (char& c : key)
+            c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        const std::string num = pair.substr(colon + 1);
+        if (std::all_of(num.begin(), num.end(), [](unsigned char c) { return std::isdigit(c) != 0; }) && num.size() <= 3)
+            g_RaceStyleChance[key] = std::min<uint32_t>(100, uint32_t(std::stoul(num)));
+    }
+    g_MingleRaceText = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.RaceText",
+        "{name} is {a_race}: if it fits, they could slip in something {race_plural} say in the game, just for fun: "
+        "{phrases}.");
+    Race_Load();
+
+    // --- banter that bites back -------------------------------------------------------------
+    g_BanterWords = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Banter.Words",
+        "noob|noobs|nub|newb|n00b|scrub|clown|git gud|get good|l2p|learn to play|ur mum|your mum|ur mom|your mom|"
+        "yo mama|ur nan|your nan|you suck|u suck|ur bad|youre bad|you are bad|tryhard|try hard|cringe"));
+    g_BanterText = sConfigMgr->GetOption<std::string>("OllamaChat.Banter.Text",
+        "{player_name} is having a go ('{tease}'): that is banter, not a real complaint, and players here give as "
+        "good as they get. If it was at you, fire one back in your own style -- {~a cheeky comeback about something "
+        "real|mock outrage|turning it right back on them|a your mum joke|a daft threat to duel them over it|calling "
+        "them a noob right back} -- and if it was at someone else, you can pile in on either side. Do not take it "
+        "seriously, agree with it or apologise.");
+
+    const RaceStats race = Race_GetStats();
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v28: battle cries {} ({} Horde, {} Alliance); {} race phrases "
+             "known, said back by their own race, slipped in on {}% of lines ({} styles more); banter given back {} "
+             "({} tease words).",
+             (g_SidesOwnCryText.empty() && g_SidesEnemyCryText.empty()) ? "off" : "on", g_SidesCriesHorde.size(),
+             g_SidesCriesAlliance.size(), race.phrases, g_RaceUseText.empty() ? 0 : g_RaceUseChance,
+             g_RaceStyleChance.size(), g_BanterText.empty() ? "off" : "on", g_BanterWords.size());
+}
+
 static void LoadNaturalChatV24Settings()
 {
     // --- a mount is not a pet -----------------------------------------------------------
@@ -3694,6 +3826,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV25Settings();
     LoadNaturalChatV26Settings();
     LoadNaturalChatV27Settings();
+    LoadNaturalChatV28Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

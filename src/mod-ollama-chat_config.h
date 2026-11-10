@@ -935,6 +935,19 @@ extern std::string g_MingleHomeCityText;        // ...{city}
 extern uint32_t    g_ContextAmbientHoldSeconds; // no unprompted line where a real player spoke this lately
 extern std::string g_ContextLeadUpText;         // what a short line came right after: {player_name} {lead_up}
 extern uint32_t    g_ContextLeadUpMaxWords;     // ...for lines of up to this many words (0: any)
+extern std::vector<std::vector<std::string>> g_SidesCriesHorde;      // "for the horde", "lok'tar ogar"
+extern std::vector<std::vector<std::string>> g_SidesCriesAlliance;   // "for the alliance"
+extern std::string g_SidesOwnCryText;           // their own side's cry: {player_name} {cry} {side} {the_side}
+extern std::string g_SidesEnemyCryText;         // ...the other side's, in their side's chat
+extern std::vector<std::pair<uint8_t, std::string>> g_RacePhrasesRaw;   // race id -> "spellings=meaning|..."
+extern std::string g_RaceHeardText;             // a real player said one: {player_name} {phrase} {meaning} {race_plural} {same}
+extern std::string g_RaceHeardSameText;         // ...and the bot is of that race: {a_race} {race_plural}
+extern std::string g_RaceUseText;               // now and then, one of its own: {a_race} {race_plural} {phrases}
+extern uint32_t    g_RaceUseChance;             // ...on this % of a bot's lines
+extern std::unordered_map<std::string, uint32_t> g_RaceStyleChance;   // personality key (upper) -> %
+extern std::string g_MingleRaceText;            // the same in a /say exchange: {name} {a_race} {race_plural} {phrases}
+extern std::vector<std::vector<std::string>> g_BanterWords;   // "noob", "ur mum": a tease
+extern std::string g_BanterText;                // ...and to give as good as it gets: {player_name} {tease}
 extern bool        g_MingleEmoteEnable;         // bots greeting each other without a word
 extern uint32_t    g_MingleEmoteMinSeconds;
 extern uint32_t    g_MingleEmoteMaxSeconds;

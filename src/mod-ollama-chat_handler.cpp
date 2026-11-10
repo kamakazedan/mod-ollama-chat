@@ -67,6 +67,8 @@
 #include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_knowledge.h"
 #include "mod-ollama-chat_wants.h"
+#include "mod-ollama-chat_race.h"
+#include "mod-ollama-chat_banter.h"
 #include "mod-ollama-chat_clock.h"
 #include <iomanip>
 #include <unordered_set>
@@ -2579,7 +2581,10 @@ static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
     const bool shouted   = traits.shouted;
     const bool ack       = traits.ack;
     const bool openWords = traits.openWords;
-    const bool open      = traits.open;
+    // "FOR THE HORDE!", "zug zug": said for everyone to answer
+    // (mod-ollama-chat_race).
+    const RaceLineFacts raceLine = Race_ReadLine(msg);
+    const bool open      = traits.open || raceLine.cry || raceLine.phrase;
     const bool greeting  = traits.greeting;
 
     const uint32_t listeners = static_cast<uint32_t>(pool.size());
@@ -2718,6 +2723,20 @@ static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
     std::vector<Player*> extras;
     if (total > fixed.size())
         extras = PickCrowdVoices(pool, fixed, total - static_cast<uint32_t>(fixed.size()));
+
+    // "zug zug": an orc says it back first, if one is about.
+    if (raceLine.phrase && !extras.empty())
+    {
+        auto ofRace = [&raceLine](Player* b) { return Race_Is(b, raceLine.races); };
+        if (std::none_of(fixed.begin(), fixed.end(), ofRace) && std::none_of(extras.begin(), extras.end(), ofRace))
+            for (Player* b : pool)
+                if (ofRace(b) && std::find(fixed.begin(), fixed.end(), b) == fixed.end())
+                {
+                    extras.back() = b;
+                    break;
+                }
+        std::stable_partition(extras.begin(), extras.end(), ofRace);
+    }
 
     if (fixed.empty() && extras.empty())
         return;
@@ -3564,6 +3583,23 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     const std::string smiley = Context_EmoticonNudgeFor(bot);
     if (!smiley.empty())
         prompt += " " + smiley;
+
+    // A real player's battle cry, or something their race says: what it is,
+    // so "FOR THE HORDE!" and "zug zug" are played along with, not missed
+    // (mod-ollama-chat_race). Otherwise, now and then, something the bot's
+    // own race says, to slip in if it fits.
+    const std::string heard = Race_HeardFor(bot, player, playerMessage);
+    const std::string ownRace = heard.empty() ? Race_UseFor(bot) : std::string();
+    if (!heard.empty())
+        prompt += " " + heard;
+    else if (!ownRace.empty())
+        prompt += " " + ownRace;
+
+    // A dig ("noob", "ur mum") is banter, and is given back
+    // (mod-ollama-chat_banter).
+    const std::string tease = Banter_PromptFor(bot, player, playerMessage);
+    if (!tease.empty())
+        prompt += " " + tease;
 
     // What a short line came right after -- the roll, and the joke about it --
     // next to the instruction to answer it: further up, in the transcript, it

@@ -14,6 +14,8 @@
 #include "mod-ollama-chat_partycmd.h"
 #include "mod-ollama-chat_phrases.h"
 #include "mod-ollama-chat_presence.h"
+#include "mod-ollama-chat_race.h"
+#include "mod-ollama-chat_banter.h"
 #include "mod-ollama-chat_random.h"
 #include "mod-ollama-chat_response.h"
 #include "mod-ollama-chat_roleplay.h"
@@ -867,6 +869,15 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)OllamaRandomChatter_HeldBack(), g_ContextAmbientHoldSeconds,
                              (unsigned long long)dispatch.totalDroppedOvertaken,
                              (unsigned long long)thread.leadUps);
+    const RaceStats   races  = Race_GetStats();
+    const BanterStats banter = Banter_GetStats();
+    if (show("chat"))
+        handler->PSendSysMessage("Cries, races and banter: {} replies told of their own side's battle cry, {} of the "
+                             "other side's; {} of something a race says ({} phrases known); {} lines told they "
+                             "could slip in one of their own; {} replies told to give a tease back",
+                             (unsigned long long)races.cries, (unsigned long long)races.enemyCries,
+                             (unsigned long long)races.heard, races.phrases, (unsigned long long)races.used,
+                             (unsigned long long)banter.teases);
     if (show("chat"))
         handler->PSendSysMessage("Sides: {} - Horde cities {}; Alliance cities {}; {} prompts said a bot was in its "
                              "own side's city",

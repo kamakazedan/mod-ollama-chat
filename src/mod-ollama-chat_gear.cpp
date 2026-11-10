@@ -325,6 +325,14 @@ void Gear_NoteHumanLine(Player* player, const std::string& msg)
     ++g_stats.backOffs;
 }
 
+bool Gear_FeelsPickedOn(Player* player)
+{
+    if (!player || g_backOff.empty())
+        return false;
+    auto it = g_backOff.find(player->GetGUID().GetRawValue());
+    return it != g_backOff.end() && Clock::now() - it->second <= std::chrono::minutes(g_GearBackOffMinutes);
+}
+
 void Gear_Update()
 {
     const auto now = Clock::now();

@@ -580,6 +580,37 @@ go on, and a remark about a mount to someone on foot (or a pet to someone with
 none out) is never said: one told to pay a compliment with nothing to go on
 admired a mount nobody was riding.
 
+## Battle Cries, Race Talk and Banter
+
+**Battle cries.** Shout "FOR THE HORDE!" in General and the Horde shouts it
+back; shout "for the alliance" there and you get booed, called a traitor and
+asked whose side you are on, all in fun. A real player's short line that is
+a side's battle cry (`OllamaChat.Sides.Cries.*`: "for the horde", "lok'tar
+ogar", "for the alliance") is said to everyone, and each bot answering is
+told whether it is its own side's (`Sides.OwnCryText`) or the other side's
+(`Sides.EnemyCryText`).
+
+**What each race says.** Bots knew their race only as a word. Every race now
+has its own phrases from the game itself -- its NPCs' greetings and
+farewells and its language's best-known words (`OllamaChat.Race.Phrases.<Race>`):
+"zug zug" and "lok'tar" for orcs, "hello mon" and "stay away from the voodoo"
+for trolls, "ishnu-alah" for night elves, "bal'a dash, malanore" for blood
+elves, "walk with the Earth Mother" for tauren, and so on. Say one and the
+bots know what it is and whose it is, an orc answers your "zug zug" first if
+one is about, and saying it back is part of the joke (`Race.HeardText`). Now
+and then -- 3% of a bot's lines, a quarter of the roleplayer's
+(`Race.UseChance`, `Race.StyleChance`) -- a bot is reminded of its own and may
+slip one in, and two orcs meeting in /say might zug zug each other
+(`Mingle.RaceText`).
+
+**Banter that bites back.** A bot called a noob answered "Fair point, I'll
+keep farming". A real player's dig -- "noob", "ur mum", "l2p", or any of
+`Response.InsultWords` (`OllamaChat.Banter.Words`) -- now tells each bot
+answering that it is banter, not a real complaint, and to give as good as it
+gets in its own style, with a different kind of comeback each time
+(`Banter.Text`). Someone who has said they feel picked on gets none of it for
+a while (`Gear.BackOffWords`).
+
 ## Item and Quest Links
 
 Bots are asked to put exact item and quest names in square brackets, and each

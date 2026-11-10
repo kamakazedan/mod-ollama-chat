@@ -36,6 +36,7 @@
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_rolls.h"
+#include "mod-ollama-chat_race.h"
 #include "mod-ollama-chat_market.h"
 
 #include "CellImpl.h"
@@ -294,6 +295,12 @@ namespace
         const std::string styleNudge = OllamaStyleNudgeFor(bot, personality);
         if (!styleNudge.empty())
             prompt += " " + styleNudge;
+
+        // Now and then, something its race says ("zug zug"), to slip in if it
+        // fits (mod-ollama-chat_race).
+        const std::string ownRace = Race_UseFor(bot);
+        if (!ownRace.empty())
+            prompt += " " + ownRace;
 
         // Now and then, a smiley would not go amiss.
         const std::string smiley = Context_EmoticonNudgeFor(bot);

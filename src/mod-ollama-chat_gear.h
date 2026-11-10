@@ -58,6 +58,10 @@ std::string Gear_ShowPiece(Player* p);
 // A real player's line: noted when they feel picked on.
 void Gear_NoteHumanLine(Player* player, const std::string& msg);
 
+// Has `player` said they feel picked on in the last Gear.BackOffMinutes?
+// Nobody teases them back (mod-ollama-chat_banter) while they have.
+bool Gear_FeelsPickedOn(Player* player);
+
 // Is this line about gear (Gear.TalkWords)?
 bool Gear_IsGearTalk(const std::string& msg);
 
