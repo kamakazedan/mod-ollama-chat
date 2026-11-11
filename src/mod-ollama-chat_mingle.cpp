@@ -438,9 +438,13 @@ namespace
         const uint32_t lines = std::min(Between(g_MingleMinLines, g_MingleMaxLines),
                                         Between(g_MingleMinLines, g_MingleMaxLines));
 
+        // {at} reads after "standing near each other": "in the Trade District
+        // in Stormwind", "outside the bank in Orgrimmar".
+        const std::string where = Where(group.front());
         const std::string prompt = SafeFormat(g_MinglePromptTemplate,
                                               fmt::arg("count", group.size() >= 3 ? "Three" : "Two"),
-                                              fmt::arg("where", Where(group.front())),
+                                              fmt::arg("where", where),
+                                              fmt::arg("at", TextRules::AtPlace(where)),
                                               fmt::arg("when", Clock_NowText()),
                                               fmt::arg("people", PeopleText(group)),
                                               fmt::arg("relation", RelationText(group)),

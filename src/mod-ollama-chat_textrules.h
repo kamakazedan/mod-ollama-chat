@@ -378,6 +378,13 @@ namespace TextRules
     // "a wolf", "an imp", "an Acherus Deathcharger".
     std::string WithArticle(const std::string& noun);
 
+    // Where people are, to follow "standing near each other": "in the Trade
+    // District in Stormwind", "in Elwynn Forest", but a place named with its
+    // own preposition keeps it -- "outside the bank in Orgrimmar", "just
+    // inside the gates of Orgrimmar", never "in outside the bank". Empty for
+    // an empty place.
+    std::string AtPlace(const std::string& place);
+
     // A mount as people call it, from the spell that summons it: "Summon
     // Felsteed" is a Felsteed.
     std::string MountFromSpell(const std::string& spellName);

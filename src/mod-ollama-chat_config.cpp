@@ -3123,7 +3123,7 @@ static void LoadNaturalChatV16Settings()
     g_MingleReadMinMs      = number("OllamaChat.Mingle.ReadMinMs", 1200, 0, 60000);
     g_MingleReadMaxMs      = std::max(g_MingleReadMinMs, number("OllamaChat.Mingle.ReadMaxMs", 3500, 0, 60000));
     g_MinglePromptTemplate = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.PromptTemplate",
-        "{count} World of Warcraft players are standing near each other in {where} and get chatting in /say. "
+        "{count} World of Warcraft players are standing near each other {at} and get chatting in /say. "
         "It is {when}. They are:{people}{relation} What gets them talking: {premise}. Write what they type, "
         "one message per line, each line starting with the speaker's name and a colon, like "
         "this:{example}About {lines} lines in all, mostly taking turns. It reads like a real chat: every "

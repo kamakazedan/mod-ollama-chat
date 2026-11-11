@@ -2012,6 +2012,24 @@ namespace TextRules
         return (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' ? "an " : "a ") + noun;
     }
 
+    std::string AtPlace(const std::string& place)
+    {
+        const std::string trimmed = Trim(place);
+        if (trimmed.empty())
+            return trimmed;
+        static const char* const kLeads[] = { "outside", "inside", "just", "by", "near", "at", "on", "in", "under",
+                                              "beside", "behind", "around", "atop", "above", "below", "beneath",
+                                              "up", "down", "across", "along", "between", "among", "off" };
+        const size_t space = trimmed.find(' ');
+        std::string first = trimmed.substr(0, space);
+        for (char& c : first)
+            c = char(std::tolower(static_cast<unsigned char>(c)));
+        for (const char* lead : kLeads)
+            if (space != std::string::npos && first == lead)
+                return trimmed;
+        return "in " + trimmed;
+    }
+
     std::string MountFromSpell(const std::string& spellName)
     {
         std::string name = Trim(spellName);
