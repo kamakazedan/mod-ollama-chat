@@ -148,6 +148,14 @@ bool OllamaGroupHasRealPlayer(Player* who)
     return false;
 }
 
+bool OllamaInBotOnlyDungeon(Player* bot)
+{
+    if (!bot || !bot->GetGroup())
+        return false;
+    Map* map = bot->FindMap();
+    return map && map->IsDungeon() && !OllamaGroupHasRealPlayer(bot);
+}
+
 bool OllamaWorldSnapshot::RealPlayerInZoneAndFaction(Player* who) const
 {
     if (!who)

@@ -69,6 +69,13 @@ std::string OllamaContinentName(Player* player);
 // it.
 bool OllamaGroupHasRealPlayer(Player* who);
 
+// In a dungeon with a group of bots and nobody playing in it: a run bots made
+// on their own (mod-playerbots-plus's bot dungeons, or a group of bots the
+// dungeon finder put together). Such a run is silent: nothing unprompted is
+// said from it, on any channel -- only an answer owed to someone who spoke to
+// the bot goes out. World thread only.
+bool OllamaInBotOnlyDungeon(Player* bot);
+
 // A place people come to talk: a capital city (the game's own "resting in a
 // city" flag), a zone or area listed in OllamaChat.City.ExtraZoneOrAreaIds
 // (Shattrath and Dalaran by default), or -- with City.IncludeInns -- an inn.

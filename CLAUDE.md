@@ -39,6 +39,12 @@ or it talks over people.
 mutates a container that `Player::Update` walks, so calling it off-thread is the
 same race it looks like it avoids.
 
+A dungeon run by bots with nobody playing among them (mod-playerbots-plus's
+bot dungeons, or any group of bots the dungeon finder made) is silent:
+`OllamaInBotOnlyDungeon` drops every line from it that is not an answer owed to
+someone who spoke to the bot, at submit (no model call) and again at delivery.
+A new kind of line needs nothing for this; it goes through both.
+
 ## The second rule: workers never read config strings directly
 
 A worker thread must not touch `g_OllamaUrl`, `g_OllamaModel`,

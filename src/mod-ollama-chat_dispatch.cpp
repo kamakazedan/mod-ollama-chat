@@ -540,6 +540,17 @@ namespace
         // time in ProcessChat, where the Group was live to consult.
         const bool directAddress = c.request.directAddress;
 
+        // A dungeon run by bots with nobody playing among them is silent:
+        // only an answer owed to someone who spoke to it goes out.
+        if (!directAddress && c.request.source != SRC_WHISPER_LOCAL && OllamaInBotOnlyDungeon(bot))
+        {
+            ++g_droppedPassed;
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} is in a dungeon run by bots; line dropped: '{}'",
+                         bot->GetName(), c.text);
+            return;
+        }
+
         // Away from the keyboard, hanging out in a city (mod-ollama-chat_hangout):
         // nothing to say unless someone talks to it -- and then it is back.
         if (Hangout_IsAway(bot) && !directAddress && c.request.source != SRC_WHISPER_LOCAL)
@@ -1099,6 +1110,13 @@ bool OllamaDispatch_Submit(OllamaChatRequest request)
 {
     if ((request.prompt.empty() && request.fixedText.empty()) || request.botGuid == 0)
         return false;
+
+    // Nothing to write for a bot in a dungeon run by bots alone: it would be
+    // dropped at delivery (Deliver says why).
+    if (!request.directAddress && request.source != SRC_WHISPER_LOCAL)
+        if (Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(request.botGuid));
+            bot && bot->IsInWorld() && OllamaInBotOnlyDungeon(bot))
+            return false;
 
     Task task;
     task.type    = TaskType::ChatReply;
