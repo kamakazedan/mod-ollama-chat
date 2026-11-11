@@ -7,6 +7,7 @@
 #include "mod-ollama-chat_rag.h"
 #include "mod-ollama-chat_conjure.h"
 #include "mod-ollama-chat_equip.h"
+#include "mod-ollama-chat_potions.h"
 #include "mod-ollama-chat_rolls.h"
 #include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_partycmd.h"
@@ -55,4 +56,7 @@ void Addmod_ollama_chatScripts()
 
     // A bot putting on a rare or epic it just got: noted as it goes on.
     new OllamaChatEquipScript();
+
+    // A bot drinking a potion in a pinch in a dungeon: noted as it drinks.
+    new OllamaChatPotionScript();
 }

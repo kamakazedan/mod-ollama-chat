@@ -14,6 +14,7 @@
 #include "mod-ollama-chat_partycmd.h"
 #include "mod-ollama-chat_phrases.h"
 #include "mod-ollama-chat_presence.h"
+#include "mod-ollama-chat_potions.h"
 #include "mod-ollama-chat_race.h"
 #include "mod-ollama-chat_banter.h"
 #include "mod-ollama-chat_random.h"
@@ -861,6 +862,12 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              g_RollsEnable ? "on" : "off",
                              (unsigned long long)rolls.noted,
                              (unsigned long long)rolls.reactions);
+    const PotionStats potions = Potions_GetStats();
+    if (show("party"))
+        handler->PSendSysMessage("Potions in a pinch: {} - {} drunk low in a dungeon, {} by a bot that came "
+                             "through the fight, {} said so after it",
+                             g_PotionsEnable ? "on" : "off", (unsigned long long)potions.noted,
+                             (unsigned long long)potions.lived, (unsigned long long)potions.said);
     const ContextThreadStats thread = Context_GetThreadStats();
     if (show("party"))
         handler->PSendSysMessage("Keeping the thread: {} unprompted lines held back where a real player had just "

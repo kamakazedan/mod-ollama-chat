@@ -721,6 +721,19 @@ of the Fang] going straight on". Whether it does depends on its chat style:
 an excitable one usually will, a quiet one or a loner never does. Gear
 playerbots hands it doesn't count. See `OllamaChat.Equip.*`.
 
+## A Potion in a Pinch
+
+A bot in a dungeon that uses a healing potion with its health nearly gone (35%
+or less) -- the tank on its last legs -- or a mana potion with its mana nearly
+gone (20% or less) -- the healer running dry -- and comes through the fight
+may say so in party once it is over: "that pot saved my arse", "mana pot
+saved us there", "too close lads". It is told who it is in the group (tank,
+healer or damage), where, what it used and how low it was, and says it its
+own way, with a different angle each time. How likely depends on its chat
+style -- the hype merchant nearly always, the quiet one hardly ever -- and
+not when it died anyway. Healthstones and mana gems count: what matters is
+what the game says the item does. See `OllamaChat.Potions.*`.
+
 ## Giving Things Away
 
 Players don't hand their things to strangers for nothing, so bots don't

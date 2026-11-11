@@ -37,6 +37,7 @@
 #include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_rolls.h"
 #include "mod-ollama-chat_race.h"
+#include "mod-ollama-chat_potions.h"
 #include "mod-ollama-chat_market.h"
 
 #include "CellImpl.h"
@@ -464,6 +465,9 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 
     // A bot putting on a rare or epic it just got, maybe saying so in party.
     Equip_Update();
+
+    // A potion drunk in a pinch in a dungeon, said once the fight is over.
+    Potions_Update();
 
     // "that's all the boar meat": a quest's last kill or item, said in party.
     Progress_Update(diff);

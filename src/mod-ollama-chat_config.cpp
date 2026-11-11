@@ -278,6 +278,15 @@ std::unordered_map<std::string, uint32_t> g_RaceStyleChance;
 std::string g_MingleRaceText;
 std::vector<std::vector<std::string>> g_BanterWords;
 std::string g_BanterText;
+bool        g_PotionsEnable             = true;
+uint32_t    g_PotionsHealthPct          = 35;
+uint32_t    g_PotionsManaPct            = 20;
+uint32_t    g_PotionsChance             = 35;
+std::unordered_map<std::string, uint32_t> g_PotionsPersonalities;
+uint32_t    g_PotionsBotCooldownMinutes   = 15;
+uint32_t    g_PotionsGroupCooldownSeconds = 120;
+std::string g_PotionsHealPrompt;
+std::string g_PotionsManaPrompt;
 bool        g_MingleEmoteEnable         = true;
 uint32_t    g_MingleEmoteMinSeconds     = 60;
 uint32_t    g_MingleEmoteMaxSeconds     = 160;
@@ -2934,6 +2943,50 @@ static void LoadNaturalChatV28Settings()
              g_RaceStyleChance.size(), g_BanterText.empty() ? "off" : "on", g_BanterWords.size());
 }
 
+static void LoadNaturalChatV29Settings()
+{
+    // --- "that pot saved my arse" -----------------------------------------------------------
+    g_PotionsEnable    = sConfigMgr->GetOption<bool>("OllamaChat.Potions.Enable", true);
+    g_PotionsHealthPct = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Potions.HealthPct", 35));
+    g_PotionsManaPct   = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Potions.ManaPct", 20));
+    g_PotionsChance    = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Potions.Chance", 35));
+    g_PotionsPersonalities.clear();
+    for (const std::string& item : ReadPipeList("OllamaChat.Potions.Personalities",
+             "NAT_HYPE:70|NAT_EXCITABLE:65|NAT_JOKER:60|NAT_BANTER:55|NAT_PRANKSTER:50|NAT_REACTOR:50|"
+             "NAT_GRUMBLER:50|NAT_NEWBIE:50|NAT_BUTTERFLY:50|NAT_SOCIAL:45|NAT_DEADPAN:45|NAT_BINGER:45|"
+             "NAT_FRIENDLY:40|NAT_TROLL:40|NAT_RAIDER:40|NAT_KEYBOARD:35|NAT_RUDE:30|NAT_MINMAXER:30|NAT_EXPERT:30|"
+             "NAT_PROPER:25|NAT_HELPFUL_VET:25|NAT_CHILL:25|NAT_TERSE_VET:10|NAT_LONER:10|NAT_QUIET:5"))
+    {
+        const size_t colon = item.find(':');
+        std::string key = item.substr(0, colon);
+        for (char& ch : key)
+            ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        const uint32_t chance = colon == std::string::npos ? 100
+                              : uint32_t(std::clamp(std::atoi(item.c_str() + colon + 1), 0, 100));
+        if (!key.empty())
+            g_PotionsPersonalities[key] = chance;
+    }
+    g_PotionsBotCooldownMinutes   = sConfigMgr->GetOption<uint32_t>("OllamaChat.Potions.BotCooldownMinutes", 15);
+    g_PotionsGroupCooldownSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Potions.GroupCooldownSeconds", 120);
+    g_PotionsHealPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Potions.HealPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, {role} in a {dungeon} run. Your chat style: "
+        "{bot_personality} In the fight that just ended your health got down to {pct}%, so you used {item}, and it "
+        "kept you alive. Say something about it in party chat the way players do -- {~that the pot saved you|how "
+        "close that was|a joke about it|being glad you had one on you} -- in your own style. One short line, 3 to 12 "
+        "words, no quotes, no name in front.");
+    g_PotionsManaPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Potions.ManaPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, {role} in a {dungeon} run. Your chat style: "
+        "{bot_personality} In the fight that just ended you were down to {pct}% mana, so you used {item}, and you "
+        "all pulled through. Say something about it in party chat the way players do -- {~that the pot saved the "
+        "day|how close that was|a joke about it|being glad you had one on you} -- in your own style. One short line, "
+        "3 to 12 words, no quotes, no name in front.");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v29: a potion drunk in a pinch said after the fight {} (health "
+             "{}% or less, mana {}% or less; {}% of the time, {} styles their own way).",
+             g_PotionsEnable ? "on" : "off", g_PotionsHealthPct, g_PotionsManaPct, g_PotionsChance,
+             g_PotionsPersonalities.size());
+}
+
 static void LoadNaturalChatV24Settings()
 {
     // --- a mount is not a pet -----------------------------------------------------------
@@ -3827,6 +3880,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV26Settings();
     LoadNaturalChatV27Settings();
     LoadNaturalChatV28Settings();
+    LoadNaturalChatV29Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

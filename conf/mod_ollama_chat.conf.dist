@@ -4526,6 +4526,60 @@ OllamaChat.Rolls.HighPrompt = "You are {bot_name}, a level {bot_level} {bot_race
 
 ###############################################################################
 #
+#   OLLAMA CHAT - A POTION IN A PINCH
+#
+###############################################################################
+
+#    OllamaChat.Potions.Enable
+#    OllamaChat.Potions.HealthPct
+#    OllamaChat.Potions.ManaPct
+#        "That pot saved my arse." A bot in a dungeon that uses a healing
+#        potion at HealthPct percent health or less -- the tank on its last
+#        legs -- or a mana potion at ManaPct percent mana or less -- the
+#        healer running dry -- and comes through the fight alive may say so
+#        in party once the fight is over and it has caught its breath. What
+#        counts is what the game says the item does: a consumable whose spell
+#        heals (a healing potion, a healthstone) or gives back mana (a mana
+#        potion, a mana gem). Not when it died anyway, nor in a group without
+#        a real player.
+#        Default: 1, 35, 20
+OllamaChat.Potions.Enable = 1
+OllamaChat.Potions.HealthPct = 35
+OllamaChat.Potions.ManaPct = 20
+
+#    OllamaChat.Potions.Chance
+#    OllamaChat.Potions.Personalities
+#    OllamaChat.Potions.BotCooldownMinutes
+#    OllamaChat.Potions.GroupCooldownSeconds
+#        How likely a bot is to say so, by its chat style: Personalities is
+#        "KEY:percent" pairs, | separated (the hype merchant nearly always,
+#        the quiet one hardly ever), and Chance is for a style not listed. At
+#        most once every BotCooldownMinutes for a bot, and one bot in a group
+#        every GroupCooldownSeconds.
+#        Default: 35, (below), 15, 120
+OllamaChat.Potions.Chance = 35
+OllamaChat.Potions.Personalities = "NAT_HYPE:70|NAT_EXCITABLE:65|NAT_JOKER:60|NAT_BANTER:55|NAT_PRANKSTER:50|NAT_REACTOR:50|NAT_GRUMBLER:50|NAT_NEWBIE:50|NAT_BUTTERFLY:50|NAT_SOCIAL:45|NAT_DEADPAN:45|NAT_BINGER:45|NAT_FRIENDLY:40|NAT_TROLL:40|NAT_RAIDER:40|NAT_KEYBOARD:35|NAT_RUDE:30|NAT_MINMAXER:30|NAT_EXPERT:30|NAT_PROPER:25|NAT_HELPFUL_VET:25|NAT_CHILL:25|NAT_TERSE_VET:10|NAT_LONER:10|NAT_QUIET:5"
+OllamaChat.Potions.BotCooldownMinutes = 15
+OllamaChat.Potions.GroupCooldownSeconds = 120
+
+#    OllamaChat.Potions.HealPrompt
+#    OllamaChat.Potions.ManaPrompt
+#        What the bot is told, for a healing potion and for a mana one:
+#          {bot_name} {bot_level} {bot_race} {bot_class}
+#          {bot_personality}  its chat style
+#          {role}      the group's tank, the group's healer, or one of the
+#                      group's damage dealers
+#          {dungeon}   where: Wailing Caverns
+#          {item}      what it used, with a or an: a Healing Potion
+#          {pct}       its health or mana, percent, when it did
+#        "{~a|b|c}" is one of them, picked each time, so the line is not the
+#        same every time. No double quotes inside it.
+#        Default: (below)
+OllamaChat.Potions.HealPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, {role} in a {dungeon} run. Your chat style: {bot_personality} In the fight that just ended your health got down to {pct}%, so you used {item}, and it kept you alive. Say something about it in party chat the way players do -- {~that the pot saved you|how close that was|a joke about it|being glad you had one on you} -- in your own style. One short line, 3 to 12 words, no quotes, no name in front."
+OllamaChat.Potions.ManaPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, {role} in a {dungeon} run. Your chat style: {bot_personality} In the fight that just ended you were down to {pct}% mana, so you used {item}, and you all pulled through. Say something about it in party chat the way players do -- {~that the pot saved the day|how close that was|a joke about it|being glad you had one on you} -- in your own style. One short line, 3 to 12 words, no quotes, no name in front."
+
+###############################################################################
+#
 #   OLLAMA CHAT - MINGLING: BOTS CHATTING AMONG THEMSELVES IN /SAY
 #
 #   In a city a real player had bots talking to them -- a wave as they

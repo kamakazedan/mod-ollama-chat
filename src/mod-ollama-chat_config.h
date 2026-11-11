@@ -948,6 +948,15 @@ extern std::unordered_map<std::string, uint32_t> g_RaceStyleChance;   // persona
 extern std::string g_MingleRaceText;            // the same in a /say exchange: {name} {a_race} {race_plural} {phrases}
 extern std::vector<std::vector<std::string>> g_BanterWords;   // "noob", "ur mum": a tease
 extern std::string g_BanterText;                // ...and to give as good as it gets: {player_name} {tease}
+extern bool        g_PotionsEnable;             // "that pot saved my arse", after the fight
+extern uint32_t    g_PotionsHealthPct;          // ...a healing potion at this much health or less
+extern uint32_t    g_PotionsManaPct;            // ...a mana potion at this much mana or less
+extern uint32_t    g_PotionsChance;             // ...said this % of the time, for a style not listed
+extern std::unordered_map<std::string, uint32_t> g_PotionsPersonalities;   // personality key (upper) -> %
+extern uint32_t    g_PotionsBotCooldownMinutes;
+extern uint32_t    g_PotionsGroupCooldownSeconds;
+extern std::string g_PotionsHealPrompt;         // {bot_name} {bot_level} {bot_race} {bot_class} {bot_personality} {role} {dungeon} {item} {pct}
+extern std::string g_PotionsManaPrompt;         // ...the same, for a mana potion
 extern bool        g_MingleEmoteEnable;         // bots greeting each other without a word
 extern uint32_t    g_MingleEmoteMinSeconds;
 extern uint32_t    g_MingleEmoteMaxSeconds;
