@@ -217,6 +217,17 @@ became "kill Guard Howe"), and a remark about a passer-by is handed something
 real to remark on, with what is not there (`OllamaChatRequest::mustNotSay`:
 mount words for someone on foot) dropped at delivery.
 
+What chat itself is like is real too. When the talk is of chat, a reply is
+told how busy General and Trade have really been (`Outlook_ChatFor`, counted
+by `Context_ChannelLines`) and that every channel is in everyone's chat
+window; a /say exchange between bots is told it every time
+(`Mingle.ChatText`), being written all at once. Untold, bots on a realm
+where nobody had typed in Trade all evening called it "basically a
+warzone", and one said "brb gonna go check trade chat". A premise that puts
+someone in a state they are not in is made up the same way: "one of them is
+waiting for a group" was never true of a mingle, since a bot in a queue
+never mingles.
+
 Every line a bot says is in its own style. The model's lines are, through its
 personality prompt; a typed (canned) line goes through
 `Personality_StyleCanned(bot, line)` (`OllamaChat.Personality.CannedStyles`),

@@ -891,6 +891,12 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (g_OutlookEnable && !g_OutlookSideText.empty()) ? "on" : "off",
                              Outlook_SideCities(false), Outlook_SideCities(true),
                              (unsigned long long)Outlook_HomeCityPrompts());
+    if (show("chat"))
+        handler->PSendSysMessage("Chat itself: {} - {} prompts told what General and Trade have really been like "
+                             "(replies when the talk was of chat, and /say exchanges between bots)",
+                             (g_OutlookChatStates.empty() || (g_OutlookChatText.empty() && g_MingleChatText.empty()))
+                                 ? "off" : "on",
+                             (unsigned long long)Outlook_ChatPrompts());
     const MingleStats mingle = Mingle_GetStats();
     if (show("city"))
         handler->PSendSysMessage("Mingling: {} - {} running, {} asked for, {} written ({} unusable), {} ran to the end, "

@@ -1,10 +1,15 @@
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_crowd.h"
+#include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat-utilities.h"
 
+#include "Channel.h"
+#include "ChannelMgr.h"
 #include "DBCStores.h"
+#include "GameTime.h"
 #include "Map.h"
 #include "Player.h"
 #include "PlayerbotAI.h"
@@ -19,6 +24,30 @@ namespace
 {
     std::vector<TextRules::LevelBand> g_bands;
     uint64_t g_homeCityPrompts = 0;   // prompts that said a bot was in its own side's city
+    uint64_t g_chatPrompts     = 0;   // prompts told what chat is really like
+
+    // The Trade channel `bot` is in: one for each side, joined only in the
+    // cities, and named "Trade - City" in every one of them.
+    Channel* TradeChannelOf(Player* bot)
+    {
+        ChannelMgr* mgr = ChannelMgr::forTeam(bot->GetTeamId());
+        if (!mgr)
+            return nullptr;
+        for (auto const& [key, channel] : mgr->GetChannels())
+            if (channel && channel->GetChannelId() == uint32(ChatChannelId::TRADE) &&
+                OllamaIsOnChannel(channel, bot->GetGUID()))
+                return channel;
+        return nullptr;
+    }
+
+    // "the past hour", or since the server came up when that is less.
+    std::string WindowText(uint32_t seconds)
+    {
+        if (seconds >= 3600)
+            return "the past hour";
+        const uint32_t minutes = std::max<uint32_t>(1, seconds / 60);
+        return minutes == 1 ? std::string("the past minute") : "the past " + std::to_string(minutes) + " minutes";
+    }
 
     const char* ClassName(uint8 cls)
     {
@@ -151,6 +180,69 @@ std::string Outlook_SideText(Player* bot)
 uint64_t Outlook_HomeCityPrompts()
 {
     return g_homeCityPrompts;
+}
+
+std::string Outlook_ChatState(Player* bot)
+{
+    if (!bot || g_OutlookChatStates.size() < 4)
+        return "";
+    // Lines are counted from when the server came up: what it said a minute
+    // after a restart would be a guess.
+    const int64_t uptime = GameTime::GetUptime().count();
+    if (uptime < 60)
+        return "";
+    const uint32_t window = uint32_t(std::min<int64_t>(3600, uptime));
+
+    std::vector<Channel*> channels;
+    if (Channel* trade = TradeChannelOf(bot))
+        channels.push_back(trade);
+    if (Channel* general = OllamaResolveZoneChannel(bot, uint32(ChatChannelId::GENERAL)))
+        channels.push_back(general);
+
+    std::string out;
+    for (Channel* channel : channels)
+    {
+        // Nothing, a line or two, a bit of chat, busy.
+        const uint32_t lines = Context_ChannelLines(uint32(bot->GetTeamId()), channel->GetName(), window);
+        const size_t state = lines == 0 ? 0 : lines <= 3 ? 1 : lines < 30 ? 2 : 3;
+        const std::string text = SafeFormat(g_OutlookChatStates[state],
+                                            fmt::arg("channel", Context_ChannelLabel(SRC_GENERAL_LOCAL,
+                                                                                     channel->GetName())),
+                                            fmt::arg("window", WindowText(window)));
+        if (text.empty() || text == "[Format Error]")
+            continue;
+        out += (out.empty() ? "" : ", and ") + text;
+    }
+    return out;
+}
+
+std::string Outlook_ChatFor(Player* bot, const std::vector<std::string>& lines)
+{
+    if (!bot || g_OutlookChatText.empty() || g_OutlookChatWords.empty())
+        return "";
+    bool aboutChat = false;
+    for (const std::string& line : lines)
+        aboutChat = aboutChat || CrowdText::ContainsPhrase(CrowdText::Words(line), g_OutlookChatWords);
+    if (!aboutChat)
+        return "";
+    const std::string state = Outlook_ChatState(bot);
+    if (state.empty())
+        return "";
+    const std::string text = SafeFormat(g_OutlookChatText, fmt::arg("chat", state));
+    if (text == "[Format Error]")
+        return "";
+    ++g_chatPrompts;
+    return text;
+}
+
+uint64_t Outlook_ChatPrompts()
+{
+    return g_chatPrompts;
+}
+
+void Outlook_NoteChatPrompt()
+{
+    ++g_chatPrompts;
 }
 
 std::string Outlook_ForBot(Player* bot)

@@ -262,6 +262,10 @@ std::vector<std::string> g_OutlookCitiesHorde;
 std::vector<std::string> g_OutlookCitiesAlliance;
 std::string g_MingleSideText;
 std::string g_MingleHomeCityText;
+std::string g_OutlookChatText;
+std::vector<std::vector<std::string>> g_OutlookChatWords;
+std::vector<std::string> g_OutlookChatStates;
+std::string g_MingleChatText;
 uint32_t    g_ContextAmbientHoldSeconds = 60;
 std::string g_ContextLeadUpText;
 uint32_t    g_ContextLeadUpMaxWords     = 8;
@@ -2943,6 +2947,37 @@ static void LoadNaturalChatV28Settings()
              g_RaceStyleChance.size(), g_BanterText.empty() ? "off" : "on", g_BanterWords.size());
 }
 
+static void LoadNaturalChatV30Settings()
+{
+    // --- what chat is really like ---------------------------------------------------------
+    g_OutlookChatText = sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.ChatText",
+        "General, and in the cities Trade, show in your own chat window wherever you are, as they do in "
+        "everyone's, so nobody goes anywhere to read them. What they have really been like here: {chat}. Say "
+        "nothing about them that is not so.");
+    g_OutlookChatWords = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.ChatWords",
+        "trade chat|trade channel|in trade|on trade|try trade|check trade|spam trade|trade is|trade was|trades dead|"
+        "trade dead|general chat|general channel|in general|check general|general is|general was|generals dead|"
+        "general dead|lfg|chat|chats|channel|channels|spam|spamming|spammy|spammers"));
+    g_OutlookChatStates = ReadPipeList("OllamaChat.Outlook.ChatStates",
+        "nobody has typed anything in {channel} for {window}|{channel} has had only a line or two in {window}|"
+        "{channel} has had a bit of chat in {window}|{channel} has been busy in {window}");
+    if (!g_OutlookChatStates.empty() && g_OutlookChatStates.size() != 4)
+    {
+        LOG_WARN("module.ollamachat", "[Ollama Chat] OllamaChat.Outlook.ChatStates needs four phrases (nothing, a "
+                 "line or two, a bit of chat, busy), not {}: bots are not told what chat is like.",
+                 g_OutlookChatStates.size());
+        g_OutlookChatStates.clear();
+    }
+    g_MingleChatText = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.ChatText",
+        "If chat comes up: General, and in the cities Trade, show in each player's own chat window wherever they "
+        "stand, so nobody goes anywhere to read them, and {chat}.");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v30: talk of chat told what General and Trade are really "
+             "like {} ({} chat words); /say exchanges between bots told it {}.",
+             (g_OutlookChatText.empty() || g_OutlookChatStates.empty()) ? "off" : "on", g_OutlookChatWords.size(),
+             (g_MingleChatText.empty() || g_OutlookChatStates.empty()) ? "off" : "on");
+}
+
 static void LoadNaturalChatV29Settings()
 {
     // --- "that pot saved my arse" -----------------------------------------------------------
@@ -3147,10 +3182,9 @@ static void LoadNaturalChatV16Settings()
         "questing and moans about it|[quest] one of them asks the other about the quest they just handed "
         "in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's "
         "pet or companion|one of them admires the other's gear|one of them teases the other about their race "
-        "or class, all in good fun|swapping tips about levelling their classes|one of them is waiting for a "
-        "group and getting bored|[duel] one of them challenges the other to a duel, and they agree to head "
-        "{duel_where} and fight it out|one of them asks the other if they "
-        "have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: "
+        "or class, all in good fun|swapping tips about levelling their classes|[duel] one of them challenges "
+        "the other to a duel, and they agree to head {duel_where} and fight it out|one of them asks the other "
+        "if they have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: "
         "the players walking past|levelling their professions|which zone is the worst to quest in|being lost "
         "in this city|what they are saving their gold for|a funny death one of them had today|one of them is "
         "about to log off|their guilds, or not having one|an imagine-if one of them dreams up, plainly made "
@@ -3881,6 +3915,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV27Settings();
     LoadNaturalChatV28Settings();
     LoadNaturalChatV29Settings();
+    LoadNaturalChatV30Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

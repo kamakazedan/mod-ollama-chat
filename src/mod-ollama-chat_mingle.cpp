@@ -403,6 +403,23 @@ namespace
         return out;
     }
 
+    // What chat is like where they stand, if it comes up: in every player's
+    // own chat window, and as busy as it has really been. Written all at once,
+    // an exchange cannot be told it only when chat comes up, as a reply is.
+    std::string ChatText(Player* bot)
+    {
+        if (g_MingleChatText.empty())
+            return {};
+        const std::string state = Outlook_ChatState(bot);
+        if (state.empty())
+            return {};
+        const std::string text = SafeFormat(g_MingleChatText, fmt::arg("chat", state));
+        if (text == "[Format Error]")
+            return {};
+        Outlook_NoteChatPrompt();
+        return " " + text;
+    }
+
     std::string BuildPrompt(const std::vector<Player*>& group, bool& duel)
     {
         uint32_t level = group.front()->GetLevel();
@@ -457,7 +474,7 @@ namespace
             return {};
         // "[Are We There, Yeti?]" is linked when the line goes out, as any
         // other bot line is (mod-ollama-chat_links).
-        std::string out = prompt + SideText(group.front());
+        std::string out = prompt + SideText(group.front()) + ChatText(group.front());
         if (g_LinksEnable && !g_MingleLinksText.empty())
             out += " " + g_MingleLinksText;
         return out;

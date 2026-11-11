@@ -29,6 +29,11 @@ class Player;
 //                said "these grunts are too high level" and asked who was
 //                going AFK in Stormwind.
 //
+// And when the talk is of chat itself, what General and Trade are really like
+// (Outlook_ChatFor): "trade chat is basically a warzone" and "brb gonna go
+// check trade chat" were said on a realm where nobody had typed in Trade all
+// evening, as if it were a place across town.
+//
 // Conversation premises can carry a level tag, "[70+]" or "[10-39]", and are
 // only picked by bots that level fits -- and a side, "[horde]" or
 // "[alliance]", picked only by that side's bots.
@@ -61,6 +66,24 @@ std::string Outlook_HomeCity(Player* bot);
 
 // Prompts that said a bot was in its own side's city.
 uint64_t Outlook_HomeCityPrompts();
+
+// How busy the chat channels where `bot` stands have really been
+// (Outlook.ChatStates, from Context_ChannelLines): "nobody has typed anything
+// in Trade for the past hour, and General has had a bit of chat in the past
+// hour". Trade when it is in Trade (only in the cities), General when there is
+// one where it is. Empty when there is neither, or the server has only just
+// come up.
+std::string Outlook_ChatState(Player* bot);
+
+// Outlook.ChatText with that state, when one of `lines` -- what is being
+// answered, and the chat before it -- talks about chat (Outlook.ChatWords:
+// "check trade", "general is dead", "lfg"). Empty otherwise.
+std::string Outlook_ChatFor(Player* bot, const std::vector<std::string>& lines);
+
+// Prompts told what chat is like: replies (Outlook_ChatFor) and /say exchanges
+// between bots (Mingle.ChatText).
+uint64_t Outlook_ChatPrompts();
+void     Outlook_NoteChatPrompt();
 
 // Does a premise's optional level tag ("[70+]", "[10-39]", "[80]") allow this
 // level? Strips the tag from `premise` either way; no tag fits every level.

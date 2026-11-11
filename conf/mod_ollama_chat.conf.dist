@@ -4737,7 +4737,7 @@ OllamaChat.Mingle.PromptTemplate = "{count} World of Warcraft players are standi
 #        [horde] or [alliance]: only that side's bots (only one side mingles
 #        together). Tags go in front, with a level tag or without.
 #        Default: (below)
-OllamaChat.Mingle.Premises = "saying hello and asking what the other has been up to|[quest] one of them just got back from questing and moans about it|[quest] one of them asks the other about the quest they just handed in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's pet or companion|one of them admires the other's gear|one of them teases the other about their race or class, all in good fun|swapping tips about levelling their classes|one of them is waiting for a group and getting bored|[duel] one of them challenges the other to a duel, and they agree to head {duel_where} and fight it out|one of them asks the other if they have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: the players walking past|levelling their professions|which zone is the worst to quest in|being lost in this city|what they are saving their gold for|a funny death one of them had today|one of them is about to log off|their guilds, or not having one|an imagine-if one of them dreams up, plainly made up for a laugh|gnomes|murlocs|[15+] whether to run a dungeon together later|[15+] a dungeon one of them ran earlier|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] flying mounts"
+OllamaChat.Mingle.Premises = "saying hello and asking what the other has been up to|[quest] one of them just got back from questing and moans about it|[quest] one of them asks the other about the quest they just handed in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's pet or companion|one of them admires the other's gear|one of them teases the other about their race or class, all in good fun|swapping tips about levelling their classes|[duel] one of them challenges the other to a duel, and they agree to head {duel_where} and fight it out|one of them asks the other if they have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: the players walking past|levelling their professions|which zone is the worst to quest in|being lost in this city|what they are saving their gold for|a funny death one of them had today|one of them is about to log off|their guilds, or not having one|an imagine-if one of them dreams up, plainly made up for a laugh|gnomes|murlocs|[15+] whether to run a dungeon together later|[15+] a dungeon one of them ran earlier|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] flying mounts"
 
 #    OllamaChat.Mingle.DuelChance
 #        Two who could go out to the gates and duel ([duel] in
@@ -4757,6 +4757,16 @@ OllamaChat.Mingle.DuelChance = 25
 #                 "{city} is one of those, so they are safe here, and its guards are on their side."
 OllamaChat.Mingle.SideText = "They all play {side}: their own side's cities are {cities}."
 OllamaChat.Mingle.HomeCityText = "{city} is one of those, so they are safe here, and its guards are on their side."
+
+#    OllamaChat.Mingle.ChatText
+#        What chat is like where they stand, for a /say exchange between bots,
+#        if it comes up: that General and Trade show in every player's own
+#        chat window, and with {chat} how busy they have really been
+#        (Outlook.ChatStates). An exchange is written all at once, so it is
+#        told this every time rather than only when chat comes up, as a reply
+#        is (Outlook.ChatText). Added after the prompt. Empty leaves it out.
+#        Default: "If chat comes up: General, and in the cities Trade, show in each player's own chat window wherever they stand, so nobody goes anywhere to read them, and {chat}."
+OllamaChat.Mingle.ChatText = "If chat comes up: General, and in the cities Trade, show in each player's own chat window wherever they stand, so nobody goes anywhere to read them, and {chat}."
 
 #    OllamaChat.Mingle.RaceText
 #        Race.UseText for one of the people in a /say exchange between bots,
@@ -5070,6 +5080,32 @@ OllamaChat.Outlook.SideText = "You play {side}: your own side's cities are {citi
 OllamaChat.Outlook.HomeCityText = "You are in {city}, one of your side's own cities: you are safe here, and its guards are on your side."
 OllamaChat.Outlook.Cities.Horde = "Orgrimmar|Thunder Bluff|the Undercity|Silvermoon City"
 OllamaChat.Outlook.Cities.Alliance = "Stormwind|Ironforge|Darnassus|the Exodar"
+
+#    OllamaChat.Outlook.ChatText
+#    OllamaChat.Outlook.ChatWords
+#    OllamaChat.Outlook.ChatStates
+#        What chat itself is really like, for a reply when the talk is of
+#        chat. "trade chat is basically a warzone" and "brb gonna go check
+#        trade chat" were said on a realm where nobody had typed in Trade all
+#        evening, and as if it were somewhere to go. When the line a bot
+#        answers, or one of the few before it, has one of ChatWords in it
+#        ("check trade", "general is dead", "lfg"; | separated, a word ending
+#        in * matches any word that starts with the rest), ChatText is added
+#        to the prompt, with {chat} how busy Trade (in a city) and General
+#        have really been: one of the four ChatStates -- nobody typed
+#        anything, only a line or two (up to 3), a bit of chat (up to 29),
+#        busy (30 or more) -- for each, with {channel} its name and {window}
+#        "the past hour" (or the minutes since the server came up). Counted
+#        are the lines people typed there and the lines this module's bots
+#        said there; one of playerbots' own canned lines is not. An empty
+#        ChatText leaves it out; Mingle.ChatText says the same of a /say
+#        exchange between bots.
+#        Default: "General, and in the cities Trade, show in your own chat window wherever you are, as they do in everyone's, so nobody goes anywhere to read them. What they have really been like here: {chat}. Say nothing about them that is not so.",
+#                 "trade chat|trade channel|in trade|on trade|try trade|check trade|spam trade|trade is|trade was|trades dead|trade dead|general chat|general channel|in general|check general|general is|general was|generals dead|general dead|lfg|chat|chats|channel|channels|spam|spamming|spammy|spammers",
+#                 "nobody has typed anything in {channel} for {window}|{channel} has had only a line or two in {window}|{channel} has had a bit of chat in {window}|{channel} has been busy in {window}"
+OllamaChat.Outlook.ChatText = "General, and in the cities Trade, show in your own chat window wherever you are, as they do in everyone's, so nobody goes anywhere to read them. What they have really been like here: {chat}. Say nothing about them that is not so."
+OllamaChat.Outlook.ChatWords = "trade chat|trade channel|in trade|on trade|try trade|check trade|spam trade|trade is|trade was|trades dead|trade dead|general chat|general channel|in general|check general|general is|general was|generals dead|general dead|lfg|chat|chats|channel|channels|spam|spamming|spammy|spammers"
+OllamaChat.Outlook.ChatStates = "nobody has typed anything in {channel} for {window}|{channel} has had only a line or two in {window}|{channel} has had a bit of chat in {window}|{channel} has been busy in {window}"
 
 #    OllamaChat.Sides.Cries.Horde
 #    OllamaChat.Sides.Cries.Alliance

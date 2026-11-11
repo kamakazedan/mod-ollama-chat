@@ -86,6 +86,19 @@ std::string Context_ChannelLabel(ChatChannelSourceLocal source, const std::strin
 // notes it when it is asked for (OllamaChatRequest::writtenAtSeq).
 uint64_t Context_NextSeq();
 
+// How busy a channel has really been: the lines said in `channelName` (its
+// full name, "Trade - City", "General - Elwynn Forest") on side `team` in the
+// last `withinSeconds` (an hour at most), by people and bots alike. What people
+// type there is noted by the chat hook (Context_NoteChannelLine), what this
+// module's bots say there by Context_RecordLine; a line neither sees -- one of
+// playerbots' own canned ones -- is not counted. Kept with Context.Enable off
+// too. For Outlook_ChatState: "trade chat is a warzone" had been said on a
+// realm where nobody had typed in Trade all evening.
+uint32_t Context_ChannelLines(uint32_t team, const std::string& channelName, uint32_t withinSeconds);
+
+// Someone said something in that channel, for Context_ChannelLines.
+void Context_NoteChannelLine(uint32_t team, const std::string& channelName);
+
 // Did a real player say something in that space that `viewer` could hear, as
 // line `fromSeq` or later (0: any line) and no more than `withinSeconds` ago
 // (0: however long ago)?

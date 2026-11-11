@@ -60,6 +60,24 @@ namespace
     // bot guid -> when it last kept a smiley in a line
     std::unordered_map<uint64_t, Clock::time_point> g_emoticonUse;
 
+    // side and channel name -> when each line of the last hour was said there
+    // (Context_ChannelLines)
+    std::unordered_map<std::string, std::deque<Clock::time_point>> g_channelLines;
+    constexpr uint32_t kChannelLinesSeconds = 3600;
+    constexpr size_t   kMaxChannelLines     = 2000;
+
+    std::string ChannelLinesKey(uint32_t team, const std::string& channelName)
+    {
+        return std::to_string(team) + ":" + channelName;
+    }
+
+    void PruneChannelLinesLocked(std::deque<Clock::time_point>& lines, Clock::time_point now)
+    {
+        while (!lines.empty() &&
+               (lines.size() > kMaxChannelLines || now - lines.front() > std::chrono::seconds(kChannelLinesSeconds)))
+            lines.pop_front();
+    }
+
     constexpr size_t kMaxStoredPerSpace = 80;
     constexpr size_t kMaxLineChars      = 160;
     // An event is the module's own note, not someone's chat line, and what
@@ -355,6 +373,11 @@ uint64_t Context_RecordLine(Player* speaker, ChatChannelSourceLocal source,
                             const std::string& channelName, const std::string& text,
                             ContextLineKind kind)
 {
+    // How busy the channel is, whatever else is on. A person's line was noted
+    // by the chat hook already, before anything could stop it.
+    if (speaker && kind == ContextLineKind::Bot && source == SRC_GENERAL_LOCAL && !text.empty())
+        Context_NoteChannelLine(uint32_t(speaker->GetTeamId()), channelName);
+
     if (!g_ContextEnable || !speaker || !speaker->IsInWorld())
         return 0;
 
@@ -479,6 +502,30 @@ uint64_t Context_NextSeq()
 {
     std::lock_guard<std::mutex> lock(g_mutex);
     return g_nextSeq;
+}
+
+void Context_NoteChannelLine(uint32_t team, const std::string& channelName)
+{
+    if (channelName.empty())
+        return;
+    const Clock::time_point now = Clock::now();
+    std::lock_guard<std::mutex> lock(g_mutex);
+    std::deque<Clock::time_point>& lines = g_channelLines[ChannelLinesKey(team, channelName)];
+    lines.push_back(now);
+    PruneChannelLinesLocked(lines, now);
+}
+
+uint32_t Context_ChannelLines(uint32_t team, const std::string& channelName, uint32_t withinSeconds)
+{
+    const Clock::time_point now = Clock::now();
+    std::lock_guard<std::mutex> lock(g_mutex);
+    auto it = g_channelLines.find(ChannelLinesKey(team, channelName));
+    if (it == g_channelLines.end())
+        return 0;
+    PruneChannelLinesLocked(it->second, now);
+    const Clock::time_point since = now - std::chrono::seconds(std::min(withinSeconds, kChannelLinesSeconds));
+    return uint32_t(std::count_if(it->second.begin(), it->second.end(),
+                                  [since](Clock::time_point when) { return when >= since; }));
 }
 
 bool Context_HumanSpokeSince(Player* viewer, ChatChannelSourceLocal source, const std::string& channelName,

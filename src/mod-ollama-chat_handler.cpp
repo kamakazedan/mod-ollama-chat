@@ -393,6 +393,11 @@ bool PlayerBotChatHandler::OnPlayerCanUseChat(Player* player, uint32_t type, uin
     if (OllamaIsBotPlayer(player))
         return true;
 
+    // How busy the channel really is, for when bots talk of chat
+    // (Outlook_ChatState). Noted first: nothing below can lose it.
+    if (player && channel && lang != LANG_ADDON && !msg.empty())
+        Context_NoteChannelLine(uint32_t(player->GetTeamId()), channel->GetName());
+
     ChatChannelSourceLocal sourceLocal = GetChannelSourceLocal(type);
     ProcessChat(player, type, lang, msg, sourceLocal, channel, nullptr);
     return true;
@@ -3412,6 +3417,21 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     // fill, and what anyone can know about someone else.
     prompt += Outlook_ForBot(bot);
     prompt += Links_PromptHint();
+
+    // Talk of chat -- "just check trade", "general is dead" -- gets what General
+    // and Trade have really been like, and that they are in everyone's chat
+    // window wherever they stand: "trade chat is basically a warzone" was said
+    // where nobody had typed in Trade all evening, and "brb gonna go check
+    // trade chat" as if it were somewhere to go. The line answered and the few
+    // before it decide (the transcript's own header names the channel).
+    {
+        std::vector<std::string> said{ playerMessage };
+        for (const ContextRecentLine& line : Context_RecentLines(bot, source, channelName, 6, g_ContextMaxAgeSeconds))
+            said.push_back(line.text);
+        const std::string chat = Outlook_ChatFor(bot, said);
+        if (!chat.empty())
+            prompt += " " + chat;
+    }
 
     // Let the model gesture. The tag is parsed back out and stripped before
     // the line is spoken, so it never reaches chat as text.

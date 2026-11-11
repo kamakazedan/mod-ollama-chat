@@ -932,6 +932,10 @@ extern std::vector<std::string> g_OutlookCitiesHorde;      // the Horde's own ci
 extern std::vector<std::string> g_OutlookCitiesAlliance;   // the Alliance's
 extern std::string g_MingleSideText;            // the same for a /say exchange between bots: {side} {cities}
 extern std::string g_MingleHomeCityText;        // ...{city}
+extern std::string g_OutlookChatText;           // talk of chat: what General and Trade are really like: {chat}
+extern std::vector<std::vector<std::string>> g_OutlookChatWords;   // ...what makes a line talk of chat
+extern std::vector<std::string> g_OutlookChatStates;   // {channel} {window}: nothing, a line or two, a bit, busy
+extern std::string g_MingleChatText;            // the same for a /say exchange between bots: {chat}
 extern uint32_t    g_ContextAmbientHoldSeconds; // no unprompted line where a real player spoke this lately
 extern std::string g_ContextLeadUpText;         // what a short line came right after: {player_name} {lead_up}
 extern uint32_t    g_ContextLeadUpMaxWords;     // ...for lines of up to this many words (0: any)

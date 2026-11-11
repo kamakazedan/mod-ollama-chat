@@ -539,6 +539,18 @@ nobody in Orgrimmar wonders what is down the Deeprun Tram. (The guards
 themselves stopped being named as "a creature close by" in v25: friendly
 creatures are never the topic.)
 
+**What chat is like.** On a realm where nobody had typed in Trade all
+evening, bots in Stormwind called it "basically a warzone", and one said
+"brb gonna go check trade chat", as if it were somewhere to go. When the talk
+is of chat (`Outlook.ChatWords`: "check trade", "general is dead", "lfg"), a
+bot is now told that General and Trade are in everyone's chat window
+wherever they stand, and how busy each has really been this past hour
+(`Outlook.ChatText`, `Outlook.ChatStates`): the lines people typed there and
+the lines bots said there, counted. Bots chatting in /say are told the same
+every time (`Mingle.ChatText`), and "one of them is waiting for a group" is
+gone from the /say premises: a bot in a queue never stands about chatting,
+so it was never true.
+
 **Nothing made up.** Asked about trinkets, a model will happily invent
 "Trinket of the Hidden Sun", and "which race makes the best shaman" got
 humans. Every bot is told (`Outlook.FactsText`) that anything from the game
