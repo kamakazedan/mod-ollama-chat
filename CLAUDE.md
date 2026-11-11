@@ -102,6 +102,13 @@ repetition history.
   normal handling continues.
 - There is no `OnGuildMemberLogin`. Guild login uses `PLAYERHOOK_ON_LOGIN` plus
   a guild check; promote/demote come through `GuildScript::OnEvent`.
+- Read a looted item in `OnPlayerStoreNewItem` (as `ChatOnLoot` does), never
+  in `OnPlayerLootItem`. Hooks run in module order, and mod-junk-to-gold sells
+  and destroys a bot's grey loot inside its own `OnPlayerLootItem`, before
+  this module's: a new item destroyed is deleted there and then, so the
+  `Item*` a later hook gets is freed memory. Following it in
+  mod-playerbots-plus's ledger brought the server down within minutes of
+  the bots coming online.
 - `urand(min, max)` is **inclusive on both ends**. `urand(0, 100) > 0` fires
   about 1 in 101 times, so a configured chance of 0 is not "never". Use
   `urand(1, 100) > chance` and check `chance <= 0` first.
