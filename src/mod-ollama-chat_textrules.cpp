@@ -248,6 +248,20 @@ namespace
         return NumberWord(w) != 0;
     }
 
+    // Words between whoever needs something and the need: "i really need",
+    // "still need", "i could really use".
+    bool IsNeedAdverb(const std::string& w)
+    {
+        static const char* const words[] = {
+            "really", "rly", "realy", "still", "just", "so", "also", "def", "defo", "actually", "kinda", "sorta",
+            "seriously", "srsly", "could", "would", "do"
+        };
+        for (const char* x : words)
+            if (w == x)
+                return true;
+        return false;
+    }
+
     // "u got", "u have": "u" meaning "you", not playerbots' "use".
     bool IsYouVerb(const std::string& w)
     {
@@ -1599,6 +1613,223 @@ namespace TextRules
             if (const uint32_t n = NumberWord(words[firstItem - 1]); n > 1)
                 out.count = n;
         return out;
+    }
+
+    // ---- buffs, on request ---------------------------------------------------
+
+    BuffAsk MatchBuffAsk(const std::string& cleanText, const BuffRules& rules, bool named,
+                         const std::vector<std::string>& names)
+    {
+        static constexpr size_t npos = std::string::npos;
+        const BuffAsk none;
+
+        // "cast fort", "c Power Word: Fortitude": playerbots' own command.
+        const std::vector<std::string> all = CrowdText::Words(cleanText);
+        if (all.empty())
+            return none;
+        for (const std::vector<std::string>& c : rules.commands)
+            if (MatchesAt(all, 0, c))
+                return none;
+
+        // The bots' names are not part of what is asked for.
+        std::vector<std::string> nameWords;
+        for (const std::string& n : names)
+            for (std::string& w : CrowdText::Words(n))
+                nameWords.push_back(std::move(w));
+        std::vector<std::string> words;
+        for (const std::string& w : all)
+            if (std::find(nameWords.begin(), nameWords.end(), w) == nameWords.end())
+                words.push_back(w);
+        if (words.empty() || (rules.maxWords > 0 && words.size() > rules.maxWords))
+            return none;
+
+        // No spell anyone casts on you: "food buff", "flask", "world buffs";
+        // "mark skull" is a raid mark.
+        if (!Occurrences(words, rules.notBuffs).empty())
+            return none;
+
+        // What they want.
+        std::vector<bool> buffWord(words.size(), false);
+        size_t firstBuff = npos;
+        auto mark = [&](const std::vector<std::vector<std::string>>& phrases) -> bool
+        {
+            bool any = false;
+            for (const auto& [b, e] : Occurrences(words, phrases))
+            {
+                any = true;
+                for (size_t i = b; i < e; ++i)
+                    buffWord[i] = true;
+                firstBuff = std::min(firstBuff, b);
+            }
+            return any;
+        };
+        uint16_t strongKinds = BUFF_NONE, shortKinds = BUFF_NONE;
+        for (const BuffRules::Kind& k : rules.kinds)
+        {
+            if (mark(k.words))
+                strongKinds |= k.kind;
+            if (mark(k.shortWords))
+                shortKinds |= k.kind;
+        }
+        const bool generic = mark(rules.buffWords);
+        const bool strong  = generic || strongKinds;
+        if (!strong && !shortKinds)
+            return none;
+
+        // Who they asked: "priest can i get a buff", "any pallys?".
+        std::vector<bool> classWord(words.size(), false);
+        size_t firstClass = npos;
+        const BuffRules::Class* asked = nullptr;
+        for (const BuffRules::Class& c : rules.classes)
+            for (const auto& [b, e] : Occurrences(words, c.words))
+            {
+                for (size_t i = b; i < e; ++i)
+                    classWord[i] = true;
+                if (b < firstClass)
+                {
+                    firstClass = b;
+                    asked = &c;
+                }
+            }
+
+        // Offering, not asking: "anyone need fort?", "who wants buffs", "im
+        // buffing", and "buffs anyone?" with "anyone" at the end.
+        if (!Occurrences(words, rules.offers).empty())
+            return none;
+        if (words.size() > 1 && (words.back() == "anyone" || words.back() == "anybody" || words.back() == "any1"))
+            return none;
+
+        // Asking for it, and asking nicely.
+        std::vector<bool> askWord(words.size(), false);
+        bool asks = false, polite = false;
+        for (const auto& [b, e] : Occurrences(words, rules.asks))
+        {
+            asks = true;
+            for (size_t i = b; i < e; ++i)
+                askWord[i] = true;
+        }
+        for (const auto& [b, e] : Occurrences(words, rules.polite))
+        {
+            polite = true;
+            for (size_t i = b; i < e; ++i)
+                askWord[i] = true;
+        }
+
+        // Had: "i have fort", "im buffed" -- but not the "i have" in "can i
+        // have" or the "got" in "anyone got".
+        for (const auto& [b, e] : Occurrences(words, rules.haves))
+        {
+            bool inAsk = false;
+            for (size_t i = b; i < e; ++i)
+                inAsk = inAsk || askWord[i];
+            if (!inAsk)
+                return none;
+        }
+
+        // Negated before the buff: "dont need buffs", "no buffs". A "no" up
+        // front is an interjection when the buff does not follow it at once:
+        // "no worries, can i get a buff".
+        for (const auto& [b, e] : Occurrences(words, rules.negations))
+        {
+            if (b >= firstBuff)
+                continue;
+            if (b == 0 && IsInterjection(words[0]) && e != firstBuff)
+                continue;
+            return none;
+        }
+
+        const bool question = cleanText.find('?') != npos;
+
+        // A thank-you, or a question about it rather than for it.
+        if (!asks && !polite && (CrowdText::ContainsPhrase(words, rules.thanks) ||
+                                 CrowdText::ContainsPhrase(words, rules.questions)))
+            return none;
+
+        // Their own need, right before the buff: "need a buff", "i could use
+        // fort", "really need some int". Never "warriors need a buff", which
+        // is about the game.
+        bool needs = false;
+        for (const auto& [b, e] : Occurrences(words, rules.needs))
+        {
+            // Whose need: back over "really", "still" and the like to the
+            // start of the line, "i" or "we", or an ask.
+            size_t j = b;
+            while (j > 0 && IsNeedAdverb(words[j - 1]))
+                --j;
+            const bool theirs = j == 0 || words[j - 1] == "i" || words[j - 1] == "we" || askWord[j - 1];
+            if (!theirs)
+                continue;
+            size_t i = e;
+            for (int skipped = 0; i < words.size() && skipped < 3 && !buffWord[i] && IsNeedFiller(words[i]); ++skipped)
+                ++i;
+            if (i < words.size() && buffWord[i])
+            {
+                needs = true;
+                break;
+            }
+        }
+
+        // "anyone", "someone" up front: "anyone fort?", "someone buff me";
+        // "any mages? need int".
+        const bool openUp = words[0] == "anyone" || words[0] == "anybody" || words[0] == "any1" ||
+                            words[0] == "someone" || words[0] == "somebody" || words[0] == "sum1" ||
+                            (words[0] == "any" && words.size() > 1 && classWord[1]);
+
+        // "buffs?", "any buffs", "fort pls", "kings for me": nothing but it.
+        bool bare = words.size() <= 4;
+        for (size_t i = 0; bare && i < words.size(); ++i)
+            bare = buffWord[i] || classWord[i] || askWord[i] || IsBareFiller(words[i]);
+
+        const bool ask = asks || polite || needs;
+        bool ok = false;
+        if (strong)
+            ok = ask || bare || openUp || (question && (named || words.size() <= 6));
+        else
+            ok = words.size() <= 6 && (ask || bare || openUp || named);
+        if (!ok)
+            return none;
+
+        BuffAsk out;
+        out.ask   = true;
+        out.kinds = strongKinds | shortKinds;
+        if (asked)
+        {
+            out.askedClass = asked->name;
+            if (out.kinds == BUFF_NONE)
+                out.kinds = asked->kinds;   // "priest buff pls": a priest's
+        }
+        return out;
+    }
+
+    bool IsThanksLine(const std::string& cleanText, const std::vector<std::vector<std::string>>& thanks,
+                      const std::vector<std::vector<std::string>>& negations,
+                      const std::vector<std::string>& names, uint32_t maxWords)
+    {
+        if (cleanText.find('?') != std::string::npos)
+            return false;
+        std::vector<std::string> nameWords;
+        for (const std::string& n : names)
+            for (std::string& w : CrowdText::Words(n))
+                nameWords.push_back(std::move(w));
+        std::vector<std::string> words;
+        for (std::string& w : CrowdText::Words(cleanText))
+            if (std::find(nameWords.begin(), nameWords.end(), w) == nameWords.end())
+                words.push_back(std::move(w));
+        if (words.empty() || (maxWords > 0 && words.size() > maxWords))
+            return false;
+
+        const std::vector<std::pair<size_t, size_t>> said = Occurrences(words, thanks);
+        if (said.empty())
+            return false;
+        // "no thanks", "nah ty": turning something down.
+        for (const auto& [b, e] : Occurrences(words, negations))
+            if (e == said.front().first)
+                return false;
+        // "thanks for nothing".
+        for (size_t i = said.front().second; i < words.size(); ++i)
+            if (words[i] == "nothing" || words[i] == "nothin")
+                return false;
+        return true;
     }
 
     // ---- telling bots what to do ---------------------------------------------

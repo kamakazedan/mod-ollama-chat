@@ -132,6 +132,14 @@ repetition history.
   after it (`mod-ollama-chat_orders.cpp`).
 - `"buff"` is playerbots' list of buff potions; class buffs are `"rebuff"`.
   `"release"` on a living bot makes it stay. `"revive"` is the spirit healer.
+- A buff asked of a stranger (`mod-ollama-chat_buffs.cpp`) is never a
+  playerbots command -- a random bot takes none from someone it does not
+  serve -- but the bot's own cast, from the world tick: `Player::CastSpell`
+  with the best rank it knows (the core scales the aura down for a
+  low-level target), off its mount and out of a form that blocks it first.
+  Whether a buff would stack is the core's own spell groups
+  (`SpellMgr::CheckSpellGroupStackRules`), not a list here. An ask it
+  answers is claimed, whoever acts on it, so no crowd chats over it.
 - Packet hooks (`ServerScript::CanPacketSend`) run on any thread: read only a
   snapshot published from the world thread (mod-playerbots-plus's
   `PlayerbotsPlusMute.cpp` does).

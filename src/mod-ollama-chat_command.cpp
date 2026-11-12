@@ -22,6 +22,7 @@
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_conjure.h"
+#include "mod-ollama-chat_buffs.h"
 #include "mod-ollama-chat_equip.h"
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_joined.h"
@@ -667,6 +668,21 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)conjure.refused,
                              (unsigned long long)conjure.lapsed,
                              conjure.pending);
+
+    const BuffStats buffs = Buff_GetStats();
+    if (show("bots"))
+        handler->PSendSysMessage("Buffs on request: {} - {} asked, {} cast, {} times without a word, {} said no, {} "
+                             "said why not, {} let go by, {} did not go off, {} thank-yous answered, {} pending",
+                             g_BuffEnable ? "on" : "off",
+                             (unsigned long long)buffs.asked,
+                             (unsigned long long)buffs.given,
+                             (unsigned long long)buffs.quiet,
+                             (unsigned long long)buffs.refused,
+                             (unsigned long long)buffs.cant,
+                             (unsigned long long)buffs.ignored,
+                             (unsigned long long)buffs.failed,
+                             (unsigned long long)buffs.thanked,
+                             buffs.pending);
 
     const OrdersStats orders = Orders_GetStats();
     if (show("bots"))

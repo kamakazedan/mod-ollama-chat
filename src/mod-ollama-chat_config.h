@@ -465,6 +465,38 @@ extern std::string g_ConjureHintNotMage;
 extern std::string g_ConjureHintAlready;
 extern std::string g_ConjureHintNotGrouped;
 
+// Buffs on request (mod-ollama-chat_buffs). World thread only.
+struct BuffStyle
+{
+    uint32_t give    = 35;   // weights: buff them and say so,
+    uint32_t quiet   = 40;   // buff them without a word,
+    uint32_t no      = 5;    // say no,
+    uint32_t ignore  = 20;   // let it go by
+    uint32_t explain = 60;   // percent: asked and can't, says why
+    uint32_t welcome = 70;   // percent: answers the "ty"
+};
+extern bool        g_BuffEnable;
+extern TextRules::BuffRules g_BuffRules;
+extern uint32_t    g_BuffMaxGivers;          // bots that buff someone for one ask
+extern uint32_t    g_BuffMaxVoices;          // bots that say anything to one ask
+extern uint32_t    g_BuffDelayMinMs;         // how long a bot takes to cast it
+extern uint32_t    g_BuffDelayMaxMs;
+extern uint32_t    g_BuffRememberSeconds;    // a bot that let someone's ask go lets their next go too
+extern uint32_t    g_BuffThanksSeconds;      // a thank-you this soon after a buff is for it
+extern uint32_t    g_BuffThanksMaxWords;
+extern bool        g_BuffSkipPvp;            // nobody flagged for PvP is buffed by a bot that is not
+extern BuffStyle   g_BuffStyleDefault;
+extern std::unordered_map<std::string, BuffStyle> g_BuffStyles;          // upper-case personality key
+extern std::unordered_map<std::string, std::string> g_BuffClassNotes;    // "warrior" -> why it has none
+extern std::string g_BuffHintGive;
+extern std::string g_BuffHintInstead;
+extern std::string g_BuffHintNo;
+extern std::string g_BuffHintCant;
+extern std::string g_BuffHintThanks;
+
+// Said to a bot in /say: the two can see each other's level and class.
+extern std::string g_SaySeenText;
+
 // Per chat style: OllamaChat.Personality.<setting>.<KEY>, keyed here by the
 // upper-case personality key. World thread only.
 struct PersonalityNudge

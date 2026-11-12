@@ -53,6 +53,7 @@
 #include "mod-ollama-chat_conversation.h"
 #include "mod-ollama-chat_partycmd.h"
 #include "mod-ollama-chat_conjure.h"
+#include "mod-ollama-chat_buffs.h"
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_orders.h"
@@ -1277,6 +1278,13 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // run and gets the water -- the mage answers after the tank. Before the
         // blacklist too, since "trade" starts a line people use to ask.
         if (Conjure_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq))
+            handled = true;
+
+        // "can i get a buff", "Verona int pls" in /say or a whisper: a bot
+        // near that can buff them might, its own way; and the "ty" after is
+        // the one that did's to answer (mod-ollama-chat_buffs). After conjure,
+        // so "mage water pls" is the mage's.
+        if (!handled && Buff_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq))
             handled = true;
 
         // "anyone want my [Woolen Bag]?", "wts [Pagan Vest] 50s": what they are
@@ -3590,6 +3598,16 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
                                             fmt::arg("channel", Context_ChannelLabel(source, channelName)));
         if (!note.empty() && note != "[Format Error]")
             prompt += " " + note;
+    }
+
+    // In /say they stand near each other, where anyone can see anyone's level
+    // and class just by looking: "i'm 54" to someone who can see it is not
+    // what people say, and "r u high lvl?" is rarely asked.
+    if ((source == SRC_SAY_LOCAL || source == SRC_YELL_LOCAL) && !g_SaySeenText.empty())
+    {
+        const std::string seen = SafeFormat(g_SaySeenText, fmt::arg("player_name", playerName));
+        if (!seen.empty() && seen != "[Format Error]")
+            prompt += " " + seen;
     }
 
     // What this chat style is told on top of its personality, this time: a

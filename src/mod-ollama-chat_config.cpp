@@ -485,6 +485,27 @@ std::string g_ConjureHintNotMage;
 std::string g_ConjureHintAlready;
 std::string g_ConjureHintNotGrouped;
 
+bool        g_BuffEnable                   = true;
+TextRules::BuffRules g_BuffRules;
+uint32_t    g_BuffMaxGivers                = 2;
+uint32_t    g_BuffMaxVoices                = 2;
+uint32_t    g_BuffDelayMinMs               = 1500;
+uint32_t    g_BuffDelayMaxMs               = 4500;
+uint32_t    g_BuffRememberSeconds          = 90;
+uint32_t    g_BuffThanksSeconds            = 120;
+uint32_t    g_BuffThanksMaxWords           = 8;
+bool        g_BuffSkipPvp                  = true;
+BuffStyle   g_BuffStyleDefault;
+std::unordered_map<std::string, BuffStyle> g_BuffStyles;
+std::unordered_map<std::string, std::string> g_BuffClassNotes;
+std::string g_BuffHintGive;
+std::string g_BuffHintInstead;
+std::string g_BuffHintNo;
+std::string g_BuffHintCant;
+std::string g_BuffHintThanks;
+
+std::string g_SaySeenText;
+
 std::unordered_map<std::string, PersonalityNudge> g_PersonalityNudges;
 std::unordered_map<std::string, uint32_t>         g_PersonalityMaxReplyLength;
 std::string g_PersonalityLongReplyNote;
@@ -1554,7 +1575,7 @@ static void LoadNaturalChatV5Settings()
     g_OutlookClassRoles    = sConfigMgr->GetOption<bool>("OllamaChat.Outlook.ClassRoles", true);
     g_OutlookKnowledgeText = sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.KnowledgeText",
         "You know other players only by what anyone could see of them: their name, level, race, class, spec "
-        "and guild, and what they say in chat.");
+        "and guild, and what they say in chat; not what they are up to, or why they are where they are.");
     g_OutlookLevelPhrases = TextRules::ParseLevelPhrases(sConfigMgr->GetOption<std::string>(
         "OllamaChat.Outlook.LevelPhrases",
         "[40+] repair bill|[40+] repair bills|[40+] repair costs|[70+] heroic|[70+] heroics|[70+] naxx|"
@@ -2805,7 +2826,8 @@ static void LoadNaturalChatV27Settings()
     g_OutlookSideText = sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.SideText",
         "You play {side}: your own side's cities are {cities}.");
     g_OutlookHomeCityText = sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.HomeCityText",
-        "You are in {city}, one of your side's own cities: you are safe here, and its guards are on your side.");
+        "You are in {city}, one of your side's own cities: you are safe here, its guards are on your side, and "
+        "people of every level come here: nobody is too low or too high a level for a city.");
     g_OutlookCitiesHorde = ReadPipeList("OllamaChat.Outlook.Cities.Horde",
         "Orgrimmar|Thunder Bluff|the Undercity|Silvermoon City");
     g_OutlookCitiesAlliance = ReadPipeList("OllamaChat.Outlook.Cities.Alliance",
@@ -2945,6 +2967,222 @@ static void LoadNaturalChatV28Settings()
              (g_SidesOwnCryText.empty() && g_SidesEnemyCryText.empty()) ? "off" : "on", g_SidesCriesHorde.size(),
              g_SidesCriesAlliance.size(), race.phrases, g_RaceUseText.empty() ? 0 : g_RaceUseChance,
              g_RaceStyleChance.size(), g_BanterText.empty() ? "off" : "on", g_BanterWords.size());
+}
+
+// "name:number|name:number" -> a BuffStyle, on top of `base`. Unknown names
+// and bad numbers go in `bad`.
+static BuffStyle ReadBuffStyle(const std::string& raw, BuffStyle base, std::string& bad)
+{
+    std::istringstream in(raw);
+    std::string part;
+    while (std::getline(in, part, '|'))
+    {
+        const size_t b = part.find_first_not_of(" \t");
+        const size_t e = part.find_last_not_of(" \t");
+        if (b == std::string::npos)
+            continue;
+        part = part.substr(b, e - b + 1);
+        const size_t colon = part.find(':');
+        std::string name = part.substr(0, colon);
+        for (char& c : name)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        const std::string num = colon == std::string::npos ? std::string() : part.substr(colon + 1);
+        const bool number = !num.empty() && num.size() <= 4 &&
+                            std::all_of(num.begin(), num.end(), [](unsigned char c) { return std::isdigit(c) != 0; });
+        const uint32_t value = number ? static_cast<uint32_t>(std::stoul(num)) : 0;
+        uint32_t* field = name == "give"    ? &base.give
+                        : name == "quiet"   ? &base.quiet
+                        : name == "no"      ? &base.no
+                        : name == "ignore"  ? &base.ignore
+                        : name == "explain" ? &base.explain
+                        : name == "welcome" ? &base.welcome
+                                            : nullptr;
+        if (!field || !number)
+        {
+            bad += (bad.empty() ? "" : ", ") + part;
+            continue;
+        }
+        *field = (field == &base.explain || field == &base.welcome) ? std::min<uint32_t>(value, 100) : value;
+    }
+    return base;
+}
+
+static void LoadNaturalChatV31Settings()
+{
+    auto phrases = [](const std::string& key, const char* def)
+    {
+        return CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(key, def));
+    };
+
+    // --- buffs on request -----------------------------------------------------------------
+    g_BuffEnable = sConfigMgr->GetOption<bool>("OllamaChat.Buff.Enable", true);
+
+    // A buff's words: those that always mean it, and "~short" ones that mean
+    // it only in a short ask.
+    struct KindWords { uint16_t kind; const char* key; const char* def; };
+    const KindWords kinds[] = {
+        { TextRules::BUFF_FORT, "Fort",
+          "fortitude|power word fortitude|pw fort|pwf|pw f|fort buff|stam buff|stamina buff|~fort|~stam|~stamina" },
+        { TextRules::BUFF_SPIRIT, "Spirit", "divine spirit|spirit buff|~spirit" },
+        { TextRules::BUFF_SHADOW, "Shadow", "shadow protection|shadow prot|sprot|shadow resist buff|shadow res buff" },
+        { TextRules::BUFF_INT, "Int", "intellect|arcane intellect|arcane int|int buff|ai buff|~int|~ai" },
+        { TextRules::BUFF_MARK, "Mark", "mark of the wild|mark of wild|motw|mark buff|~mark" },
+        { TextRules::BUFF_THORNS, "Thorns", "thorns buff|~thorns" },
+        { TextRules::BUFF_KINGS, "Kings", "blessing of kings|bok|kings buff|~kings|~king" },
+        { TextRules::BUFF_MIGHT, "Might", "blessing of might|bom|might buff|~might" },
+        { TextRules::BUFF_WISDOM, "Wisdom", "blessing of wisdom|wisdom buff|~wisdom|~wis" },
+        { TextRules::BUFF_SANCT, "Sanctuary", "blessing of sanctuary|sanctuary|sanc buff|~sanc|~sanct" },
+    };
+    g_BuffRules.kinds.clear();
+    for (const KindWords& k : kinds)
+    {
+        TextRules::BuffRules::Kind kind;
+        kind.kind = k.kind;
+        std::string strong, weak;
+        std::istringstream in(sConfigMgr->GetOption<std::string>(std::string("OllamaChat.Buff.Words.") + k.key, k.def));
+        std::string part;
+        while (std::getline(in, part, '|'))
+        {
+            const size_t b = part.find_first_not_of(" \t");
+            if (b == std::string::npos)
+                continue;
+            part = part.substr(b);
+            std::string& into = part[0] == '~' ? weak : strong;
+            into += (into.empty() ? "" : "|") + (part[0] == '~' ? part.substr(1) : part);
+        }
+        kind.words      = CrowdText::ParsePhrases(strong);
+        kind.shortWords = CrowdText::ParsePhrases(weak);
+        g_BuffRules.kinds.push_back(std::move(kind));
+    }
+
+    struct ClassWords { const char* name; uint16_t kinds; const char* key; const char* def; };
+    const ClassWords classes[] = {
+        { "priest", TextRules::BUFF_FORT, "Priest", "priest|priests|preist|preists|priestess" },
+        { "mage", TextRules::BUFF_INT, "Mage", "mage|mages|magey|wizard" },
+        { "druid", TextRules::BUFF_MARK, "Druid", "druid|druids|dudu|drood|droods" },
+        { "paladin", uint16_t(TextRules::BUFF_KINGS | TextRules::BUFF_MIGHT | TextRules::BUFF_WISDOM), "Paladin",
+          "paladin|paladins|pally|pallys|pallies|pala|pali|paly" },
+    };
+    g_BuffRules.classes.clear();
+    for (const ClassWords& c : classes)
+    {
+        TextRules::BuffRules::Class cls;
+        cls.name  = c.name;
+        cls.kinds = c.kinds;
+        cls.words = phrases(std::string("OllamaChat.Buff.Class.") + c.key, c.def);
+        g_BuffRules.classes.push_back(std::move(cls));
+    }
+
+    g_BuffRules.buffWords = phrases("OllamaChat.Buff.BuffWords",
+        "buff|buffs|buffz|bufs|buf|buffage|rebuff|rebuffs|buffing");
+    g_BuffRules.notBuffs = phrases("OllamaChat.Buff.NotBuffWords",
+        "food buff*|buff food|well fed|world buff*|wbuff*|ony buff|rend buff|zg buff|dmf buff*|darkmoon*|"
+        "songflower*|buff pot*|potion*|pots|elixir*|flask*|scroll*|runescroll*|drum|drums|debuff*|nerf*|skull|cross|"
+        "moon|square|triangle|diamond|circle|star|raid mark*");
+    g_BuffRules.asks = phrases("OllamaChat.Buff.AskWords",
+        "lf|looking for|can i get|can i have|can i grab|could i get|could i have|could i grab|may i have|may i get|"
+        "give me|giv me|gimme|gimmie|gib|gief|hook me up|hook us up|buff me|buff us|chuck me|toss me|throw me|"
+        "spare a|spare me|"
+        "got any|have any|any spare|anyone got|anyone have|anybody got|anybody have|any1 got|any1 have|you got|u got|"
+        "ya got|do you have|do u have|can someone|can anyone|could someone|could anyone|would someone|would anyone|"
+        "someone buff|somebody buff|anyone buff|anybody buff|anyone buffing|any buffers");
+    g_BuffRules.polite = phrases("OllamaChat.Buff.PoliteWords",
+        "pls|plz|please|pleas|plox|plis|pl0x|ples|plx|can you|can u|could you|could u|would you|would u|will you|"
+        "will u|how about|mind");
+    g_BuffRules.needs = phrases("OllamaChat.Buff.NeedWords",
+        "need|needs|neeed|nid|want|wanna|could use|could do with|really use|rly use|really do with|would love|"
+        "would like|id love|id like");
+    g_BuffRules.offers = phrases("OllamaChat.Buff.OfferWords",
+        "anyone need|anybody need|any1 need|anyone want|anybody want|any1 want|who needs|who wants|whos need|"
+        "whos want|free buff*|buffs here|buffing here|giving buffs|giving out|handing out|im buffing|i can buff|"
+        "ill buff|i will buff|let me buff|lemme buff|buffs for|buff for anyone");
+    g_BuffRules.negations = phrases("OllamaChat.Buff.NegationWords",
+        "not|dont|didnt|doesnt|no|nope|nah|never|without|aint|isnt|arent|havent|wont");
+    g_BuffRules.haves = phrases("OllamaChat.Buff.HaveWords",
+        "i have|i got|ive got|i still have|still have|already have|already got|already buffed|im buffed|"
+        "im all buffed|all buffed|got all|have all|got plenty|im good|im fine|im set|all good|enough");
+    g_BuffRules.thanks = phrases("OllamaChat.Buff.ThanksWords",
+        "ty|thx|thnx|thanks|thank you|thank u|tyvm|tysm|tyty|cheers|ta|appreciate*|much appreciated|lifesaver");
+    g_BuffRules.questions = phrases("OllamaChat.Buff.QuestionWords",
+        "what|where|why|when|which|how|whats|wheres|whys|hows");
+    g_BuffRules.commands = phrases("OllamaChat.Buff.CommandWords",
+        "cast|castnc|c|nc|co|use|t|nt|b|s|e|ue|de|q|ll|ss|rti|rtsc");
+    g_BuffRules.maxWords = sConfigMgr->GetOption<uint32_t>("OllamaChat.Buff.MaxWords", 14);
+
+    g_BuffMaxGivers  = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Buff.MaxGivers", 2), 1, 5);
+    g_BuffMaxVoices  = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Buff.MaxVoices", 2), 5);
+    g_BuffDelayMinMs = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Buff.DelayMinMs", 1500), 30000);
+    g_BuffDelayMaxMs = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Buff.DelayMaxMs", 4500),
+                                            g_BuffDelayMinMs, 30000);
+    g_BuffRememberSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Buff.RememberSeconds", 90);
+    g_BuffThanksSeconds   = sConfigMgr->GetOption<uint32_t>("OllamaChat.Buff.ThanksSeconds", 120);
+    g_BuffThanksMaxWords  = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Buff.ThanksMaxWords", 8));
+    g_BuffSkipPvp         = sConfigMgr->GetOption<bool>("OllamaChat.Buff.SkipPvp", true);
+
+    // How each chat style takes being asked: Default, then
+    // OllamaChat.Buff.Style.<KEY> on top of it for the styles that differ.
+    std::string bad;
+    g_BuffStyleDefault = ReadBuffStyle(sConfigMgr->GetOption<std::string>("OllamaChat.Buff.Style.Default",
+        "give:35|quiet:40|no:5|ignore:20|explain:60|welcome:70"), BuffStyle{}, bad);
+    g_BuffStyles.clear();
+    {
+        const std::string prefix = "OllamaChat.Buff.Style.";
+        for (const std::string& key : sConfigMgr->GetKeysByString(prefix))
+        {
+            std::string name = key.substr(prefix.size());
+            for (char& c : name)
+                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            if (name.empty() || name == "DEFAULT")
+                continue;
+            g_BuffStyles[name] = ReadBuffStyle(sConfigMgr->GetOption<std::string>(key, ""), g_BuffStyleDefault, bad);
+        }
+    }
+    if (!bad.empty())
+        LOG_WARN("module.ollamachat", "[Ollama Chat] Ignored parts of OllamaChat.Buff.Style settings that are not "
+                 "give, quiet, no, ignore, explain or welcome with a number: {}", bad);
+
+    g_BuffClassNotes.clear();
+    for (const std::string& item : ReadPipeList("OllamaChat.Buff.ClassNotes",
+             "warrior:your shouts only reach your own group|rogue:a rogue has no buffs to give anyone|"
+             "hunter:your aspects and Trueshot Aura only help you and your own group|"
+             "shaman:your totems only help your own group|"
+             "warlock:a warlock has nothing like that to give, bar Unending Breath|"
+             "death knight:Horn of Winter only reaches your own group"))
+    {
+        const size_t colon = item.find(':');
+        if (colon == std::string::npos || colon == 0 || colon + 1 >= item.size())
+            continue;
+        std::string cls = item.substr(0, colon);
+        for (char& c : cls)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        g_BuffClassNotes[cls] = item.substr(colon + 1);
+    }
+
+    g_BuffHintGive = sConfigMgr->GetOption<std::string>("OllamaChat.Buff.HintGive",
+        "{player_name} asked for {request}, and you are casting {buff} on them now, for nothing.{took_for} Say so "
+        "in one to five words, in your own chat style.");
+    g_BuffHintInstead = sConfigMgr->GetOption<std::string>("OllamaChat.Buff.HintInstead",
+        "{player_name} asked for {request}, but that is {asked_class}'s to give, and you are {class}: you are "
+        "casting your own {buff} on them instead, for nothing. Say so in a few words, in your own chat style.");
+    g_BuffHintNo = sConfigMgr->GetOption<std::string>("OllamaChat.Buff.HintNo",
+        "{player_name} asked for {request}. You could put {buff} on them, but you are not going to.{took_for} Say "
+        "no in a few words, in your own chat style, with or without a reason.");
+    g_BuffHintCant = sConfigMgr->GetOption<std::string>("OllamaChat.Buff.HintCant",
+        "{player_name} asked for {request}, but you can't give them one: {reason}.{took_for} Say so in a few "
+        "words, in your own chat style.");
+    g_BuffHintThanks = sConfigMgr->GetOption<std::string>("OllamaChat.Buff.HintThanks",
+        "You just put {buff} on {player_name}, and they said thanks. Answer in one to three words, in your own "
+        "chat style, and leave it there.");
+
+    // --- what anyone near can see -----------------------------------------------------------
+    g_SaySeenText = sConfigMgr->GetOption<std::string>("OllamaChat.Say.SeenText",
+        "{player_name} is standing near you: you can each see the other's level and class just by looking, so "
+        "you never tell them your level unless they ask, and you hardly ever ask theirs.");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v31: buffs on request {} (up to {} buffing an ask, {} "
+             "speaking; {} chat styles of their own); /say told what anyone near can see {}.",
+             g_BuffEnable ? "on" : "off", g_BuffMaxGivers, g_BuffMaxVoices, g_BuffStyles.size(),
+             g_SaySeenText.empty() ? "off" : "on");
 }
 
 static void LoadNaturalChatV30Settings()
@@ -3166,7 +3404,9 @@ static void LoadNaturalChatV16Settings()
         "said, or asking something back, and nobody answers a question nobody asked. A greeting gets a "
         "greeting back, or a question. When one of them says what they have been doing, it is what they have "
         "been doing lately as told above, put the way a player would in a few words, what and where; with "
-        "nothing told, they have not been up to much. Each line is what that player types: short (2 to 12 "
+        "nothing told, they have not been up to much. They can see each other's level and class just by "
+        "looking, so nobody says their own level unless asked, and they hardly ever ask. Each line is what "
+        "that player types: short (2 to 12 "
         "words), casual, in their own chat style, mostly lowercase, but a question ends with a question "
         "mark, and a line can end with an exclamation mark where it fits. Reactions and goodbyes are as "
         "short as players make them, in each one's own style. Instead of words, a line can be just an emote "
@@ -3916,6 +4156,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV28Settings();
     LoadNaturalChatV29Settings();
     LoadNaturalChatV30Settings();
+    LoadNaturalChatV31Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

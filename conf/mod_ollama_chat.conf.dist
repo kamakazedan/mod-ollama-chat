@@ -3165,6 +3165,246 @@ OllamaChat.Conjure.HintNotGrouped = "{player_name} asked you for {request}, but 
 
 ###############################################################################
 #
+#   OLLAMA CHAT - BUFFS ON REQUEST
+#
+#   Someone asks for a buff the way people do, in /say or in a whisper to a
+#   bot, and a bot near them that can put one on anybody might:
+#
+#       "can i get a buff", "buff pls", "buffs?", "anyone got fort?",
+#       "kings please", "Verona int pls", "your a priest, can you buff me?"
+#
+#   What it puts on them, really cast, a moment later (off its mount or out
+#   of its form first, with its own mana):
+#     * a priest: Power Word: Fortitude; Divine Spirit or Shadow Protection
+#       when asked for by name;
+#     * a mage: Arcane Intellect, to anyone with mana -- or to anyone who
+#       asks for it by name;
+#     * a druid: Mark of the Wild; Thorns when asked for by name;
+#     * a paladin: Blessing of Kings, or Might (for those who hit things) or
+#       Wisdom before it has Kings or when they have it already; Sanctuary
+#       when asked for by name.
+#   The core puts the rank they can have on someone low, and nothing goes
+#   on anyone who has it already, or something it does not stack with.
+#
+#   Whether a bot does, and whether it says anything, is up to its chat
+#   style (Style below): buff them and say so, buff them without a word,
+#   say no, or let it go by. An ask said to everyone gets at most MaxGivers
+#   bots buffing, each with something different, and MaxVoices saying
+#   anything. An ask said to one bot -- named, whispered, the one they have
+#   targeted, or the one they were just talking to -- is that bot's, and
+#   one that can't may say why: it is a warrior, it is out of mana, they
+#   have it already, it has not learned it yet. Asked for another class's
+#   buff ("fort pls" to a mage), it puts its own on them instead.
+#
+#   A thank-you soon after ("ty", "thanks Verona", "cheers for the buff")
+#   is answered by the one who gave it, or not at all, and nobody else: that
+#   is the end of it.
+#
+#   Not answered here: bots in their group and bots they are master of
+#   (playerbots keeps its own group buffed; "buff us" in party chat is an
+#   order), the other faction, a battleground or arena, and anyone AFK,
+#   fighting or flying.
+#
+#   Word lists are separated by |, matched lowercase with punctuation and
+#   apostrophes dropped; a trailing * matches any word starting with it.
+#
+###############################################################################
+
+#    OllamaChat.Buff.Enable
+#        Default: 1
+OllamaChat.Buff.Enable = 1
+
+#    OllamaChat.Buff.Words.Fort
+#    OllamaChat.Buff.Words.Spirit
+#    OllamaChat.Buff.Words.Shadow
+#    OllamaChat.Buff.Words.Int
+#    OllamaChat.Buff.Words.Mark
+#    OllamaChat.Buff.Words.Thorns
+#    OllamaChat.Buff.Words.Kings
+#    OllamaChat.Buff.Words.Might
+#    OllamaChat.Buff.Words.Wisdom
+#    OllamaChat.Buff.Words.Sanctuary
+#        The words for each buff. Those marked ~ are ordinary words too
+#        ("might", "mark", "int"), so they only count in a short line, six
+#        words at most, that asks for it, is nothing but it ("fort?"), or is
+#        said to a bot by name.
+OllamaChat.Buff.Words.Fort = "fortitude|power word fortitude|pw fort|pwf|pw f|fort buff|stam buff|stamina buff|~fort|~stam|~stamina"
+OllamaChat.Buff.Words.Spirit = "divine spirit|spirit buff|~spirit"
+OllamaChat.Buff.Words.Shadow = "shadow protection|shadow prot|sprot|shadow resist buff|shadow res buff"
+OllamaChat.Buff.Words.Int = "intellect|arcane intellect|arcane int|int buff|ai buff|~int|~ai"
+OllamaChat.Buff.Words.Mark = "mark of the wild|mark of wild|motw|mark buff|~mark"
+OllamaChat.Buff.Words.Thorns = "thorns buff|~thorns"
+OllamaChat.Buff.Words.Kings = "blessing of kings|bok|kings buff|~kings|~king"
+OllamaChat.Buff.Words.Might = "blessing of might|bom|might buff|~might"
+OllamaChat.Buff.Words.Wisdom = "blessing of wisdom|wisdom buff|~wisdom|~wis"
+OllamaChat.Buff.Words.Sanctuary = "blessing of sanctuary|sanctuary|sanc buff|~sanc|~sanct"
+
+#    OllamaChat.Buff.Class.Priest
+#    OllamaChat.Buff.Class.Mage
+#    OllamaChat.Buff.Class.Druid
+#    OllamaChat.Buff.Class.Paladin
+#        A class named in the ask ("priest can i get a buff", "pally buff
+#        pls"): what is asked for when no buff is named, and who the bot was
+#        taken for -- a mage asked "your a priest, can you buff me?" hears it.
+OllamaChat.Buff.Class.Priest = "priest|priests|preist|preists|priestess"
+OllamaChat.Buff.Class.Mage = "mage|mages|magey|wizard"
+OllamaChat.Buff.Class.Druid = "druid|druids|dudu|drood|droods"
+OllamaChat.Buff.Class.Paladin = "paladin|paladins|pally|pallys|pallies|pala|pali|paly"
+
+#    OllamaChat.Buff.BuffWords
+#        "A buff", whichever.
+OllamaChat.Buff.BuffWords = "buff|buffs|buffz|bufs|buf|buffage|rebuff|rebuffs|buffing"
+
+#    OllamaChat.Buff.NotBuffWords
+#        A line with one of these is not asking anyone to cast a buff: food,
+#        flasks and world buffs are no spell anyone casts on you, "nerf" is
+#        balance talk, and "mark skull" is a raid mark.
+OllamaChat.Buff.NotBuffWords = "food buff*|buff food|well fed|world buff*|wbuff*|ony buff|rend buff|zg buff|dmf buff*|darkmoon*|songflower*|buff pot*|potion*|pots|elixir*|flask*|scroll*|runescroll*|drum|drums|debuff*|nerf*|skull|cross|moon|square|triangle|diamond|circle|star|raid mark*"
+
+#    OllamaChat.Buff.AskWords
+#    OllamaChat.Buff.PoliteWords
+#    OllamaChat.Buff.NeedWords
+#        Asking for one; asking nicely; and needing one, which counts only as
+#        their own need, right before the buff ("need a buff", "i could use
+#        fort") -- never "warriors need a buff", which is about the game.
+OllamaChat.Buff.AskWords = "lf|looking for|can i get|can i have|can i grab|could i get|could i have|could i grab|may i have|may i get|give me|giv me|gimme|gimmie|gib|gief|hook me up|hook us up|buff me|buff us|chuck me|toss me|throw me|spare a|spare me|got any|have any|any spare|anyone got|anyone have|anybody got|anybody have|any1 got|any1 have|you got|u got|ya got|do you have|do u have|can someone|can anyone|could someone|could anyone|would someone|would anyone|someone buff|somebody buff|anyone buff|anybody buff|anyone buffing|any buffers"
+OllamaChat.Buff.PoliteWords = "pls|plz|please|pleas|plox|plis|pl0x|ples|plx|can you|can u|could you|could u|would you|would u|will you|will u|how about|mind"
+OllamaChat.Buff.NeedWords = "need|needs|neeed|nid|want|wanna|could use|could do with|really use|rly use|really do with|would love|would like|id love|id like"
+
+#    OllamaChat.Buff.OfferWords
+#        Offering, not asking: "anyone need fort?", "who wants buffs", "im
+#        buffing". So is a line ending in "anyone" ("buffs anyone?"), and one
+#        asking for a buff of the speaker's own class (a priest's "fort?").
+OllamaChat.Buff.OfferWords = "anyone need|anybody need|any1 need|anyone want|anybody want|any1 want|who needs|who wants|whos need|whos want|free buff*|buffs here|buffing here|giving buffs|giving out|handing out|im buffing|i can buff|ill buff|i will buff|let me buff|lemme buff|buffs for|buff for anyone"
+
+#    OllamaChat.Buff.NegationWords
+#    OllamaChat.Buff.HaveWords
+#    OllamaChat.Buff.QuestionWords
+#        Not asking: a negation before the buff ("dont need buffs"; a "no" up
+#        front is fine unless the buff follows it at once), having it ("i
+#        have fort", "im buffed", but not the "i have" in "can i have"), or a
+#        question about it ("what does kings do") -- the last only without an
+#        ask word.
+OllamaChat.Buff.NegationWords = "not|dont|didnt|doesnt|no|nope|nah|never|without|aint|isnt|arent|havent|wont"
+OllamaChat.Buff.HaveWords = "i have|i got|ive got|i still have|still have|already have|already got|already buffed|im buffed|im all buffed|all buffed|got all|have all|got plenty|im good|im fine|im set|all good|enough"
+OllamaChat.Buff.QuestionWords = "what|where|why|when|which|how|whats|wheres|whys|hows"
+
+#    OllamaChat.Buff.ThanksWords
+#    OllamaChat.Buff.ThanksMaxWords
+#    OllamaChat.Buff.ThanksSeconds
+#        A thank-you: a line of at most ThanksMaxWords words with one of
+#        these in it, not "no thanks" and not a question. Within
+#        ThanksSeconds of a buff it is for the buff: the one who gave it may
+#        answer, nobody else does. Never an ask either ("ty for the buff").
+#        Default: 8, 120
+OllamaChat.Buff.ThanksWords = "ty|thx|thnx|thanks|thank you|thank u|tyvm|tysm|tyty|cheers|ta|appreciate*|much appreciated|lifesaver"
+OllamaChat.Buff.ThanksMaxWords = 8
+OllamaChat.Buff.ThanksSeconds = 120
+
+#    OllamaChat.Buff.CommandWords
+#        A line starting with one of these is never an ask: playerbots acts
+#        on its own commands itself ("cast fort", "c Arcane Intellect").
+OllamaChat.Buff.CommandWords = "cast|castnc|c|nc|co|use|t|nt|b|s|e|ue|de|q|ll|ss|rti|rtsc"
+
+#    OllamaChat.Buff.MaxWords
+#        Longer lines are conversation, not asks.
+#        Default: 14
+OllamaChat.Buff.MaxWords = 14
+
+#    OllamaChat.Buff.MaxGivers
+#    OllamaChat.Buff.MaxVoices
+#        An ask said to everyone: how many bots may buff them (1 to 5, each
+#        with something different), and how many may say anything (0 to 5),
+#        a no included. One says no at most.
+#        Default: 2, 2
+OllamaChat.Buff.MaxGivers = 2
+OllamaChat.Buff.MaxVoices = 2
+
+#    OllamaChat.Buff.DelayMinMs
+#    OllamaChat.Buff.DelayMaxMs
+#        How long a bot takes to cast it, picked between these; a second buff
+#        from the same bot follows a global cooldown later.
+#        Default: 1500, 4500
+OllamaChat.Buff.DelayMinMs = 1500
+OllamaChat.Buff.DelayMaxMs = 4500
+
+#    OllamaChat.Buff.RememberSeconds
+#        A bot that said no to someone, or let their ask go by, does the same
+#        with the next one said to everyone for this long, rather than being
+#        asked until it gives in. Asked by name, it decides afresh.
+#        Default: 90
+OllamaChat.Buff.RememberSeconds = 90
+
+#    OllamaChat.Buff.SkipPvp
+#        1: nobody flagged for PvP is buffed by a bot that is not (buffing
+#        them would flag it); asked by name, it says so.
+#        Default: 1
+OllamaChat.Buff.SkipPvp = 1
+
+#    OllamaChat.Buff.Style.Default
+#    OllamaChat.Buff.Style.<KEY>
+#        How each chat style takes being asked. give, quiet, no and ignore
+#        are weights: buff them and say so, buff them without a word, say
+#        no, or let it go by (asked in particular, letting it go by is half
+#        as likely). explain is the percent chance one asked in particular
+#        that can't says why; welcome the percent chance the one who gave it
+#        answers the thank-you. A style without a line of its own uses
+#        Default, and a line only needs what differs from it.
+#        Default: "give:35|quiet:40|no:5|ignore:20|explain:60|welcome:70"
+OllamaChat.Buff.Style.Default = "give:35|quiet:40|no:5|ignore:20|explain:60|welcome:70"
+OllamaChat.Buff.Style.NAT_FRIENDLY = "give:50|quiet:40|no:0|ignore:10|explain:80|welcome:90"
+OllamaChat.Buff.Style.NAT_SOCIAL = "give:60|quiet:25|no:0|ignore:15|explain:80|welcome:95"
+OllamaChat.Buff.Style.NAT_BUTTERFLY = "give:70|quiet:15|no:0|ignore:15|explain:80|welcome:100"
+OllamaChat.Buff.Style.NAT_HELPFUL_VET = "give:30|quiet:60|no:0|ignore:10|explain:70|welcome:70"
+OllamaChat.Buff.Style.NAT_EXPERT = "give:45|quiet:40|no:0|ignore:15|explain:90|welcome:70"
+OllamaChat.Buff.Style.NAT_PROPER = "give:50|quiet:35|no:0|ignore:15|explain:80|welcome:90"
+OllamaChat.Buff.Style.NAT_ROLEPLAYER = "give:60|quiet:20|no:0|ignore:20|explain:70|welcome:90"
+OllamaChat.Buff.Style.NAT_NEWBIE = "give:50|quiet:20|no:0|ignore:30|explain:70|welcome:90"
+OllamaChat.Buff.Style.NAT_EXCITABLE = "give:65|quiet:15|no:0|ignore:20|explain:70|welcome:90"
+OllamaChat.Buff.Style.NAT_HYPE = "give:65|quiet:15|no:0|ignore:20|explain:70|welcome:90"
+OllamaChat.Buff.Style.NAT_GOSSIP = "give:55|quiet:20|no:5|ignore:20|explain:70|welcome:80"
+OllamaChat.Buff.Style.NAT_PETLOVER = "give:40|quiet:45|no:0|ignore:15|explain:60|welcome:80"
+OllamaChat.Buff.Style.NAT_CHILL = "give:40|quiet:45|no:0|ignore:15|explain:60|welcome:80"
+OllamaChat.Buff.Style.NAT_JOKER = "give:50|quiet:20|no:10|ignore:20|explain:60|welcome:70"
+OllamaChat.Buff.Style.NAT_BANTER = "give:50|quiet:20|no:10|ignore:20|explain:60|welcome:70"
+OllamaChat.Buff.Style.NAT_PRANKSTER = "give:50|quiet:20|no:10|ignore:20|explain:60|welcome:70"
+OllamaChat.Buff.Style.NAT_TERSE_VET = "give:15|quiet:60|no:5|ignore:20|explain:40|welcome:50"
+OllamaChat.Buff.Style.NAT_QUIET = "give:10|quiet:60|no:0|ignore:30|explain:40|welcome:50"
+OllamaChat.Buff.Style.NAT_LONER = "give:10|quiet:45|no:5|ignore:40|explain:30|welcome:40"
+OllamaChat.Buff.Style.NAT_GRUMBLER = "give:35|quiet:30|no:15|ignore:20|explain:70|welcome:50"
+OllamaChat.Buff.Style.NAT_CONTRARIAN = "give:30|quiet:20|no:30|ignore:20|explain:60|welcome:50"
+OllamaChat.Buff.Style.NAT_GOLDMAKER = "give:20|quiet:20|no:30|ignore:30|explain:50|welcome:50"
+OllamaChat.Buff.Style.NAT_PVPER = "give:30|quiet:30|no:15|ignore:25|explain:50|welcome:50"
+OllamaChat.Buff.Style.NAT_TROLL = "give:30|quiet:15|no:25|ignore:30|explain:50|welcome:50"
+OllamaChat.Buff.Style.NAT_RUDE = "give:10|quiet:20|no:40|ignore:30|explain:40|welcome:20"
+
+#    OllamaChat.Buff.ClassNotes
+#        Why a class that has no buff for anyone outside its group has none,
+#        for the bot to say when it is asked: "class:why" pairs.
+OllamaChat.Buff.ClassNotes = "warrior:your shouts only reach your own group|rogue:a rogue has no buffs to give anyone|hunter:your aspects and Trueshot Aura only help you and your own group|shaman:your totems only help your own group|warlock:a warlock has nothing like that to give, bar Unending Breath|death knight:Horn of Winter only reaches your own group"
+
+#    OllamaChat.Buff.HintGive
+#    OllamaChat.Buff.HintInstead
+#    OllamaChat.Buff.HintNo
+#    OllamaChat.Buff.HintCant
+#    OllamaChat.Buff.HintThanks
+#        What the bot is told when it answers: it is buffing them; it is
+#        putting its own buff on them, asked for another class's; it won't;
+#        it can't; it is answering their thank-you. Placeholders:
+#        {player_name}; {request} (what they asked for: "a buff", "Power
+#        Word: Fortitude", "a blessing"); {buff} (what it is casting, or
+#        could: "Blessing of Kings"); {reason} ("you are out of mana", "they
+#        have Mark of the Wild already"); {class} and {asked_class} ("a
+#        mage", "a priest"); {took_for} (" They took you for a priest, but
+#        you are a mage." or nothing).
+OllamaChat.Buff.HintGive = "{player_name} asked for {request}, and you are casting {buff} on them now, for nothing.{took_for} Say so in one to five words, in your own chat style."
+OllamaChat.Buff.HintInstead = "{player_name} asked for {request}, but that is {asked_class}'s to give, and you are {class}: you are casting your own {buff} on them instead, for nothing. Say so in a few words, in your own chat style."
+OllamaChat.Buff.HintNo = "{player_name} asked for {request}. You could put {buff} on them, but you are not going to.{took_for} Say no in a few words, in your own chat style, with or without a reason."
+OllamaChat.Buff.HintCant = "{player_name} asked for {request}, but you can't give them one: {reason}.{took_for} Say so in a few words, in your own chat style."
+OllamaChat.Buff.HintThanks = "You just put {buff} on {player_name}, and they said thanks. Answer in one to three words, in your own chat style, and leave it there."
+
+###############################################################################
+#
 #   OLLAMA CHAT - ORDERS IN PLAIN WORDS
 #
 #   A real player tells the bots what to do the way they would tell anyone,
@@ -4715,7 +4955,7 @@ OllamaChat.Mingle.ReadMaxMs = 3500
 #        (No double quotes inside it: the server's config reader drops every
 #        one of them.)
 #        Default: (below)
-OllamaChat.Mingle.PromptTemplate = "{count} World of Warcraft players are standing near each other {at} and get chatting in /say. It is {when}. They are:{people}{relation} What gets them talking: {premise}. Write what they type, one message per line, each line starting with the speaker's name and a colon, like this:{example}About {lines} lines in all, mostly taking turns. It reads like a real chat: every line follows on from the one before it, answering what was just asked, reacting to what was just said, or asking something back, and nobody answers a question nobody asked. A greeting gets a greeting back, or a question. When one of them says what they have been doing, it is what they have been doing lately as told above, put the way a player would in a few words, what and where; with nothing told, they have not been up to much. Each line is what that player types: short (2 to 12 words), casual, in their own chat style, mostly lowercase, but a question ends with a question mark, and a line can end with an exclamation mark where it fits. Reactions and goodbyes are as short as players make them, in each one's own style. Instead of words, a line can be just an emote at the other one, written as a slash command ({emotes}), at most {max_emotes} in all. It ends the way a chat between players does: a laugh, a goodbye, someone heading off, or simply done. No narration, no actions in asterisks, no quotation marks, and nothing made up from the game -- no item, quest, NPC, creature, place, mount or pet that is not really in it, and nobody riding a mount or with a pet out but as told above (a hunter's pet, a warlock's demon or a companion pet is no mount); plainly made-up fun is fine as an imagine-if. A famous line from a film or show is fine now and then, but never say what it is from."
+OllamaChat.Mingle.PromptTemplate = "{count} World of Warcraft players are standing near each other {at} and get chatting in /say. It is {when}. They are:{people}{relation} What gets them talking: {premise}. Write what they type, one message per line, each line starting with the speaker's name and a colon, like this:{example}About {lines} lines in all, mostly taking turns. It reads like a real chat: every line follows on from the one before it, answering what was just asked, reacting to what was just said, or asking something back, and nobody answers a question nobody asked. A greeting gets a greeting back, or a question. When one of them says what they have been doing, it is what they have been doing lately as told above, put the way a player would in a few words, what and where; with nothing told, they have not been up to much. They can see each other's level and class just by looking, so nobody says their own level unless asked, and they hardly ever ask. Each line is what that player types: short (2 to 12 words), casual, in their own chat style, mostly lowercase, but a question ends with a question mark, and a line can end with an exclamation mark where it fits. Reactions and goodbyes are as short as players make them, in each one's own style. Instead of words, a line can be just an emote at the other one, written as a slash command ({emotes}), at most {max_emotes} in all. It ends the way a chat between players does: a laugh, a goodbye, someone heading off, or simply done. No narration, no actions in asterisks, no quotation marks, and nothing made up from the game -- no item, quest, NPC, creature, place, mount or pet that is not really in it, and nobody riding a mount or with a pet out but as told above (a hunter's pet, a warlock's demon or a companion pet is no mount); plainly made-up fun is fine as an imagine-if. A famous line from a film or show is fine now and then, but never say what it is from."
 
 #    OllamaChat.Mingle.Premises
 #        What gets them talking, one picked each time: a premise only the
@@ -5038,7 +5278,17 @@ OllamaChat.Outlook.ClassRoles = 1
 
 #    OllamaChat.Outlook.KnowledgeText
 #        What a bot can know about other players. Empty disables.
-OllamaChat.Outlook.KnowledgeText = "You know other players only by what anyone could see of them: their name, level, race, class, spec and guild, and what they say in chat."
+OllamaChat.Outlook.KnowledgeText = "You know other players only by what anyone could see of them: their name, level, race, class, spec and guild, and what they say in chat; not what they are up to, or why they are where they are."
+
+#    OllamaChat.Say.SeenText
+#        Added to a reply in /say: standing near each other, anyone can see
+#        anyone's level and class just by looking, so a bot does not tell
+#        them its level unless asked, and hardly ever asks theirs ("i'm 54,
+#        just grinding" to someone who can see it is not what people say).
+#        Mingle.PromptTemplate says the same of a /say exchange between bots.
+#        Placeholder: {player_name}. Empty disables.
+#        Default: "{player_name} is standing near you: you can each see the other's level and class just by looking, so you never tell them your level unless they ask, and you hardly ever ask theirs."
+OllamaChat.Say.SeenText = "{player_name} is standing near you: you can each see the other's level and class just by looking, so you never tell them your level unless they ask, and you hardly ever ask theirs."
 
 #    OllamaChat.Outlook.FactsText
 #        What every bot is told about the game itself, on everything it says:
@@ -5073,11 +5323,11 @@ OllamaChat.Outlook.FactsText = "Anything from the game you name -- an item, ques
 #        and premises and pool entries about one side's places carry that
 #        side's tag (Conversation.Premises).
 #        Default: "You play {side}: your own side's cities are {cities}.",
-#                 "You are in {city}, one of your side's own cities: you are safe here, and its guards are on your side.",
+#                 "You are in {city}, one of your side's own cities: you are safe here, its guards are on your side, and people of every level come here: nobody is too low or too high a level for a city.",
 #                 "Orgrimmar|Thunder Bluff|the Undercity|Silvermoon City",
 #                 "Stormwind|Ironforge|Darnassus|the Exodar"
 OllamaChat.Outlook.SideText = "You play {side}: your own side's cities are {cities}."
-OllamaChat.Outlook.HomeCityText = "You are in {city}, one of your side's own cities: you are safe here, and its guards are on your side."
+OllamaChat.Outlook.HomeCityText = "You are in {city}, one of your side's own cities: you are safe here, its guards are on your side, and people of every level come here: nobody is too low or too high a level for a city."
 OllamaChat.Outlook.Cities.Horde = "Orgrimmar|Thunder Bluff|the Undercity|Silvermoon City"
 OllamaChat.Outlook.Cities.Alliance = "Stormwind|Ironforge|Darnassus|the Exodar"
 

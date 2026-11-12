@@ -539,6 +539,18 @@ nobody in Orgrimmar wonders what is down the Deeprun Tram. (The guards
 themselves stopped being named as "a creature close by" in v25: friendly
 creatures are never the topic.)
 
+**Every level in a city.** Someone asking for a buff in Orgrimmar was told
+they were "way too low level for this area". A bot standing in one of its own
+side's cities is now told that people of every level come there
+(`Outlook.HomeCityText`), and every bot that what someone is up to, and why
+they are where they are, is their own business (`Outlook.KnowledgeText`).
+
+**Levels in /say.** Standing near each other, anyone can see anyone's level
+and class just by looking, so "i'm 54, just grinding" told to someone who can
+see it is not what people say. A reply in /say is told so (`Say.SeenText`):
+a bot gives its level only when asked, and hardly ever asks yours. Bots
+chatting in /say among themselves are told the same (`Mingle.PromptTemplate`).
+
 **What chat is like.** On a realm where nobody had typed in Trade all
 evening, bots in Stormwind called it "basically a warzone", and one said
 "brb gonna go check trade chat", as if it were somewhere to go. When the talk
@@ -671,6 +683,34 @@ gets filled instead. "need mana", "oom" and "mb" stay mana breaks, a bare
 "pots" needs a real ask ("pls send me pots", since "pot now" is a raid call),
 and playerbots' own commands ("t water", "use water") are left to playerbots.
 See `OllamaChat.Conjure.*`.
+
+## Buffs from Strangers
+
+Ask for a buff in /say the way you would ask anyone -- "can i get a buff",
+"buff pls", "anyone got fort?", "kings please", "Verona int pls" -- or
+whisper a bot for one, and a bot standing near that can put one on anybody
+might: a priest Power Word: Fortitude, a mage Arcane Intellect (to anyone
+with mana, or anyone who asks for it by name), a druid Mark of the Wild, a
+paladin Blessing of Kings, or Might or Wisdom before it has Kings. Divine
+Spirit, Shadow Protection, Thorns and Sanctuary come when you name them. It
+really casts it, a moment later -- off its mount first, with its own mana --
+and the core gives a low-level player the rank they can have.
+
+Whether it does is up to its chat style (`OllamaChat.Buff.Style.<KEY>`): it
+might buff you and say so, buff you without a word, say no, or let it go by.
+A friendly one nearly always helps; a rude one often won't. Asked of
+everyone, at most two bots buff you, each with something different. Asked of
+one bot -- by name, by whisper, the one you have targeted, or the one you were
+just talking to -- it is that bot's to answer, and one that can't may say
+why: it's a warrior and its shouts only reach its own group, it's out of
+mana, you have it already. Asked for another class's buff, it puts its own
+on you instead. Say "ty" after and the one who buffed you answers ("np"), or
+doesn't, and nobody else chimes in: that's the end of it.
+
+Bots in your group are left to playerbots, which keeps its own group buffed
+("buff us" in party chat is an order), and nobody flagged for PvP is buffed
+by a bot that is not. `.ollama status` counts asks, casts, refusals and
+thank-yous. See `OllamaChat.Buff.*`.
 
 ## Orders in Plain Words
 

@@ -20,6 +20,7 @@
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_conjure.h"
+#include "mod-ollama-chat_buffs.h"
 #include "mod-ollama-chat_equip.h"
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_joined.h"
@@ -453,6 +454,9 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
     // bot what it can spare); a trade promised once they invited it.
     Conjure_Update();
     Bags_Tick();
+
+    // A buff someone asked for, cast a moment later.
+    Buff_Update();
 
     // A bot that agreed a price puts the money in the trade window.
     Gifts_Tick();

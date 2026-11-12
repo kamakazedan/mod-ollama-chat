@@ -238,6 +238,97 @@ namespace TextRules
     ConjureAsk MatchConjureAsk(const std::string& cleanText, const ConjureRules& rules,
                                bool named, const std::vector<std::string>& names = {});
 
+    // ---- buffs, on request ---------------------------------------------------
+
+    // The buffs a priest, mage, druid or paladin can put on anyone at all.
+    enum BuffKinds : uint16_t
+    {
+        BUFF_NONE   = 0,
+        BUFF_FORT   = 1 << 0,   // Power Word: Fortitude
+        BUFF_SPIRIT = 1 << 1,   // Divine Spirit
+        BUFF_SHADOW = 1 << 2,   // Shadow Protection
+        BUFF_INT    = 1 << 3,   // Arcane Intellect
+        BUFF_MARK   = 1 << 4,   // Mark of the Wild
+        BUFF_THORNS = 1 << 5,   // Thorns
+        BUFF_KINGS  = 1 << 6,   // Blessing of Kings
+        BUFF_MIGHT  = 1 << 7,   // Blessing of Might
+        BUFF_WISDOM = 1 << 8,   // Blessing of Wisdom
+        BUFF_SANCT  = 1 << 9,   // Blessing of Sanctuary
+    };
+
+    struct BuffRules
+    {
+        // One buff: the words that always mean it ("fortitude", "motw", "bok"),
+        // and short ones that mean it only in a short ask ("fort pls", "int?",
+        // "kings please") -- "might", "mark" and "int" are ordinary words too.
+        struct Kind
+        {
+            uint16_t kind = BUFF_NONE;
+            std::vector<std::vector<std::string>> words;
+            std::vector<std::vector<std::string>> shortWords;
+        };
+        // A class named ("priest", "pally"): what it is asked for when no buff
+        // is named, and who the bot was taken for.
+        struct Class
+        {
+            std::string name;   // "priest"
+            uint16_t    kinds = BUFF_NONE;
+            std::vector<std::vector<std::string>> words;
+        };
+        std::vector<Kind>  kinds;
+        std::vector<Class> classes;
+        std::vector<std::vector<std::string>> buffWords;  // "buff", "buffs", "rebuff"
+        std::vector<std::vector<std::string>> notBuffs;   // "food buff", "flask", "skull": not one, the whole line
+        std::vector<std::vector<std::string>> asks;       // "can i get", "give me", "buff me", "anyone got"
+        std::vector<std::vector<std::string>> polite;     // "pls", "can you"
+        std::vector<std::vector<std::string>> needs;      // "need", "could use": theirs, right before the buff
+        std::vector<std::vector<std::string>> offers;     // "anyone need", "who wants", "im buffing": offering
+        std::vector<std::vector<std::string>> negations;  // "dont", "no"
+        std::vector<std::vector<std::string>> haves;      // "i have", "im buffed"
+        std::vector<std::vector<std::string>> thanks;     // "ty", "cheers"
+        std::vector<std::vector<std::string>> questions;  // "what", "how": asking about, not for
+        std::vector<std::vector<std::string>> commands;   // first word: playerbots' own ("cast", "c")
+        uint32_t maxWords = 14;
+    };
+
+    struct BuffAsk
+    {
+        bool        ask   = false;
+        uint16_t    kinds = BUFF_NONE;   // what they named; none: any buff will do
+        std::string askedClass;          // "priest" in "priest can i get a buff": who they took the bot for
+    };
+
+    // Is this a line asking for a buff, the way people ask? "can i get a
+    // buff", "buff pls", "buffs?", "anyone got fort?", "kings please", "Verona
+    // int pls", "your a priest, can you buff me?".
+    //
+    //   * a buff word ("buff", "fortitude", "motw") with an ask or a please, a
+    //     need of their own right before it ("need a buff", "i could use
+    //     fort", but never "warriors need a buff"), an "anyone"/"someone" up
+    //     front, a short question, nothing much else ("buffs?", "any buffs"),
+    //     or a question to a named bot;
+    //   * a short word ("fort", "int", "kings", "mark") only in a short line,
+    //     six words at most, that asks, is nothing but it ("fort?"), or is
+    //     said to a named bot;
+    //   * not when it is negated before the buff ("dont need buffs"), had ("i
+    //     have fort", "im buffed"), a thank-you ("ty for the buff"), a question
+    //     about it ("what does kings do"), an offer ("anyone need fort?",
+    //     "buffs anyone?") or no spell at all ("food buff", "flask", "mark
+    //     skull").
+    //
+    // A line starting with a playerbots command ("cast fort") is never one.
+    // `names` are words to leave out first; `named` says a bot was named, or
+    // the line was whispered to one.
+    BuffAsk MatchBuffAsk(const std::string& cleanText, const BuffRules& rules, bool named,
+                         const std::vector<std::string>& names = {});
+
+    // Is the line only a thank-you -- "ty", "thanks Verona", "cheers for the
+    // buff", "tyvm :)" -- at most `maxWords` words once `names` are left out?
+    // Not "no thanks", not "thanks for nothing", and not a question.
+    bool IsThanksLine(const std::string& cleanText, const std::vector<std::vector<std::string>>& thanks,
+                      const std::vector<std::vector<std::string>>& negations,
+                      const std::vector<std::string>& names, uint32_t maxWords);
+
     // ---- telling bots what to do ---------------------------------------------
 
     enum class BotIntent : uint8_t
