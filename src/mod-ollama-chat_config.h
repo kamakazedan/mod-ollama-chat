@@ -905,6 +905,8 @@ extern bool        g_PartyBreakEndEnable;
 extern uint32_t    g_PartyBreakEndHealthPct;      // everyone's health back to at least this
 extern uint32_t    g_PartyBreakEndManaPct;        // a real player's and a healer's mana
 extern uint32_t    g_PartyBreakEndOthersManaPct;  // every other bot's mana
+extern uint32_t    g_PartyBreakEndLowManaClasses; // ...but these classes' (a class mask, 1 << (class - 1))...
+extern uint32_t    g_PartyBreakEndLowManaPct;     // ...need only this much, unless they heal
 extern uint32_t    g_PartyBreakEndMinSeconds;     // never sooner than this after it began
 extern uint32_t    g_PartyBreakEndMaxMinutes;     // longer than this: over when someone says so
 extern std::string g_PartyBreakEndSituation;      // the tank's "lets go", for Party.AnnouncePrompt

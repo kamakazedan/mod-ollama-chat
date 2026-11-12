@@ -81,6 +81,7 @@ namespace
     std::unordered_map<uint64_t, std::unordered_set<uint64_t>> g_finderJoins;
     std::unordered_map<uint64_t, Invite>                        g_invites;
 
+#if OLLAMA_CHAT_DC_RUN_STATE
     // A bot the finder matched into this group -- not one somebody in it
     // invited lately and queued with (the finder rebuilds a part group around
     // the players it adds, so they all join it afresh).
@@ -96,6 +97,7 @@ namespace
             return false;   // invited by someone it is still grouped with
         return true;
     }
+#endif
 
     // "just start the dingeon": the words a line about the run hangs on,
     // read right however they are typed.
@@ -1093,7 +1095,8 @@ namespace
     // back (Party.BreakEnd*), and every real player close by, at the keyboard
     // and done drinking -- one sat down still is done only when full. A real
     // player's and a healer's mana has to be all but full; any other bot's
-    // less, as it tops up on the way like on the rest of a run.
+    // less, as it tops up on the way like on the rest of a run, and a hunter's
+    // or a shaman's (BreakEndLowManaClasses) least: it does its damage anyway.
     bool GroupRested(Player* tank, Group* group)
     {
         Map* map = tank->GetMap();
@@ -1120,7 +1123,10 @@ namespace
             const float mana    = hasMana ? member->GetPowerPct(POWER_MANA) : 100.0f;
             if (health < float(g_PartyBreakEndHealthPct))
                 return false;
+            const bool lowManaClass =
+                (member->getClassMask() & g_PartyBreakEndLowManaClasses) && !PlayerbotAI::IsTank(member);
             const uint32_t bar = (real || PlayerbotAI::IsHeal(member)) ? g_PartyBreakEndManaPct
+                                 : lowManaClass                        ? g_PartyBreakEndLowManaPct
                                                                        : g_PartyBreakEndOthersManaPct;
             if (hasMana && mana < float(bar))
                 return false;

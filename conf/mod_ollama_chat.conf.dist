@@ -2940,6 +2940,8 @@ OllamaChat.Party.DoneStayingText = " Someone asked everyone to stick around, so 
 #    OllamaChat.Party.BreakEndHealthPct
 #    OllamaChat.Party.BreakEndManaPct
 #    OllamaChat.Party.BreakEndOthersManaPct
+#    OllamaChat.Party.BreakEndLowManaClasses
+#    OllamaChat.Party.BreakEndLowManaPct
 #    OllamaChat.Party.BreakEndMinSeconds
 #    OllamaChat.Party.BreakEndMaxMinutes
 #        A rest someone calls in party -- "mb", "need mana", "drink", "lets
@@ -2951,7 +2953,9 @@ OllamaChat.Party.DoneStayingText = " Someone asked everyone to stick around, so 
 #            back to BreakEndHealthPct health,
 #          - every real player and every healer has BreakEndManaPct mana,
 #            every other bot BreakEndOthersManaPct (it tops up on the way,
-#            as on the rest of a run),
+#            as on the rest of a run), and a bot of one of
+#            BreakEndLowManaClasses that does not heal only BreakEndLowManaPct:
+#            hunters and shamans do their damage without much mana,
 #          - every real player is inside, within PartyCommands.MaxDistance of
 #            the tank, not AFK, and not still sat drinking: someone sat down
 #            is done only when both bars are full.
@@ -2962,11 +2966,17 @@ OllamaChat.Party.DoneStayingText = " Someone asked everyone to stick around, so 
 #        wait for someone to say ready.
 #        Only with a bot leading the run. 0 disables: every pause waits for
 #        someone to say ready, as before.
-#        Default: 1, 90, 95, 80, 10, 5
+#        BreakEndLowManaClasses are class names separated by | (warrior,
+#        paladin, hunter, rogue, priest, death knight, shaman, mage, warlock,
+#        druid); empty for none. mod-dungeon-clear's own rests have the same
+#        thing as DungeonClear.SmartRestLowManaClasses.
+#        Default: 1, 90, 95, 80, hunter|shaman, 25, 10, 5
 OllamaChat.Party.BreakEndEnable = 1
 OllamaChat.Party.BreakEndHealthPct = 90
 OllamaChat.Party.BreakEndManaPct = 95
 OllamaChat.Party.BreakEndOthersManaPct = 80
+OllamaChat.Party.BreakEndLowManaClasses = "hunter|shaman"
+OllamaChat.Party.BreakEndLowManaPct = 25
 OllamaChat.Party.BreakEndMinSeconds = 10
 OllamaChat.Party.BreakEndMaxMinutes = 5
 

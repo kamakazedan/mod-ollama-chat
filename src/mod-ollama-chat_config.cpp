@@ -202,6 +202,8 @@ bool        g_PartyBreakEndEnable        = true;
 uint32_t    g_PartyBreakEndHealthPct     = 90;
 uint32_t    g_PartyBreakEndManaPct       = 95;
 uint32_t    g_PartyBreakEndOthersManaPct = 80;
+uint32_t    g_PartyBreakEndLowManaClasses = (1u << (CLASS_HUNTER - 1)) | (1u << (CLASS_SHAMAN - 1));
+uint32_t    g_PartyBreakEndLowManaPct     = 25;
 uint32_t    g_PartyBreakEndMinSeconds    = 10;
 uint32_t    g_PartyBreakEndMaxMinutes    = 5;
 std::string g_PartyBreakEndSituation;
@@ -1232,6 +1234,32 @@ namespace
     std::vector<std::string> ReadChoiceList(const char* key, const char* def)
     {
         return TextRules::SplitBars(sConfigMgr->GetOption<std::string>(key, def));
+    }
+
+    // "hunter|shaman" -> the class mask (1 << (class - 1)) of the classes named.
+    uint32_t ReadClassMask(const char* key, const char* def)
+    {
+        static const std::pair<const char*, uint8> kClasses[] = {
+            { "warrior", CLASS_WARRIOR }, { "paladin", CLASS_PALADIN }, { "hunter", CLASS_HUNTER },
+            { "rogue", CLASS_ROGUE }, { "priest", CLASS_PRIEST }, { "death knight", CLASS_DEATH_KNIGHT },
+            { "deathknight", CLASS_DEATH_KNIGHT }, { "dk", CLASS_DEATH_KNIGHT }, { "shaman", CLASS_SHAMAN },
+            { "mage", CLASS_MAGE }, { "warlock", CLASS_WARLOCK }, { "druid", CLASS_DRUID },
+        };
+        uint32_t mask = 0;
+        const std::string raw = sConfigMgr->GetOption<std::string>(key, def);
+        for (const std::vector<std::string>& words : CrowdText::ParsePhrases(raw))
+        {
+            std::string name;
+            for (const std::string& w : words)
+                name += (name.empty() ? "" : " ") + w;
+            auto it = std::find_if(std::begin(kClasses), std::end(kClasses),
+                                   [&](const auto& c) { return name == c.first; });
+            if (it != std::end(kClasses))
+                mask |= 1u << (it->second - 1);
+            else if (!name.empty())
+                LOG_WARN("module.ollamachat", "[Ollama Chat] {}: '{}' is not a class, left out.", key, name);
+        }
+        return mask;
     }
 
     std::vector<uint32_t> ReadEmoteList(const std::string& raw, std::string* unknown = nullptr)
@@ -2729,6 +2757,9 @@ static void LoadNaturalChatV21Settings()
         std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.BreakEndManaPct", 95));
     g_PartyBreakEndOthersManaPct =
         std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.BreakEndOthersManaPct", 80));
+    g_PartyBreakEndLowManaClasses = ReadClassMask("OllamaChat.Party.BreakEndLowManaClasses", "hunter|shaman");
+    g_PartyBreakEndLowManaPct =
+        std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.BreakEndLowManaPct", 25));
     g_PartyBreakEndMinSeconds =
         std::min<uint32_t>(600, sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.BreakEndMinSeconds", 10));
     g_PartyBreakEndMaxMinutes =
