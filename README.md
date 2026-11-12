@@ -679,7 +679,8 @@ style.
 When it can't, it says why (not a mage, not learned it yet, bags full); when
 it only can't yet (a fight on, out of mana, too far apart to trade) it says it
 will, and does as soon as it can. A trade window you already opened with it
-gets filled instead. "need mana", "oom" and "mb" stay mana breaks, a bare
+gets filled instead. Someone outside its group can ask too (see Trading
+with Strangers below). "need mana", "oom" and "mb" stay mana breaks, a bare
 "pots" needs a real ask ("pls send me pots", since "pot now" is a raid call),
 and playerbots' own commands ("t water", "use water") are left to playerbots.
 See `OllamaChat.Conjure.*`.
@@ -711,6 +712,32 @@ Bots in your group are left to playerbots, which keeps its own group buffed
 ("buff us" in party chat is an order), and nobody flagged for PvP is buffed
 by a bot that is not. `.ollama status` counts asks, casts, refusals and
 thank-yous. See `OllamaChat.Buff.*`.
+
+## Trading with Strangers
+
+Playerbots turns down any trade with someone outside a bot's group ("I'm
+kind of busy now"), so these used to need an invite first. Now someone
+outside the group can ask too -- by name, by whisper, or, for water, of
+everyone near in /say ("anyone got water?") -- and the bot takes it as a
+favour, its own way, by the same chat style as a buff
+(`OllamaChat.Buff.Style.<KEY>`): it does it and says so, does it without a
+word, says no, or lets it go by.
+
+- **Water and food from a mage** outside your group: it conjures it and opens
+  the trade, as for its own group.
+- **Something you sell or give it** ("wts [Pagan Vest] 5g", whispered): it
+  says what it would pay, or that it would like it, and when you open a trade
+  and put the thing in, it puts in the money and accepts its side.
+- **Something spare from its bags**, with `OllamaChat.Bags.GiveAway = 1`
+  (what it offered you always goes over).
+
+While such a trade is on, or about to be (you're close, with water waiting or
+a price agreed), the bot's playerbots AI is held from the world tick, so it
+never sees the trade to turn it down, and its side is accepted for it; a
+fight calls it off. `OllamaChat.Favor.Strangers = 0` puts things back: an
+invite first. Bots only answer ordinary whispers with
+`OllamaChat.EnableWhisperReplies = 1`; asks for buffs, water and spare things
+are answered either way.
 
 ## Orders in Plain Words
 

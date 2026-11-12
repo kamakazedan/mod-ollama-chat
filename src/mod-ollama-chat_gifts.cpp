@@ -4,6 +4,7 @@
 #include "mod-ollama-chat_conjure.h"
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_crowd.h"
+#include "mod-ollama-chat_favor.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_textrules.h"
@@ -58,7 +59,9 @@ namespace
     std::vector<Pending> g_pending;
 
     // A bot agreed to pay `price` for `entry`: when the player puts it in a
-    // trade window with it, the money goes in on its side.
+    // trade window with it, the money goes in on its side. With someone
+    // outside its group it is a deal at price 0 too, for a thing it said yes
+    // to: playerbots takes no trade from them, so this one finishes it.
     struct Deal
     {
         uint64_t          bot    = 0;
@@ -67,9 +70,19 @@ namespace
         uint32_t          price  = 0;
         bool              filled = false;   // the money is in a window between them right now
         uint32_t          moneyBefore = 0;  // the bot's money when it went in
+        bool              accepted = false; // its side accepted for it (someone outside its group)
+        bool              begun    = false; // their trade taken up on its side by this (someone outside its group)
+        uint32_t          countBefore = 0;  // how many it had then
+        Clock::time_point lastAccept{};
+        Clock::time_point made{};
         Clock::time_point until{};
     };
     std::vector<Deal> g_deals;
+
+    // Someone outside its group, with a price agreed or a gift said yes to
+    // (and not forgotten yet), standing this close: the bot's AI is held, so
+    // the trade they open is not turned down by playerbots.
+    constexpr float kHoldNear = 15.0f;
 
     enum class SaidKind : uint8_t { Gift, Buy, Counter, AskPrice };
 
@@ -352,7 +365,8 @@ namespace
         d.player = p;
         d.entry  = entry;
         d.price  = price;
-        d.until  = Clock::now() + std::chrono::seconds(g_GiftsRememberSeconds);
+        d.made   = Clock::now();
+        d.until  = d.made + std::chrono::seconds(g_GiftsRememberSeconds);
         g_deals.push_back(d);
     }
 
@@ -633,10 +647,12 @@ bool Gifts_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSo
     for (Candidate& c : all)
         (c.j.score >= need ? wanters : others).push_back(&c);
 
-    // Not in their group: playerbots only trades with its group.
+    // Not in their group, with bots trading only inside one
+    // (Favor.Strangers = 0): playerbots only trades with its group.
     auto inviteNote = [&](Player* bot) -> std::string
     {
-        return SameGroup(player, bot) || g_GiftsInviteText.empty() ? std::string() : " " + g_GiftsInviteText;
+        return SameGroup(player, bot) || Favor_TradesWithStrangers() || g_GiftsInviteText.empty()
+                   ? std::string() : " " + g_GiftsInviteText;
     };
 
     if (sale)
@@ -667,6 +683,10 @@ bool Gifts_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSo
             voices.push_back({ first.bot, Format(g_GiftsHintWant, player, proto, first.j.why) + inviteNote(first.bot) });
             p.taker = first.bot->GetGUID().GetRawValue();
             RememberSaid(first.bot, player, entry, 0, SaidKind::Gift);
+            // Someone outside its group: taking it in a trade is this
+            // module's, playerbots having none of it (Gifts_Tick).
+            if (Favor_TradesWithStrangers() && Favor_IsStranger(first.bot, player))
+                RememberDeal(first.bot, player, entry, 0);
 
             // Now and then a second voice: another who could have used it, or
             // a no thanks.
@@ -760,11 +780,34 @@ void Gifts_Tick()
             continue;
         }
 
+        // Someone outside its group: playerbots would turn their trade down,
+        // so the bot's AI is held while one is open between them, or about
+        // to be: they are close, with the deal still standing.
+        const bool stranger = Favor_TradesWithStrangers() && Favor_IsStranger(bot, player);
+
         TradeData* mine   = bot->GetTradeData();
         TradeData* theirs = player->GetTradeData();
         const bool open = mine && theirs && bot->GetTrader() == player;
         if (!open)
         {
+            // A gift taken in a trade accepted for it: done.
+            if (d.accepted && d.price == 0)
+            {
+                d.accepted = false;
+                if (bot->GetItemCount(d.entry) > d.countBefore)
+                {
+                    ++g_stats.received;
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] {} took {}'s {} in a trade.", bot->GetName(),
+                                 player->GetName(), d.entry);
+                    it = g_deals.erase(it);
+                    continue;
+                }
+            }
+            d.accepted = false;
+            d.begun    = false;
+            if (stranger && !bot->IsInCombat() && bot->IsWithinDistInMap(player, kHoldNear))
+                Favor_HoldAi(bot);
             if (d.filled)
             {
                 // The window closed with the money in it: paid, if the money
@@ -799,6 +842,44 @@ void Gifts_Tick()
             packet << uint32(want);
             bot->GetSession()->HandleSetTradeGoldOpcode(packet);
             d.filled = offered;
+        }
+
+        // Someone outside its group: held, and its side accepted for it when
+        // the window holds the thing agreed, nothing else of theirs, and on
+        // its side the price agreed and nothing more. Their accept then
+        // finishes it. Once a second at most: a change undoes an accept.
+        if (stranger && bot->GetTradeData() && player->GetTradeData())
+        {
+            Favor_HoldAi(bot);
+            // Their trade: playerbots, held off it, never takes it up, so it
+            // is taken up here, once -- unless the bot offered it, handing
+            // them something (Conjure_GiveItems).
+            if (!d.begun && !Conjure_IsGiving(bot, player, 0))
+            {
+                d.begun = true;
+                WorldPacket begin;
+                bot->GetSession()->HandleBeginTradeOpcode(begin);
+            }
+            bool other = theirs->GetMoney() != 0;
+            for (uint8 slot = 0; slot < TRADE_SLOT_TRADED_COUNT && !other; ++slot)
+            {
+                if (Item* item = theirs->GetItem(TradeSlots(slot)))
+                    other = item->GetEntry() != d.entry;
+                if (mine->GetItem(TradeSlots(slot)))
+                    other = true;
+            }
+            if (offered && !other && mine->GetMoney() == d.price && !mine->GetSpell() && !mine->IsAccepted() &&
+                !mine->IsInAcceptProcess() && now - d.lastAccept >= std::chrono::seconds(1))
+            {
+                d.lastAccept  = now;
+                d.accepted    = true;
+                d.countBefore = bot->GetItemCount(d.entry);
+                WorldPacket packet;
+                bot->GetSession()->HandleAcceptTradeOpcode(packet);
+                // Their accept came first: done in that call, gone now.
+                if (!bot->GetTradeData())
+                    continue;
+            }
         }
         ++it;
     }

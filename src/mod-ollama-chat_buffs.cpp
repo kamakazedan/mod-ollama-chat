@@ -3,6 +3,7 @@
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_crowd.h"
+#include "mod-ollama-chat_favor.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_textrules.h"
@@ -383,55 +384,8 @@ namespace
         return {};
     }
 
-    // Up to answering anything: about, alive, not fighting, travelling or AFK.
-    bool CanAnswer(Player* bot)
-    {
-        return bot && bot->IsInWorld() && bot->IsAlive() && !bot->IsInCombat() && !bot->isAFK() && !bot->isDND() &&
-               !bot->IsInFlight() && !bot->GetVehicle() && !bot->IsBeingTeleported();
-    }
-
-    // ---- how a bot takes being asked ------------------------------------------
-
-    const BuffStyle& StyleOf(Player* bot)
-    {
-        std::string key = GetBotPersonality(bot);
-        for (char& ch : key)
-            ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-        auto it = g_BuffStyles.find(key);
-        return it == g_BuffStyles.end() ? g_BuffStyleDefault : it->second;
-    }
-
-    bool Chance(uint32_t percent)
-    {
-        return percent > 0 && (percent >= 100 || urand(1, 100) <= percent);
-    }
-
-    enum class Outcome : uint8_t
-    {
-        Give,     // buff them, and say so
-        Quiet,    // buff them without a word
-        No,       // say no
-        Ignore    // let it go by
-    };
-
-    // Asked in particular, letting it go by is half as likely.
-    Outcome Roll(const BuffStyle& s, bool spokenTo)
-    {
-        const uint32_t ignore = spokenTo ? s.ignore / 2 : s.ignore;
-        const uint32_t total  = s.give + s.quiet + s.no + ignore;
-        if (total == 0)
-            return Outcome::Ignore;
-        uint32_t r = urand(1, total);
-        if (r <= s.give)
-            return Outcome::Give;
-        r -= s.give;
-        if (r <= s.quiet)
-            return Outcome::Quiet;
-        r -= s.quiet;
-        if (r <= s.no)
-            return Outcome::No;
-        return Outcome::Ignore;
-    }
+    // How a bot takes being asked is its chat style's (mod-ollama-chat_favor).
+    using Outcome = FavorOutcome;
 
     // What a bot made of someone's last ask, so asking again straight away
     // does not get it a new roll.
@@ -544,13 +498,8 @@ namespace
         Near n;
         auto mayAnswer = [player](Player* b)
         {
-            if (b->GetTeamId() != player->GetTeamId() || b->InBattleground() || b->InArena())
-                return false;
-            Group* group = player->GetGroup();
-            if (group && group == b->GetGroup())
-                return false;
-            PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(b);
-            return !(ai && ai->GetMaster() == player);
+            return b->GetTeamId() == player->GetTeamId() && !b->InBattleground() && !b->InArena() &&
+                   Favor_IsStranger(b, player);
         };
 
         if (source == SRC_WHISPER_LOCAL)
@@ -708,7 +657,7 @@ namespace
         const bool hears = bot && bot->IsInWorld() &&
                            (source == SRC_WHISPER_LOCAL ||
                             (bot->GetMapId() == player->GetMapId() && bot->IsWithinDistInMap(player, g_SayDistance)));
-        if (hears && CanAnswer(bot) && Chance(StyleOf(bot).welcome))
+        if (hears && Favor_CanAnswer(bot, true) && Favor_Welcomes(bot))
         {
             ++g_stats.thanked;
             Answer(player, bot, msg, source, scopeKey, seq,
@@ -744,12 +693,11 @@ namespace
     void AnswerOne(const Ask& a, Player* bot)
     {
         Player* player = a.player;
-        if (!CanAnswer(bot))
+        if (!Favor_CanAnswer(bot, true))
         {
             ++g_stats.ignored;
             return;
         }
-        const BuffStyle& style = StyleOf(bot);
         const Choice c = Choose(bot, player, a.wanted, ComingTo(player->GetGUID().GetRawValue()), true);
         std::string why = c.casts.empty() ? c.reason : std::string();
         if (why.empty() && PvpStops(bot, player))
@@ -760,8 +708,9 @@ namespace
 
         if (!why.empty())
         {
-            if (Chance(style.explain))
+            if (Favor_Explains(bot))
             {
+                Favor_ComeBack(bot);
                 ++g_stats.cant;
                 Answer(player, bot, *a.msg, a.source, *a.scopeKey, a.seq,
                        Hint(g_BuffHintCant, player, bot, a.request, {}, why, tookFor, {}));
@@ -774,7 +723,9 @@ namespace
             return;
         }
 
-        const Outcome o = Roll(style, true);
+        const Outcome o = Favor_Roll(bot, true);
+        if (o != Outcome::Ignore)
+            Favor_ComeBack(bot);
         switch (o)
         {
             case Outcome::Give:
@@ -820,7 +771,7 @@ namespace
         Acore::Containers::RandomShuffle(order);
         for (Player* bot : order)
         {
-            if (!CanAnswer(bot))
+            if (!Favor_CanAnswer(bot))
                 continue;
             // "buff pls" from a priest is not asking the other priests.
             if (a.wanted == TextRules::BUFF_NONE && bot->getClass() == player->getClass() &&
@@ -836,7 +787,7 @@ namespace
             if (c.casts.empty() || PvpStops(bot, player) || !RangeProblem(bot, player, c).empty())
                 continue;
 
-            Outcome o = Roll(StyleOf(bot), false);
+            Outcome o = Favor_Roll(bot, false);
             const Outcome rolled = o;
             if ((o == Outcome::Give || o == Outcome::Quiet) && givers >= g_BuffMaxGivers)
                 o = Outcome::Ignore;   // enough people on it already

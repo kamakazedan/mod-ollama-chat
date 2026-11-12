@@ -28,8 +28,9 @@ class Player;
 //   * Asked for something ("can I have your [Linen Cloth]", "ill take the
 //     leggings", or just "me!" after it offered one), a spare thing goes over
 //     in a trade -- the way a mage's water does -- and a kept one gets a no
-//     and the reason. Playerbots only trades inside a group, so someone
-//     outside it is told to invite the bot first. Only what a player would
+//     and the reason. Someone outside its group asking for something it did
+//     not offer them is a favour, the bot's own call (mod-ollama-chat_favor):
+//     it may say no, or let it go by. Only what a player would
 //     give away free counts as spare: not a blue, not a stack worth real
 //     gold (Bags.MaxGiftQuality, Bags.MaxGiftCopper).
 //   * Saying so hands nothing over, and a bot that has just talked about its
@@ -114,7 +115,9 @@ struct BagsStats
     uint64_t asked     = 0;   // asks for something it carries
     uint64_t given     = 0;   // trades started for it
     uint64_t kept      = 0;   // said no: it needs it
-    uint64_t invite    = 0;   // told to invite it first
+    uint64_t invite    = 0;   // told to invite it first (Favor.Strangers = 0)
+    uint64_t refused   = 0;   // someone outside its group: said no
+    uint64_t ignored   = 0;   // someone outside its group: let it go by
     uint64_t offers    = 0;   // spare things linked in its own lines
 };
 BagsStats Bags_GetStats();

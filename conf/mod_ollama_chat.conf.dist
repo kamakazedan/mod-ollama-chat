@@ -3022,9 +3022,14 @@ OllamaChat.Party.AnnouncePrompt = "You are {bot_name}, a level {bot_level} {bot_
 #   does as soon as it can, for up to WaitSeconds.
 #
 #   Who answers: the bot the line names, or whispers; otherwise the group's
-#   nearest mage. In /say only a mage close enough to hear it. A mage named
-#   or whispered by someone outside its group says to invite it: playerbots
-#   cancels trades with anyone outside the group.
+#   nearest mage. In /say only a mage close enough to hear it -- and with
+#   nobody in their group to ask, a mage outside it that hears it might.
+#   Someone outside the mage's group gets it as a favour (Favor.Strangers):
+#   the mage takes it its own way, by its chat style (Buff.Style.<KEY>), and
+#   may say no (HintNo) or let it go by; while the trade is on, its
+#   playerbots AI is held so the trade is not turned down. With
+#   Favor.Strangers = 0, a mage named or whispered by someone outside its
+#   group says to invite it instead (HintNotGrouped).
 #
 #   What counts as asking:
 #     * a real item ("water", "food", "mana pots") with an ask or a please
@@ -3147,9 +3152,11 @@ OllamaChat.Conjure.TradeSeconds = 60
 #    OllamaChat.Conjure.HintNotMage
 #    OllamaChat.Conjure.HintAlready
 #    OllamaChat.Conjure.HintNotGrouped
+#    OllamaChat.Conjure.HintNo
 #        What the bot is told when it answers: it is giving it; it will once it
 #        can; it can't; it is not a mage; it already offered a trade (asked
-#        again); they are not in its group. Placeholders: {player_name},
+#        again); they are not in its group (Favor.Strangers = 0); it won't
+#        (someone outside its group, its own call). Placeholders: {player_name},
 #        {request} ("conjured water", "conjured food and water"), {gift}
 #        ("a stack of Conjured Mana Strudel"), {when} ("as soon as this fight
 #        is over", "once you have the mana for it, ..."), {reason} ("your bags
@@ -3162,6 +3169,7 @@ OllamaChat.Conjure.HintCant = "{player_name} asked you for {request}, but you ca
 OllamaChat.Conjure.HintNotMage = "{player_name} asked you for {request}, but you are a {class}, not a mage, so you can't conjure it.{mage} Tell them in a few words, in your own chat style."
 OllamaChat.Conjure.HintAlready = "{player_name} asked you for {request} again, but you have already offered them a trade with it. Tell them in a few words to accept the trade."
 OllamaChat.Conjure.HintNotGrouped = "{player_name} asked you for {request}, but you only hand out conjured food and water to your own group, and they are not in it. Tell them in a few words, in your own chat style, to invite you if they want some."
+OllamaChat.Conjure.HintNo = "{player_name} asked you for {request}. You could conjure it for them, but you are not going to: say no in a few words, in your own chat style, with or without a reason."
 
 ###############################################################################
 #
@@ -3341,11 +3349,26 @@ OllamaChat.Buff.RememberSeconds = 90
 #        Default: 1
 OllamaChat.Buff.SkipPvp = 1
 
+#    OllamaChat.Favor.Strangers
+#        1: bots trade with people outside their group too -- conjured food
+#        and water (Conjure.*), a spare thing from their bags (Bags.*), what
+#        they agreed to buy or said yes to (Gifts.*) -- asked by name, by
+#        whisper, or (water) of everyone near in /say. Each takes it its own
+#        way, by the Style below. Playerbots turns down any trade with someone
+#        outside a bot's group, so while one is on, or about to be (they are
+#        close, with water waiting or a deal agreed), the bot's playerbots AI
+#        is held and its side of the trade is accepted for it; a fight calls
+#        it off. 0: someone outside the group is told to invite the bot first.
+#        Default: 1
+OllamaChat.Favor.Strangers = 1
+
 #    OllamaChat.Buff.Style.Default
 #    OllamaChat.Buff.Style.<KEY>
-#        How each chat style takes being asked. give, quiet, no and ignore
-#        are weights: buff them and say so, buff them without a word, say
-#        no, or let it go by (asked in particular, letting it go by is half
+#        How each chat style takes a favour asked of it -- a buff, and from
+#        someone outside its group conjured food or water or something spare
+#        from its bags (Favor.Strangers). give, quiet, no and ignore
+#        are weights: do it and say so, do it without a word, say no, or
+#        let it go by (asked in particular, letting it go by is half
 #        as likely). explain is the percent chance one asked in particular
 #        that can't says why; welcome the percent chance the one who gave it
 #        answers the thank-you. A style without a line of its own uses
@@ -3946,10 +3969,13 @@ OllamaChat.Marks.SapFailed = "You tried to sap {target} for {player_name} and it
 #   was given: anything else put in (gold, another item) makes it an ordinary
 #   trade, priced by playerbots. Whole stacks go over: the biggest, then
 #   more only while they stay within what was asked and one stack's worth.
-#   Playerbots cancels trades with anyone outside the bot's group, so
-#   someone outside it is told to invite the bot first; if they do within
-#   InviteWaitSeconds, the trade starts by itself. "me!" in General gets its
-#   answer by whisper.
+#   Someone outside the bot's group gets what it offered them, and anything
+#   else they ask for is a favour, its own call (Favor.Strangers,
+#   Buff.Style.<KEY>): it may say no (HintNo) or let it go by. While the
+#   trade is on, its playerbots AI is held so the trade is not turned down.
+#   With Favor.Strangers = 0 they are told to invite the bot first instead;
+#   if they do within InviteWaitSeconds, the trade starts by itself. "me!" in
+#   General gets its answer by whisper.
 #
 ###############################################################################
 
@@ -3969,8 +3995,8 @@ OllamaChat.Bags.RecentMinutes = 30
 OllamaChat.Bags.OfferSeconds = 180
 
 #    OllamaChat.Bags.InviteWaitSeconds
-#        Told to invite the bot first: the trade starts by itself if they do
-#        within this long.
+#        Told to invite the bot first (Favor.Strangers = 0): the trade starts
+#        by itself if they do within this long.
 #        Default: 120
 OllamaChat.Bags.InviteWaitSeconds = 120
 
@@ -4056,6 +4082,7 @@ OllamaChat.Bags.NotWords = "dont|do not|doesnt|not|no|nah|nope|never|cant|wont|d
 
 #    OllamaChat.Bags.HintGive
 #    OllamaChat.Bags.HintInvite
+#    OllamaChat.Bags.HintNo
 #    OllamaChat.Bags.HintKeep
 #    OllamaChat.Bags.HintNotHave
 #    OllamaChat.Bags.HintCant
@@ -4066,9 +4093,11 @@ OllamaChat.Bags.NotWords = "dont|do not|doesnt|not|no|nah|nope|never|cant|wont|d
 #        trade"), {reason} (kept: "it is an upgrade you mean to put on";
 #        cannot: "their bags are full, so they need to make room first").
 #        HintAlready: asked again ("sure", then "trade it") while it is going
-#        over already.
+#        over already. HintInvite: someone outside its group, with
+#        Favor.Strangers = 0. HintNo: someone outside its group, and it won't.
 OllamaChat.Bags.HintGive = "{player_name} asked for {item}, which you have no use for, so you are trading it over to them {when}. Say so in a few words, in your own way."
 OllamaChat.Bags.HintInvite = "{player_name} wants {item}, which you could spare, but you only trade with people in your group: tell them to invite you and you will trade it over."
+OllamaChat.Bags.HintNo = "{player_name} asked for {item}, which you could spare, but you are not giving it to them: say no in a few words, in your own chat style, with or without a reason."
 OllamaChat.Bags.HintKeep = "{player_name} asked for {item}, but you are keeping it: {reason}. Say no, and why, in your own way."
 OllamaChat.Bags.HintNotHave = "{player_name} asked for {item}, but you do not have one. Say so."
 OllamaChat.Bags.HintCant = "{player_name} asked for {item}, and you would give it to them, but you can't right now: {reason}. Say so."
@@ -4187,7 +4216,8 @@ OllamaChat.Gifts.MaxSpendPercent = 50
 #        Bag]"), {why} (what use it is to it, or why none), {price} (what they
 #        asked), {counter} (what it offers), {money} (what it has), {first}
 #        (who already said yes). InviteText goes after a yes from a bot outside
-#        their group.
+#        their group, with Favor.Strangers = 0; otherwise a bot outside it
+#        trades with them too, its AI held and its side accepted for it.
 OllamaChat.Gifts.HintWant = "{player_name} is giving away {item} for free to anyone in the group who wants it -- they are offering it, not asking for one. It would be useful to you: {why}. Say you would like it, in a few words and in your own way, so they can trade it to you."
 OllamaChat.Gifts.HintWantToo = "{player_name} is giving away {item} for free, and {first} has already said they would like it. It would have been useful to you too ({why}); if you say anything, keep it light -- that you would have taken it too, or that {first} can have it."
 OllamaChat.Gifts.HintNoNeed = "{player_name} is giving away {item} for free to anyone who wants it -- they are offering it, not asking for one. It is no use to you: {why}. If you say anything, just a quick no thanks in your own words."
@@ -5210,7 +5240,7 @@ OllamaChat.Needs.ReasonErrand = "you are in {city} and {why}, so you asked {what
 #        {item} ("[Linen Cloth] x12"), {looted} (", which you just looted,"
 #        or empty).
 OllamaChat.Needs.AskSpare = "You have {item}{looted} in your bags and no use for it. Offer it, free, to anyone who wants it, naming it in square brackets."
-OllamaChat.Needs.ReasonSpare = "you offered {item}, which you have no use for: whoever wants it can have it, in a trade if they are in your group, and anyone else has to invite you first"
+OllamaChat.Needs.ReasonSpare = "you offered {item}, which you have no use for: whoever wants it can have it, in a trade"
 
 #    OllamaChat.Needs.AskShort
 #    OllamaChat.Needs.ReasonShort

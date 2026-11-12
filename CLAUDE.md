@@ -140,6 +140,17 @@ repetition history.
   Whether a buff would stack is the core's own spell groups
   (`SpellMgr::CheckSpellGroupStackRules`), not a list here. An ask it
   answers is claimed, whoever acts on it, so no crowd chats over it.
+- Playerbots turns down every trade with a person outside the bot's group
+  (`TradeStatusAction`, "I'm kind of busy now"), from the trade packets it
+  queues for the bot's next AI tick. A trade made as a favour to someone
+  outside the group (`mod-ollama-chat_favor.h`: conjure, bags, gifts) holds
+  the bot's AI with `Favor_HoldAi` every world tick while the trade is open
+  or about to be, so that tick never comes; the module accepts the bot's side
+  itself, and the queued packets find no trade once the AI is back. Hold it
+  with `YieldThread` (never shorter than a hold someone else set, such as a
+  city hangout's), call it off in a fight, and never hold a bot for a trade
+  that is not one of this module's. How the bot takes the ask is its chat
+  style's (`Favor_Roll`), the same weights as a buff.
 - Packet hooks (`ServerScript::CanPacketSend`) run on any thread: read only a
   snapshot published from the world thread (mod-playerbots-plus's
   `PlayerbotsPlusMute.cpp` does).

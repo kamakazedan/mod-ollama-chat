@@ -73,6 +73,7 @@ struct GiftsStats
     uint64_t agreed   = 0;   // a bot agreed a price
     uint64_t countered = 0;  // a bot offered less
     uint64_t paid     = 0;   // a bot paid in a trade window
+    uint64_t received = 0;   // a gift from someone outside its group, taken in a trade
     uint32_t deals    = 0;   // prices agreed and not traded yet
 };
 GiftsStats Gifts_GetStats();

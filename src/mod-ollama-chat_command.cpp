@@ -658,10 +658,12 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
 
     const ConjureStats conjure = Conjure_GetStats();
     if (show("bots"))
-        handler->PSendSysMessage("Conjured food and water: {} - {} asked, {} trades offered, {} traded, {} waited "
-                             "first, {} refused, {} lapsed, {} pending",
+        handler->PSendSysMessage("Conjured food and water: {} - {} asked ({} from outside the group, {} let go "
+                             "by), {} trades offered, {} traded, {} waited first, {} refused, {} lapsed, {} pending",
                              g_ConjureEnable ? "on" : "off",
                              (unsigned long long)conjure.asked,
+                             (unsigned long long)conjure.strangers,
+                             (unsigned long long)conjure.ignored,
                              (unsigned long long)conjure.offered,
                              (unsigned long long)conjure.completed,
                              (unsigned long long)conjure.waited,
@@ -712,13 +714,16 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
     const NeedsStats needs = Needs_GetStats();
     if (show("bots"))
         handler->PSendSysMessage("Bags: {} - told what they carry {} times, {} asks for something ({} traded over, {} "
-                             "kept, {} told to invite first), {} spare things offered",
+                             "kept, {} told to invite first, {} said no and {} let go by to someone outside the "
+                             "group), {} spare things offered",
                              g_BagsEnable ? "on" : "off",
                              (unsigned long long)bags.described,
                              (unsigned long long)bags.asked,
                              (unsigned long long)bags.given,
                              (unsigned long long)bags.kept,
                              (unsigned long long)bags.invite,
+                             (unsigned long long)bags.refused,
+                             (unsigned long long)bags.ignored,
                              (unsigned long long)bags.offers);
     const JoinedStats joined = Joined_GetStats();
     if (show("party"))
@@ -814,8 +819,8 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
     const GiftsStats gifts = Gifts_GetStats();
     if (show("bots"))
         handler->PSendSysMessage("Things given away and sold: {} - {} given away, {} sold; {} said yes please, {} nobody "
-                             "could use; {} asked the price, {} agreed one, {} offered less, {} paid ({} agreed and "
-                             "not traded yet)",
+                             "could use; {} asked the price, {} agreed one, {} offered less, {} paid, {} gifts "
+                             "taken from someone outside the group ({} agreed and not traded yet)",
                              g_GiftsEnable ? "on" : "off",
                              (unsigned long long)gifts.offers,
                              (unsigned long long)gifts.sales,
@@ -825,6 +830,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)gifts.agreed,
                              (unsigned long long)gifts.countered,
                              (unsigned long long)gifts.paid,
+                             (unsigned long long)gifts.received,
                              gifts.deals);
     const WipeStats wipe = Wipe_GetStats();
     if (show("party"))

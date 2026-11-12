@@ -506,6 +506,10 @@ std::string g_BuffHintThanks;
 
 std::string g_SaySeenText;
 
+bool        g_FavorStrangers               = true;
+std::string g_ConjureHintNo;
+std::string g_BagsHintNo;
+
 std::unordered_map<std::string, PersonalityNudge> g_PersonalityNudges;
 std::unordered_map<std::string, uint32_t>         g_PersonalityMaxReplyLength;
 std::string g_PersonalityLongReplyNote;
@@ -2005,8 +2009,7 @@ static void LoadNaturalChatV7Settings()
         "You have {item}{looted} in your bags and no use for it. Offer it, free, to anyone who wants it, naming it "
         "in square brackets.");
     g_NeedsReasonSpare = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.ReasonSpare",
-        "you offered {item}, which you have no use for: whoever wants it can have it, in a trade if they are in "
-        "your group, and anyone else has to invite you first");
+        "you offered {item}, which you have no use for: whoever wants it can have it, in a trade");
     g_NeedsAskShort = sConfigMgr->GetOption<std::string>("OllamaChat.Needs.AskShort",
         "You are new and have only {money} to your name, saving for {want}. Ask if anyone could spare a few silver, "
         "the way new players do: friendly, not pushy.");
@@ -3174,15 +3177,25 @@ static void LoadNaturalChatV31Settings()
         "You just put {buff} on {player_name}, and they said thanks. Answer in one to three words, in your own "
         "chat style, and leave it there.");
 
+    // --- favours for people outside the group ------------------------------------------------
+    g_FavorStrangers = sConfigMgr->GetOption<bool>("OllamaChat.Favor.Strangers", true);
+    g_ConjureHintNo = sConfigMgr->GetOption<std::string>("OllamaChat.Conjure.HintNo",
+        "{player_name} asked you for {request}. You could conjure it for them, but you are not going to: say no "
+        "in a few words, in your own chat style, with or without a reason.");
+    g_BagsHintNo = sConfigMgr->GetOption<std::string>("OllamaChat.Bags.HintNo",
+        "{player_name} asked for {item}, which you could spare, but you are not giving it to them: say no in a "
+        "few words, in your own chat style, with or without a reason.");
+
     // --- what anyone near can see -----------------------------------------------------------
     g_SaySeenText = sConfigMgr->GetOption<std::string>("OllamaChat.Say.SeenText",
         "{player_name} is standing near you: you can each see the other's level and class just by looking, so "
         "you never tell them your level unless they ask, and you hardly ever ask theirs.");
 
     LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v31: buffs on request {} (up to {} buffing an ask, {} "
-             "speaking; {} chat styles of their own); /say told what anyone near can see {}.",
+             "speaking; {} chat styles of their own); trades with people outside the group {}; /say told what "
+             "anyone near can see {}.",
              g_BuffEnable ? "on" : "off", g_BuffMaxGivers, g_BuffMaxVoices, g_BuffStyles.size(),
-             g_SaySeenText.empty() ? "off" : "on");
+             g_FavorStrangers ? "on" : "off", g_SaySeenText.empty() ? "off" : "on");
 }
 
 static void LoadNaturalChatV30Settings()

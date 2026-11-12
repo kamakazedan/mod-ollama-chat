@@ -4,12 +4,14 @@
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
+#include "mod-ollama-chat_favor.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
 
 #include "Bag.h"
+#include "Containers.h"
 #include "CellImpl.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
@@ -52,6 +54,10 @@ namespace
     // A little inside TRADE_DISTANCE, so a mage that takes a step while the
     // window opens is still close enough to finish.
     constexpr float kTradeRange = TRADE_DISTANCE - 1.5f;
+
+    // Someone outside its group this close, with a gift for them waiting: the
+    // bot's AI is held, so a trade they open is not turned down.
+    constexpr float kHoldNear = 15.0f;
 
     // ---- what mages can conjure ----------------------------------------------
 
@@ -212,6 +218,7 @@ namespace
         bool                  placed     = false;
         std::vector<ObjectGuid> placedGuids;       // the stacks this put in (or found in already): the gift
         bool                  refreshed  = false;
+        bool                  begun      = false;  // their trade, opened on the mage's side by this (a stranger)
         Clock::time_point     created{};
         Clock::time_point     since{};             // entered this state
         Clock::time_point     lastAnswer{};
@@ -584,6 +591,49 @@ namespace
         return best;
     }
 
+    // Nobody in their group to ask, in /say: a mage outside it close enough
+    // to hear, that can make it for them and wants to -- each takes it its
+    // own way (mod-ollama-chat_favor). `outcome` says how: Give or Quiet, or
+    // No when the only one to answer says no. Nobody: none near would.
+    Player* PickStrangerMage(Player* player, uint8_t kinds, FavorOutcome& outcome)
+    {
+        std::list<Player*> near;
+        Acore::AnyPlayerInObjectRangeCheck check(player, g_SayDistance, true, true);
+        Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(player, near, check);
+        Cell::VisitObjects(player, searcher, g_SayDistance);
+
+        std::vector<Player*> mages;
+        for (Player* p : near)
+        {
+            if (!p || p == player || p->getClass() != CLASS_MAGE || !OllamaIsBotPlayer(p) ||
+                p->GetTeamId() != player->GetTeamId() || !Favor_IsStranger(p, player) || !Favor_CanAnswer(p))
+                continue;
+            bool can = true;
+            for (uint8_t kind : { CONJURE_DRINK, CONJURE_FOOD })
+                if ((kinds & kind) && OptionsFor(p, player, kind).empty())
+                    can = false;
+            if (can)
+                mages.push_back(p);
+        }
+        Acore::Containers::RandomShuffle(mages);
+
+        Player* no = nullptr;
+        for (Player* m : mages)
+        {
+            const FavorOutcome o = Favor_Roll(m, false);
+            if (o == FavorOutcome::Give || o == FavorOutcome::Quiet)
+            {
+                outcome = o;
+                return m;
+            }
+            if (o == FavorOutcome::No && !no)
+                no = m;
+        }
+        if (no)
+            outcome = FavorOutcome::No;
+        return no;
+    }
+
     // Another mage in the group to send them to, bot or not.
     std::string OtherMageName(Player* player, Player* except)
     {
@@ -691,6 +741,17 @@ bool Conjure_HandleHumanLine(Player* player, const std::string& msg, ChatChannel
     Player* mage = target.bot;
     if (!mage)
         mage = PickMage(player, ask.kinds, source);
+
+    // Nobody in their group to ask, in /say: a mage outside it near enough to
+    // hear might, its own way.
+    const bool strangers = Favor_TradesWithStrangers();
+    bool picked = false;
+    FavorOutcome pickedOutcome = FavorOutcome::Give;
+    if (!mage && strangers && source == SRC_SAY_LOCAL)
+    {
+        mage   = PickStrangerMage(player, ask.kinds, pickedOutcome);
+        picked = mage != nullptr;
+    }
     if (!mage)
         return false;   // no mage to ask: ordinary chat
     if (!target.grouped && target.named && mage->getClass() != CLASS_MAGE)
@@ -709,12 +770,46 @@ bool Conjure_HandleHumanLine(Player* player, const std::string& msg, ChatChannel
     const uint64_t reqGuid = player->GetGUID().GetRawValue();
     const auto now = Clock::now();
 
-    // Not in their group: playerbots would cancel the trade, so say to invite.
-    if (!target.grouped && target.named)
+    // Not in their group, with bots trading only inside one
+    // (Favor.Strangers = 0): playerbots would cancel the trade, so say to
+    // invite.
+    const bool stranger = Favor_IsStranger(mage, player);
+    if (stranger && !strangers)
     {
         ++g_stats.refused;
         Answer(player, mage, msg, source, scopeKey, seq, Hint(g_ConjureHintNotGrouped, player, request));
         return true;
+    }
+
+    // Someone outside its group: a favour, which the mage takes its own way
+    // (mod-ollama-chat_favor) -- the one picked from those near for an ask
+    // said to everyone, asked itself otherwise.
+    bool quiet = false;
+    if (stranger)
+    {
+        ++g_stats.strangers;
+        // AFK: nobody home -- unless it is hanging out in a city, asked by
+        // name or whisper: then it comes back to the keyboard for it.
+        if (!picked && (mage->isAFK() || mage->isDND()) && !Favor_CanAnswer(mage, true))
+        {
+            ++g_stats.ignored;
+            return true;
+        }
+        const FavorOutcome o = picked ? pickedOutcome : Favor_Roll(mage, true);
+        if (o != FavorOutcome::Ignore)
+            Favor_ComeBack(mage);
+        if (o == FavorOutcome::Ignore)
+        {
+            ++g_stats.ignored;
+            return true;
+        }
+        if (o == FavorOutcome::No)
+        {
+            ++g_stats.refused;
+            Answer(player, mage, msg, source, scopeKey, seq, Hint(g_ConjureHintNo, player, request));
+            return true;
+        }
+        quiet = o == FavorOutcome::Quiet;
     }
 
     if (mage->getClass() != CLASS_MAGE)
@@ -750,11 +845,13 @@ bool Conjure_HandleHumanLine(Player* player, const std::string& msg, ChatChannel
         return true;
     }
 
+    // A stranger's mage says why only if it would (Buff.Style explain).
     auto cant = [&](const std::string& reason)
     {
         ++g_stats.refused;
-        Answer(player, mage, msg, source, scopeKey, seq,
-               Hint(g_ConjureHintCant, player, request, {}, {}, reason));
+        if (!stranger || Favor_Explains(mage))
+            Answer(player, mage, msg, source, scopeKey, seq,
+                   Hint(g_ConjureHintCant, player, request, {}, {}, reason));
         return true;
     };
 
@@ -857,10 +954,11 @@ bool Conjure_HandleHumanLine(Player* player, const std::string& msg, ChatChannel
         const std::string giftWords = GiftWords(gift.items);
         g_gifts.push_back(std::move(gift));
         CountWatched();
-        Answer(player, mage, msg, source, scopeKey, seq,
-               mana ? Hint(g_ConjureHintGive, player, request, giftWords)
-                    : Hint(g_ConjureHintWait, player, request, giftWords,
-                           "once you have the mana for it, since you are out of mana right now"));
+        if (!quiet)
+            Answer(player, mage, msg, source, scopeKey, seq,
+                   mana ? Hint(g_ConjureHintGive, player, request, giftWords)
+                        : Hint(g_ConjureHintWait, player, request, giftWords,
+                               "once you have the mana for it, since you are out of mana right now"));
         return true;
     }
 
@@ -868,8 +966,9 @@ bool Conjure_HandleHumanLine(Player* player, const std::string& msg, ChatChannel
     if (!when.empty())
     {
         ++g_stats.waited;
-        Answer(player, mage, msg, source, scopeKey, seq,
-               Hint(g_ConjureHintWait, player, request, GiftWords(gift.items), when));
+        if (!quiet)
+            Answer(player, mage, msg, source, scopeKey, seq,
+                   Hint(g_ConjureHintWait, player, request, GiftWords(gift.items), when));
         g_gifts.push_back(std::move(gift));
         CountWatched();
         return true;
@@ -885,7 +984,8 @@ bool Conjure_HandleHumanLine(Player* player, const std::string& msg, ChatChannel
     const std::string giftWords = GiftWords(gift.items);
     g_gifts.push_back(std::move(gift));
     CountWatched();
-    Answer(player, mage, msg, source, scopeKey, seq, Hint(g_ConjureHintGive, player, request, giftWords));
+    if (!quiet)
+        Answer(player, mage, msg, source, scopeKey, seq, Hint(g_ConjureHintGive, player, request, giftWords));
     return true;
 }
 
@@ -908,7 +1008,20 @@ void Conjure_Update()
         Gift& g = *it;
         Player* mage = ObjectAccessor::FindConnectedPlayer(ObjectGuid(g.botGuid));
         Player* req  = ObjectAccessor::FindConnectedPlayer(ObjectGuid(g.requesterGuid));
-        bool done = !mage || !req || !mage->IsInWorld() || !req->IsInWorld() || !InGroupWith(req, mage);
+        bool done = !mage || !req || !mage->IsInWorld() || !req->IsInWorld() ||
+                    (!Favor_TradesWithStrangers() && !InGroupWith(req, mage));
+
+        // Someone outside its group: playerbots would turn the trade down, so
+        // the bot's AI is held while it lasts (below). A fight calls it off: a
+        // held AI does not fight back.
+        const bool stranger = !done && Favor_IsStranger(mage, req);
+        if (stranger && mage->IsInCombat())
+        {
+            if (mage->GetTrader() == req)
+                mage->TradeCancel(true);
+            ++g_stats.lapsed;
+            done = true;
+        }
 
         // Their window for a trade with the mage stays open while the two are
         // trading. The server says so once, as it opens.
@@ -930,6 +1043,14 @@ void Conjure_Update()
             }
             else if (mage->GetTrader() == req)
             {
+                // Someone outside its group: playerbots, held off it, never
+                // takes their trade up, so it is taken up here, once.
+                if (stranger && !g.windowOpen && !g.begun)
+                {
+                    g.begun = true;
+                    WorldPacket begin;
+                    mage->GetSession()->HandleBeginTradeOpcode(begin);
+                }
                 // They opened a trade with the mage themselves: once the
                 // window is open, put the gift in, given the mana to make it.
                 if (g.windowOpen && mage->GetPower(POWER_MANA) >= ManaNeeded(mage, g.items))
@@ -1018,6 +1139,12 @@ void Conjure_Update()
             }
         }
 
+        // Held while the trade is offered or open, or about to be: they are
+        // near (or opened one themselves) while it waits.
+        if (!done && stranger &&
+            (g.state != GiftState::Waiting || mage->GetTrader() == req || mage->IsWithinDistInMap(req, kHoldNear)))
+            Favor_HoldAi(mage);
+
         it = done ? g_gifts.erase(it) : std::next(it);
     }
     CountWatched();
@@ -1029,7 +1156,7 @@ std::string Conjure_GiveItems(Player* bot, Player* player, const std::vector<std
     when.clear();
     if (!bot || !player || items.empty())
         return "there is nothing to give";
-    if (!InGroupWith(player, bot))
+    if (!Favor_TradesWithStrangers() && !InGroupWith(player, bot))
         return "you only trade with people in your group";
     if (sPlayerbotAIConfig.EnableRandomBotTrading == 0 &&
         (sRandomPlayerbotMgr.IsRandomBot(bot) || sRandomPlayerbotMgr.IsAddclassBot(bot)))

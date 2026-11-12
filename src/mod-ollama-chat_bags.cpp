@@ -2,6 +2,7 @@
 #include "mod-ollama-chat_answer.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_conjure.h"
+#include "mod-ollama-chat_favor.h"
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_governor.h"
@@ -1145,8 +1146,11 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
     }
 
     const std::string itemText = JoinWords(parts);
+    const bool stranger = Favor_IsStranger(bot, player);
 
-    if (!InGroupWith(player, bot))
+    // Outside its group, with bots trading only inside one
+    // (Favor.Strangers = 0): promised once they invite it.
+    if (stranger && !Favor_TradesWithStrangers())
     {
         ++g_stats.invite;
         g_promises.erase(std::remove_if(g_promises.begin(), g_promises.end(),
@@ -1158,6 +1162,41 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
         hushed();
         answer(Hint(g_BagsHintInvite, player, itemText));
         return true;
+    }
+
+    // Someone outside its group asking for something it did not offer them:
+    // a favour, its own call (mod-ollama-chat_favor). What it offered them
+    // goes over.
+    bool quiet = false;
+    if (stranger && !byOffer && !Conjure_IsGiving(bot, player, give.front().first))
+    {
+        // AFK: nobody home -- unless it is hanging out in a city, asked by
+        // name or whisper: then it comes back to the keyboard for it.
+        if ((bot->isAFK() || bot->isDND()) && !Favor_CanAnswer(bot, true))
+        {
+            ++g_stats.ignored;
+            return true;
+        }
+        const FavorOutcome o = Favor_Roll(bot, true);
+        if (o != FavorOutcome::Ignore)
+            Favor_ComeBack(bot);
+        switch (o)
+        {
+            case FavorOutcome::Ignore:
+                ++g_stats.ignored;
+                hushed();
+                return true;
+            case FavorOutcome::No:
+                ++g_stats.refused;
+                hushed();
+                answer(Hint(g_BagsHintNo, player, itemText));
+                return true;
+            case FavorOutcome::Quiet:
+                quiet = true;
+                break;
+            default:
+                break;
+        }
     }
 
     // Asked again while it is going over already ("sure" then "trade it"):
@@ -1183,7 +1222,8 @@ bool Bags_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
     DropOffersTo(scopeKey, player->GetGUID().GetRawValue());
     ++g_stats.given;
     hushed();
-    answer(Hint(g_BagsHintGive, player, itemText, when.empty() ? std::string("now") : when));
+    if (!quiet)
+        answer(Hint(g_BagsHintGive, player, itemText, when.empty() ? std::string("now") : when));
     if (g_DebugEnabled)
         LOG_INFO("module.ollamachat", "[Ollama Chat] {} asked {} for {}: trading it over{}.", player->GetName(),
                  bot->GetName(), itemText, when.empty() ? "" : " (" + when + ")");

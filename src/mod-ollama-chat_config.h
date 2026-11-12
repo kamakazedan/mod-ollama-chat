@@ -497,6 +497,12 @@ extern std::string g_BuffHintThanks;
 // Said to a bot in /say: the two can see each other's level and class.
 extern std::string g_SaySeenText;
 
+// Favours for people outside a bot's group (mod-ollama-chat_favor): bots
+// trade with them too, conjured food and water and spare things included.
+extern bool        g_FavorStrangers;
+extern std::string g_ConjureHintNo;   // a mage outside their group that won't
+extern std::string g_BagsHintNo;      // a bot outside their group that won't part with it
+
 // Per chat style: OllamaChat.Personality.<setting>.<KEY>, keyed here by the
 // upper-case personality key. World thread only.
 struct PersonalityNudge

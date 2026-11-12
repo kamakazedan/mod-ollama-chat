@@ -28,9 +28,12 @@ class WorldSession;
 // 20c for this") never runs. The answer in chat comes from the model, in the
 // bot's own voice, steered by OllamaChat.Conjure.Hint*.
 //
-// Requests only count from someone in the same group as the mage: playerbots
-// cancels trades with anyone else. A mage that is named or whispered by
-// someone outside its group says to invite it.
+// Someone outside the mage's group may ask too -- by name, by whisper, or of
+// everyone near in /say -- and the mage takes it its own way, as a favour
+// (mod-ollama-chat_favor): its AI is held while the trade lasts, since
+// playerbots cancels trades with anyone outside its group. With
+// OllamaChat.Favor.Strangers = 0, a mage asked by someone outside its group
+// says to invite it instead.
 //
 // World thread only, except the packet hook, which only records whose trade
 // window has opened.
@@ -58,6 +61,8 @@ struct ConjureStats
     uint64_t refused   = 0;   // could not, and said why
     uint64_t lapsed    = 0;   // declined, cancelled, or not taken in time
     uint64_t takenBack = 0;   // they said to take it back out
+    uint64_t strangers = 0;   // asks from someone outside the mage's group
+    uint64_t ignored   = 0;   // let go by (someone outside its group)
     uint32_t pending   = 0;
 };
 ConjureStats Conjure_GetStats();
