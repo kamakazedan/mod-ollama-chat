@@ -503,6 +503,20 @@ extern bool        g_FavorStrangers;
 extern std::string g_ConjureHintNo;   // a mage outside their group that won't
 extern std::string g_BagsHintNo;      // a bot outside their group that won't part with it
 
+// Skipping a boss in a dungeon-clear run (mod-ollama-chat_partycmd): "skip the
+// next boss", "skip oggleflint", "dont skip jergosh".
+extern bool        g_PartySkipEnable;
+extern TextRules::SkipRules g_PartySkipRules;
+extern std::vector<std::vector<std::string>> g_PartySkipLaterWords;   // a skipped one back, but in its turn
+extern std::string g_PartyCmdHintSkip;         // the tank agrees: {skipped} {next} {plan}
+extern std::string g_PartyCmdHintSkipNo;       // ...or cannot: {skipped} {reason}
+extern std::string g_PartyCmdHintUnskip;       // a skipped one back: {skipped} {next} {plan}
+extern std::string g_PartyRunStateSkippedText; // added to the run's state while bosses are skipped
+extern std::string g_PartyDoneSkippedSituation;   // the tank's call at the end of a run with bosses skipped...
+extern std::vector<std::vector<std::string>> g_PartyDoneSkippedWords;   // ...has one of these in it...
+extern std::vector<std::string> g_PartyDoneSkippedLines;                // ...or one of these goes out
+extern std::string g_PartyDoneSkippedText;     // and the rest are told, for their gg
+
 // Per chat style: OllamaChat.Personality.<setting>.<KEY>, keyed here by the
 // upper-case personality key. World thread only.
 struct PersonalityNudge

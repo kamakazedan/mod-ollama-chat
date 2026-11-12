@@ -2788,6 +2788,109 @@ OllamaChat.PartyCommands.HintWaiting = "{player_name} wants to start, but not ev
 OllamaChat.PartyCommands.RecentAcks = 4
 OllamaChat.PartyCommands.RecentAcksText = " You already said {lines} in this group, so use different words this time."
 
+#    OllamaChat.PartyCommands.SkipEnable
+#        Skipping a boss, asked in party during a dungeon-clear run led by a
+#        bot tank -- "skip the next boss", "can we skip oggleflint", "skipp
+#        him", "skip oggleflint and jergosh" -- skips it: the run leaves it
+#        out and the tank says so, and where it is heading now, in its own
+#        chat style. "skip to taragaman" or "straight to the last boss"
+#        skips every boss before it. "dont skip jergosh", "unskip him" or
+#        "actually lets do jergosh" takes a skip back: a boss already behind
+#        the run is gone back for now ("...later" leaves it to the end), one
+#        ahead is done in its turn. Said before the run starts ("skip the
+#        first boss", "ready, skip oggleflint"), the skip waits for the run.
+#        A boss already dead, one being fought, or one skipped already gets
+#        a no and why. Nobody else answers the line.
+#        Names are read the way people type them: any word of one but its
+#        titles (SkipTitleWords: "cobrahn" is Lord Cobrahn), typed long or
+#        short ("oglefint"), a slip off (two in a long name), the start of
+#        it ("taraga"), or split ("van cleef").
+#        Not an ask: a question about it ("why did we skip him", "are we
+#        skipping it?", SkipQuestionWords), a negation ("we cant skip him"),
+#        a line about trash or loot ("skip this pull", SkipNotBossWords),
+#        bosses by number ("skip the next 2"), or other words after the skip
+#        with no boss or "it" among them ("skip everything").
+#        Skipping a boss another needs (one of Wailing Caverns' four
+#        Fanglords, which Mutanus needs) leaves the run stuck later on: take
+#        the skip back to carry on.
+#        Needs a mod-dungeon-clear with named skips (DcCommandApi.h); .ollama
+#        status says whether the build has it.
+#        Default: 1
+OllamaChat.PartyCommands.SkipEnable = 1
+
+#    OllamaChat.PartyCommands.SkipPhrases
+#    OllamaChat.PartyCommands.SkipNamedPhrases
+#    OllamaChat.PartyCommands.SkipToPhrases
+#    OllamaChat.PartyCommands.UnskipPhrases
+#    OllamaChat.PartyCommands.SkipDoPhrases
+#        The asks. SkipPhrases work with a boss's name, "the next boss",
+#        "him", "it" or nothing at all ("skip": what the run is heading for).
+#        SkipNamedPhrases ("leave", "dont kill") only with a boss's name.
+#        SkipToPhrases skip every boss before the one named (or the last
+#        one). UnskipPhrases take a skip back, of a boss named or the one
+#        just skipped ("no dont skip"); SkipDoPhrases ("lets do", "go back
+#        for") only of one named, and only when it was skipped.
+OllamaChat.PartyCommands.SkipPhrases = "skip|skipp|skp|sikp|skipping|skiping|skippin"
+OllamaChat.PartyCommands.SkipNamedPhrases = "pass on|leave|leave out|ignore|forget|forget about|bypass|go past|go round|go around|run past|walk past|skip over|dont do|dont kill|dont fight|dont bother with|dont bother killing|no need to do|no need to kill|no need for|dont need|we dont need|not doing|not killing"
+OllamaChat.PartyCommands.SkipToPhrases = "skip to|skipp to|skip straight to|skip ahead to|skip right to|skip on to|skip up to|skip until|skip till|skip til|straight to|go straight to|head straight to|jump to|just do|only do|lets just do|just go for|go straight for"
+OllamaChat.PartyCommands.UnskipPhrases = "unskip|un skip|dont skip|do not skip|dont wanna skip|dont want to skip|lets not skip|not skip|no skipping|stop skipping|cancel the skip|undo the skip|undo skip"
+OllamaChat.PartyCommands.SkipDoPhrases = "lets do|do|kill|lets kill|go back for|back for|go for|lets get|get|fight|lets fight|take on|actually do|actually kill|we can do|we should do|go kill|go do"
+
+#    OllamaChat.PartyCommands.SkipNextBossWords
+#    OllamaChat.PartyCommands.SkipNextWords
+#    OllamaChat.PartyCommands.SkipLastWords
+#        Which boss, without a name. SkipNextBossWords ("him", "the next
+#        boss") are the boss the run is heading for, or the first one after
+#        a stop or an event it is on its way to. SkipNextWords ("it", "this
+#        one") are what it is heading for: on its way to an event rather
+#        than a boss, they are left to ordinary chat. SkipLastWords are the
+#        dungeon's last boss.
+OllamaChat.PartyCommands.SkipNextBossWords = "next boss|the next boss|this boss|the boss|boss|that boss|current boss|first boss|the first boss|him|her|he|she|this guy|that guy|next guy|the next guy"
+OllamaChat.PartyCommands.SkipNextWords = "next|next one|the next one|the next|this|this one|that|that one|it|first one|the first one|the first"
+OllamaChat.PartyCommands.SkipLastWords = "last boss|the last boss|last one|the last one|end boss|the end boss|final boss|the final boss|the end|end|the last|last|final|final one|the final one"
+
+#    OllamaChat.PartyCommands.SkipNotBossWords
+#    OllamaChat.PartyCommands.SkipFillers
+#    OllamaChat.PartyCommands.SkipStopWords
+#    OllamaChat.PartyCommands.SkipQuestionWords
+#    OllamaChat.PartyCommands.SkipNegationWords
+#    OllamaChat.PartyCommands.SkipTitleWords
+#    OllamaChat.PartyCommands.SkipMaxWords
+#        After the ask: a word of SkipNotBossWords makes it no boss skip at
+#        all; SkipFillers can be there without saying anything; a stop word
+#        ends what the ask is about ("skip him because..."). Anywhere in the
+#        sentence, a question word makes it talk; before the ask or in it, a
+#        negation does ("we cant skip him"), but not a "no" up front ("no,
+#        skip him"). SkipTitleWords never name a boss alone. Lines longer
+#        than SkipMaxWords words are conversation.
+#        Default: (below), 14
+OllamaChat.PartyCommands.SkipNotBossWords = "trash|pack|packs|mob|mobs|adds|add|pat|pats|patrol|patrols|pull|pulls|loot|looting|chest|chests|cutscene|rp|dialogue|talk|talking|quest|quests|event|events|escort|room|part|jump|drop|corridor|hallway|corner|door|gate|whelps|these|those|everything|all"
+OllamaChat.PartyCommands.SkipFillers = "the|a|an|pls|please|plz|plx|now|for now|this time|today|tonight|and|too|also|as well|just|lol|lmao|haha*|lets|can|could|we|you|u|ya|yall|guys|mate|lads|ok|okay|k|kk|yeah|yes|yep|ye|of|maybe|probably|i|id|ill|im|think|should|shall|would|wanna|want|to|quick|quickly|instead|anyway|anyways|tbh|imo|honestly|ahead|ty|thanks|cheers|already|again|actually|tho|though|right|alright|aight|after all|sorry|sry|hmm|hm|uh|um|guess|i guess|over|out|past|by|on"
+OllamaChat.PartyCommands.SkipStopWords = "then|but|because|cuz|cause|coz|cos|cus|bc|since|so|until|till|unless|while|instead of"
+OllamaChat.PartyCommands.SkipQuestionWords = "why|how|what|whats|wat|wut|when|where|which|did|didnt|have we|havent we|has he|was|were|are we|arent we|r we|is it|is he|is she|isnt|does|doesnt|do we need|do we have to|do we gotta|need to kill|have to kill|skipped|skippable|worth|or not|wonder"
+OllamaChat.PartyCommands.SkipNegationWords = "not|cant|cannot|wont|shouldnt|wouldnt|couldnt|never|no|nope|nah|dont|aint"
+OllamaChat.PartyCommands.SkipTitleWords = "the|of|lord|lady|king|queen|prince|princess|high|chief|captain|commander|general|warlord|overlord|mr|mrs|miss|sir|dame|old|big|little|great|grand|elder|ancient|master|baron|baroness|count|countess|duke|archmage|magister|warchief|priest|priestess|inquisitor|houndmaster|arcanist|bloodmage|ambassador|emperor|guardian|keeper|matriarch|patriarch|watcher|deviate|defias|scarlet|brother|sister|champion"
+OllamaChat.PartyCommands.SkipMaxWords = 14
+
+#    OllamaChat.PartyCommands.SkipLaterWords
+#        A skip taken back of a boss the run has already gone past is gone
+#        back for now, unless the line has one of these ("actually lets do
+#        jergosh later"): then once everything ahead is done.
+OllamaChat.PartyCommands.SkipLaterWords = "later|after|afterwards|at the end|on the way back|after this|after that|after the rest|when we are done|last"
+
+#    OllamaChat.PartyCommands.HintSkip
+#    OllamaChat.PartyCommands.HintSkipNo
+#    OllamaChat.PartyCommands.HintUnskip
+#        What the tank is told when it answers a skip, one it cannot do, and
+#        one taken back. Placeholders: {player_name}, {player_message},
+#        {skipped} (the bosses, "Oggleflint and Jergosh the Invoker"),
+#        {next} (the boss the run heads for now), {plan} (what happens now:
+#        "you turn away from it and head for Taragaman the Hungerer instead."),
+#        {reason} (HintSkipNo: "Oggleflint is already dead."), {recent_acks}.
+OllamaChat.PartyCommands.HintSkip = "{player_name} asked to skip {skipped}, and you agree: {plan} Tell them in a few words, in your own chat style; you can say where you are heading next.{recent_acks}"
+OllamaChat.PartyCommands.HintSkipNo = "{player_name} asked to skip {skipped}, but {reason} Tell them so in a few words, in your own chat style.{recent_acks}"
+OllamaChat.PartyCommands.HintUnskip = "{player_name} wants to do {skipped} after all, and you agree: {plan} Tell them in a few words, in your own chat style.{recent_acks}"
+
 #    OllamaChat.Party.DungeonGlossary
 #        Added to every party and raid chat prompt inside a dungeon or raid,
 #        so "mb" reads as a mana break and not "my bad". Empty disables.
@@ -2811,9 +2914,15 @@ OllamaChat.Party.DungeonFocusText = "You are in the middle of a dungeon run with
 #        can answer. Placeholders: {tank} (who leads the run), {progress}
 #        ("2 of 5 bosses are down"), {killed}, {left}, {total}, {next}
 #        (the next boss), {state} ("resting or waiting for someone (waiting
-#        on Brelac, out of range)", "fighting trash", "paused"...). Empty
-#        disables.
+#        on Brelac, out of range)", "fighting trash", "paused"...), {skipped}
+#        (RunStateSkippedText, or nothing). Empty disables.
 OllamaChat.Party.RunStateText = "About this dungeon run: {tank} leads it, {progress}, the next boss is {next}, and right now the group is {state}. Only bring this up when someone asks what is going on, what the plan is or which boss is next."
+
+#    OllamaChat.Party.RunStateSkippedText
+#        Added to the run's state while it is skipping bosses someone asked it
+#        to skip ({skipped}: "Oggleflint"), so nobody says they are coming up.
+#        {skipped} in RunStateText puts it there; otherwise it goes at the end.
+OllamaChat.Party.RunStateSkippedText = " The group is skipping {skipped} this run, because someone asked to."
 
 #    OllamaChat.Party.GreetEnable
 #    OllamaChat.Party.GreetDelaySeconds
@@ -2864,6 +2973,21 @@ OllamaChat.Party.TogetherText = "You and everyone in this group are inside {dung
 #        Default: 1, (below)
 OllamaChat.Party.DoneEnable = 1
 OllamaChat.Party.DoneSituation = "Every boss in {dungeon} is dead: the group has cleared the whole dungeon and the run is over. Say that plainly first - {dungeon} is cleared, {bosses} - so nobody can miss that it is done, then celebrate it your own way: gg, thanks, nice work, whatever suits you."
+
+#    OllamaChat.Party.DoneSkippedSituation
+#    OllamaChat.Party.DoneSkippedWords
+#    OllamaChat.Party.DoneSkippedLines
+#    OllamaChat.Party.DoneSkippedText
+#        The same for a run that skipped bosses someone asked it to: it is
+#        over, but no full clear. DoneSkippedSituation is what the tank is
+#        told ({dungeon}, {bosses}: "3 bosses are down", {skipped}:
+#        "Oggleflint", {was_were}), its line must have one of DoneSkippedWords
+#        in it or one of DoneSkippedLines goes out instead, and the rest of
+#        the group's gg prompt (CheerPrompt) gets DoneSkippedText.
+OllamaChat.Party.DoneSkippedSituation = "The group has done every boss it meant to in {dungeon} and the run is over: {bosses}, and {skipped} {was_were} skipped on purpose. Say that plainly first - you are done with {dungeon} - so nobody can miss it, then celebrate it your own way: gg, thanks, nice work, whatever suits you. It was not a full clear, so never call it one."
+OllamaChat.Party.DoneSkippedWords = "done|all done|run done|dungeon done|were done|we are done|thats it|that is it|finished|thats us|thats everything|complete|completed"
+OllamaChat.Party.DoneSkippedLines = "thats us done here, gg all|right, thats {dungeon} done. gg everyone|and thats the run done, gg all|thats it for {dungeon}, ty all|done here, gg|thats everything we were doing, gg all"
+OllamaChat.Party.DoneSkippedText = " They skipped {skipped} on purpose, so it was not a full clear: never call it one."
 
 #    OllamaChat.Party.DoneWords
 #    OllamaChat.Party.DoneLines

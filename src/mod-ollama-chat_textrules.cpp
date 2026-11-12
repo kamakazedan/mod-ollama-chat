@@ -1425,6 +1425,337 @@ namespace TextRules
     }
     }
 
+    // ---- skipping a boss -------------------------------------------------------
+
+    namespace
+    {
+        // How far apart `a` and `b` are -- a letter wrong, missing, extra or two
+        // swapped each counting one -- or `cap + 1` once it is further than that.
+        size_t Slips(const std::string& a, const std::string& b, size_t cap)
+        {
+            const size_t n = a.size(), m = b.size();
+            if ((n > m ? n - m : m - n) > cap)
+                return cap + 1;
+            std::vector<std::vector<size_t>> d(n + 1, std::vector<size_t>(m + 1, 0));
+            for (size_t i = 0; i <= n; ++i)
+                d[i][0] = i;
+            for (size_t j = 0; j <= m; ++j)
+                d[0][j] = j;
+            for (size_t i = 1; i <= n; ++i)
+                for (size_t j = 1; j <= m; ++j)
+                {
+                    const size_t cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                    d[i][j] = std::min({ d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost });
+                    if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1])
+                        d[i][j] = std::min(d[i][j], d[i - 2][j - 2] + 1);
+                }
+            return std::min(d[n][m], cap + 1);
+        }
+
+        // A word of a boss's name, to read what someone typed against.
+        struct BossNameKey
+        {
+            std::string word;
+            std::string squeezed;
+            size_t      boss = 0;
+        };
+
+        // Every word of every name but its titles ("Lord", "the"), and each
+        // name of more than one word run together ("mrsmite").
+        std::vector<BossNameKey> BossNameKeys(const std::vector<std::string>& bossNames,
+                                      const std::vector<std::vector<std::string>>& titles)
+        {
+            std::vector<BossNameKey> keys;
+            for (size_t i = 0; i < bossNames.size(); ++i)
+            {
+                const std::vector<std::string> words = CrowdText::Words(bossNames[i]);
+                std::vector<std::string> picked;
+                for (const std::string& w : words)
+                    if (w.size() >= 3 && !CrowdText::ContainsPhrase({ w }, titles))
+                        picked.push_back(w);
+                if (picked.empty())   // nothing but titles: still somebody
+                    for (const std::string& w : words)
+                        if (w.size() >= 3)
+                            picked.push_back(w);
+                if (words.size() > 1)
+                {
+                    std::string whole;
+                    for (const std::string& w : words)
+                        whole += w;
+                    picked.push_back(whole);
+                }
+                for (const std::string& w : picked)
+                    keys.push_back({ w, SqueezeLetters(w), i });
+            }
+            return keys;
+        }
+
+        // How well a typed word reads as `key`: 4 it is the word, 3 typed long
+        // or short ("oglefint"), 2 the start of it ("taraga"), 1 a slip off --
+        // two in a long name -- and 0 not at all.
+        int NameMatch(const std::string& typed, const BossNameKey& key)
+        {
+            if (typed.size() < 3)
+                return 0;
+            if (typed == key.word)
+                return 4;
+            const std::string squeezed = SqueezeLetters(typed);
+            if (squeezed == key.squeezed)
+                return 3;
+            if (typed.size() >= 4 && typed.size() < key.word.size() && typed.size() * 2 >= key.word.size() &&
+                key.word.compare(0, typed.size(), typed) == 0)
+                return 2;
+            const size_t allowed = key.squeezed.size() >= 8 ? 2 : (key.squeezed.size() >= 5 ? 1 : 0);
+            if (allowed && Slips(squeezed, key.squeezed, allowed) <= allowed)
+                return 1;
+            return 0;
+        }
+
+        // The bosses a typed word names best; none when it names nobody.
+        std::vector<size_t> BossesNamed(const std::string& typed, const std::vector<BossNameKey>& keys)
+        {
+            int best = 0;
+            std::vector<size_t> out;
+            for (const BossNameKey& key : keys)
+            {
+                const int m = NameMatch(typed, key);
+                if (m == 0 || m < best)
+                    continue;
+                if (m > best)
+                {
+                    best = m;
+                    out.clear();
+                }
+                if (std::find(out.begin(), out.end(), key.boss) == out.end())
+                    out.push_back(key.boss);
+            }
+            return out;
+        }
+
+        // The longest of `phrases` that matches at `at`, in words; 0 for none.
+        size_t LongestAt(const std::vector<std::string>& words, size_t at,
+                         const std::vector<std::vector<std::string>>& phrases)
+        {
+            size_t best = 0;
+            for (const std::vector<std::string>& p : phrases)
+                if (p.size() > best && MatchesAt(words, at, p))
+                    best = p.size();
+            return best;
+        }
+
+        // The sentences of a line: up to each ?, ! or ;, and whether it ended
+        // with a ?.
+        std::vector<std::pair<std::string, bool>> Sentences(const std::string& text)
+        {
+            std::vector<std::pair<std::string, bool>> out;
+            std::string cur;
+            for (char c : text)
+            {
+                if (c == '?' || c == '!' || c == ';')
+                {
+                    out.emplace_back(cur, c == '?');
+                    cur.clear();
+                }
+                else
+                    cur += c;
+            }
+            out.emplace_back(cur, false);
+            return out;
+        }
+
+        TextRules::SkipAsk MatchSkipSentence(const std::vector<std::string>& words, bool asked,
+                                             const TextRules::SkipRules& rules, const std::vector<BossNameKey>& keys)
+        {
+            using TextRules::SkipKind;
+            TextRules::SkipAsk ask;
+
+            // What is asked, and where: the first of each kind, taken in this
+            // order so "dont skip" is no skip and "skip to" no plain one.
+            struct Kind
+            {
+                const std::vector<std::vector<std::string>>* phrases;
+                SkipKind kind;
+                bool     named;   // only with a boss's name
+            };
+            const Kind kinds[] = {
+                { &rules.unskip, SkipKind::Unskip, false }, { &rules.skipTo, SkipKind::SkipTo, false },
+                { &rules.skip, SkipKind::Skip, false },     { &rules.skipNamed, SkipKind::Skip, true },
+                { &rules.doIt, SkipKind::Do, true },
+            };
+            size_t start = 0, length = 0;
+            const Kind* found = nullptr;
+            for (const Kind& k : kinds)
+            {
+                for (size_t i = 0; i < words.size() && !found; ++i)
+                    if (const size_t len = LongestAt(words, i, *k.phrases))
+                    {
+                        found  = &k;
+                        start  = i;
+                        length = len;
+                    }
+                if (found)
+                    break;
+            }
+            if (!found)
+                return ask;
+
+            // "why did we skip him", "is he worth skipping", "are we skipping
+            // him?": talk about it, not an ask.
+            if (CrowdText::ContainsPhrase(words, rules.questions))
+                return ask;
+            const std::string& verb = words[start + length - 1];
+            if (asked && verb.size() > 3 && verb.compare(verb.size() - 3, 3, "ing") == 0)
+                return ask;
+
+            // What it is about: the words after it, up to another ask or a
+            // stop ("then", "because").
+            size_t end = start + length;
+            while (end < words.size() && !LongestAt(words, end, rules.stops))
+            {
+                bool another = false;
+                for (const Kind& k : kinds)
+                    another = another || LongestAt(words, end, *k.phrases) > 0;
+                if (another)
+                    break;
+                ++end;
+            }
+
+            // "we cant skip him", "skip him or not" -- but "no, skip him", and
+            // the "dont" of "dont kill" is the ask itself.
+            size_t lead = 0;
+            while (lead + 1 < words.size() && IsInterjection(words[lead]))
+                ++lead;
+            for (size_t i = lead; i < end; ++i)
+                if ((i < start || i >= start + length) && LongestAt(words, i, rules.negations))
+                    return ask;
+
+            size_t stray = 0;
+            bool pointed = false;       // "the next boss", "next one": the boss the run heads for...
+            bool pronoun = false;       // ..."him", "it", "this one": or one just named
+            bool saysBoss = false;      // ...said to be a boss
+            for (size_t i = start + length; i < end;)
+            {
+                if (LongestAt(words, i, rules.notBoss))
+                    return ask;   // "skip this pull", "skip the trash"
+                if (NumberWord(words[i]) >= 2)
+                    return ask;   // "skip the next 2": which ones is anyone's guess
+                // "skip the boss after oggleflint": which one is anyone's guess.
+                if ((words[i] == "after" || words[i] == "before") && i + 1 < end &&
+                    (!BossesNamed(words[i + 1], keys).empty() || LongestAt(words, i + 1, rules.nextBoss) ||
+                     LongestAt(words, i + 1, rules.nextAny) || LongestAt(words, i + 1, rules.last)))
+                    return ask;
+
+                // The longest of them says what it is: "this time" is no "this".
+                const size_t lenLast = LongestAt(words, i, rules.last);
+                const size_t lenBoss = LongestAt(words, i, rules.nextBoss);
+                const size_t lenAny  = LongestAt(words, i, rules.nextAny);
+                const size_t lenFill = LongestAt(words, i, rules.fillers);
+                if (const size_t longest = std::max({ lenLast, lenBoss, lenAny, lenFill }))
+                {
+                    if (lenLast == longest)
+                        ask.last = true;
+                    else if (lenBoss == longest || lenAny == longest)
+                    {
+                        bool next = false;
+                        for (size_t j = i; j < i + longest; ++j)
+                            next = next || words[j] == "next" || words[j] == "first" || words[j] == "current";
+                        (next ? pointed : pronoun) = true;
+                        saysBoss = saysBoss || lenBoss == longest;
+                    }
+                    i += longest;
+                    continue;
+                }
+
+                // A name: this word, or it and the next run together ("van cleef").
+                std::vector<size_t> named = BossesNamed(words[i], keys);
+                size_t used = 1;
+                if (named.empty() && i + 1 < end)
+                {
+                    named = BossesNamed(words[i] + words[i + 1], keys);
+                    used  = 2;
+                }
+                if (named.empty())
+                {
+                    ++stray;
+                    ++i;
+                    continue;
+                }
+                i += used;
+                // "skip oggleflint, taragaman next": the second is where to go,
+                // and "skip oggleflint first" no skip of the next boss.
+                if (i < end && (words[i] == "next" || words[i] == "first"))
+                {
+                    ++stray;
+                    break;
+                }
+                for (size_t b : named)
+                    if (std::find(ask.bosses.begin(), ask.bosses.end(), b) == ask.bosses.end())
+                        ask.bosses.push_back(b);
+            }
+
+            // "skip bazzalan, he is annoying": the "he" is the one named.
+            const bool named = !ask.bosses.empty();
+            ask.next         = pointed || (pronoun && !named);
+            ask.nextSaysBoss = ask.next && saysBoss;
+            bool ok = false;
+            switch (found->kind)
+            {
+                case SkipKind::Skip:
+                    if (found->named)
+                        ok = named || ask.last;
+                    else
+                    {
+                        ok = named || ask.next || ask.last || stray == 0;
+                        if (ok && !named && !ask.last)
+                            ask.next = true;   // a bare "skip": what the run heads for
+                    }
+                    break;
+                case SkipKind::SkipTo:
+                    ok = named || ask.last;
+                    if (named)
+                        ask.bosses.resize(1);   // where to skip to: the first one named
+                    ask.next = ask.nextSaysBoss = false;
+                    break;
+                case SkipKind::Unskip:
+                    ok = named || ask.next || stray == 0;
+                    if (ok && !named)
+                        ask.next = true;   // "dont skip", "unskip him": the one just skipped
+                    ask.last = false;
+                    break;
+                case SkipKind::Do:
+                    ok = named;
+                    ask.next = ask.nextSaysBoss = ask.last = false;
+                    break;
+                default:
+                    break;
+            }
+            if (!ok)
+                return TextRules::SkipAsk();
+            ask.kind = found->kind;
+            return ask;
+        }
+    }
+
+    SkipAsk MatchSkipAsk(const std::string& cleanText, const SkipRules& rules,
+                         const std::vector<std::string>& bossNames)
+    {
+        const std::vector<std::string> all = CrowdText::Words(cleanText);
+        if (all.empty() || (rules.maxWords > 0 && all.size() > rules.maxWords) || IsDungeonClearCommand(cleanText))
+            return SkipAsk();
+
+        const std::vector<BossNameKey> keys = BossNameKeys(bossNames, rules.titles);
+        for (const auto& [sentence, asked] : Sentences(cleanText))
+        {
+            const std::vector<std::string> words = CrowdText::Words(sentence);
+            if (words.empty())
+                continue;
+            const SkipAsk ask = MatchSkipSentence(words, asked, rules, keys);
+            if (ask.kind != SkipKind::None)
+                return ask;
+        }
+        return SkipAsk();
+    }
+
     // ---- conjured food and water ---------------------------------------------
 
     ConjureAsk MatchConjureAsk(const std::string& cleanText, const ConjureRules& rules,

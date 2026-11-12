@@ -790,7 +790,26 @@ or "KEEP UP" from another. Your mana and the healers' have to be all but full,
 the other bots' most of the way, and nobody can still be sitting down
 drinking. "ok im done", "full" or "ready" still carries on at once. A "brb",
 "wait" or "stop", during a break or on its own, waits until someone says
-they're ready (`OllamaChat.Party.BreakEnd*`).
+they're ready (`OllamaChat.Party.BreakEnd*`). A hunter or shaman bot only needs
+a quarter of its mana: both do their damage without much of it.
+
+## Skipping a Boss
+
+"skip the next boss", "can we skip oggleflint", "skipp him" or "skip jergosh
+and bazzalan" in party skips them: the run leaves them out, and the tank says
+so in its own style, and where it's heading now. Names are read the way
+people type them ("oglefint", "taraga", "van cleef", "cobrahn" for Lord
+Cobrahn). "skip to taragaman" or "straight to the last boss" skips every boss
+before it. "dont skip jergosh" or "actually lets do jergosh" takes a skip back:
+a boss the run has already passed is gone back for now ("...later" leaves it
+to the end), one ahead comes in its turn. Asked before the run starts ("ready,
+skip the first boss"), the skip waits for it. A boss already dead or being
+fought gets a no and why. Questions ("why did we skip him?") stay chat. While
+bosses are skipped, the bots know it, and the end of the run isn't called a
+full clear. Skipping a boss another one needs (one of Wailing Caverns' four
+Fanglords, which Mutanus needs) leaves the run stuck later: take the skip back.
+Needs mod-dungeon-clear with named skips (`dc skip <boss>`); see
+`OllamaChat.PartyCommands.Skip*`.
 
 ## New Gear
 

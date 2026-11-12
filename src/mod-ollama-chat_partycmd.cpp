@@ -65,6 +65,17 @@
 #define OLLAMA_CHAT_DC_RUN_STATE 0
 #endif
 
+// Skipping a boss someone asks to skip: a mod-dungeon-clear whose `dc skip`
+// takes the boss (DcCommandApi.h, DC_COMMAND_API 1).
+#if OLLAMA_CHAT_DC_RUN_STATE && __has_include("DcCommandApi.h")
+#include "DcCommandApi.h"
+#endif
+#if OLLAMA_CHAT_DC_RUN_STATE && defined(DC_COMMAND_API) && DC_COMMAND_API >= 1
+#define OLLAMA_CHAT_DC_SKIPS 1
+#else
+#define OLLAMA_CHAT_DC_SKIPS 0
+#endif
+
 namespace
 {
     PartyCmdStats g_stats;
@@ -193,19 +204,15 @@ namespace
         return detail;
     }
 
-    // How many of the dungeon's bosses are down, and how many the run still
-    // means to kill (not the ones it skips). The run's own values: LazyGet only
-    // computes one that never has been, and mod-dungeon-clear refreshes them
-    // itself while the run is on. A list from the last dungeon this bot was in
-    // is worked out again, once, for the copy it is in now.
-    void BossCounts(Player* owner, AiObjectContext* ctx, uint32_t& killed, uint32_t& left)
+    // The bosses and stops of `owner`'s run, in the order it takes them: its
+    // own list, which LazyGet only works out when it never has been and
+    // mod-dungeon-clear refreshes itself while the run is on. A list from the
+    // last dungeon this bot was in is worked out again, once, for this one.
+    std::vector<DungeonBossInfo> RunBossList(Player* owner, AiObjectContext* ctx)
     {
-        killed = left = 0;
-        if (!owner || !ctx)
-            return;
-        auto* value = ctx->GetValue<std::vector<DungeonBossInfo>>(DcKey::DungeonBosses);
+        auto* value = (owner && ctx) ? ctx->GetValue<std::vector<DungeonBossInfo>>(DcKey::DungeonBosses) : nullptr;
         if (!value)
-            return;
+            return {};
         static std::unordered_map<uint64_t, uint32_t> listFor;   // bot -> instance its list is for
         if (listFor.size() > 5000)
             listFor.clear();
@@ -215,18 +222,46 @@ namespace
             value->Reset();
             instance = owner->GetInstanceId();
         }
-        InstanceScript const* inst = owner->GetInstanceScript();
+        return value->LazyGet();
+    }
+
+    // The bosses skipped in `ctx`'s run (`dc skip`), by entry.
+    const std::unordered_set<uint32>& RunSkipped(AiObjectContext* ctx)
+    {
+        static const std::unordered_set<uint32> none;
+        auto* value = ctx ? ctx->GetValue<std::unordered_set<uint32>&>(DcKey::Skipped) : nullptr;
+        return value ? value->Get() : none;
+    }
+
+    // Is this boss of the run dead, or its encounter done?
+    bool BossDone(const DungeonBossInfo& b, InstanceScript const* inst)
+    {
         const uint32_t mask = inst ? inst->GetCompletedEncounterMask() : 0u;
-        static const std::unordered_set<uint32> noneSkipped;
-        auto* skippedValue = ctx->GetValue<std::unordered_set<uint32>&>(DcKey::Skipped);
-        const std::unordered_set<uint32>& skipped = skippedValue ? skippedValue->Get() : noneSkipped;
-        for (const DungeonBossInfo& b : value->LazyGet())
+        return (b.encounterIndex < 32 && (mask & (1u << b.encounterIndex))) || DcAnchorDoneByInstanceScript(b, inst);
+    }
+
+    // How many of the dungeon's bosses are down, and how many the run still
+    // means to kill (not the ones it skips, whose names go in `skippedNames`).
+    void BossCounts(Player* owner, AiObjectContext* ctx, uint32_t& killed, uint32_t& left,
+                    std::vector<std::string>* skippedNames = nullptr)
+    {
+        killed = left = 0;
+        if (!owner || !ctx)
+            return;
+        InstanceScript const* inst = owner->GetInstanceScript();
+        const std::unordered_set<uint32>& skipped = RunSkipped(ctx);
+        for (const DungeonBossInfo& b : RunBossList(owner, ctx))
         {
             if (b.kind != DungeonAnchorKind::Boss)
                 continue;
-            if ((b.encounterIndex < 32 && (mask & (1u << b.encounterIndex))) || DcAnchorDoneByInstanceScript(b, inst))
+            if (BossDone(b, inst))
                 ++killed;
-            else if (!b.skipByDesign && !skipped.count(b.entry))
+            else if (skipped.count(b.entry))
+            {
+                if (skippedNames && !b.skipByDesign)
+                    skippedNames->push_back(b.name);
+            }
+            else if (!b.skipByDesign)
                 ++left;
         }
     }
@@ -332,6 +367,33 @@ namespace
         return true;
     }
 
+    // The tank answers `msg`, in party, as itself, and nobody else does: `hint`
+    // is what it is told.
+    void TankAnswers(Player* player, Player* tank, const std::string& msg, uint64_t seq,
+                     ChatChannelSourceLocal source, const std::string& scopeKey, std::string hint)
+    {
+        CrowdPlan plan;
+        plan.key          = Crowd_KeyFor(scopeKey, source, uint32(player->GetTeamId()));
+        plan.scopeKey     = scopeKey;
+        plan.source       = source;
+        plan.speakerGuid  = player->GetGUID().GetRawValue();
+        plan.speakerIsBot = false;
+        plan.speakerName  = player->GetName();
+        plan.message      = msg;
+        plan.messageSeq   = seq;
+        plan.kind         = CrowdLineKind::Command;
+        plan.listeners    = 1;
+        plan.closed       = true;   // one answer, no follow-ups
+
+        CrowdSlot slot;
+        slot.botGuid   = tank->GetGUID().GetRawValue();
+        slot.addressed = true;     // owed an answer: no pacing cooldowns
+        slot.hint      = std::move(hint);
+        plan.slots.push_back(std::move(slot));
+
+        Crowd_Start(std::move(plan), 0);
+    }
+
     // The tank says what happened, in party, as itself.
     void Acknowledge(Player* player, Player* tank, const std::string& msg, uint64_t seq,
                      ChatChannelSourceLocal source, const std::string& scopeKey,
@@ -365,26 +427,7 @@ namespace
         if (templ->find("{recent_acks}") == std::string::npos)
             hint += recent;
 
-        CrowdPlan plan;
-        plan.key          = Crowd_KeyFor(scopeKey, source, uint32(player->GetTeamId()));
-        plan.scopeKey     = scopeKey;
-        plan.source       = source;
-        plan.speakerGuid  = player->GetGUID().GetRawValue();
-        plan.speakerIsBot = false;
-        plan.speakerName  = player->GetName();
-        plan.message      = msg;
-        plan.messageSeq   = seq;
-        plan.kind         = CrowdLineKind::Command;
-        plan.listeners    = 1;
-        plan.closed       = true;   // one answer, no follow-ups
-
-        CrowdSlot slot;
-        slot.botGuid   = tank->GetGUID().GetRawValue();
-        slot.addressed = true;     // owed an answer: no pacing cooldowns
-        slot.hint      = std::move(hint);
-        plan.slots.push_back(std::move(slot));
-
-        Crowd_Start(std::move(plan), 0);
+        TankAnswers(player, tank, msg, seq, source, scopeKey, std::move(hint));
     }
 
     // Groups whose staying bots are still to be taken along: the run started
@@ -429,12 +472,564 @@ namespace
             if (Group* group = player->GetGroup())
                 g_unstayLater.insert(group->GetGUID().GetCounter());
     }
+
+#if OLLAMA_CHAT_DC_SKIPS
+    // ---- skipping a boss -----------------------------------------------------------
+
+    // One boss of a run, the way a skip ask sees it.
+    struct RunBoss
+    {
+        uint32_t    entry   = 0;
+        std::string name;
+        size_t      at      = 0;       // where it is in the run's list of bosses and stops
+        bool        done    = false;   // dead, its encounter done
+        bool        skipped = false;   // skipped this run, or to be once it starts
+    };
+
+    // The run a skip ask is about: whose it is -- the tank's, before it starts
+    // -- its bosses in the order it takes them, and what it is heading for.
+    struct RunView
+    {
+        Player*              owner   = nullptr;
+        AiObjectContext*     ctx     = nullptr;
+        bool                 running = false;
+        std::vector<RunBoss> bosses;          // bosses only, in the order the run takes them
+        int                  current = -1;    // the boss it is heading for (an index into bosses), -1 none
+        bool                 atBoss  = false; // ...for that boss itself, not a stop or an event on the way
+    };
+
+    // Skips asked for before the run starts, by group: done once it does.
+    struct PendingSkips
+    {
+        uint32_t                              instanceId = 0;
+        std::vector<uint32_t>                 entries;
+        std::chrono::steady_clock::time_point at{};
+    };
+    std::unordered_map<uint32_t, PendingSkips> g_pendingSkips;
+
+    // Each group's last skip, for "no dont skip", "unskip him".
+    std::unordered_map<uint32_t, PendingSkips> g_lastSkips;
+
+    bool Has(const std::vector<uint32_t>& entries, uint32_t entry)
+    {
+        return std::find(entries.begin(), entries.end(), entry) != entries.end();
+    }
+
+    // The run in `player`'s copy of the dungeon, or the one the tank would
+    // lead. `withCurrent`: what it is heading for too (it asks the run).
+    bool ViewRun(Player* player, Player* tank, RunView& view, bool withCurrent = true)
+    {
+        Map* map = player->GetMap();
+        Player* owner = DcLeaderSignal::FindRunOwner(player);
+        view.running = owner && owner->IsInWorld() && owner->GetMap() == map;
+        view.owner   = view.running ? owner : tank;
+        PlayerbotAI* ai = view.owner ? PlayerbotsMgr::instance().GetPlayerbotAI(view.owner) : nullptr;
+        view.ctx = ai ? ai->GetAiObjectContext() : nullptr;
+        if (!map || !view.ctx)
+            return false;
+
+        const std::vector<DungeonBossInfo> list = RunBossList(view.owner, view.ctx);
+        InstanceScript const* inst = view.owner->GetInstanceScript();
+        const std::unordered_set<uint32>& skipped = RunSkipped(view.ctx);
+        static const std::vector<uint32_t> nonePending;
+        const std::vector<uint32_t>* pending = &nonePending;
+        if (!view.running)
+        {
+            auto it = g_pendingSkips.find(GroupKey(player));
+            if (it != g_pendingSkips.end() && it->second.instanceId == map->GetInstanceId())
+                pending = &it->second.entries;
+        }
+        for (size_t i = 0; i < list.size(); ++i)
+        {
+            const DungeonBossInfo& b = list[i];
+            if (b.kind != DungeonAnchorKind::Boss || b.skipByDesign)
+                continue;
+            RunBoss boss;
+            boss.entry   = b.entry;
+            boss.name    = b.name;
+            boss.at      = i;
+            boss.done    = BossDone(b, inst);
+            boss.skipped = view.running ? skipped.count(b.entry) > 0 : Has(*pending, b.entry);
+            view.bosses.push_back(std::move(boss));
+        }
+        if (view.bosses.empty() || !withCurrent)
+            return !view.bosses.empty();
+
+        // What it heads for: the run's own next stop, and the first boss at or
+        // after it still to do (the first one of all, before it starts).
+        size_t from = 0;
+        view.atBoss = true;
+        if (view.running)
+        {
+            auto* value = view.ctx->GetValue<std::optional<DungeonBossInfo>>(DcKey::NextDungeonBoss);
+            const std::optional<DungeonBossInfo> next =
+                value ? (view.owner->IsAlive() ? value->Get() : value->LazyGet()) : std::nullopt;
+            if (!next)
+                return true;   // nothing left
+            for (size_t i = 0; i < list.size(); ++i)
+                if (list[i].entry == next->entry)
+                {
+                    from = i;
+                    break;
+                }
+            view.atBoss = next->kind == DungeonAnchorKind::Boss;
+        }
+        for (int pass = 0; pass < 2 && view.current < 0; ++pass)
+            for (size_t k = 0; k < view.bosses.size(); ++k)
+            {
+                const RunBoss& b = view.bosses[k];
+                if (b.done || b.skipped || (pass == 0 && b.at < from))
+                    continue;
+                view.current = int(k);
+                break;
+            }
+        if (view.running && view.current >= 0 && view.bosses[view.current].at != from)
+            view.atBoss = false;
+        return true;
+    }
+
+    // The run's last boss still to do, or its very last one with `evenDone`.
+    int LastBoss(const RunView& view, bool evenDone = false)
+    {
+        for (size_t k = view.bosses.size(); k-- > 0;)
+            if (evenDone || (!view.bosses[k].done && !view.bosses[k].skipped))
+                return int(k);
+        return -1;
+    }
+
+    // Someone in `player`'s group is fighting this boss right now.
+    bool Fighting(Player* player, uint32_t entry)
+    {
+        Group* group = player->GetGroup();
+        if (!group)
+            return false;
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            if (Player* member = ref->GetSource())
+                if (member->IsInWorld() && member->GetMap() == player->GetMap() && member->IsInCombat())
+                    if (Unit* victim = member->GetVictim())
+                        if (victim->GetEntry() == entry && victim->IsAlive())
+                            return true;
+        return false;
+    }
+
+    // The tank answers a skip: `templ` with what it is told.
+    void SkipAck(Player* player, Player* tank, const std::string& msg, uint64_t seq, ChatChannelSourceLocal source,
+                 const std::string& scopeKey, const std::string& templ, const std::string& skipped,
+                 const std::string& next, const std::string& plan, const std::string& reason)
+    {
+        if (templ.empty())
+            return;
+        const std::string recent = RecentAcksText(tank);
+        std::string hint = SafeFormat(templ,
+                                      fmt::arg("player_name", player->GetName()),
+                                      fmt::arg("player_message", TextRules::StripChatMarkup(msg)),
+                                      fmt::arg("skipped", skipped),
+                                      fmt::arg("next", next.empty() ? std::string("nothing: the run is over") : next),
+                                      fmt::arg("plan", plan),
+                                      fmt::arg("reason", reason),
+                                      fmt::arg("recent_acks", recent),
+                                      fmt::arg("pass_token", g_ContextPassToken));
+        if (hint == "[Format Error]")
+            return;
+        if (templ.find("{recent_acks}") == std::string::npos)
+            hint += recent;
+        TankAnswers(player, tank, msg, seq, source, scopeKey, std::move(hint));
+    }
+
+    void NoteLastSkip(Player* player, const std::vector<uint32_t>& entries)
+    {
+        if (g_lastSkips.size() > 500)
+            g_lastSkips.clear();
+        PendingSkips& last = g_lastSkips[GroupKey(player)];
+        last.instanceId = player->GetMap() ? player->GetMap()->GetInstanceId() : 0;
+        last.entries    = entries;
+        last.at         = std::chrono::steady_clock::now();
+    }
+
+    // The run has started: what was asked to be skipped before it did is.
+    void ApplyPendingSkips(Player* player, Player* tank)
+    {
+        auto it = g_pendingSkips.find(GroupKey(player));
+        if (it == g_pendingSkips.end())
+            return;
+        const PendingSkips pending = std::move(it->second);
+        g_pendingSkips.erase(it);
+        Map* map = player->GetMap();
+        if (!tank || !map || pending.instanceId != map->GetInstanceId() || !DcLeaderSignal::FindRunOwner(player))
+            return;
+        for (uint32_t entry : pending.entries)
+            Dispatch(player, tank, "dc skip", std::to_string(entry));
+        NoteLastSkip(player, pending.entries);
+        if (g_DebugEnabled)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] The run in {} has started: {} boss(es) {} asked to skip "
+                     "before it did skipped now.", map->GetMapName(), pending.entries.size(), player->GetName());
+    }
+
+    // The boss names a skip ask is read against: the run's, or the one the
+    // tank would lead.
+    std::vector<std::string> SkipNames(Player* player, Player* tank)
+    {
+        RunView view;
+        std::vector<std::string> names;
+        if (ViewRun(player, tank, view, false))
+            for (const RunBoss& b : view.bosses)
+                names.push_back(b.name);
+        return names;
+    }
+
+    enum class SkipResult : uint8_t
+    {
+        NotOne,    // no skip ask, or one about nothing: ordinary chat
+        Handled,   // done, or said no to, and answered
+        Refused    // mod-dungeon-clear said no, and whispered why
+    };
+
+    // "skip the next boss", "skip oggleflint", "dont skip him": done and
+    // answered by the tank. `intent`: "ready, skip oggleflint" starts the run
+    // as well, and "ok im done, skip him" carries on a paused one.
+    SkipResult HandleSkip(Player* player, Player* tank, const std::string& msg, const std::string& clean,
+                          uint64_t seq, ChatChannelSourceLocal source, const std::string& scopeKey,
+                          TextRules::PartyIntent intent)
+    {
+        using TextRules::SkipKind;
+        RunView view;
+        if (!ViewRun(player, tank, view))
+            return SkipResult::NotOne;
+        std::vector<std::string> names;
+        for (const RunBoss& b : view.bosses)
+            names.push_back(b.name);
+        const TextRules::SkipAsk ask = TextRules::MatchSkipAsk(clean, g_PartySkipRules, names);
+        if (ask.kind == SkipKind::None)
+            return SkipResult::NotOne;
+
+        Map* map = player->GetMap();
+        const uint32_t key = GroupKey(player);
+        const auto now = std::chrono::steady_clock::now();
+        auto nameOf = [&](size_t k) { return view.bosses[k].name; };
+
+        if (ask.kind == SkipKind::Unskip || ask.kind == SkipKind::Do)
+        {
+            // Only one that is skipped comes back: "lets do jergosh" about one
+            // that is not is ordinary chat.
+            std::vector<size_t> targets;
+            auto add = [&](size_t k)
+            {
+                if (view.bosses[k].skipped && std::find(targets.begin(), targets.end(), k) == targets.end())
+                    targets.push_back(k);
+            };
+            for (size_t k : ask.bosses)
+                add(k);
+            if (ask.kind == SkipKind::Unskip && ask.next)
+            {
+                auto it = g_lastSkips.find(key);
+                if (it != g_lastSkips.end() && it->second.instanceId == map->GetInstanceId() &&
+                    now - it->second.at < std::chrono::minutes(15))
+                    for (size_t k = 0; k < view.bosses.size(); ++k)
+                        if (Has(it->second.entries, view.bosses[k].entry))
+                            add(k);
+            }
+            if (targets.empty())
+                return SkipResult::NotOne;
+
+            const bool later = CrowdText::ContainsPhrase(CrowdText::Words(clean), g_PartySkipLaterWords);
+            std::vector<std::string> back;
+            bool turnBack = false;
+            if (!view.running)
+            {
+                auto it = g_pendingSkips.find(key);
+                for (size_t k : targets)
+                {
+                    if (it != g_pendingSkips.end())
+                        it->second.entries.erase(std::remove(it->second.entries.begin(), it->second.entries.end(),
+                                                             view.bosses[k].entry),
+                                                 it->second.entries.end());
+                    back.push_back(nameOf(k));
+                }
+            }
+            else
+            {
+                // One behind the run is gone back for now ("...later": once
+                // everything ahead is done); one ahead comes in its turn.
+                for (size_t k : targets)
+                {
+                    const RunBoss& b = view.bosses[k];
+                    const bool behind = view.current >= 0 && b.at < view.bosses[size_t(view.current)].at;
+                    const bool goNow  = behind && !later && !turnBack;
+                    Dispatch(player, tank, goNow ? "dc go" : "dc unskip", std::to_string(b.entry));
+                    if (!RunSkipped(view.ctx).count(b.entry))
+                    {
+                        back.push_back(b.name);
+                        turnBack = turnBack || goNow;
+                    }
+                }
+                if (back.empty())
+                {
+                    ++g_stats.refused;
+                    return SkipResult::Refused;
+                }
+            }
+            if (auto it = g_lastSkips.find(key); it != g_lastSkips.end())
+                for (size_t k : targets)
+                    it->second.entries.erase(std::remove(it->second.entries.begin(), it->second.entries.end(),
+                                                         view.bosses[k].entry),
+                                             it->second.entries.end());
+            g_stats.unskips += back.size();
+
+            RunView after;
+            ViewRun(player, tank, after);
+            const std::string next = after.current >= 0 ? after.bosses[size_t(after.current)].name : std::string();
+            const char* it = back.size() > 1 ? "them" : "it";
+            std::string plan;
+            if (!view.running)
+                plan = fmt::format("{} back in the run, which has not started yet.",
+                                   back.size() > 1 ? "they are" : "it is");
+            else if (turnBack)
+                plan = fmt::format("you turn back for {} now.", back.front());
+            else if (later && !next.empty())
+                plan = fmt::format("you will go back for {} once everything ahead is done; for now you are heading for "
+                                   "{}.", it, next);
+            else if (!next.empty())
+                plan = fmt::format("you will get to {} in {} turn; for now you are heading for {}.", it,
+                                   back.size() > 1 ? "their" : "its", next);
+            else
+                plan = fmt::format("you will get to {} next.", it);
+            SkipAck(player, tank, msg, seq, source, scopeKey, g_PartyCmdHintUnskip, CrowdText::JoinNames(back), next,
+                    plan, std::string());
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] {} took a skip back in {}: {} ('{}').", player->GetName(),
+                         map->GetMapName(), CrowdText::JoinNames(back), clean);
+            return SkipResult::Handled;
+        }
+
+        // What to skip: the bosses named, what the run heads for, the last
+        // one -- or every boss before the one to skip to.
+        std::vector<size_t> targets;
+        std::string why;   // the first reason one of them cannot be
+        auto add = [&](size_t k)
+        {
+            if (std::find(targets.begin(), targets.end(), k) == targets.end())
+                targets.push_back(k);
+        };
+        std::string asked;   // what they asked to skip, in words
+        int dest = -1;       // skipping to: where
+        if (ask.kind == SkipKind::Skip)
+        {
+            for (size_t k : ask.bosses)
+                add(k);
+            if (ask.next)
+            {
+                if (view.current < 0)
+                    why = "there is no boss left to skip.";
+                else if (!view.atBoss && !ask.nextSaysBoss)
+                    return SkipResult::NotOne;   // "skip it" on the way to an event: not about a boss
+                else
+                    add(size_t(view.current));
+            }
+            if (ask.last)
+            {
+                if (const int last = LastBoss(view, true); last >= 0)
+                    add(size_t(last));
+            }
+            std::vector<std::string> said;
+            for (size_t k : targets)
+                said.push_back(nameOf(k));
+            asked = said.empty() ? std::string("the next boss") : CrowdText::JoinNames(said);
+        }
+        else
+        {
+            dest = !ask.bosses.empty() ? int(ask.bosses.front()) : LastBoss(view, true);
+            if (dest < 0)
+                return SkipResult::NotOne;
+            asked = "everything before " + nameOf(size_t(dest));
+            if (view.bosses[size_t(dest)].done)
+                why = nameOf(size_t(dest)) + " is already dead.";
+            else
+            {
+                for (size_t k = 0; k < size_t(dest); ++k)
+                    if (!view.bosses[k].done && !view.bosses[k].skipped)
+                        add(k);
+                if (targets.empty())
+                    why = nameOf(size_t(dest)) + " is next anyway, so there is nothing to skip.";
+            }
+        }
+
+        std::vector<size_t> skip;
+        for (size_t k : targets)
+        {
+            const RunBoss& b = view.bosses[k];
+            std::string no;
+            if (b.done)
+                no = b.name + " is already dead.";
+            else if (b.skipped)
+                no = "you are skipping " + b.name + " already.";
+            else if (view.running && int(k) == view.current && Fighting(player, b.entry))
+                no = "you are fighting " + b.name + " right now, so it is too late to skip it.";
+            if (no.empty())
+                skip.push_back(k);
+            else if (why.empty())
+                why = no;
+        }
+        if (skip.empty())
+        {
+            // "ready, skip oggleflint" with him skipped already: the ready is
+            // what is left of it.
+            if (why.empty() || intent == TextRules::PartyIntent::Start || intent == TextRules::PartyIntent::Resume)
+                return SkipResult::NotOne;
+            ++g_stats.skipsRefused;
+            SkipAck(player, tank, msg, seq, source, scopeKey, g_PartyCmdHintSkipNo, asked,
+                    view.current >= 0 ? nameOf(size_t(view.current)) : std::string(), std::string(), why);
+            return SkipResult::Handled;
+        }
+
+        // "ready, skip oggleflint": start the run as well; "im back, skip
+        // him": carry on a paused one.
+        bool started = false;
+        std::vector<std::string> missing;
+        if (!view.running && intent == TextRules::PartyIntent::Start)
+        {
+            missing = MissingPeople(tank);
+            if (!missing.empty())
+                ++g_stats.waiting;
+            else
+            {
+                Dispatch(player, tank, "dc on", std::string());
+                if (DcLeaderSignal::FindRunOwner(player))
+                {
+                    started = true;
+                    ++g_stats.started;
+                    g_readyAsked.erase(key);
+                    ReleaseStaysFor(player);
+                }
+            }
+        }
+        else if (view.running && intent != TextRules::PartyIntent::None &&
+                 intent != TextRules::PartyIntent::Pause && DcLeaderSignal::IsInPausedDungeonClearRun(player) &&
+                 MissingPeople(tank).empty())
+        {
+            Dispatch(player, tank, "dc pause", "resume");
+            if (!DcLeaderSignal::IsInPausedDungeonClearRun(player))
+            {
+                ++g_stats.resumed;
+                g_breaks.erase(key);
+                ReleaseStaysFor(player);
+            }
+        }
+
+        std::vector<std::string> skipped;
+        std::vector<uint32_t> entries;
+        bool turnedAway = false;
+        const bool running = view.running || started;
+        if (running)
+        {
+            if (started)
+                ApplyPendingSkips(player, tank);   // asked for before, in other lines
+            RunView live;
+            if (!ViewRun(player, tank, live) || !live.running)
+                return SkipResult::Refused;
+            const uint32_t heading = live.current >= 0 ? live.bosses[size_t(live.current)].entry : 0;
+            for (size_t k : skip)
+            {
+                const RunBoss& b = view.bosses[k];
+                if (!RunSkipped(live.ctx).count(b.entry))   // or it was, as the run started
+                    Dispatch(player, tank, "dc skip", std::to_string(b.entry));
+                if (RunSkipped(live.ctx).count(b.entry))
+                {
+                    skipped.push_back(b.name);
+                    entries.push_back(b.entry);
+                    turnedAway = turnedAway || b.entry == heading;
+                }
+            }
+            if (skipped.empty())
+            {
+                ++g_stats.refused;
+                return SkipResult::Refused;
+            }
+            // "skip to jergosh" when he was skipped too: he is where they go.
+            if (dest >= 0 && RunSkipped(live.ctx).count(view.bosses[size_t(dest)].entry))
+                Dispatch(player, tank, "dc unskip", std::to_string(view.bosses[size_t(dest)].entry));
+        }
+        else
+        {
+            PendingSkips& pending = g_pendingSkips[key];
+            if (dest >= 0)
+                pending.entries.erase(std::remove(pending.entries.begin(), pending.entries.end(),
+                                                  view.bosses[size_t(dest)].entry),
+                                      pending.entries.end());
+            if (pending.instanceId != map->GetInstanceId())
+                pending = PendingSkips{};
+            pending.instanceId = map->GetInstanceId();
+            pending.at         = now;
+            for (size_t k : skip)
+                if (!Has(pending.entries, view.bosses[k].entry))
+                {
+                    pending.entries.push_back(view.bosses[k].entry);
+                    skipped.push_back(nameOf(k));
+                    entries.push_back(view.bosses[k].entry);
+                }
+            g_stats.skipsBefore += skipped.size();
+        }
+        g_stats.skips += skipped.size();
+        NoteLastSkip(player, entries);
+
+        // Where it heads now. A run with nothing left to do ends by itself,
+        // and the tank calls it done in a moment: that is its answer.
+        const char* it = skipped.size() > 1 ? "them" : "it";
+        std::string next, plan;
+        if (running && !DcLeaderSignal::FindRunOwner(player))
+        {
+            uint32_t killed = 0, left = 0;
+            BossCounts(view.owner, view.ctx, killed, left);
+            if (killed > 0 && g_PartyDoneEnable)
+            {
+                if (g_DebugEnabled)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] {} skipped the last boss of {}: the tank calls the "
+                             "run done.", player->GetName(), map->GetMapName());
+                return SkipResult::Handled;
+            }
+            plan = "with that, there is no boss left to do here, so the run is over.";
+        }
+        else
+        {
+            RunView after;
+            ViewRun(player, tank, after);
+            next = after.current >= 0 ? after.bosses[size_t(after.current)].name : std::string();
+            if (!running)
+                plan = missing.empty()
+                           ? fmt::format("the run has not started yet, so you will leave {} out once it does.", it)
+                           : fmt::format("you will start as soon as {} {} here, and leave {} out.",
+                                         CrowdText::JoinNames(missing), missing.size() > 1 ? "are" : "is", it);
+            else if (started)
+                plan = fmt::format("you start the run now and leave {} out, so you head for {} first.", it,
+                                   next.empty() ? std::string("the next boss") : next);
+            else if (DcLeaderSignal::IsInPausedDungeonClearRun(player))
+                plan = fmt::format("you leave {} out, and once everyone is ready you head for {}.", it,
+                                   next.empty() ? std::string("the next boss") : next);
+            else if (turnedAway)
+                plan = fmt::format("you turn away from {} and head for {} instead.", it,
+                                   next.empty() ? std::string("the next boss") : next);
+            else
+                plan = fmt::format("you will pass {} by when you get there, and for now you are still heading for "
+                                   "{}.", it, next.empty() ? std::string("the next boss") : next);
+        }
+        SkipAck(player, tank, msg, seq, source, scopeKey, g_PartyCmdHintSkip, CrowdText::JoinNames(skipped), next,
+                plan, std::string());
+        if (g_DebugEnabled)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] {} asked to skip {} in {}{}: '{}'.", player->GetName(),
+                     CrowdText::JoinNames(skipped), map->GetMapName(), running ? "" : " (once the run starts)", clean);
+        return SkipResult::Handled;
+    }
+#endif
 #endif
 }
 
 bool PartyCmd_Available()
 {
     return OLLAMA_CHAT_DUNGEON_CLEAR != 0;
+}
+
+bool PartyCmd_SkipsAvailable()
+{
+    return OLLAMA_CHAT_DC_SKIPS != 0;
 }
 
 Player* PartyCmd_RunVoiceFor(Player* player, const std::string& msg, ChatChannelSourceLocal source)
@@ -492,11 +1087,19 @@ PartyCmdLine PartyCmd_Classify(Player* player, const std::string& msg, ChatChann
     if (intent == TextRules::PartyIntent::None && AnswersReadyAsk(player, clean) &&
         !DcLeaderSignal::FindRunOwner(player))
         intent = TextRules::PartyIntent::Start;   // "yep", to the tank's "everyone ready?"
-    if (intent == TextRules::PartyIntent::None)
-        return PartyCmdLine::None;
 
     Player* tank = DcLeaderSignal::FindLeaderTank(player);
     if (!tank || !tank->IsInWorld())
+        return PartyCmdLine::None;
+
+#if OLLAMA_CHAT_DC_SKIPS
+    // "skip the next boss", "dont skip jergosh".
+    if (g_PartySkipEnable &&
+        TextRules::MatchSkipAsk(clean, g_PartySkipRules, SkipNames(player, tank)).kind != TextRules::SkipKind::None)
+        return PartyCmdLine::Instruction;
+#endif
+
+    if (intent == TextRules::PartyIntent::None)
         return PartyCmdLine::None;
 
     // "ok im done" only means go on when there is a break to end.
@@ -531,12 +1134,26 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
     if (intent == TextRules::PartyIntent::None && AnswersReadyAsk(player, clean) &&
         !DcLeaderSignal::FindRunOwner(player))
         intent = TextRules::PartyIntent::Start;   // "yep", to the tank's "everyone ready?"
-    if (intent == TextRules::PartyIntent::None)
-        return false;
 
     // No dungeon-clear tank in this group: just chat.
     Player* tank = DcLeaderSignal::FindLeaderTank(player);
     if (!tank || !tank->IsInWorld())
+        return false;
+
+#if OLLAMA_CHAT_DC_SKIPS
+    // "skip the next boss", "skip oggleflint", "dont skip him" -- with
+    // "ready" in it, the run starts as well.
+    if (g_PartySkipEnable)
+    {
+        const SkipResult skip = HandleSkip(player, tank, msg, clean, seq, source, scopeKey, intent);
+        if (skip == SkipResult::Handled)
+            return true;
+        if (skip == SkipResult::Refused)
+            return false;   // dungeon clear whispered why
+    }
+#endif
+
+    if (intent == TextRules::PartyIntent::None)
         return false;
 
     const bool running = DcLeaderSignal::FindRunOwner(player) != nullptr;
@@ -645,6 +1262,9 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
         ++g_stats.started;
         g_readyAsked.erase(GroupKey(player));   // answered
         ReleaseStaysFor(player);
+#if OLLAMA_CHAT_DC_SKIPS
+        ApplyPendingSkips(player, tank);   // "skip the first boss", said before
+#endif
         Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Started, std::string());
     }
 
@@ -742,7 +1362,15 @@ std::string PartyCmd_RunStateFor(Player* bot, ChatChannelSourceLocal source)
         return "";
 
     uint32_t killed = 0, left = 0;
-    BossCounts(owner, ctx, killed, left);
+    std::vector<std::string> skippedNames;
+    BossCounts(owner, ctx, killed, left, &skippedNames);
+    std::string skipped;
+    if (!skippedNames.empty() && !g_PartyRunStateSkippedText.empty())
+    {
+        skipped = SafeFormat(g_PartyRunStateSkippedText, fmt::arg("skipped", CrowdText::JoinNames(skippedNames)));
+        if (skipped == "[Format Error]")
+            skipped.clear();
+    }
 
     // STATUS \t on \t entry \t name \t stall \t skipped \t state \t detail \t ...
     // The status line is built the way mod-dungeon-clear builds it for its
@@ -782,8 +1410,12 @@ std::string PartyCmd_RunStateFor(Player* bot, ChatChannelSourceLocal source)
                                        fmt::arg("next", !next.empty() ? next
                                                         : (left == 0 && killed > 0) ? std::string("none, they are all down")
                                                                                     : std::string("not picked yet")),
-                                       fmt::arg("state", state));
-    return out == "[Format Error]" ? std::string() : out;
+                                       fmt::arg("state", state),
+                                       fmt::arg("skipped", skipped));
+    if (out == "[Format Error]")
+        return std::string();
+    // A text written before {skipped} existed still says what is skipped.
+    return g_PartyRunStateText.find("{skipped}") == std::string::npos ? out + skipped : out;
 #endif
 }
 
@@ -908,27 +1540,37 @@ namespace
         bool                   cheered    = false;
         bool                   stay       = false;   // asked to stay
         std::vector<uint64_t>  leavers;              // the random bots that came in through the finder
+        std::string            skipped;              // bosses skipped on purpose, for the gg: no full clear
     };
     std::unordered_map<uint32_t, Wrapup> g_wrapups;   // by the group's guid counter
 
     // The tank calls it: in its own words if they say the dungeon is cleared
-    // (Party.DoneWords, or the dungeon's name), else in stock ones.
-    bool SubmitDoneCall(Player* tank, Map* map, uint32_t killed)
+    // (Party.DoneWords, or the dungeon's name), else in stock ones. With bosses
+    // skipped on purpose (`skipped`) it is done but no full clear, and says so
+    // (Party.DoneSkipped*).
+    bool SubmitDoneCall(Player* tank, Map* map, uint32_t killed, const std::vector<std::string>& skipped)
     {
+        const bool partial = !skipped.empty() && !g_PartyDoneSkippedSituation.empty();
         const std::string dungeon = map ? std::string(map->GetMapName()) : std::string("the dungeon");
-        const std::string bosses  = BossesText(killed);
-        std::string situation = SafeFormat(g_PartyDoneSituation, fmt::arg("dungeon", dungeon), fmt::arg("bosses", bosses));
+        const std::string bosses  = !partial ? BossesText(killed)
+                                  : killed == 1 ? std::string("one boss is down")
+                                                : fmt::format("{} bosses are down", killed);
+        const std::string& templ = partial ? g_PartyDoneSkippedSituation : g_PartyDoneSituation;
+        std::string situation = SafeFormat(templ, fmt::arg("dungeon", dungeon), fmt::arg("bosses", bosses),
+                                           fmt::arg("skipped", CrowdText::JoinNames(skipped)),
+                                           fmt::arg("was_were", skipped.size() > 1 ? "were" : "was"));
         if (situation.empty() || situation == "[Format Error]")
-            situation = g_PartyDoneSituation;
+            situation = templ;
 
         MustSay must;
         must.doneCall = true;
-        must.phrases  = g_PartyDoneWords;
+        must.phrases  = partial ? g_PartyDoneSkippedWords : g_PartyDoneWords;
         if (std::vector<std::string> name = CrowdText::Words(dungeon); !name.empty())
             must.phrases.push_back(std::move(name));
-        if (!g_PartyDoneLines.empty())
+        const std::vector<std::string>& lines = partial ? g_PartyDoneSkippedLines : g_PartyDoneLines;
+        if (!lines.empty())
         {
-            const std::string& pick = g_PartyDoneLines[Between(0, uint32_t(g_PartyDoneLines.size() - 1))];
+            const std::string& pick = lines[Between(0, uint32_t(lines.size() - 1))];
             must.fallback = SafeFormat(pick, fmt::arg("dungeon", dungeon), fmt::arg("bosses", bosses));
             if (must.fallback == "[Format Error]")
                 must.fallback.clear();
@@ -939,7 +1581,8 @@ namespace
 
     // The tank has called it: who is to leave (the random bots, in a group the
     // dungeon finder made), and from when.
-    void StartWrapup(Player* tank, Group* group, Map* map, uint32_t key, WatchClock::time_point now)
+    void StartWrapup(Player* tank, Group* group, Map* map, uint32_t key, WatchClock::time_point now,
+                     const std::vector<std::string>& skipped)
     {
         Wrapup& w   = g_wrapups[key];
         w           = Wrapup{};
@@ -948,6 +1591,7 @@ namespace
         w.tank       = tank->GetGUID().GetRawValue();
         w.dungeon    = map->GetMapName();
         w.calledAt   = now;
+        w.skipped    = CrowdText::JoinNames(skipped);
         if (!g_PartyDoneLeave || !group->isLFGGroup())
             return;
         // Only the random bots the finder matched: not ones invited before the
@@ -978,6 +1622,12 @@ namespace
                                         fmt::arg("tank", tankName));
         if (prompt.empty() || prompt == "[Format Error]")
             return "";
+        if (!w.skipped.empty() && !g_PartyDoneSkippedText.empty())
+        {
+            const std::string note = SafeFormat(g_PartyDoneSkippedText, fmt::arg("skipped", w.skipped));
+            if (note != "[Format Error]")
+                prompt += note;
+        }
         return prompt + Roleplay_BuildVoicePrompt(bot);
     }
 
@@ -1272,7 +1922,8 @@ void PartyCmd_Update(uint32_t diff)
         Player* counted = (owner && owner->GetMap() == map) ? owner : tank;
         PlayerbotAI* countedAi = PlayerbotsMgr::instance().GetPlayerbotAI(counted);
         uint32_t killed = 0, left = 0;
-        BossCounts(counted, countedAi ? countedAi->GetAiObjectContext() : nullptr, killed, left);
+        std::vector<std::string> skippedNames;
+        BossCounts(counted, countedAi ? countedAi->GetAiObjectContext() : nullptr, killed, left, &skippedNames);
 
         RunWatch& w = g_watches[key];
         if (w.instanceId != map->GetInstanceId() || w.firstSeen == WatchClock::time_point{})
@@ -1304,6 +1955,12 @@ void PartyCmd_Update(uint32_t diff)
         // A rest someone called ("mb"): over once everyone has had it.
         WatchBreak(tank, group, map, key, pausedRun, now);
 
+#if OLLAMA_CHAT_DC_SKIPS
+        // Skips asked for before the run, which "dc on" or the addon started.
+        if (owner && g_pendingSkips.count(key))
+            ApplyPendingSkips(player, tank);
+#endif
+
         // "let me know when you're ready": once, when they first come in.
         if (!w.greeted)
         {
@@ -1331,11 +1988,11 @@ void PartyCmd_Update(uint32_t diff)
         {
             if (w.doneTried == WatchClock::time_point{})
                 w.doneTried = now;
-            if (SubmitDoneCall(tank, map, killed))
+            if (SubmitDoneCall(tank, map, killed, skippedNames))
             {
                 w.announced = true;
                 ++g_stats.done;
-                StartWrapup(tank, group, map, key, now);
+                StartWrapup(tank, group, map, key, now, skippedNames);
             }
             else if (now - w.doneTried > std::chrono::seconds(60))
                 w.announced = true;
@@ -1367,6 +2024,12 @@ void PartyCmd_Update(uint32_t diff)
     for (auto it = g_readyAsked.begin(); it != g_readyAsked.end();)
         it = (now - it->second > std::chrono::seconds(g_PartyReadyWindowSeconds)) ? g_readyAsked.erase(it)
                                                                                   : std::next(it);
+#if OLLAMA_CHAT_DC_SKIPS
+    // Skips for a run that never started, and the last skips, long gone.
+    for (auto* skips : { &g_pendingSkips, &g_lastSkips })
+        for (auto it = skips->begin(); it != skips->end();)
+            it = (now - it->second.at > std::chrono::minutes(30)) ? skips->erase(it) : std::next(it);
+#endif
 #endif
 }
 

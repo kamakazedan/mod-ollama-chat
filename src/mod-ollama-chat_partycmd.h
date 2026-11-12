@@ -32,6 +32,14 @@ class Player;
 // mod-dungeon-clear's own commands: it answers those itself, and bots do not
 // chat about them.
 //
+// A boss can be skipped the same way (PartyCommands.Skip*): "skip the next
+// boss", "skip oggleflint", "skip to the last boss", and taken back with
+// "dont skip jergosh" or "actually lets do jergosh" -- see
+// TextRules::MatchSkipAsk. The tank answers with where the run goes now; one
+// it cannot skip (dead, being fought) gets a no and why. Asked before the run
+// starts, the skip waits for it. Needs a mod-dungeon-clear whose `dc skip`
+// takes a boss (DcCommandApi.h).
+//
 // These are looked at before the BlacklistCommands and DisableForParty checks:
 // "ready", "wait" and "drink" are on the blacklist because they are playerbots
 // commands too, and DisableForParty is about chatter, not about steering a run.
@@ -44,6 +52,9 @@ class Player;
 
 // Was mod-dungeon-clear found at build time?
 bool PartyCmd_Available();
+
+// ...and one whose `dc skip` takes a boss, so a boss can be skipped in chat?
+bool PartyCmd_SkipsAvailable();
 
 enum class PartyCmdLine : uint8_t
 {
@@ -159,6 +170,10 @@ struct PartyCmdStats
     uint64_t cheers  = 0;   // gg lines from the rest
     uint64_t left    = 0;   // bots that left the group after a run
     uint64_t stayed  = 0;   // groups asked to stay
+    uint64_t skips        = 0;   // bosses skipped when someone asked
+    uint64_t skipsBefore  = 0;   // ...of them asked for before the run started
+    uint64_t skipsRefused = 0;   // asks the tank said no to: dead already, being fought, skipped already
+    uint64_t unskips      = 0;   // skips taken back
 };
 PartyCmdStats PartyCmd_GetStats();
 

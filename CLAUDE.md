@@ -166,7 +166,12 @@ The one exception is steering a mod-dungeon-clear run from what a player types
 (`mod-ollama-chat_partycmd.cpp`): reading "mb" out of a party line is this
 module's, so the pause, the resume, and the end of a rest that ends by itself
 (the tank's "lets go" goes out first, and the run moves when it lands) stay
-together here. mod-playerbots-plus knows nothing of mod-dungeon-clear.
+together here, and so does skipping a boss someone asks to skip. It is only
+ever the tank's own `dc` actions, sent as the player (`dc skip <boss>`,
+`dc unskip <boss>`, `dc go <boss>`: what they take is mod-dungeon-clear's
+`DcCommandApi.h`), never its run state written from here; the skip list is
+read back to see it took. mod-playerbots-plus knows nothing of
+mod-dungeon-clear.
 
 - Include `mod-ollama-chat_plus.h`, never `PlayerbotsPlus.h` directly.
   `OLLAMA_CHAT_PLAYERBOTS_PLUS` is its API version, 0 when it is not in the

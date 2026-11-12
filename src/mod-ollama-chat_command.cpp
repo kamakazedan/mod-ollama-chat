@@ -641,7 +641,8 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
         handler->PSendSysMessage("Party instructions: {} (dungeon clear {}) - {} started, {} paused ({} rests, "
                              "{} the tank called over itself), {} resumed, "
                              "{} waited for players, {} refused; {} runs called done, {} gg, {} bots left after, "
-                             "{} groups asked to stay",
+                             "{} groups asked to stay. Skipping bosses when asked: {} - {} skipped ({} asked before "
+                             "the run started), {} said no to, {} taken back",
                              g_PartyCmdEnable ? "on" : "off",
                              PartyCmd_Available() ? "found" : "not in this build",
                              (unsigned long long)party.started,
@@ -654,7 +655,13 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)party.done,
                              (unsigned long long)party.cheers,
                              (unsigned long long)party.left,
-                             (unsigned long long)party.stayed);
+                             (unsigned long long)party.stayed,
+                             !PartyCmd_SkipsAvailable() ? "not in this build (mod-dungeon-clear without named skips)"
+                                                        : (g_PartySkipEnable ? "on" : "off"),
+                             (unsigned long long)party.skips,
+                             (unsigned long long)party.skipsBefore,
+                             (unsigned long long)party.skipsRefused,
+                             (unsigned long long)party.unskips);
 
     const ConjureStats conjure = Conjure_GetStats();
     if (show("bots"))

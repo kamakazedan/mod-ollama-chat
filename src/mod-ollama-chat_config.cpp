@@ -512,6 +512,18 @@ bool        g_FavorStrangers               = true;
 std::string g_ConjureHintNo;
 std::string g_BagsHintNo;
 
+bool        g_PartySkipEnable              = true;
+TextRules::SkipRules g_PartySkipRules;
+std::vector<std::vector<std::string>> g_PartySkipLaterWords;
+std::string g_PartyCmdHintSkip;
+std::string g_PartyCmdHintSkipNo;
+std::string g_PartyCmdHintUnskip;
+std::string g_PartyRunStateSkippedText;
+std::string g_PartyDoneSkippedSituation;
+std::vector<std::vector<std::string>> g_PartyDoneSkippedWords;
+std::vector<std::string> g_PartyDoneSkippedLines;
+std::string g_PartyDoneSkippedText;
+
 std::unordered_map<std::string, PersonalityNudge> g_PersonalityNudges;
 std::unordered_map<std::string, uint32_t>         g_PersonalityMaxReplyLength;
 std::string g_PersonalityLongReplyNote;
@@ -3229,6 +3241,97 @@ static void LoadNaturalChatV31Settings()
              g_FavorStrangers ? "on" : "off", g_SaySeenText.empty() ? "off" : "on");
 }
 
+static void LoadNaturalChatV32Settings()
+{
+    auto phrases = [](const std::string& key, const char* def)
+    {
+        return CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(key, def));
+    };
+
+    // --- skipping a boss in a dungeon run ---------------------------------------------------
+    g_PartySkipEnable = sConfigMgr->GetOption<bool>("OllamaChat.PartyCommands.SkipEnable", true);
+    TextRules::SkipRules& rules = g_PartySkipRules;
+    rules.skip = phrases("OllamaChat.PartyCommands.SkipPhrases",
+        "skip|skipp|skp|sikp|skipping|skiping|skippin");
+    rules.skipNamed = phrases("OllamaChat.PartyCommands.SkipNamedPhrases",
+        "pass on|leave|leave out|ignore|forget|forget about|bypass|go past|go round|go around|run past|walk past|"
+        "skip over|dont do|dont kill|dont fight|dont bother with|dont bother killing|no need to do|no need to kill|"
+        "no need for|dont need|we dont need|not doing|not killing");
+    rules.skipTo = phrases("OllamaChat.PartyCommands.SkipToPhrases",
+        "skip to|skipp to|skip straight to|skip ahead to|skip right to|skip on to|skip up to|skip until|skip till|"
+        "skip til|straight to|go straight to|head straight to|jump to|just do|only do|lets just do|just go for|"
+        "go straight for");
+    rules.unskip = phrases("OllamaChat.PartyCommands.UnskipPhrases",
+        "unskip|un skip|dont skip|do not skip|dont wanna skip|dont want to skip|lets not skip|not skip|"
+        "no skipping|stop skipping|cancel the skip|undo the skip|undo skip");
+    rules.doIt = phrases("OllamaChat.PartyCommands.SkipDoPhrases",
+        "lets do|do|kill|lets kill|go back for|back for|go for|lets get|get|fight|lets fight|take on|actually do|"
+        "actually kill|we can do|we should do|go kill|go do");
+    rules.nextBoss = phrases("OllamaChat.PartyCommands.SkipNextBossWords",
+        "next boss|the next boss|this boss|the boss|boss|that boss|current boss|first boss|the first boss|him|her|"
+        "he|she|this guy|that guy|next guy|the next guy");
+    rules.nextAny = phrases("OllamaChat.PartyCommands.SkipNextWords",
+        "next|next one|the next one|the next|this|this one|that|that one|it|first one|the first one|the first");
+    rules.last = phrases("OllamaChat.PartyCommands.SkipLastWords",
+        "last boss|the last boss|last one|the last one|end boss|the end boss|final boss|the final boss|the end|end|"
+        "the last|last|final|final one|the final one");
+    rules.notBoss = phrases("OllamaChat.PartyCommands.SkipNotBossWords",
+        "trash|pack|packs|mob|mobs|adds|add|pat|pats|patrol|patrols|pull|pulls|loot|looting|chest|chests|cutscene|"
+        "rp|dialogue|talk|talking|quest|quests|event|events|escort|room|part|jump|drop|corridor|hallway|corner|"
+        "door|gate|whelps|these|those|everything|all");
+    rules.fillers = phrases("OllamaChat.PartyCommands.SkipFillers",
+        "the|a|an|pls|please|plz|plx|now|for now|this time|today|tonight|and|too|also|as well|just|lol|lmao|haha*|"
+        "lets|can|could|we|you|u|ya|yall|guys|mate|lads|ok|okay|k|kk|yeah|yes|yep|ye|of|maybe|probably|i|id|ill|"
+        "im|think|should|shall|would|wanna|want|to|quick|quickly|instead|anyway|anyways|tbh|imo|honestly|ahead|"
+        "ty|thanks|cheers|already|again|actually|tho|though|right|alright|aight|after all|sorry|sry|hmm|hm|uh|um|"
+        "guess|i guess|over|out|past|by|on");
+    rules.stops = phrases("OllamaChat.PartyCommands.SkipStopWords",
+        "then|but|because|cuz|cause|coz|cos|cus|bc|since|so|until|till|unless|while|instead of");
+    rules.questions = phrases("OllamaChat.PartyCommands.SkipQuestionWords",
+        "why|how|what|whats|wat|wut|when|where|which|did|didnt|have we|havent we|has he|was|were|are we|arent we|"
+        "r we|is it|is he|is she|isnt|does|doesnt|do we need|do we have to|do we gotta|need to kill|have to kill|"
+        "skipped|skippable|worth|or not|wonder");
+    rules.negations = phrases("OllamaChat.PartyCommands.SkipNegationWords",
+        "not|cant|cannot|wont|shouldnt|wouldnt|couldnt|never|no|nope|nah|dont|aint");
+    rules.titles = phrases("OllamaChat.PartyCommands.SkipTitleWords",
+        "the|of|lord|lady|king|queen|prince|princess|high|chief|captain|commander|general|warlord|overlord|mr|mrs|"
+        "miss|sir|dame|old|big|little|great|grand|elder|ancient|master|baron|baroness|count|countess|duke|archmage|"
+        "magister|warchief|priest|priestess|inquisitor|houndmaster|arcanist|bloodmage|ambassador|emperor|guardian|"
+        "keeper|matriarch|patriarch|watcher|deviate|defias|scarlet|brother|sister|champion");
+    rules.maxWords = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.PartyCommands.SkipMaxWords", 14),
+                                          3, 40);
+    g_PartySkipLaterWords = phrases("OllamaChat.PartyCommands.SkipLaterWords",
+        "later|after|afterwards|at the end|on the way back|after this|after that|after the rest|when we are done|"
+        "last");
+    g_PartyCmdHintSkip = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.HintSkip",
+        "{player_name} asked to skip {skipped}, and you agree: {plan} Tell them in a few words, in your own chat "
+        "style; you can say where you are heading next.{recent_acks}");
+    g_PartyCmdHintSkipNo = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.HintSkipNo",
+        "{player_name} asked to skip {skipped}, but {reason} Tell them so in a few words, in your own chat "
+        "style.{recent_acks}");
+    g_PartyCmdHintUnskip = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.HintUnskip",
+        "{player_name} wants to do {skipped} after all, and you agree: {plan} Tell them in a few words, in your "
+        "own chat style.{recent_acks}");
+    g_PartyRunStateSkippedText = sConfigMgr->GetOption<std::string>("OllamaChat.Party.RunStateSkippedText",
+        " The group is skipping {skipped} this run, because someone asked to.");
+    g_PartyDoneSkippedSituation = sConfigMgr->GetOption<std::string>("OllamaChat.Party.DoneSkippedSituation",
+        "The group has done every boss it meant to in {dungeon} and the run is over: {bosses}, and {skipped} "
+        "{was_were} skipped on purpose. Say that plainly first - you are done with {dungeon} - so nobody can miss "
+        "it, then celebrate it your own way: gg, thanks, nice work, whatever suits you. It was not a full clear, "
+        "so never call it one.");
+    g_PartyDoneSkippedWords = phrases("OllamaChat.Party.DoneSkippedWords",
+        "done|all done|run done|dungeon done|were done|we are done|thats it|that is it|finished|thats us|"
+        "thats everything|complete|completed");
+    g_PartyDoneSkippedLines = ReadPipeList("OllamaChat.Party.DoneSkippedLines",
+        "thats us done here, gg all|right, thats {dungeon} done. gg everyone|and thats the run done, gg all|"
+        "thats it for {dungeon}, ty all|done here, gg|thats everything we were doing, gg all");
+    g_PartyDoneSkippedText = sConfigMgr->GetOption<std::string>("OllamaChat.Party.DoneSkippedText",
+        " They skipped {skipped} on purpose, so it was not a full clear: never call it one.");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v32: skipping a boss when asked in party {}.",
+             g_PartySkipEnable ? "on" : "off");
+}
+
 static void LoadNaturalChatV30Settings()
 {
     // --- what chat is really like ---------------------------------------------------------
@@ -4201,6 +4304,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV29Settings();
     LoadNaturalChatV30Settings();
     LoadNaturalChatV31Settings();
+    LoadNaturalChatV32Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

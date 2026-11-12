@@ -173,6 +173,64 @@ namespace TextRules
     // chat commands ("dc on", "dc pause").
     bool IsDungeonClearCommand(const std::string& cleanText);
 
+    // ---- skipping a boss -----------------------------------------------------
+
+    struct SkipRules
+    {
+        std::vector<std::vector<std::string>> skip;        // "skip": a boss, "the next boss", "it" or nothing after
+        std::vector<std::vector<std::string>> skipNamed;   // "leave", "dont kill": only with a boss's name
+        std::vector<std::vector<std::string>> skipTo;      // "skip to", "straight to": every boss before it
+        std::vector<std::vector<std::string>> unskip;      // "dont skip", "unskip"
+        std::vector<std::vector<std::string>> doIt;        // "lets do", "go back for": a skipped one back
+        std::vector<std::vector<std::string>> nextBoss;    // "the next boss", "him": the boss the run heads for
+        std::vector<std::vector<std::string>> nextAny;     // "it", "this one": whatever it heads for
+        std::vector<std::vector<std::string>> last;        // "the last boss", "the end"
+        std::vector<std::vector<std::string>> notBoss;     // "trash", "pull", "loot": not about a boss at all
+        std::vector<std::vector<std::string>> fillers;     // "the", "pls", "and", "for now"
+        std::vector<std::vector<std::string>> stops;       // "then", "because": the rest is about something else
+        std::vector<std::vector<std::string>> questions;   // "why", "did we", "worth": talk, not an ask
+        std::vector<std::vector<std::string>> negations;   // "cant", "not"
+        std::vector<std::vector<std::string>> titles;      // "lord", "the": words of a name that name nobody
+        uint32_t maxWords = 14;
+    };
+
+    enum class SkipKind : uint8_t
+    {
+        None,
+        Skip,     // "skip oggleflint", "skip the next boss", "skip it"
+        SkipTo,   // "skip to taragaman", "straight to the last boss": the bosses before it
+        Unskip,   // "dont skip jergosh", "unskip him"
+        Do        // "actually lets do jergosh": a skipped one back, or nothing at all
+    };
+
+    struct SkipAsk
+    {
+        SkipKind kind = SkipKind::None;
+        bool next = false;           // "skip", "skip it": what the run is heading for...
+        bool nextSaysBoss = false;   // ...said to be a boss: "him", "the next boss"
+        bool last = false;           // "the last boss", "the end"
+        std::vector<size_t> bosses;  // named ones, as indexes into the names given, in the order said
+    };
+
+    // A party line asking to skip a boss of the dungeon (`bossNames`): "skip
+    // the next boss", "can we skip oggleflint and jergosh", "skipp him";
+    // to skip to one, passing every boss before it ("skip to the last boss",
+    // "straight to taragaman"); or to take a skip back ("dont skip jergosh",
+    // "actually lets do jergosh"). The first sentence (up to a ?, ! or ;)
+    // that asks it is the one read. Names are read the way people type them:
+    // any word of one but its titles ("cobrahn" for Lord Cobrahn), typed long
+    // or short ("oglefint"), one slip off (two in a long name), the start of
+    // it ("taraga"), or split ("van cleef"). A named boss followed by "next"
+    // or "first" is where they want to go, not one to skip. Not an ask: a
+    // question ("why did we skip him", "are we skipping it?"), a negation
+    // ("we cant skip him"), a line about trash or loot ("skip this pull"),
+    // more than one boss by number ("skip the next 2"), or a word after
+    // "skip" that is no boss and no "it" ("skip everything"). "leave",
+    // "dont kill" and the like only count with a boss's name, "lets do" only
+    // with one; a bare "skip" is the boss the run heads for.
+    SkipAsk MatchSkipAsk(const std::string& cleanText, const SkipRules& rules,
+                         const std::vector<std::string>& bossNames);
+
     // ---- conjured food and water ---------------------------------------------
 
     enum ConjureKinds : uint8_t
