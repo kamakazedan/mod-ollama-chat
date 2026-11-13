@@ -2237,18 +2237,17 @@ static void LoadNaturalChatV10Settings()
     g_PartyReadyWindowSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.ReadyWindowSeconds", 180);
     g_PartyReadyTimeoutSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Party.ReadyTimeoutSeconds", 60);
     g_PartyReadyTimeoutSituation = sConfigMgr->GetOption<std::string>("OllamaChat.Party.ReadyTimeoutSituation",
-        "You asked whether everyone was ready a little while ago and nobody has said anything, but the whole group "
-        "is here and good to go, so you take that as a yes and start the run now. {~Say everyone looks ready and "
-        "you will take the lead|Tell them you are taking that as a yes and starting|Say you are leading off now|"
-        "Tell them you are starting, so to follow you}, in a few words of your own, whatever suits your chat "
-        "style.");
+        "You asked whether everyone was ready a little while ago and nobody has answered, but the whole group is here "
+        "and good to go, so you take the silence as a yes and start pulling now. {~Say you are taking the silence as a "
+        "yes and pulling|Say nobody said no, so you are going|Say everyone looks set, so lets go|Say you are pulling "
+        "now, so keep up}, in a few words of your own, whatever suits your chat style.");
     g_PartyReadyTimeoutWords = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(
         "OllamaChat.Party.ReadyTimeoutWords",
-        "lead|leading|start|starting|go|gogo|lets go|pull|pulling|move|moving|off we|here we go|follow|begin|"
-        "beginning|get going|getting going|on we|lets do this|lets do it|kick off|kicking off"));
+        "start|starting|go|gogo|going|lets go|pull|pulling|move|moving|off we|here we go|follow|keep up|get going|"
+        "getting going|on we|lets do this|lets do it|kick off|kicking off|heading in"));
     g_PartyReadyTimeoutLines = ReadPipeList("OllamaChat.Party.ReadyTimeoutLines",
-        "right, everyone looks ready, ill take the lead|ok, looks like everyones ready, lets go|"
-        "alright, ill take that as a yes, lets go|right, starting now, follow me|ok everyone looks good, ill lead off");
+        "ok, taking that as a yes, pulling|looks like everyones set, lets go|nobody said no, so im pulling|alright, "
+        "pulling now, keep up|ok lets get going then");
     g_PartyTogetherText = sConfigMgr->GetOption<std::string>("OllamaChat.Party.TogetherText",
         "You and everyone in this group are inside {dungeon} together, doing it as one group{tank}. You are part of "
         "this run: never talk about it as if they were going without you, and anything you ask about or bring up "

@@ -132,7 +132,7 @@ namespace
     {
         std::chrono::steady_clock::time_point at{};
         bool                                  spoken = false;   // a real player said something in the group since
-        std::chrono::steady_clock::time_point leadCalled{};     // the tank's "right, ill lead" went to be written
+        std::chrono::steady_clock::time_point leadCalled{};     // the tank's "ok, pulling" went to be written
     };
     std::unordered_map<uint32_t, ReadyAsk> g_readyAsked;
 
@@ -1942,7 +1942,7 @@ namespace
                      leader->GetMap() ? leader->GetMap()->GetMapName() : "a dungeon", leader->GetName());
     }
 
-    // "right, everyone looks ready, ill take the lead": in the tank's own chat
+    // "ok, taking that as a yes, pulling": in the tank's own chat
     // style and in words that say it is starting, or else stock ones
     // (Party.ReadyTimeoutLines). The run starts once the line is out
     // (PartyCmd_NoteLeadOffCalled).
@@ -2134,7 +2134,7 @@ void PartyCmd_Update(uint32_t diff)
     for (auto it = g_breaks.begin(); it != g_breaks.end();)
         it = (now - it->second.startedAt > std::chrono::minutes(g_PartyBreakEndMaxMinutes + 1)) ? g_breaks.erase(it)
                                                                                                  : std::next(it);
-    // Ready checks long asked -- but not one whose "ill take the lead" is on
+    // Ready checks long asked -- but not one whose "ok, pulling" is on
     // its way: the run starts when that is out.
     for (auto it = g_readyAsked.begin(); it != g_readyAsked.end();)
     {

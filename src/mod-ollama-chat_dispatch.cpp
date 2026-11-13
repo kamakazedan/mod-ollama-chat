@@ -521,7 +521,7 @@ namespace
         if (c.request.breakEndCall && !PartyCmd_BreakEndStillDue(bot))
             return;
 
-        // "right, ill take the lead": moot once somebody has said anything.
+        // "ok, taking that as a yes, pulling": moot once somebody has said anything.
         if (c.request.leadOffCall && !PartyCmd_LeadOffStillDue(bot))
             return;
 
@@ -988,7 +988,7 @@ namespace
             PartyCmd_NoteDoneCalled(bot);
         if (c.request.breakEndCall)   // "right, lets go": off they go
             PartyCmd_NoteBreakEndCalled(bot);
-        if (c.request.leadOffCall)    // "everyone looks ready, ill lead": off they go
+        if (c.request.leadOffCall)    // "looks like everyones set, lets go": off they go
             PartyCmd_NoteLeadOffCalled(bot);
         if (c.request.progressKey)
             Progress_NoteDelivered(c.request.progressKey);

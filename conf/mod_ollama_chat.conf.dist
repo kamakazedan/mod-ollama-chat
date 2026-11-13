@@ -2987,8 +2987,8 @@ OllamaChat.Party.ReadyWindowSeconds = 180
 #        and in this copy of the dungeon, and the rest as at the end of a rest
 #        (BreakEnd*: alive, out of combat, real players within
 #        PartyCommands.MaxDistance of the tank and not AFK, health and mana
-#        back) -- it says so in party, in its own chat style ("right everyone
-#        looks ready, im taking the lead"), and starts the run. Anything a
+#        back) -- it says so in party, in its own chat style ("ok, taking
+#        that as a yes, pulling"), and starts the run. Anything a
 #        real player says in party after the ask, whatever it is, leaves the
 #        start to them: "ready", or a yes, starts it as always. Only while
 #        ReadyWindowSeconds lasts, and only with a bot leading the run.
@@ -3007,10 +3007,12 @@ OllamaChat.Party.ReadyTimeoutSeconds = 60
 #        goes out instead, in the tank's chat style. The run starts once the
 #        line is out (20 seconds later anyway if it never gets out), and a
 #        line still being written when somebody says something is dropped.
+#        "Lead" is not one of the words: "right then leading off now" is not
+#        how a tank says it, so a line like that gets a typed one instead.
 #        Default: (below)
-OllamaChat.Party.ReadyTimeoutSituation = "You asked whether everyone was ready a little while ago and nobody has said anything, but the whole group is here and good to go, so you take that as a yes and start the run now. {~Say everyone looks ready and you will take the lead|Tell them you are taking that as a yes and starting|Say you are leading off now|Tell them you are starting, so to follow you}, in a few words of your own, whatever suits your chat style."
-OllamaChat.Party.ReadyTimeoutWords = "lead|leading|start|starting|go|gogo|lets go|pull|pulling|move|moving|off we|here we go|follow|begin|beginning|get going|getting going|on we|lets do this|lets do it|kick off|kicking off"
-OllamaChat.Party.ReadyTimeoutLines = "right, everyone looks ready, ill take the lead|ok, looks like everyones ready, lets go|alright, ill take that as a yes, lets go|right, starting now, follow me|ok everyone looks good, ill lead off"
+OllamaChat.Party.ReadyTimeoutSituation = "You asked whether everyone was ready a little while ago and nobody has answered, but the whole group is here and good to go, so you take the silence as a yes and start pulling now. {~Say you are taking the silence as a yes and pulling|Say nobody said no, so you are going|Say everyone looks set, so lets go|Say you are pulling now, so keep up}, in a few words of your own, whatever suits your chat style."
+OllamaChat.Party.ReadyTimeoutWords = "start|starting|go|gogo|going|lets go|pull|pulling|move|moving|off we|here we go|follow|keep up|get going|getting going|on we|lets do this|lets do it|kick off|kicking off|heading in"
+OllamaChat.Party.ReadyTimeoutLines = "ok, taking that as a yes, pulling|looks like everyones set, lets go|nobody said no, so im pulling|alright, pulling now, keep up|ok lets get going then"
 
 #    OllamaChat.Party.TogetherText
 #        Added to every party and raid prompt inside a dungeon or raid: the

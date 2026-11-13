@@ -107,8 +107,8 @@ void PartyCmd_NoteBreakEndCalled(Player* bot);
 
 // Nobody has said anything in party for Party.ReadyTimeoutSeconds after the
 // tank's "everyone ready?", and the whole group is here: the tank takes it
-// they are ready, says so in its own chat style ("right everyone looks ready,
-// ill take the lead") and starts the run.
+// they are ready, says so in its own chat style ("ok, taking that as a yes,
+// pulling") and starts the run.
 //
 // Before that line is delivered: is it still due? Not once someone has said
 // something, or the run has started some other way, while it was written.
