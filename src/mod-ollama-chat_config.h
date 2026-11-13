@@ -128,6 +128,11 @@ extern std::string g_ChatExtraInfoTemplate;
 // Personality and Prompt Data
 // --------------------------------------------
 extern std::unordered_map<uint64_t, std::string> g_BotPersonalityList;
+// Guards g_BotPersonalityList: a bot emoted at answers from the map thread the
+// emote came in on (ChatOnEmote), and several map threads run at once.
+extern std::mutex g_BotPersonalityMutex;
+// mod_ollama_chat_personality is there to save assignments in (LoadBotPersonalityList).
+extern bool g_PersonalityTableExists;
 extern std::unordered_map<std::string, std::string> g_PersonalityPrompts;
 extern std::vector<std::string> g_PersonalityKeys;
 extern std::vector<std::string> g_PersonalityKeysRandomOnly; // Personalities that can be randomly assigned

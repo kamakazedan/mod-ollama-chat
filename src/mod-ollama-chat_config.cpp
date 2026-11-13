@@ -959,6 +959,8 @@ std::string g_ChatExtraInfoTemplate;
 // Personality and Prompt Data
 // --------------------------------------------
 std::unordered_map<uint64_t, std::string> g_BotPersonalityList;
+std::mutex g_BotPersonalityMutex;
+bool g_PersonalityTableExists = false;
 std::unordered_map<std::string, std::string> g_PersonalityPrompts;
 std::vector<std::string> g_PersonalityKeys;
 std::vector<std::string> g_PersonalityKeysRandomOnly;
@@ -1152,6 +1154,8 @@ void LoadBotPersonalityList()
 {    
     // Let's make sure our user has sourced the required sql file to add the new table
     QueryResult tableExists = CharacterDatabase.Query("SELECT * FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'mod_ollama_chat_personality' LIMIT 1");
+    // Asked once here, not again for every bot given a personality.
+    g_PersonalityTableExists = bool(tableExists);
     if (!tableExists)
     {
         LOG_ERROR("module.ollamachat", "[Ollama Chat] Please source the required database table first");
@@ -1174,6 +1178,7 @@ void LoadBotPersonalityList()
         LOG_INFO("module.ollamachat", "[Ollama Chat] Fetching Bot Personality List into array");
     }
 
+    std::lock_guard<std::mutex> lock(g_BotPersonalityMutex);
     do
     {
         uint64_t personalityBotGUID = result->Fetch()[0].Get<uint64_t>();

@@ -14,7 +14,7 @@ std::string GetBotPersonality(Player* bot);
 
 // Given a personality key, returns the prompt addition string from config.
 // Falls back to a default if not found.
-std::string GetPersonalityPromptAddition(const std::string& type);
+std::string GetPersonalityPromptAddition(const std::string& personality);
 
 // Set a bot's personality manually (saves to database)
 bool SetBotPersonality(Player* bot, const std::string& personality);

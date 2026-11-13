@@ -17,64 +17,46 @@ std::string Personality_StyleCanned(Player* bot, const std::string& line)
     return it == g_PersonalityCannedStyles.end() ? line : TextRules::StyleCanned(line, it->second);
 }
 
-// Internal personality map
+// Internal personality map. Any thread: the map is behind a lock, since a bot
+// emoted at answers from the emote's map thread.
 std::string GetBotPersonality(Player* bot)
 {
-    uint64_t botGuid = bot->GetGUID().GetRawValue();
+    // RP personalities off: everyone is "default". The assignments are kept,
+    // not overwritten, for when they are switched back on.
+    if (!g_EnableRPPersonalities)
+        return "default";
 
-    // If personality already assigned, return it (but only if RP personalities are enabled)
+    const uint64_t botGuid = bot->GetGUID().GetRawValue();
+
+    std::unique_lock<std::mutex> lock(g_BotPersonalityMutex);
+
+    // Already assigned: earlier this run, or saved in the table and loaded.
     auto it = g_BotPersonalityList.find(botGuid);
     if (it != g_BotPersonalityList.end())
     {
-        // If RP personalities are disabled, reset to default
-        if (!g_EnableRPPersonalities)
-        {
-            g_BotPersonalityList[botGuid] = "default";
-            return "default";
-        }
+        std::string found = it->second;
+        lock.unlock();
         if(g_DebugEnabled)
         {
-            LOG_INFO("module.ollamachat", "[Ollama Chat] Using existing personality '{}' for bot {}", it->second, bot->GetName());
+            LOG_INFO("module.ollamachat", "[Ollama Chat] Using existing personality '{}' for bot {}", found, bot->GetName());
         }
-        return it->second;
+        return found;
     }
 
-    // RP personalities disabled or config not loaded
-    if (!g_EnableRPPersonalities || g_PersonalityKeysRandomOnly.empty())
-    {
-        g_BotPersonalityList[botGuid] = "default";
+    // None that may be handed out at random (config not loaded): "default",
+    // and nothing kept, so a reload that adds some gives this bot one.
+    if (g_PersonalityKeysRandomOnly.empty())
         return "default";
-    }
-
-    // Try to load from database if you have persistence
-    if (g_BotPersonalityList.find(botGuid) != g_BotPersonalityList.end())
-    {
-        // DB stores string keys now
-        std::string dbPersonality = g_BotPersonalityList[botGuid];
-
-        if (dbPersonality.empty())
-        {
-            dbPersonality = "default";
-        }
-
-        g_BotPersonalityList[botGuid] = dbPersonality;
-
-        if(g_DebugEnabled)
-        {
-            LOG_INFO("module.ollamachat", "[Ollama Chat] Using database personality '{}' for bot {}", dbPersonality, bot->GetName());
-        }
-        return dbPersonality;
-    }
 
     // Otherwise, assign randomly from config (only from non-manual personalities)
-    uint32 newIdx = urand(0, g_PersonalityKeysRandomOnly.size() - 1);
+    uint32 newIdx = urand(0, uint32(g_PersonalityKeysRandomOnly.size() - 1));
     std::string chosenPersonality = g_PersonalityKeysRandomOnly[newIdx];
     g_BotPersonalityList[botGuid] = chosenPersonality;
+    lock.unlock();
 
-    // Save to database if schema supports string (recommend TEXT or VARCHAR column for personality)
-    QueryResult tableExists = CharacterDatabase.Query(
-        "SELECT * FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'mod_ollama_chat_personality' LIMIT 1;");
-    if (!tableExists)
+    // Saved for next time, when the table is there (asked once, at load: this
+    // used to ask the database again, and wait for it, for every new bot).
+    if (!g_PersonalityTableExists)
     {
         LOG_INFO("module.ollamachat", "[Ollama Chat] Please source the required database table first");
     }
@@ -113,7 +95,10 @@ bool SetBotPersonality(Player* bot, const std::string& personality)
     }
     
     // Update in memory
-    g_BotPersonalityList[botGuid] = personality;
+    {
+        std::lock_guard<std::mutex> lock(g_BotPersonalityMutex);
+        g_BotPersonalityList[botGuid] = personality;
+    }
     
     // Update in database
     CharacterDatabase.Execute("REPLACE INTO mod_ollama_chat_personality (guid, personality) VALUES ({}, '{}')", 
@@ -141,7 +126,10 @@ bool PersonalityExists(const std::string& personality)
 
 void ClearAllBotPersonalities()
 {
-    g_BotPersonalityList.clear();
+    {
+        std::lock_guard<std::mutex> lock(g_BotPersonalityMutex);
+        g_BotPersonalityList.clear();
+    }
     if(g_DebugEnabled)
     {
         LOG_INFO("module.ollamachat", "[Ollama Chat] Cleared all bot personality assignments due to RP personalities being disabled");
