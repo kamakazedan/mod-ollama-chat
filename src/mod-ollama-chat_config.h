@@ -723,6 +723,10 @@ extern uint32_t    g_EmoticonScopeLines;
 // Dungeon start: the tank asks if everyone is ready; a plain yes starts it
 extern std::vector<std::vector<std::string>> g_PartyReadyYesPhrases;
 extern uint32_t    g_PartyReadyWindowSeconds;
+extern uint32_t    g_PartyReadyTimeoutSeconds;       // nobody answers the ready check: the tank leads off
+extern std::string g_PartyReadyTimeoutSituation;     // its "right, ill take the lead", for Party.AnnouncePrompt
+extern std::vector<std::vector<std::string>> g_PartyReadyTimeoutWords;   // the line has one of these, or...
+extern std::vector<std::string> g_PartyReadyTimeoutLines;                // ...one of these goes out instead
 extern std::string g_PartyTogetherText;
 extern std::string g_JoinedLfgPrompt;
 

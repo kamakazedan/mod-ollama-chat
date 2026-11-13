@@ -105,6 +105,18 @@ bool PartyCmd_BreakEndStillDue(Player* bot);
 // ...and once it is out: the run carries on.
 void PartyCmd_NoteBreakEndCalled(Player* bot);
 
+// Nobody has said anything in party for Party.ReadyTimeoutSeconds after the
+// tank's "everyone ready?", and the whole group is here: the tank takes it
+// they are ready, says so in its own chat style ("right everyone looks ready,
+// ill take the lead") and starts the run.
+//
+// Before that line is delivered: is it still due? Not once someone has said
+// something, or the run has started some other way, while it was written.
+bool PartyCmd_LeadOffStillDue(Player* bot);
+
+// ...and once it is out: the run starts.
+void PartyCmd_NoteLeadOffCalled(Player* bot);
+
 // A real player's party or raid line once a run is over. "wait", "can you help
 // me with..." keeps the bots that were about to leave (Party.DoneStayWords);
 // after that, "ok bye" lets them go after all (Party.DoneGoWords). Only looks:
@@ -160,6 +172,7 @@ public:
 struct PartyCmdStats
 {
     uint64_t started = 0;
+    uint64_t ledOff  = 0;   // ...of them by the tank, when nobody answered its ready check
     uint64_t paused  = 0;
     uint64_t breaks  = 0;   // ...of them rests that end by themselves
     uint64_t breaksEnded = 0;   // rests the tank called over itself

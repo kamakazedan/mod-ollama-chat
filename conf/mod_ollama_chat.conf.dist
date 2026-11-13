@@ -2974,6 +2974,38 @@ OllamaChat.Party.GreetSituation = "The group has just come in and nobody has pul
 OllamaChat.Party.ReadyYesPhrases = "yes|yep|yup|yeah|ye|ya|yea|y|sure|aye|go|gogo|go go|of course|ofc|sure thing|why not|mhm|yes please|do it|lets do it|go for it|go ahead|go on|go on then|whenever|when you are|ready when you are|yes im ready|yeah im ready|yep im ready|born ready|yes lets go|yeah lets go|yep lets go|lets"
 OllamaChat.Party.ReadyWindowSeconds = 180
 
+#    OllamaChat.Party.ReadyTimeoutSeconds
+#        When nobody says anything in party for this many seconds after the
+#        tank's are-you-ready (GreetSituation), the tank takes it they are:
+#        once the whole group is here and ready to go -- every member online
+#        and in this copy of the dungeon, and the rest as at the end of a rest
+#        (BreakEnd*: alive, out of combat, real players within
+#        PartyCommands.MaxDistance of the tank and not AFK, health and mana
+#        back) -- it says so in party, in its own chat style ("right everyone
+#        looks ready, im taking the lead"), and starts the run. Anything a
+#        real player says in party after the ask, whatever it is, leaves the
+#        start to them: "ready", or a yes, starts it as always. Only while
+#        ReadyWindowSeconds lasts, and only with a bot leading the run.
+#        0 disables: the run waits for someone to say ready, as before.
+#        Default: 60
+OllamaChat.Party.ReadyTimeoutSeconds = 60
+
+#    OllamaChat.Party.ReadyTimeoutSituation
+#    OllamaChat.Party.ReadyTimeoutWords
+#    OllamaChat.Party.ReadyTimeoutLines
+#        The tank's line as it takes the lead, the way BreakEnd* has its: it
+#        goes into AnnouncePrompt as {situation}, and {~a|b} picks one at
+#        random. The line has to make it plain the run is starting, so it
+#        must have one of ReadyTimeoutWords in it; when it does not -- or the
+#        model passes, fails or cannot be reached -- one of ReadyTimeoutLines
+#        goes out instead, in the tank's chat style. The run starts once the
+#        line is out (20 seconds later anyway if it never gets out), and a
+#        line still being written when somebody says something is dropped.
+#        Default: (below)
+OllamaChat.Party.ReadyTimeoutSituation = "You asked whether everyone was ready a little while ago and nobody has said anything, but the whole group is here and good to go, so you take that as a yes and start the run now. {~Say everyone looks ready and you will take the lead|Tell them you are taking that as a yes and starting|Say you are leading off now|Tell them you are starting, so to follow you}, in a few words of your own, whatever suits your chat style."
+OllamaChat.Party.ReadyTimeoutWords = "lead|leading|start|starting|go|gogo|lets go|pull|pulling|move|moving|off we|here we go|follow|begin|beginning|get going|getting going|on we|lets do this|lets do it|kick off|kicking off"
+OllamaChat.Party.ReadyTimeoutLines = "right, everyone looks ready, ill take the lead|ok, looks like everyones ready, lets go|alright, ill take that as a yes, lets go|right, starting now, follow me|ok everyone looks good, ill lead off"
+
 #    OllamaChat.Party.TogetherText
 #        Added to every party and raid prompt inside a dungeon or raid: the
 #        bot and its group are doing this place together, so nobody says

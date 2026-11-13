@@ -126,8 +126,15 @@ namespace
 
     // When the tank last asked the group whether it is ready (the greeting as
     // they come in), by group: for a few minutes after, a plain "yes" or
-    // "sure" answers it and starts the run.
-    std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> g_readyAsked;
+    // "sure" answers it and starts the run. With nobody saying anything at
+    // all, the tank takes it they are ready (Party.ReadyTimeout*).
+    struct ReadyAsk
+    {
+        std::chrono::steady_clock::time_point at{};
+        bool                                  spoken = false;   // a real player said something in the group since
+        std::chrono::steady_clock::time_point leadCalled{};     // the tank's "right, ill lead" went to be written
+    };
+    std::unordered_map<uint32_t, ReadyAsk> g_readyAsked;
 
     bool AnswersReadyAsk(Player* player, const std::string& clean)
     {
@@ -135,7 +142,7 @@ namespace
             return false;
         auto it = g_readyAsked.find(GroupKey(player));
         if (it == g_readyAsked.end() ||
-            std::chrono::steady_clock::now() - it->second > std::chrono::seconds(g_PartyReadyWindowSeconds))
+            std::chrono::steady_clock::now() - it->second.at > std::chrono::seconds(g_PartyReadyWindowSeconds))
             return false;
 
         // "yep Gruk": the names in the group are not part of the answer.
@@ -1283,7 +1290,7 @@ void PartyCmd_NoteReadyAsked(Player* bot)
         return;
     if (g_readyAsked.size() > 500)
         g_readyAsked.clear();
-    g_readyAsked[key] = std::chrono::steady_clock::now();
+    g_readyAsked[key] = ReadyAsk{ std::chrono::steady_clock::now() };
 #else
     (void)bot;
 #endif
@@ -1447,6 +1454,7 @@ namespace
         std::string                           fallback;  // ...or this goes out instead
         bool                                  doneCall     = false;
         bool                                  breakEndCall = false;
+        bool                                  leadOffCall  = false;
     };
 
     // The tank says something to the whole group without being asked, in its
@@ -1505,6 +1513,7 @@ namespace
             request.fallbackText = must->fallback;
             request.doneCall     = must->doneCall;
             request.breakEndCall = must->breakEndCall;
+            request.leadOffCall  = must->leadOffCall;
         }
         return OllamaDispatch_Submit(std::move(request));
     }
@@ -1879,6 +1888,106 @@ namespace
         if (!SubmitBreakEndLine(tank))
             EndBreak(tank, key);   // nothing to say it with: it just goes
     }
+
+    // ---- nobody answers "everyone ready?" -------------------------------------------
+
+    // The whole group is here and ready to go: every member online and in this
+    // copy of the dungeon, and the rest as at the end of a rest (GroupRested:
+    // alive, out of combat, real players near the tank and not AFK, health and
+    // mana back).
+    bool EveryoneHere(Player* tank, Group* group)
+    {
+        Map* map = tank->GetMap();
+        uint32_t here = 0;
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            if (Player* member = ref->GetSource())
+                if (member->IsInWorld() && member->GetMap() == map)
+                    ++here;
+        return here == group->GetMembersCount() && GroupRested(tank, group);
+    }
+
+    // The tank leads off: the run starts as if a real player in the group had
+    // said ready.
+    void LeadOff(Player* tank, uint32_t key)
+    {
+        g_readyAsked.erase(key);
+        Group* group = tank ? tank->GetGroup() : nullptr;
+        if (!group)
+            return;
+        Player* issuer = nullptr;
+        for (GroupReference* ref = group->GetFirstMember(); ref && !issuer; ref = ref->next())
+            if (Player* member = ref->GetSource())
+                if (member->IsInWorld() && !OllamaIsBotPlayer(member))
+                    issuer = member;
+        if (!issuer || DcLeaderSignal::FindRunOwner(issuer))
+            return;   // nobody to give the word, or going already
+        Player* leader = DcLeaderSignal::FindLeaderTank(issuer);
+        if (!leader || !leader->IsInWorld())
+            return;
+
+        Dispatch(issuer, leader, "dc on", std::string());
+        if (!DcLeaderSignal::FindRunOwner(issuer))
+        {
+            ++g_stats.refused;   // dungeon clear whispered why
+            return;
+        }
+        ++g_stats.started;
+        ++g_stats.ledOff;
+        ReleaseStaysFor(issuer);
+#if OLLAMA_CHAT_DC_SKIPS
+        ApplyPendingSkips(issuer, leader);   // "skip the first boss", said before
+#endif
+        if (g_DebugEnabled)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] Nobody answered the ready check in {}: {} leads off.",
+                     leader->GetMap() ? leader->GetMap()->GetMapName() : "a dungeon", leader->GetName());
+    }
+
+    // "right, everyone looks ready, ill take the lead": in the tank's own chat
+    // style and in words that say it is starting, or else stock ones
+    // (Party.ReadyTimeoutLines). The run starts once the line is out
+    // (PartyCmd_NoteLeadOffCalled).
+    bool SubmitLeadOffLine(Player* tank)
+    {
+        if (g_PartyReadyTimeoutSituation.empty())
+            return false;
+        MustSay must;
+        must.phrases     = g_PartyReadyTimeoutWords;
+        must.leadOffCall = true;
+        if (!g_PartyReadyTimeoutLines.empty())
+            must.fallback = Personality_StyleCanned(
+                tank, g_PartyReadyTimeoutLines[Between(0, uint32_t(g_PartyReadyTimeoutLines.size() - 1))]);
+        return SubmitTankLine(tank, TextRules::ExpandChoices(g_PartyReadyTimeoutSituation, WrapRng()), false, &must);
+    }
+
+    // The tank's are-you-ready, every couple of seconds until the run starts:
+    // nobody has said anything for Party.ReadyTimeoutSeconds and the whole
+    // group is here, so it takes that as a yes.
+    void WatchReadyAsk(Player* tank, Group* group, uint32_t key, WatchClock::time_point now)
+    {
+        if (g_PartyReadyTimeoutSeconds == 0)
+            return;
+        auto it = g_readyAsked.find(key);
+        if (it == g_readyAsked.end())
+            return;
+        ReadyAsk& ask = it->second;
+        if (ask.spoken)
+            return;   // someone said something: when to start is theirs to say
+        if (ask.leadCalled != WatchClock::time_point{})
+        {
+            // The line is on its way, and the run starts when it is out. One
+            // that never makes it out does not leave them standing there.
+            if (now - ask.leadCalled > std::chrono::seconds(20))
+                LeadOff(tank, key);
+            return;
+        }
+        if (now - ask.at < std::chrono::seconds(g_PartyReadyTimeoutSeconds) || !tank->IsAlive() ||
+            !EveryoneHere(tank, group))
+            return;
+
+        ask.leadCalled = now;
+        if (!SubmitLeadOffLine(tank))
+            LeadOff(tank, key);   // nothing to say it with: it just goes
+    }
 }
 #endif
 
@@ -1979,6 +2088,10 @@ void PartyCmd_Update(uint32_t diff)
                     w.greeted = true;
             }
         }
+        // Asked, and nobody has said a word since while everyone is here: the
+        // tank takes it they are ready, says so, and leads off.
+        else if (!owner && killed == 0)
+            WatchReadyAsk(tank, group, key, now);
 
         // Every boss down: the tank says they are done -- plainly -- and the
         // rest of the end of a run follows from that (UpdateWrapups). A call
@@ -2021,9 +2134,16 @@ void PartyCmd_Update(uint32_t diff)
     for (auto it = g_breaks.begin(); it != g_breaks.end();)
         it = (now - it->second.startedAt > std::chrono::minutes(g_PartyBreakEndMaxMinutes + 1)) ? g_breaks.erase(it)
                                                                                                  : std::next(it);
+    // Ready checks long asked -- but not one whose "ill take the lead" is on
+    // its way: the run starts when that is out.
     for (auto it = g_readyAsked.begin(); it != g_readyAsked.end();)
-        it = (now - it->second > std::chrono::seconds(g_PartyReadyWindowSeconds)) ? g_readyAsked.erase(it)
-                                                                                  : std::next(it);
+    {
+        const ReadyAsk& ask = it->second;
+        const bool leading =
+            ask.leadCalled != WatchClock::time_point{} && now - ask.leadCalled < std::chrono::seconds(30);
+        it = (now - ask.at > std::chrono::seconds(g_PartyReadyWindowSeconds) && !leading) ? g_readyAsked.erase(it)
+                                                                                          : std::next(it);
+    }
 #if OLLAMA_CHAT_DC_SKIPS
     // Skips for a run that never started, and the last skips, long gone.
     for (auto* skips : { &g_pendingSkips, &g_lastSkips })
@@ -2059,6 +2179,30 @@ bool PartyCmd_BreakEndStillDue(Player* bot)
 #endif
 }
 
+bool PartyCmd_LeadOffStillDue(Player* bot)
+{
+#if OLLAMA_CHAT_DC_RUN_STATE
+    auto it = g_readyAsked.find(GroupKey(bot));
+    return it != g_readyAsked.end() && !it->second.spoken &&
+           it->second.leadCalled != std::chrono::steady_clock::time_point{} && !DcLeaderSignal::FindRunOwner(bot);
+#else
+    (void)bot;
+    return false;
+#endif
+}
+
+void PartyCmd_NoteLeadOffCalled(Player* bot)
+{
+#if OLLAMA_CHAT_DC_RUN_STATE
+    const uint32_t key = GroupKey(bot);
+    auto it = g_readyAsked.find(key);
+    if (it != g_readyAsked.end() && !it->second.spoken)
+        LeadOff(bot, key);
+#else
+    (void)bot;
+#endif
+}
+
 void PartyCmd_NoteBreakEndCalled(Player* bot)
 {
 #if OLLAMA_CHAT_DC_RUN_STATE
@@ -2073,7 +2217,13 @@ void PartyCmd_NoteBreakEndCalled(Player* bot)
 void PartyCmd_NoteHumanPartyLine(Player* player, const std::string& msg, ChatChannelSourceLocal source)
 {
 #if OLLAMA_CHAT_DC_RUN_STATE
-    if (g_wrapups.empty() || !player || (source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL))
+    if (!player || (source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL))
+        return;
+    // Whatever they said after the tank's "everyone ready?", when to start is
+    // theirs to say now: the tank does not take the quiet for a yes.
+    if (auto ask = g_readyAsked.find(GroupKey(player)); ask != g_readyAsked.end())
+        ask->second.spoken = true;
+    if (g_wrapups.empty())
         return;
     Group* group = player->GetGroup();
     auto it = group ? g_wrapups.find(group->GetGUID().GetCounter()) : g_wrapups.end();

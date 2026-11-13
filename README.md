@@ -798,6 +798,12 @@ starts a run, and so does "lets go" however it's typed: "lego", "lesgo",
 "letsgoooo", "leeggoooo". A word typed long for effect counts as itself, so
 "readyyy" is "ready".
 
+If nobody answers for a minute and the whole group is in, alive and topped
+up, the tank takes that as a yes: it says so in its own way ("right everyone
+looks ready, im taking the lead") and starts. Anything said in party after it
+asked, "brb" or "one sec" or just chat, leaves the start to you
+(`Party.ReadyTimeout*`).
+
 Call a mana break ("mb", "need mana", "drink", "lets eat") and the tank stops
 with a quick "np" or "drink up", then keeps an eye on the bars, like a real
 tank. When everyone has their health and mana back, it says it's carrying on

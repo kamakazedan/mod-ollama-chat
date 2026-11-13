@@ -170,6 +170,12 @@ struct OllamaChatRequest
     // once it is out, the run carries on.
     bool breakEndCall = false;
 
+    // The tank taking the lead when nobody answered its "everyone ready?"
+    // (mod-ollama-chat_partycmd): dropped if someone said something or the
+    // run started some other way while it was written, and once it is out,
+    // the run starts.
+    bool leadOffCall = false;
+
     // A line of a /say exchange between bots (mod-ollama-chat_mingle): a
     // conversation running nearby does not take it for a turn of its own.
     bool mingle = false;

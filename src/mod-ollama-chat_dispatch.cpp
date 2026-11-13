@@ -521,6 +521,10 @@ namespace
         if (c.request.breakEndCall && !PartyCmd_BreakEndStillDue(bot))
             return;
 
+        // "right, ill take the lead": moot once somebody has said anything.
+        if (c.request.leadOffCall && !PartyCmd_LeadOffStillDue(bot))
+            return;
+
         // An unprompted line written before a real player said something
         // there: it would talk straight over them, about something else.
         if (c.request.writtenAtSeq &&
@@ -984,6 +988,8 @@ namespace
             PartyCmd_NoteDoneCalled(bot);
         if (c.request.breakEndCall)   // "right, lets go": off they go
             PartyCmd_NoteBreakEndCalled(bot);
+        if (c.request.leadOffCall)    // "everyone looks ready, ill lead": off they go
+            PartyCmd_NoteLeadOffCalled(bot);
         if (c.request.progressKey)
             Progress_NoteDelivered(c.request.progressKey);
         if (c.request.noSelfDing)   // a "gz": the one it is for hears it, and thanks once for the lot
