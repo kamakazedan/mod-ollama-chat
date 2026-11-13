@@ -385,6 +385,8 @@ extern uint32_t    g_CityConversationBoost;
 extern bool        g_ConversationEnable;
 extern uint32_t    g_ConversationMinMinutes;
 extern uint32_t    g_ConversationMaxMinutes;
+extern uint32_t    g_ConversationMinLines;    // bot lines before it winds down, rolled at the start (0: by time only)
+extern uint32_t    g_ConversationMaxLines;
 extern uint32_t    g_ConversationGapMinSeconds;
 extern uint32_t    g_ConversationGapMaxSeconds;
 extern uint32_t    g_ConversationLullChance;
@@ -545,6 +547,9 @@ void LoadEmoteStyles();
 // --------------------------------------------
 // Replies. World thread only.
 extern std::vector<std::vector<std::string>> g_ResponseDropVocatives;   // "kid", where it addresses someone
+extern std::vector<std::vector<std::string>> g_ResponsePetNames;        // "sugar", "darling": one style's
+extern std::vector<std::string> g_ResponsePetNameStyles;                // ...that style: NAT_BUTTERFLY
+extern uint32_t    g_ResponsePetNameEveryLines;                         // ...at most one in this many of its lines
 extern std::vector<TextRules::PhraseSwap> g_ResponseSwaps;              // "fair point" -> "fair"
 extern std::vector<std::vector<std::string>> g_ResponseInsultWords;     // "knob", "muppet": banter or heat only
 extern std::vector<std::vector<std::string>> g_ResponseProvokeWords;    // what makes one fair: "stfu", "ur mum"
@@ -724,7 +729,7 @@ extern uint32_t    g_EmoticonScopeLines;
 extern std::vector<std::vector<std::string>> g_PartyReadyYesPhrases;
 extern uint32_t    g_PartyReadyWindowSeconds;
 extern uint32_t    g_PartyReadyTimeoutSeconds;       // nobody answers the ready check: the tank leads off
-extern std::string g_PartyReadyTimeoutSituation;     // its "ok, taking that as a yes, pulling", for Party.AnnouncePrompt
+extern std::string g_PartyReadyTimeoutSituation;     // its "ok, taking that as a yes, pulling", for AnnouncePrompt
 extern std::vector<std::vector<std::string>> g_PartyReadyTimeoutWords;   // the line has one of these, or...
 extern std::vector<std::string> g_PartyReadyTimeoutLines;                // ...one of these goes out instead
 extern std::string g_PartyTogetherText;

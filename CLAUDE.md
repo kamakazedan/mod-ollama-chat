@@ -274,7 +274,12 @@ never mingles.
 Every line a bot says is in its own style. The model's lines are, through its
 personality prompt; a typed (canned) line goes through
 `Personality_StyleCanned(bot, line)` (`OllamaChat.Personality.CannedStyles`),
-and a new place that says one must too.
+and a new place that says one must too. And only its own: a model copies the
+chat above it, so one bot calling people "sugar" had half of General ending
+every line with it. Pet names are their style's (`Response.PetNameStyles`,
+once in a few lines) and taken out of everyone else's at delivery, and a
+conversation winds down after a handful of lines (`Conversation.MaxLines`)
+before it turns into one long running joke.
 
 Every bot knows its side. `Outlook_ForBot` says which side it plays and its
 own side's cities, and, standing in one of them, that it is safe and the

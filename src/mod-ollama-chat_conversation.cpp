@@ -74,6 +74,11 @@ namespace
         bool     winding  = false;
         uint32_t windLeft = 0;
 
+        // Bot lines said in it, and how many it has before it winds down
+        // (Conversation.MinLines..MaxLines; 0: only its time).
+        uint32_t botLines   = 0;
+        uint32_t lineBudget = 0;
+
         uint64_t turnPlanId = 0;
         uint64_t turnGuid   = 0;
         bool     turnLanded = false;
@@ -246,6 +251,9 @@ namespace
         c.byPlayer    = byPlayer;
         c.created     = now;
         c.endAt       = now + PlannedLength();
+        c.lineBudget  = g_ConversationMaxLines ? std::max<uint32_t>(1, RandomBetween(g_ConversationMinLines,
+                                                                                    g_ConversationMaxLines))
+                                               : 0;
         c.nextTurnAt  = now + std::chrono::seconds(2);
         Recount();
 
@@ -772,6 +780,7 @@ void Conversation_NoteLine(const std::string& key, Player* speaker, bool isBot,
 
     if (isBot)
     {
+        ++c.botLines;
         Seat* s = FindSeat(c, guid);
         if (!s && AddSeat(c, speaker))
         {
@@ -798,6 +807,8 @@ void Conversation_NoteLine(const std::string& key, Player* speaker, bool isBot,
         const auto more = now + std::chrono::seconds(RandomBetween(90, 240));
         if (c.endAt < more)
             c.endAt = more;
+        if (c.lineBudget)
+            c.lineBudget = std::max(c.lineBudget, c.botLines + RandomBetween(3, 6));
         c.winding  = false;
         c.windLeft = 0;
     }
@@ -920,7 +931,9 @@ void Conversation_Update()
         if (now < c.nextTurnAt)
             continue;
 
-        if (!c.winding && now >= c.endAt)
+        // Its time is up, or it has said what a chat like it says: General
+        // between strangers is a handful of lines, not a running joke.
+        if (!c.winding && (now >= c.endAt || (c.lineBudget && c.botLines >= c.lineBudget)))
         {
             c.winding  = true;
             c.windLeft = RandomBetween(1, 2);

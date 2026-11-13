@@ -1448,6 +1448,24 @@ OllamaChat.Echo.CommonWords = "i|im|ive|ill|id|you|your|youre|ur|u|ya|the|a|an|t
 #        Default: "kid|kiddo"
 OllamaChat.Response.DropVocatives = "kid|kiddo"
 
+#    OllamaChat.Response.PetNames
+#    OllamaChat.Response.PetNameStyles
+#    OllamaChat.Response.PetNameEveryLines
+#        Pet names people get called ("sugar", "darling", "hun"), and the
+#        styles that call people them (personality keys, separated by |).
+#        One of those styles keeps one at most once in PetNameEveryLines of
+#        its lines; everyone else never says them. A model copies what is in
+#        the chat above it: one bot called people "sugar", and soon half of
+#        General was ending every line with it. Taken out the way
+#        DropVocatives are, only where it addresses someone ("the ah is a
+#        nightmare sugar" -> "the ah is a nightmare"); a reply that was
+#        nothing else is dropped. PetNames empty disables; PetNameEveryLines
+#        0 or 1 lets those styles use one every line.
+#        Default: (below), "NAT_BUTTERFLY", 4
+OllamaChat.Response.PetNames = "sugar|darling|dahling|darl|hun|hon|hunny|honey|sweetie|sweetheart|sweetcheeks|sugarplum|babe|babes|cutie|cupcake|doll|petal|treacle|buttercup|pumpkin|sunshine"
+OllamaChat.Response.PetNameStyles = "NAT_BUTTERFLY"
+OllamaChat.Response.PetNameEveryLines = 4
+
 #    OllamaChat.Response.Swaps
 #        Phrases people have stopped saying, and what they say now: a bot's
 #        line says the new words instead. Each entry is old=new, separated by
@@ -2088,6 +2106,17 @@ OllamaChat.Conversation.Enable = 1
 OllamaChat.Conversation.MinMinutes = 2
 OllamaChat.Conversation.MaxMinutes = 15
 
+#    OllamaChat.Conversation.MinLines
+#    OllamaChat.Conversation.MaxLines
+#        ...or once the bots in it have said this many lines, rolled when it
+#        starts, whichever comes first: chat between strangers in General is
+#        a handful of lines, and left to run on it turns into one long
+#        running joke. A real player joining in gives it a few more. MaxLines
+#        0 leaves it to the time alone.
+#        Default: 4, 10
+OllamaChat.Conversation.MinLines = 4
+OllamaChat.Conversation.MaxLines = 10
+
 #    OllamaChat.Conversation.GapMinSeconds
 #    OllamaChat.Conversation.GapMaxSeconds
 #        Pause after a line appears before the next person starts typing.
@@ -2242,7 +2271,7 @@ OllamaChat.Conversation.Pool.activity = "battlegrounds|fishing|dungeon runs|leve
 #        ("General chat"), {about} (" about <premise>" or nothing),
 #        {premise}, {last_speaker}, {pass_token}; HintObserve:
 #        {observation}.
-OllamaChat.Conversation.HintTurn = "You are chatting in {where} with {others} (see the chat above){about}. Carry it on as yourself with one short line: answer the last line, disagree, joke, ask something back, or take it somewhere related. Never make a point someone has already made, not even in other words: if you agree, add something new to it (a reason, a story, a joke) instead of saying it again. If you really have nothing to add, reply with just {pass_token}."
+OllamaChat.Conversation.HintTurn = "You are chatting in {where} with {others} (see the chat above){about}. Carry it on as yourself with one short line: answer the last line, disagree, joke, ask something back, or take it somewhere related. Never make a point someone has already made, not even in other words: if you agree, add something new to it (a reason, a story, a joke) instead of saying it again. Talk the way you always do, not the way they do: never pick up someone else's pet names or catchphrases. If the last few lines are all one running joke, leave it be and say something real instead. If you really have nothing to add, reply with just {pass_token}."
 OllamaChat.Conversation.HintJoin = "You have been reading the chat above in {where}{about}, and now you jump in with your own take, a joke or a question. One short line."
 OllamaChat.Conversation.HintWindDown = "This chat has been going on for a while and is winding down. Give your last word on it the way players do: a final opinion, a joke, or something like anyway, gtg, back to farming or cya. Do not start anything new."
 OllamaChat.Conversation.HintObserve = "Right now {observation}. You can mention that if it fits."

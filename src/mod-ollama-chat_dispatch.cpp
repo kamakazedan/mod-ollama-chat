@@ -112,6 +112,17 @@ namespace
 
     // When each bot last let an insult through (world thread, at delivery).
     std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> g_insultUse;
+
+    // A pet-name style's lines out since its last pet name, while fewer than
+    // Response.PetNameEveryLines (world thread, at delivery).
+    std::unordered_map<uint64_t, uint32_t> g_petNameGap;
+
+    bool PetNameStyle(Player* bot)
+    {
+        const std::string style = GetBotPersonality(bot);
+        return std::find(g_ResponsePetNameStyles.begin(), g_ResponsePetNameStyles.end(), style) !=
+               g_ResponsePetNameStyles.end();
+    }
     std::atomic<uint64_t> g_droppedGovernor{ 0 };
     std::atomic<uint64_t> g_droppedPassed{ 0 };
     std::atomic<uint64_t> g_droppedPhrase{ 0 };
@@ -682,6 +693,33 @@ namespace
             c.text = kept;
         }
 
+        // "the ah is a nightmare sugar": pet names are one style's
+        // (Response.PetNameStyles), and even that one does not call someone
+        // something every line. A bot that picked one up from the chat above
+        // -- one says "sugar", and soon the whole channel does -- or a
+        // pet-name style that used one in its last few lines loses it.
+        if (!g_ResponsePetNames.empty())
+        {
+            auto gap = g_petNameGap.find(botGuid.GetRawValue());
+            const bool rested = gap == g_petNameGap.end() || g_ResponsePetNameEveryLines <= 1;
+            if (!rested || !PetNameStyle(bot))
+            {
+                const std::string kept = TextRules::StripVocatives(c.text, g_ResponsePetNames);
+                if (kept.empty())
+                {
+                    ++g_droppedEmpty;
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} reply was only a pet name: '{}'",
+                                 bot->GetName(), c.text);
+                    return;
+                }
+                if (g_DebugEnabled && kept != c.text)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} pet name dropped: '{}' -> '{}'",
+                             bot->GetName(), c.text, kept);
+                c.text = kept;
+            }
+        }
+
         // "far too quiet for a Tuesday" -- on a Saturday. The model has no
         // calendar: a weekday it uses for today becomes today's.
         if (g_ClockFixWeekdays)
@@ -971,6 +1009,16 @@ namespace
         openerReport.done = true;   // it is out: the conversation hears it below
         if (insultKept)
             g_insultUse[botGuid.GetRawValue()] = std::chrono::steady_clock::now();
+        if (!g_ResponsePetNames.empty() && g_ResponsePetNameEveryLines > 1 && PetNameStyle(bot))
+        {
+            // Its pet name is out: the next few lines go without one.
+            const uint64_t key = botGuid.GetRawValue();
+            if (TextRules::StripVocatives(plain, g_ResponsePetNames) != plain)
+                g_petNameGap[key] = 0;
+            else if (auto gap = g_petNameGap.find(key); gap != g_petNameGap.end() &&
+                                                        ++gap->second + 1 >= g_ResponsePetNameEveryLines)
+                g_petNameGap.erase(gap);
+        }
         Links_NoteSent(line);
         if (c.request.offerEntry)   // "anyone want [Linen Cloth]?": out, so "me!" claims it
             Bags_NoteOffer(bot, c.request.offerEntry, c.request.scopeKey);

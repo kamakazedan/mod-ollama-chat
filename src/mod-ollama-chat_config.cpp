@@ -419,6 +419,8 @@ uint32_t    g_CityConversationBoost        = 2;
 bool        g_ConversationEnable           = true;
 uint32_t    g_ConversationMinMinutes       = 2;
 uint32_t    g_ConversationMaxMinutes       = 15;
+uint32_t    g_ConversationMinLines         = 4;
+uint32_t    g_ConversationMaxLines         = 10;
 uint32_t    g_ConversationGapMinSeconds    = 6;
 uint32_t    g_ConversationGapMaxSeconds    = 25;
 uint32_t    g_ConversationLullChance       = 12;
@@ -532,6 +534,9 @@ std::string g_PersonalitySaidLatelyNote;
 uint32_t    g_PersonalitySaidLatelyLines = 5;
 
 std::vector<std::vector<std::string>> g_ResponseDropVocatives;
+std::vector<std::vector<std::string>> g_ResponsePetNames;
+std::vector<std::string> g_ResponsePetNameStyles;
+uint32_t    g_ResponsePetNameEveryLines = 4;
 std::vector<TextRules::PhraseSwap> g_ResponseSwaps;
 std::vector<std::vector<std::string>> g_ResponseInsultWords;
 std::vector<std::vector<std::string>> g_ResponseProvokeWords;
@@ -1448,6 +1453,12 @@ static void LoadNaturalChatV4Settings()
     g_ConversationEnable            = sConfigMgr->GetOption<bool>("OllamaChat.Conversation.Enable", true);
     g_ConversationMinMinutes        = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.MinMinutes", 2));
     g_ConversationMaxMinutes        = std::max(g_ConversationMinMinutes, sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.MaxMinutes", 15));
+    g_ConversationMinLines          = std::max<uint32_t>(1,
+                                                         sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.MinLines", 4));
+    {
+        const uint32_t maxLines     = sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.MaxLines", 10);
+        g_ConversationMaxLines      = maxLines ? std::max(g_ConversationMinLines, maxLines) : 0;   // 0: by time only
+    }
     g_ConversationGapMinSeconds     = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.GapMinSeconds", 6));
     g_ConversationGapMaxSeconds     = std::max(g_ConversationGapMinSeconds, sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.GapMaxSeconds", 25));
     g_ConversationLullChance        = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.LullChance", 12));
@@ -1484,8 +1495,10 @@ static void LoadNaturalChatV4Settings()
         "You are chatting in {where} with {others} (see the chat above){about}. Carry it on as yourself with "
         "one short line: answer the last line, disagree, joke, ask something back, or take it somewhere "
         "related. Never make a point someone has already made, not even in other words: if you agree, add "
-        "something new to it (a reason, a story, a joke) instead of saying it again. If you really have "
-        "nothing to add, reply with just {pass_token}.");
+        "something new to it (a reason, a story, a joke) instead of saying it again. Talk the way you always "
+        "do, not the way they do: never pick up someone else's pet names or catchphrases. If the last few lines "
+        "are all one running joke, leave it be and say something real instead. If you really have nothing to "
+        "add, reply with just {pass_token}.");
     g_ConversationHintJoin = sConfigMgr->GetOption<std::string>("OllamaChat.Conversation.HintJoin",
         "You have been reading the chat above in {where}{about}, and now you jump in with your own take, a "
         "joke or a question. One short line.");
@@ -1608,10 +1621,11 @@ static void LoadNaturalChatV4Settings()
         "anything that has nothing to do with it.");
 
     LOG_INFO("module.ollamachat",
-             "[Ollama Chat] Conversations: {} ({}-{} min, up to {} at once, {} premises). Cities: {} (chatter x{}). "
-             "Presence: {}. Party instructions: {}.",
+             "[Ollama Chat] Conversations: {} ({}-{} min, {}-{} lines, up to {} at once, {} premises). Cities: {} "
+             "(chatter x{}). Presence: {}. Party instructions: {}.",
              (g_ConversationEnable && g_CrowdEnable && g_ContextEnable) ? "on" : "off",
-             g_ConversationMinMinutes, g_ConversationMaxMinutes, g_ConversationMaxActive,
+             g_ConversationMinMinutes, g_ConversationMaxMinutes, g_ConversationMinLines, g_ConversationMaxLines,
+             g_ConversationMaxActive,
              g_ConversationPremises.size(), g_CityEnable ? "on" : "off", g_CityChatterMultiplier,
              g_PresenceEnable ? "on" : "off", g_PartyCmdEnable ? "on" : "off");
 }
@@ -1774,6 +1788,11 @@ static void LoadNaturalChatV7Settings()
 
     // --- replies --------------------------------------------------------------
     g_ResponseDropVocatives = phrases("OllamaChat.Response.DropVocatives", "kid|kiddo");
+    g_ResponsePetNames = phrases("OllamaChat.Response.PetNames",
+        "sugar|darling|dahling|darl|hun|hon|hunny|honey|sweetie|sweetheart|sweetcheeks|sugarplum|babe|babes|"
+        "cutie|cupcake|doll|petal|treacle|buttercup|pumpkin|sunshine");
+    g_ResponsePetNameStyles = ReadPipeList("OllamaChat.Response.PetNameStyles", "NAT_BUTTERFLY");
+    g_ResponsePetNameEveryLines = sConfigMgr->GetOption<uint32_t>("OllamaChat.Response.PetNameEveryLines", 4);
     g_ResponseSwaps = TextRules::ParseSwaps(sConfigMgr->GetOption<std::string>("OllamaChat.Response.Swaps",
                                                                               "fair point=fair"));
     g_ResponseInsultWords = phrases("OllamaChat.Response.InsultWords",
@@ -2097,9 +2116,11 @@ static void LoadNaturalChatV7Settings()
         "your own way: gg, thanks, nice work, whatever suits you.");
 
     LOG_INFO("module.ollamachat",
-             "[Ollama Chat] Replies: {} word(s) dropped as forms of address, {} phrase(s) said the way people "
-             "say them now, {} rare phrase(s) once per {} s; thank-yous answered {}% of the time.",
-             g_ResponseDropVocatives.size(), g_ResponseSwaps.size(), g_ResponseRarePhrases.size(),
+             "[Ollama Chat] Replies: {} word(s) dropped as forms of address, {} pet name(s) left to {} style(s) "
+             "(one in {} lines), {} phrase(s) said the way people say them now, {} rare phrase(s) once per {} s; "
+             "thank-yous answered {}% of the time.",
+             g_ResponseDropVocatives.size(), g_ResponsePetNames.size(), g_ResponsePetNameStyles.size(),
+             g_ResponsePetNameEveryLines, g_ResponseSwaps.size(), g_ResponseRarePhrases.size(),
              g_ResponseRareCooldownSeconds, g_CrowdThanksReplyChance);
 }
 
