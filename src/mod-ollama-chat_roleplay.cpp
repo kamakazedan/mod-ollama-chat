@@ -110,12 +110,6 @@ namespace
             "longer units than everyone around you.";
     }
 
-    std::string ToLower(std::string v)
-    {
-        for (char& c : v)
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        return v;
-    }
 }
 
 // --------------------------------------------------------------------------
@@ -133,7 +127,7 @@ void Roleplay_Load()
 
     for (const std::string& term : SplitString(g_RoleplayMetaTermList, '|'))
     {
-        std::string t = ToLower(term);
+        std::string t = AsciiLower(term);
         if (!t.empty())
             g_metaTerms.push_back(t);
     }
@@ -147,7 +141,7 @@ void Roleplay_Load()
         do
         {
             Field* fields = result->Fetch();
-            const std::string kind = ToLower(fields[0].Get<std::string>());
+            const std::string kind = AsciiLower(fields[0].Get<std::string>());
             const uint8_t     id   = fields[1].Get<uint8>();
             const std::string text = fields[2].Get<std::string>();
 
@@ -229,7 +223,7 @@ std::string Roleplay_FilterMetaTerms(const std::string& text)
     if (terms.empty())
         return text;
 
-    const std::string lower = ToLower(text);
+    const std::string lower = AsciiLower(text);
 
     for (const std::string& term : terms)
     {

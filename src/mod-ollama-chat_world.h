@@ -93,7 +93,7 @@ struct OllamaWorldSnapshot
 
     bool GuildHasRealPlayer(uint32_t guildId) const
     {
-        return guildId != 0 && guildsWithRealPlayer.count(guildId) != 0;
+        return guildId != 0 && guildsWithRealPlayer.contains(guildId);
     }
 
     // True when a real player is within `distance` of `who`, on the same map.

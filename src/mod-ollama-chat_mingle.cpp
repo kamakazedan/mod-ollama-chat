@@ -167,7 +167,7 @@ namespace
         // there: "nice mount" would be about one it no longer has.
         if (bot->IsMounted() && HangingOut(bot))
             return false;
-        return bot->GetTeamId() == listener->GetTeamId() && !g_busy.count(bot->GetGUID().GetRawValue());
+        return bot->GetTeamId() == listener->GetTeamId() && !g_busy.contains(bot->GetGUID().GetRawValue());
     }
 
     bool Rested(const std::unordered_map<uint64_t, Clock::time_point>& rest, uint64_t key, Clock::time_point now)
@@ -347,7 +347,7 @@ namespace
     std::string PickPremise(uint32_t level, const std::set<std::string>& facts, bool& duel)
     {
         duel = false;
-        const bool duelFirst = facts.count("duel") && Between(1, 100) <= g_MingleDuelChance;
+        const bool duelFirst = facts.contains("duel") && Between(1, 100) <= g_MingleDuelChance;
         std::vector<std::string> fit, any, duels;
         std::set<std::string> isDuel;
         for (std::string p : g_MinglePremises)
@@ -355,7 +355,7 @@ namespace
             bool there = true;
             const std::vector<std::string> tags = TextRules::TakePremiseTags(p);
             for (const std::string& tag : tags)
-                there = there && facts.count(tag) != 0;
+                there = there && facts.contains(tag);
             if (!there || !TextRules::PremiseFits(p, level))
                 continue;
             if (std::find(tags.begin(), tags.end(), "duel") != tags.end())
@@ -371,7 +371,7 @@ namespace
         if (from.empty())
             return {};
         const std::string pick = from[Between(0, uint32_t(from.size() - 1))];
-        duel = isDuel.count(pick) != 0;
+        duel = isDuel.contains(pick);
         g_recentPremises.push_back(pick);
         while (g_recentPremises.size() > std::min<size_t>(8, g_MinglePremises.size() / 2 + 1))
             g_recentPremises.pop_front();
@@ -697,7 +697,7 @@ namespace
         for (const TextRules::ScriptLine& s : parsed)
         {
             uint32_t emote = s.emote.empty() ? 0 : LookupTextEmoteId(s.emote);
-            if (emote && (g_PresenceSkipEmotes.count(emote) || emotes >= g_MingleMaxEmotes))
+            if (emote && (g_PresenceSkipEmotes.contains(emote) || emotes >= g_MingleMaxEmotes))
                 emote = 0;
             // In roleplay mode a line with out-of-world talk in it is not said.
             const std::string text = g_RoleplayEnable ? Roleplay_FilterMetaTerms(Clip(s.text)) : Clip(s.text);
@@ -831,7 +831,7 @@ namespace
         if (Between(1, 100) <= g_MingleEmoteReturnChance)
         {
             uint32_t back = GetMirrorEmote(first);
-            if (!back || g_PresenceSkipEmotes.count(back))
+            if (!back || g_PresenceSkipEmotes.contains(back))
                 back = g_MingleGreetings[Between(0, uint32_t(g_MingleGreetings.size() - 1))];
             ScheduleBotExpression(b, a->GetGUID(), back, Between(1200, 2600));
         }
@@ -1048,7 +1048,7 @@ void Mingle_NoteHumanSay(Player* player, const std::string& msg, uint64_t addres
 
 bool Mingle_IsBusy(Player* bot)
 {
-    return bot && !g_busy.empty() && g_busy.count(bot->GetGUID().GetRawValue()) != 0;
+    return bot && !g_busy.empty() && g_busy.contains(bot->GetGUID().GetRawValue());
 }
 
 void Mingle_ForgetPlayer(uint64_t guid)

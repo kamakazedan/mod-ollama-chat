@@ -235,8 +235,6 @@ OllamaHttpClient::OllamaHttpClient()
 {
 }
 
-OllamaHttpClient::~OllamaHttpClient() = default;
-
 void OllamaHttpClient::SetTimeout(int seconds)
 {
     m_timeout = seconds;

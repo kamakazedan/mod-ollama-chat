@@ -267,10 +267,10 @@ std::string Race_HeardFor(Player* bot, Player* speaker, const std::string& msg)
         const std::string& templ = own ? g_SidesOwnCryText : g_SidesEnemyCryText;
         if (templ.empty())
             return {};
-        const std::string text = SafeFormat(templ, fmt::arg("player_name", speaker->GetName()),
-                                            fmt::arg("cry", facts.cryText),
-                                            fmt::arg("side", botAlliance ? "Alliance" : "Horde"),
-                                            fmt::arg("the_side", botAlliance ? "the Alliance" : "the Horde"));
+        std::string text = SafeFormat(templ, fmt::arg("player_name", speaker->GetName()),
+                                      fmt::arg("cry", facts.cryText),
+                                      fmt::arg("side", botAlliance ? "Alliance" : "Horde"),
+                                      fmt::arg("the_side", botAlliance ? "the Alliance" : "the Horde"));
         if (text.empty() || text == "[Format Error]")
             return {};
         ++(own ? g_stats.cries : g_stats.enemyCries);
@@ -295,10 +295,10 @@ std::string Race_HeardFor(Player* bot, Player* speaker, const std::string& msg)
         if (same == "[Format Error]")
             same.clear();
     }
-    const std::string text = SafeFormat(g_RaceHeardText, fmt::arg("player_name", speaker->GetName()),
-                                        fmt::arg("phrase", facts.phraseText), fmt::arg("meaning", facts.meaning),
-                                        fmt::arg("race_plural", CrowdText::JoinNames(whose)),
-                                        fmt::arg("same", same.empty() ? std::string() : " " + same));
+    std::string text = SafeFormat(g_RaceHeardText, fmt::arg("player_name", speaker->GetName()),
+                                  fmt::arg("phrase", facts.phraseText), fmt::arg("meaning", facts.meaning),
+                                  fmt::arg("race_plural", CrowdText::JoinNames(whose)),
+                                  fmt::arg("same", same.empty() ? std::string() : " " + same));
     if (text.empty() || text == "[Format Error]")
         return {};
     ++g_stats.heard;
@@ -313,11 +313,13 @@ std::string Race_UseFor(Player* bot)
     if (chance == 0 || urand(1, 100) > chance)
         return {};
     const RaceInfo* info = InfoFor(uint8_t(bot->getRace()));
-    const std::string phrases = info ? SomePhrases(info->id, 3) : std::string();
+    if (!info)
+        return {};
+    const std::string phrases = SomePhrases(info->id, 3);
     if (phrases.empty())
         return {};
-    const std::string text = SafeFormat(g_RaceUseText, fmt::arg("a_race", info->one),
-                                        fmt::arg("race_plural", info->plural), fmt::arg("phrases", phrases));
+    std::string text = SafeFormat(g_RaceUseText, fmt::arg("a_race", info->one),
+                                  fmt::arg("race_plural", info->plural), fmt::arg("phrases", phrases));
     if (text.empty() || text == "[Format Error]")
         return {};
     ++g_stats.used;
@@ -332,7 +334,9 @@ std::string Race_MingleFor(Player* bot)
     if (chance == 0 || urand(1, 100) > chance)
         return {};
     const RaceInfo* info = InfoFor(uint8_t(bot->getRace()));
-    const std::string phrases = info ? SomePhrases(info->id, 3) : std::string();
+    if (!info)
+        return {};
+    const std::string phrases = SomePhrases(info->id, 3);
     if (phrases.empty())
         return {};
     const std::string text = SafeFormat(g_MingleRaceText, fmt::arg("name", bot->GetName()),

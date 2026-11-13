@@ -734,27 +734,27 @@ namespace TextRules
 
             if (n.empty())
                 return false;
-            if (qs.names.count(n) || qs.names.count("the " + n))
+            if (qs.names.contains(n) || qs.names.contains("the " + n))
                 return true;
-            if (n.size() > 4 && n.compare(0, 4, "the ") == 0 && qs.names.count(n.substr(4)))
+            if (n.size() > 4 && n.compare(0, 4, "the ") == 0 && qs.names.contains(n.substr(4)))
                 return true;
 
             std::string joined;
             for (char c : n)
                 if (c != ' ')
                     joined.push_back(c);
-            return qs.joined.count(joined) != 0;
+            return qs.joined.contains(joined);
         }
     }
 
-    std::string StripQuoteSource(const std::string& text, const QuoteSources& qs, const std::string& answering)
+    std::string StripQuoteSource(const std::string& text, const QuoteSources& sources, const std::string& answering)
     {
-        if (qs.names.empty() || text.empty())
+        if (sources.names.empty() || text.empty())
             return text;
 
         // Talking about films, naming one is the point.
-        if (!qs.filmWords.empty() && !answering.empty() &&
-            CrowdText::ContainsPhrase(CrowdText::Words(answering), qs.filmWords))
+        if (!sources.filmWords.empty() && !answering.empty() &&
+            CrowdText::ContainsPhrase(CrowdText::Words(answering), sources.filmWords))
             return text;
 
         size_t b = 0, e = text.size();
@@ -791,7 +791,7 @@ namespace TextRules
 
         for (const Cut& cut : cuts)
         {
-            if (!IsQuoteSource(t.substr(cut.tailStart), qs))
+            if (!IsQuoteSource(t.substr(cut.tailStart), sources))
                 continue;
 
             std::string rest = t.substr(0, cut.restEnd);
@@ -810,7 +810,7 @@ namespace TextRules
             const std::vector<std::string> left = CrowdText::Words(rest);
             if (left.size() < 2)
                 return text;
-            if (!qs.filmWords.empty() && CrowdText::ContainsPhrase(left, qs.filmWords))
+            if (!sources.filmWords.empty() && CrowdText::ContainsPhrase(left, sources.filmWords))
                 return text;
             return rest;
         }
@@ -1952,7 +1952,7 @@ namespace TextRules
                          const std::vector<std::string>& names)
     {
         static constexpr size_t npos = std::string::npos;
-        const BuffAsk none;
+        BuffAsk none;   // not const: returned, it is moved, not copied
 
         // "cast fort", "c Power Word: Fortitude": playerbots' own command.
         const std::vector<std::string> all = CrowdText::Words(cleanText);
@@ -2576,7 +2576,7 @@ namespace TextRules
 
     std::string AtPlace(const std::string& place)
     {
-        const std::string trimmed = Trim(place);
+        std::string trimmed = Trim(place);
         if (trimmed.empty())
             return trimmed;
         static const char* const kLeads[] = { "outside", "inside", "just", "by", "near", "at", "on", "in", "under",
@@ -3366,8 +3366,7 @@ namespace TextRules
             switch (code)
             {
                 case 'B': case 'b': raw += ' ';         ++i; break;
-                case 'N':           raw += name;        ++i; break;
-                case 'n':           raw += name;        ++i; break;
+                case 'N': case 'n': raw += name;        ++i; break;
                 case 'C':           raw += cls;         ++i; break;
                 case 'c':           raw += lower(cls);  ++i; break;
                 case 'R':           raw += race;        ++i; break;

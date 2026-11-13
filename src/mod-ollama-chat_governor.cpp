@@ -119,7 +119,7 @@ namespace
             if (end > start)
             {
                 std::string tok = normalized.substr(start, end - start);
-                if (!dropStopwords || !Stopwords().count(tok))
+                if (!dropStopwords || !Stopwords().contains(tok))
                     tokens.push_back(std::move(tok));
             }
             start = end + 1;
@@ -177,7 +177,7 @@ namespace
 
         size_t inter = 0;
         for (const auto& t : sa)
-            if (sb.count(t))
+            if (sb.contains(t))
                 ++inter;
 
         const size_t uni = sa.size() + sb.size() - inter;

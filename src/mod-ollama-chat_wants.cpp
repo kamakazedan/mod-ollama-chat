@@ -421,7 +421,7 @@ namespace
                         if (ref > 0)
                         {
                             tableRefs[entry].push_back(uint32(ref));
-                            if (!read.count(uint32(ref)))
+                            if (!read.contains(uint32(ref)))
                                 deeper.push_back(uint32(ref));
                         }
                         else
@@ -447,7 +447,7 @@ namespace
             {
                 std::vector<uint32_t> items = direct[lootId];
                 for (uint32_t ref : refs[lootId])
-                    if (own.count(ref))
+                    if (own.contains(ref))
                         collect(ref, items, 0);
                 items.erase(std::remove_if(items.begin(), items.end(), [](uint32_t id) { return !Gear(id); }),
                             items.end());

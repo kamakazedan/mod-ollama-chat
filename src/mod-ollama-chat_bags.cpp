@@ -153,7 +153,7 @@ namespace
     {
         if (item->IsSoulBound())
             return "it is soulbound, so it cannot be traded";
-        const std::string quest = QuestNeeding(bot, proto->ItemId);
+        std::string quest = QuestNeeding(bot, proto->ItemId);
         if (!quest.empty())
             return quest;
         if (proto->Class == ITEM_CLASS_QUEST)
@@ -212,7 +212,7 @@ namespace
             DEADLY_POISON, DEADLY_POISON_II, DEADLY_POISON_III, DEADLY_POISON_IV, DEADLY_POISON_V,
             DEADLY_POISON_VI, DEADLY_POISON_VII, DEADLY_POISON_VIII, DEADLY_POISON_IX,
         };
-        return kGiven.count(proto->ItemId) != 0;
+        return kGiven.contains(proto->ItemId);
     }
 
     // A kept thing worth naming: what someone would actually ask about.
@@ -535,7 +535,7 @@ namespace
             for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
                 add(ref->GetSource());
         add(also);
-        words.erase(std::remove_if(words.begin(), words.end(), [&](const std::string& w) { return names.count(w) > 0; }),
+        words.erase(std::remove_if(words.begin(), words.end(), [&](const std::string& w) { return names.contains(w); }),
                     words.end());
         return words;
     }
@@ -736,10 +736,10 @@ std::string Bags_Describe(Player* bot)
     for (const BagEntry* e : kept)
         keptText += (keptText.empty() ? "" : ", ") + ItemWords(*e, e->count) + " (" + e->why + ")";
 
-    const std::string out = SafeFormat(g_BagsPromptText,
-                                       fmt::arg("spare", spareText.empty() ? std::string("nothing much") : spareText),
-                                       fmt::arg("kept", keptText.empty() ? std::string("nothing in particular") : keptText),
-                                       fmt::arg("money", MoneyText(bot->GetMoney())));
+    std::string out = SafeFormat(g_BagsPromptText,
+                                 fmt::arg("spare", spareText.empty() ? std::string("nothing much") : spareText),
+                                 fmt::arg("kept", keptText.empty() ? std::string("nothing in particular") : keptText),
+                                 fmt::arg("money", MoneyText(bot->GetMoney())));
     if (out.empty() || out == "[Format Error]")
         return {};
     ++g_stats.described;

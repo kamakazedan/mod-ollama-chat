@@ -172,9 +172,9 @@ bool Congrats_AchievementWorthIt(AchievementEntry const* achievement)
     if (!worth)
     {
         constexpr uint32_t kFeatsOfStrength = 81;   // the achievement category
-        if (g_CongratsAchievementAlways.count(achievement->ID))
+        if (g_CongratsAchievementAlways.contains(achievement->ID))
             worth = true;
-        else if (g_CongratsAchievementNever.count(achievement->ID))
+        else if (g_CongratsAchievementNever.contains(achievement->ID))
             worth = false;
         else if ((achievement->flags & (ACHIEVEMENT_FLAG_REALM_FIRST_REACH | ACHIEVEMENT_FLAG_REALM_FIRST_KILL)) ||
                  achievement->categoryId == kFeatsOfStrength)

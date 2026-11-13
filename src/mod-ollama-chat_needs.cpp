@@ -190,7 +190,7 @@ namespace
     void GatherErrands(Player* bot, const NeedsBotState* state, Clock::time_point now, std::vector<BotNeed>& out)
     {
         const std::string city = AreaName(bot->GetZoneId());
-        auto add = [&](const char* id, std::string why, std::string what)
+        auto add = [&](const char* id, const std::string& why, const std::string& what)
         {
             const std::string key = std::string("errand:") + id;
             if (Cooling(state, key, now))

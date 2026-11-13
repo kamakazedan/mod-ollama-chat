@@ -749,7 +749,7 @@ void ProcessBotChatMessage(Player* bot, const std::string& msg, ChatChannelSourc
                                       crowdPlanId);
 }
 
-std::string GetBotHistoryPrompt(uint64_t botGuid, uint64_t playerGuid, std::string playerMessage)
+std::string GetBotHistoryPrompt(uint64_t botGuid, uint64_t playerGuid, const std::string& playerMessage)
 {
     if(!g_EnableChatHistory)
     {
@@ -1189,14 +1189,12 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         return;
     }
     if (lang == LANG_ADDON) return;
-    std::string chanName = (channel != nullptr) ? channel->GetName() : "Unknown";
-    uint32_t channelId = (channel != nullptr) ? channel->GetChannelId() : 0;
-    std::string receiverName = (receiver != nullptr) ? receiver->GetName() : "None";
     if(g_DebugEnabled)
     {
-        LOG_INFO("server.loading",
+        LOG_INFO("module.ollamachat",
                 "[Ollama Chat] Player {} sent msg: '{}' | Source: {} | Channel Name: {} | Channel ID: {} | Receiver: {}",
-                player->GetName(), msg, (int)sourceLocal, chanName, channelId, receiverName);
+                player->GetName(), msg, (int)sourceLocal, channel ? channel->GetName() : "Unknown",
+                channel ? channel->GetChannelId() : 0, receiver ? receiver->GetName() : "None");
     }
 
 
@@ -1335,7 +1333,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         if (startsWithWord(trimmedMsg, blacklist))
         {
             if (g_DebugEnabled)
-                LOG_INFO("server.loading",
+                LOG_INFO("module.ollamachat",
                          "[Ollama Chat] Message starts with '{}' (blacklisted). Skipping bot responses.",
                          blacklist);
             return;
@@ -2061,7 +2059,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // Whoever the line was aimed at answers first; a random cut used to
         // drop them and let a bystander answer in their place.
         std::stable_partition(finalCandidates.begin(), finalCandidates.end(),
-                              [&addressedBots](Player* b) { return addressedBots.count(b) > 0; });
+                              [&addressedBots](Player* b) { return addressedBots.contains(b); });
         uint32_t countToPick = urand(1, std::max<uint32_t>(1, g_MaxBotsToPick));
         if(g_DebugEnabled)
         {
@@ -2095,7 +2093,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // call rather than after.
         // A line aimed at this bot is owed an answer, so it skips the pacing
         // cooldowns. The global messages-per-minute ceiling still applies.
-        const bool directAddress = addressedBots.count(bot) > 0 ||
+        const bool directAddress = addressedBots.contains(bot) ||
             (!addressee.guid &&
              OllamaIsDirectAddress(bot, player, sourceLocal, trimmedMsg, senderIsBot, scopeKey));
 
@@ -2478,7 +2476,7 @@ namespace
                     continue;
                 if (any < 0)
                     any = int(i);
-                if (usedKeys.count(keys[i]))
+                if (usedKeys.contains(keys[i]))
                     continue;
                 if (unused < 0)
                     unused = int(i);

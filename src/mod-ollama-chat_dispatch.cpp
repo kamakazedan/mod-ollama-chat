@@ -697,7 +697,7 @@ namespace
             std::string style;
             for (char ch : GetBotPersonality(bot))
                 style += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-            if (g_ResponseQuoteSourceStyles.count(style))
+            if (g_ResponseQuoteSourceStyles.contains(style))
             {
                 const std::string unsourced = TextRules::StripQuoteSource(c.text, g_ResponseQuoteSources, origin);
                 if (g_DebugEnabled && unsourced != c.text)
@@ -1016,7 +1016,7 @@ namespace
 
         // Body language. Safe here and only here: this is the world thread.
         // A passer-by gets nothing rude or gross with it.
-        if (c.request.gentle && g_PresenceSkipEmotes.count(c.emoteId))
+        if (c.request.gentle && g_PresenceSkipEmotes.contains(c.emoteId))
             c.emoteId = 0;
         ScheduleBotExpression(bot, ObjectGuid(c.request.targetGuid), c.emoteId,
                               g_BotExpressionDelayMs);

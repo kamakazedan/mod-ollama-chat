@@ -387,7 +387,7 @@ bool Crowd_IsPlayful(const std::string& personalityKey)
     for (char c : personalityKey)
         key += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 
-    return g_CrowdPlayfulPersonalities.count(key) != 0;
+    return g_CrowdPlayfulPersonalities.contains(key);
 }
 
 void Crowd_Start(CrowdPlan plan, uint32_t firstDelayMs)

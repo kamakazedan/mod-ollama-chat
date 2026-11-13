@@ -48,7 +48,7 @@ bool OllamaIsSocialHub(Player* player)
         return true;
 
     return !g_CityExtraIds.empty() &&
-           (g_CityExtraIds.count(player->GetZoneId()) != 0 || g_CityExtraIds.count(player->GetAreaId()) != 0);
+           (g_CityExtraIds.contains(player->GetZoneId()) || g_CityExtraIds.contains(player->GetAreaId()));
 }
 
 std::string OllamaContinentName(Player* player)

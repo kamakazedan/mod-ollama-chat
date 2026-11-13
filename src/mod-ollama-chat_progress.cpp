@@ -221,7 +221,7 @@ namespace
             }
         }
         for (auto it = seen.quests.begin(); it != seen.quests.end();)
-            it = inLog.count(it->first) ? std::next(it) : seen.quests.erase(it);
+            it = inLog.contains(it->first) ? std::next(it) : seen.quests.erase(it);
     }
 
     bool Say(Player* bot, const Done& d, uint64_t key)

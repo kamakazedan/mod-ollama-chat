@@ -15,9 +15,18 @@ inline std::string SafeFormat(const std::string& templ, Args&&... args) {
     try {
         return fmt::vformat(templ, fmt::make_format_args(args...));
     } catch (const fmt::format_error& e) {
-        LOG_ERROR("server.loading", "[Ollama Chat] Format error: {} | Template: {}", e.what(), templ);
+        LOG_ERROR("module.ollamachat", "[Ollama Chat] Format error: {} | Template: {}", e.what(), templ);
         return "[Format Error]";
     }
+}
+
+// `text` in lower case, letter by letter (std::tolower): the one copy every
+// file of the module uses.
+inline std::string AsciiLower(std::string text)
+{
+    for (char& c : text)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return text;
 }
 
 // ChatHelper::FormatClass() builds a string for the WoW chat window, not for a

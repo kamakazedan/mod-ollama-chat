@@ -278,7 +278,7 @@ namespace
         if (b == std::string::npos)
             return {};
         const size_t e = text.find_last_not_of(" \t");
-        const std::string line = text.substr(b, e - b + 1);
+        std::string line = text.substr(b, e - b + 1);
 
         if (ctx->GetTrigger(line))
             return line;

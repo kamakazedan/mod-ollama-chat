@@ -511,7 +511,7 @@ namespace
             {
                 if (p->InventoryType == INVTYPE_CLOAK)
                     return "a cloak";   // cloth by subclass, but nobody calls it cloth armour
-                const std::string kind = ArmorWords(p->SubClass);
+                std::string kind = ArmorWords(p->SubClass);
                 const std::string slot = SlotWords(p->InventoryType);
                 if (kind.empty())
                     return slot.empty() ? std::string("a piece of gear") : slot;
@@ -630,11 +630,11 @@ namespace
         {
             built = true;
             for (auto const& [entry, quest] : *sObjectMgr->GetCreatureQuestInvolvedRelationMap())
-                if (!enders.count(quest))
+                if (!enders.contains(quest))
                     if (CreatureTemplate const* t = sObjectMgr->GetCreatureTemplate(entry))
                         enders[quest] = t->Name;
             for (auto const& [entry, quest] : *sObjectMgr->GetGOQuestInvolvedRelationMap())
-                if (!enders.count(quest))
+                if (!enders.contains(quest))
                     if (GameObjectTemplate const* t = sObjectMgr->GetGameObjectTemplate(entry))
                         enders[quest] = t->name;
         }

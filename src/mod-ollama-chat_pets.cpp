@@ -18,12 +18,6 @@
 
 namespace
 {
-    std::string Lower(std::string s)
-    {
-        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return char(std::tolower(c)); });
-        return s;
-    }
-
     // "Cat", "Wind Serpent", "Imp": its kind, as the game names it; empty if none.
     std::string FamilyOf(Pet* pet)
     {
@@ -99,11 +93,11 @@ PetsSeen Pets_Seen(Player* who, float range)
         pet && pet->IsInWorld() && pet->IsAlive() && pet->IsWithinDistInMap(who, range))
     {
         a.petKind = KindOf(pet, who);
-        std::string family = Lower(FamilyOf(pet));
+        std::string family = AsciiLower(FamilyOf(pet));
         std::string name   = pet->GetName();
         if (family == a.petKind)
             family.clear();   // a ghoul's kind is Ghoul
-        if (Lower(name) == a.petKind || (!family.empty() && Lower(name) == family))
+        if (AsciiLower(name) == a.petKind || (!family.empty() && AsciiLower(name) == family))
             name.clear();     // "Water Elemental", a cat still called Cat
         a.petFamily  = family;
         a.petName    = name;

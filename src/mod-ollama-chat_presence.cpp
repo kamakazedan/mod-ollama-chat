@@ -303,9 +303,9 @@ void Presence_Update(uint32_t diff)
         // of its style's emotes, or none.
         bool petEmote = false;
         uint32_t emote = Expression_PickStyleEmote(bot, !petGuid.IsEmpty(), &petEmote);
-        for (int tries = 0; emote && g_PresenceSkipEmotes.count(emote) && tries < 6; ++tries)
+        for (int tries = 0; emote && g_PresenceSkipEmotes.contains(emote) && tries < 6; ++tries)
             emote = Expression_PickStyleEmote(bot, !petGuid.IsEmpty(), &petEmote);
-        if (!emote || g_PresenceSkipEmotes.count(emote))
+        if (!emote || g_PresenceSkipEmotes.contains(emote))
             continue;
 
         const ObjectGuid target = (petEmote && !petGuid.IsEmpty()) ? petGuid : real->GetGUID();

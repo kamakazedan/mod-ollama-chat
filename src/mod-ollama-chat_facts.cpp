@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_facts.h"
+#include "mod-ollama-chat-utilities.h"
 
 #include "DBCStores.h"
 #include "ItemTemplate.h"
@@ -21,19 +22,13 @@ namespace
         return rng;
     }
 
-    std::string Lower(std::string s)
-    {
-        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return char(std::tolower(c)); });
-        return s;
-    }
-
     // Not a test, placeholder or retired entry: the data has plenty of those.
     // Whole words, so "Testament" and "Old Murk-Eye" stay.
     bool Sane(const std::string& name)
     {
         if (name.size() < 3 || std::isdigit(static_cast<unsigned char>(name[0])))
             return false;
-        const std::string low = Lower(name);
+        const std::string low = AsciiLower(name);
         static const char* const kBadParts[] = { "[ph]", "(ph)", "[old]", "(old)", "[dnd]", "(dnd)", "do not use",
                                                  "monster -", "(test)", "[test]" };
         for (const char* bad : kBadParts)
@@ -52,7 +47,7 @@ namespace
                 word += low[i];
             else
             {
-                if (kBadWords.count(word))
+                if (kBadWords.contains(word))
                     return false;
                 word.clear();
             }
@@ -134,7 +129,7 @@ namespace
             std::unordered_set<std::string> seen;
             if (CreatureTemplateContainer const* creatures = sObjectMgr->GetCreatureTemplates())
                 for (const auto& [entry, t] : *creatures)
-                    if ((t.rank == CREATURE_ELITE_RARE || t.rank == CREATURE_ELITE_RAREELITE) && spawned.count(entry) &&
+                    if ((t.rank == CREATURE_ELITE_RARE || t.rank == CREATURE_ELITE_RAREELITE) && spawned.contains(entry) &&
                         t.minlevel > 0 && Sane(t.Name) && seen.insert(t.Name).second)
                         pool.emplace_back(t.minlevel, t.Name);
         }
@@ -145,7 +140,7 @@ namespace
     std::string Key(const std::string& name)
     {
         std::string out;
-        for (char c : Lower(name))
+        for (char c : AsciiLower(name))
         {
             if (std::isalnum(static_cast<unsigned char>(c)))
                 out += c;
@@ -225,7 +220,7 @@ std::string Facts_Bosses(const std::string& instance)
     for (uint32 i = 0; i < sDungeonEncounterStore.GetNumRows(); ++i)
     {
         DungeonEncounterEntry const* e = sDungeonEncounterStore.LookupEntry(i);
-        if (!e || e->difficulty != 0 || !maps.count(e->mapId) || !e->encounterName[0] || !*e->encounterName[0])
+        if (!e || e->difficulty != 0 || !maps.contains(e->mapId) || !e->encounterName[0] || !*e->encounterName[0])
             continue;
         if (seen.insert(e->encounterName[0]).second)
             found.emplace_back(e->encounterIndex, e->encounterName[0]);
@@ -255,7 +250,7 @@ std::string Facts_ClassRaces(const std::string& cls)
         { RACE_GNOME, "gnomes" },   { RACE_TROLL, "trolls" },     { RACE_BLOODELF, "blood elves" },
         { RACE_DRAENEI, "draenei" },
     };
-    const std::string low = Lower(cls);
+    const std::string low = AsciiLower(cls);
     uint8 classId = 0;
     for (const auto& [name, id] : kClasses)
         if (low.find(name) != std::string::npos)

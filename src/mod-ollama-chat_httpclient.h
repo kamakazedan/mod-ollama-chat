@@ -30,7 +30,7 @@ class OllamaHttpClient
 {
 public:
     OllamaHttpClient();
-    ~OllamaHttpClient();
+    ~OllamaHttpClient() = default;
 
     // Backwards-compatible form: body on 200, empty string otherwise.
     std::string Post(const std::string& url, const std::string& jsonData);

@@ -62,7 +62,7 @@ std::string Banter_PromptFor(Player* bot, Player* speaker, const std::string& ms
     // "{~a cheeky comeback|mock outrage|...}": one kind each time, or every
     // bot would reach for the same joke.
     const std::string templ = TextRules::ExpandChoices(g_BanterText, Rng());
-    const std::string text = SafeFormat(templ, fmt::arg("player_name", speaker->GetName()), fmt::arg("tease", tease));
+    std::string text = SafeFormat(templ, fmt::arg("player_name", speaker->GetName()), fmt::arg("tease", tease));
     if (text.empty() || text == "[Format Error]")
         return {};
     ++g_stats.teases;

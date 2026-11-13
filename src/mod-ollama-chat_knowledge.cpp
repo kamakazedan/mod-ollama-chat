@@ -159,7 +159,7 @@ namespace
         };
         std::vector<std::string> keys;
         for (const std::string& w : CrowdText::Words(label))
-            if (!skip.count(w) && std::find(keys.begin(), keys.end(), w) == keys.end())
+            if (!skip.contains(w) && std::find(keys.begin(), keys.end(), w) == keys.end())
                 keys.push_back(w);
         return keys;
     }
@@ -410,7 +410,7 @@ namespace
                     if (menu.dirs.size() >= 3 && marked >= 2)
                         g.menus.emplace(t.GossipMenuId, std::move(menu));
                 }
-                if (g.menus.count(t.GossipMenuId))
+                if (g.menus.contains(t.GossipMenuId))
                     g.giverMenu[entry] = t.GossipMenuId;
             }
             if (sObjectMgr->GetNpcVendorItemList(entry))
@@ -433,8 +433,8 @@ namespace
             {
                 return std::all_of(a.words.begin(), a.words.end(), [&](const std::string& w)
                 {
-                    return kinds.count(w) || kinds.count(w + "s") ||
-                           (w.size() > 1 && w.back() == 's' && kinds.count(w.substr(0, w.size() - 1)));
+                    return kinds.contains(w) || kinds.contains(w + "s") ||
+                           (w.size() > 1 && w.back() == 's' && kinds.contains(w.substr(0, w.size() - 1)));
                 });
             }), g.areas.end());
         }
@@ -447,8 +447,8 @@ namespace
                 eventOnly.insert(guid);
         for (auto const& [spawnId, data] : sObjectMgr->GetAllCreatureData())
         {
-            const bool giver = g.giverMenu.count(data.id) != 0;
-            if ((!giver && !vendorEntries.count(data.id)) || eventOnly.count(spawnId))
+            const bool giver = g.giverMenu.contains(data.id);
+            if ((!giver && !vendorEntries.contains(data.id)) || eventOnly.contains(spawnId))
                 continue;
             MapEntry const* map = sMapStore.LookupEntry(data.mapid);
             if (!map || map->Instanceable())
@@ -462,7 +462,7 @@ namespace
             s.id    = spawnId;
             if (giver)
                 g.giverSpawns.push_back(s);
-            if (vendorEntries.count(data.id))
+            if (vendorEntries.contains(data.id))
             {
                 uint32 npcflag = 0, unitFlags = 0, dynamicFlags = 0;
                 ObjectMgr::ChooseCreatureFlags(sObjectMgr->GetCreatureTemplate(data.id), npcflag, unitFlags,
@@ -565,7 +565,7 @@ namespace
             if (!HasAll(words, a.words))
                 continue;
             named = true;
-            if (!g.zoneMenu.count(a.zone))
+            if (!g.zoneMenu.contains(a.zone))
                 continue;
             // Where the asker is first, then the longest name.
             const size_t score = a.words.size() + (asker && asker->GetZoneId() == a.zone ? 100 : 0);
@@ -636,18 +636,12 @@ namespace
         return best;
     }
 
-    std::string Lower(std::string s)
-    {
-        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return char(std::tolower(c)); });
-        return s;
-    }
-
     // "Leatherworking" under "Profession Trainer" is the leatherworking
     // trainer; "The inn" is the inn, "Bank of Stormwind" stays as it is.
     std::string PlaceName(const Direction& d)
     {
         if (d.trainer)
-            return "the " + Lower(d.label) + " trainer";
+            return "the " + AsciiLower(d.label) + " trainer";
         std::string name = d.label;
         if (name.size() > 4 && name.compare(0, 4, "The ") == 0)
             name[0] = 't';
@@ -706,7 +700,7 @@ namespace
         {
             if (!HasAll(words, h.keys))
                 continue;
-            std::string heading = Lower(h.label);
+            std::string heading = AsciiLower(h.label);
             if (heading.compare(0, 4, "the ") == 0)
                 heading.erase(0, 4);
 
@@ -757,7 +751,7 @@ namespace
             "looking", "with", "and", "or", "it", "them", "they", "those", "these", "this", "that", "please", "pls",
             "plz", "ty", "more", "new", "good", "best", "cheap", "wtb", "learn", "make", "craft", "one", "ones"
         };
-        return noise.count(w) != 0;
+        return noise.contains(w);
     }
 
     // The item a question is about: linked, in brackets, or the longest run
@@ -784,7 +778,7 @@ namespace
             while (e > b && !std::isalnum(static_cast<unsigned char>(token[e - 1])))
                 --e;
             if (e > b)
-                tokens.push_back(Lower(token.substr(b, e - b)));
+                tokens.push_back(AsciiLower(token.substr(b, e - b)));
             token.clear();
         };
         for (char c : plain)
@@ -849,7 +843,7 @@ namespace
             v.title = t->SubName;
             for (std::string w : CrowdText::Words(t->SubName))
             {
-                if (generic.count(w))
+                if (generic.contains(w))
                     continue;
                 if (w.size() > 3 && w.back() == 's')
                     w.pop_back();

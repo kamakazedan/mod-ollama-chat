@@ -228,7 +228,7 @@ std::string Outlook_ChatFor(Player* bot, const std::vector<std::string>& lines)
     const std::string state = Outlook_ChatState(bot);
     if (state.empty())
         return "";
-    const std::string text = SafeFormat(g_OutlookChatText, fmt::arg("chat", state));
+    std::string text = SafeFormat(g_OutlookChatText, fmt::arg("chat", state));
     if (text == "[Format Error]")
         return "";
     ++g_chatPrompts;

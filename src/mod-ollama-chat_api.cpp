@@ -45,13 +45,6 @@ namespace
         return status == 429 || status == 503 || status == 529;
     }
 
-    std::string ToLower(std::string v)
-    {
-        for (char& c : v)
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        return v;
-    }
-
     // OllamaChat.Stop is a comma-separated list.
     std::vector<std::string> ParseStopSequences(const std::string& stop)
     {
@@ -311,6 +304,7 @@ namespace
         }
         catch (const std::exception&)
         {
+            // Not JSON, or not the shape above: the raw body says it below.
         }
 
         constexpr size_t kMaxRaw = 400;
@@ -601,7 +595,7 @@ OllamaHttpHeaders OllamaBuildRequestHeaders(const OllamaEndpointSettings& cfg)
     if (!cfg.apiKeyHeader.empty())
     {
         std::string value = cfg.apiKey;
-        if (ToLower(cfg.apiKeyHeader) == "authorization" && ToLower(value).rfind("bearer ", 0) != 0)
+        if (AsciiLower(cfg.apiKeyHeader) == "authorization" && AsciiLower(value).rfind("bearer ", 0) != 0)
             value = "Bearer " + value;
         headers.emplace_back(cfg.apiKeyHeader, value);
         return headers;
@@ -694,7 +688,7 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
         // session and the request is retried immediately so no reply is lost.
         if (!r.ok && cfg.provider == OllamaProvider::OpenAI && r.status == 400)
         {
-            const std::string lower = ToLower(r.error);
+            const std::string lower = AsciiLower(r.error);
 
             if (!g_useMaxCompletionTokens.load() &&
                 lower.find("max_completion_tokens") != std::string::npos)

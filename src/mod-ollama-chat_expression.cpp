@@ -29,17 +29,10 @@
 
 namespace
 {
-    std::string ToLower(std::string v)
-    {
-        for (char& c : v)
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        return v;
-    }
-
     // Trim a trailing verb inflection so "waves"/"waving" both resolve to "wave".
     std::string NormalizeEmoteWord(const std::string& raw)
     {
-        std::string s = ToLower(raw);
+        std::string s = AsciiLower(raw);
 
         // Drop anything that isn't a letter (punctuation, digits, spaces).
         std::string letters;
@@ -447,7 +440,7 @@ uint32_t Expression_PickStyleEmote(Player* bot, bool petNearby, bool* outPetEmot
 
     std::vector<uint32_t> forPet, forPerson;
     for (uint32_t id : style)
-        (g_EmotePetEmotes.count(id) ? forPet : forPerson).push_back(id);
+        (g_EmotePetEmotes.contains(id) ? forPet : forPerson).push_back(id);
 
     // A pet to fuss over is hard to resist for a style that has pet emotes.
     if (petNearby && !forPet.empty() && (forPerson.empty() || urand(0, 99) < 60))

@@ -607,7 +607,7 @@ bool Conversation_CanOpen(const std::string& key)
 {
     if (!g_ConversationEnable || g_convs.size() >= g_ConversationMaxActive)
         return false;
-    if (g_convs.count(key))
+    if (g_convs.contains(key))
         return false;
     return !CoolingDown(key, Clock::now());
 }

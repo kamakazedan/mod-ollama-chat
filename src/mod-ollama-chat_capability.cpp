@@ -47,13 +47,6 @@ namespace
         return g_thinkSamples;
     }
 
-    std::string ToLower(std::string v)
-    {
-        for (char& c : v)
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        return v;
-    }
-
     void SetSupport(OllamaThinkSupport support, const std::string& detail)
     {
         std::lock_guard<std::mutex> lock(g_mutex);
@@ -90,7 +83,7 @@ namespace
 
             for (const auto& cap : parsed["capabilities"])
             {
-                if (cap.is_string() && ToLower(cap.get<std::string>()) == "thinking")
+                if (cap.is_string() && AsciiLower(cap.get<std::string>()) == "thinking")
                 {
                     outSupported = true;
                     outDetail    = "/api/show reports the thinking capability";
@@ -285,7 +278,7 @@ bool OllamaCapability_IsThinkRejection(int status, const std::string& body)
     if (status != 400 && status != 422 && status != 500)
         return false;
 
-    const std::string lower = ToLower(body);
+    const std::string lower = AsciiLower(body);
 
     // Ollama's wording.
     if (lower.find("does not support thinking") != std::string::npos ||
@@ -458,7 +451,7 @@ std::string OllamaCapability_StatusText()
     {
         case OllamaThinkPolicy::On:  policyText = "on";  break;
         case OllamaThinkPolicy::Off: policyText = "off"; break;
-        default:                     policyText = "auto"; break;
+        default:                     break;   // "auto"
     }
 
     std::string out = SafeFormat("policy={} support={} ({})",
@@ -487,7 +480,7 @@ std::string OllamaCapability_StatusText()
 
 OllamaThinkPolicy OllamaCapability_ParsePolicy(const std::string& text, bool legacyBool)
 {
-    const std::string v = ToLower(text);
+    const std::string v = AsciiLower(text);
 
     if (v == "auto" || v.empty())
     {

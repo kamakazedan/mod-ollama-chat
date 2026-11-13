@@ -58,7 +58,7 @@ namespace
     // Under the lock: one entry, room made when there are far too many.
     Lately& Entry(uint64_t guid, time_t now)
     {
-        if (g_lately.size() >= kMaxBots && !g_lately.count(guid))
+        if (g_lately.size() >= kMaxBots && !g_lately.contains(guid))
             for (auto it = g_lately.begin(); it != g_lately.end();)
                 it = now - it->second.touched > kForget ? g_lately.erase(it) : std::next(it);
         Lately& l = g_lately[guid];

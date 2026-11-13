@@ -174,7 +174,10 @@ namespace
                     entry.importance = static_cast<uint8_t>(std::clamp(score, 1, 10));
                     line = line.substr(sep + 1);
                 }
-                catch (const std::exception&) { }
+                catch (const std::exception&)
+                {
+                    // Not a number after all: the line keeps the default importance.
+                }
             }
 
             a = line.find_first_not_of(" \t");
