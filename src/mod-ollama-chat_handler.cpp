@@ -988,6 +988,10 @@ std::vector<std::string> ChatHandler_GetVisibleLocations(Player* bot, float radi
     {
         if (!c || c->IsPet() || c->IsTotem())
             continue;
+        // A place's guards and townsfolk are not sights (OllamaIsScenery):
+        // "FRIENDLY: Orgrimmar Grunt (Level 75, ...)" is a stat line to wonder at.
+        if (OllamaIsScenery(c, bot))
+            continue;
         if (!bot->IsWithinLOSInMap(c))
             continue;
 

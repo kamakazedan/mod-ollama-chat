@@ -298,9 +298,11 @@ namespace
             // The old code took whatever the searcher landed on first.
             if (c->GetCreatureType() == CREATURE_TYPE_CRITTER)
                 continue;
-            // Not the guards and townsfolk: "an Orgrimmar Grunt is close by"
-            // reads to a model as an enemy to watch out for.
-            if (c->IsFriendlyTo(bot))
+            // Not the guards and townsfolk, whatever the bot's standing with
+            // them, nor a training dummy (OllamaIsScenery): "an Orgrimmar
+            // Grunt is close by" reads to a model as an enemy to watch out
+            // for, and "about level 75" had one ask why the grunt was.
+            if (c->IsFriendlyTo(bot) || OllamaIsScenery(c, bot))
                 continue;
 
             int score = 0;

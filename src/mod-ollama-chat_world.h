@@ -7,6 +7,7 @@
 #include <vector>
 
 class Channel;
+class Creature;
 class Player;
 
 // --------------------------------------------------------------------------
@@ -81,6 +82,27 @@ bool OllamaInBotOnlyDungeon(Player* bot);
 // (Shattrath and Dalaran by default), or -- with City.IncludeInns -- an inn.
 // Never an instance. False when OllamaChat.City.Enable is off.
 bool OllamaIsSocialHub(Player* player);
+
+// Part of the scenery around `bot` rather than something to remark on: a
+// place's guards and townsfolk -- anyone not hostile who is a guard, has
+// something to offer (npc flags) or belongs to a faction with standing -- and
+// whatever never fights (a civilian, a training dummy, an invisible helper).
+// The nearby-creature topic and the reply snapshot leave these out.
+//
+// "There is a Orgrimmar Grunt around here, about level 75" had a bot in
+// Orgrimmar ask why the grunt was level 75. A guard is part of its city: a
+// bot may still talk of the guards ("they'll hold them off"), never of one
+// as a sight with a level.
+//
+// Decided by what the creature is, not by how it reacts to the bot. A city's
+// people react to someone by that one's standing with the city, and undead
+// and blood elves start out only Neutral with Orgrimmar (orcs, trolls and
+// tauren with Silvermoon and the Undercity), so to them the grunts were never
+// "friendly" and a friendly-only test let them through. A hostile guard --
+// another side's, in a town being raided -- is still something to watch.
+//
+// World thread only.
+bool OllamaIsScenery(Creature const* creature, Player const* bot);
 
 struct OllamaWorldSnapshot
 {

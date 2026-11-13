@@ -276,6 +276,13 @@ quest, an NPC, a race's mount -- carries `[horde]` or `[alliance]`, read by
 `TextRules::TakeLevelAndSide` beside the level tag: untagged, a Horde bot
 asked who was going AFK in Stormwind.
 
+A place's guards and townsfolk are scenery (`OllamaIsScenery`), never a
+topic or a line of the snapshot: told "about level 75" of an Orgrimmar
+Grunt, a bot asked why the grunt was level 75. Decide it by what a creature
+is, never by `IsFriendlyTo`: a city's people react to someone by that one's
+standing with the city, and undead and blood elves start out only Neutral
+with Orgrimmar.
+
 A race is more than a word in the prompt. What each race says comes from the
 game -- its NPCs' greetings and farewells, its language's attested phrases
 (`Race.Phrases.<Race>`, read by `mod-ollama-chat_race.cpp`) -- never made up:

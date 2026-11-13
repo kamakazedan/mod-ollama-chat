@@ -4,6 +4,8 @@
 
 #include "AreaDefines.h"
 #include "Channel.h"
+#include "Creature.h"
+#include "DBCStores.h"
 #include "Map.h"
 #include "Group.h"
 #include "ObjectAccessor.h"
@@ -49,6 +51,28 @@ bool OllamaIsSocialHub(Player* player)
 
     return !g_CityExtraIds.empty() &&
            (g_CityExtraIds.contains(player->GetZoneId()) || g_CityExtraIds.contains(player->GetAreaId()));
+}
+
+bool OllamaIsScenery(Creature const* creature, Player const* bot)
+{
+    if (!creature || !bot)
+        return false;
+
+    // Never fights anyone, whoever is looking.
+    if (creature->IsTrigger() || creature->IsCivilian() || creature->HasUnitFlag(UNIT_FLAG_PACIFIED))
+        return true;
+
+    if (creature->IsHostileTo(bot))
+        return false;
+
+    if (creature->IsGuard() || creature->GetNpcFlags() != UNIT_NPC_FLAG_NONE)
+        return true;
+
+    // One of a faction's own people -- a city's, a town's, a camp's -- however
+    // the bot stands with them.
+    FactionTemplateEntry const* faction = creature->GetFactionTemplateEntry();
+    FactionEntry const* entry = faction ? sFactionStore.LookupEntry(faction->faction) : nullptr;
+    return entry && entry->CanHaveReputation();
 }
 
 std::string OllamaContinentName(Player* player)

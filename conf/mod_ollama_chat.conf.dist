@@ -743,8 +743,11 @@ OllamaChat.ChatExtraInfoTemplate = "Your Info: {bot_race} {bot_gender}, Spec: {b
 # --------------------------------------------
 
 # OllamaChat.EnvCommentCreature
-#   Description: A pipe-separated (|) list of template messages for when any creature is spotted nearby.
-#   Placeholders (named): {creature_name}
+#   Description: A pipe-separated (|) list of template messages for when a creature is spotted nearby:
+#   the most interesting one in range (an elite, a rare, a real level threat). Never a critter, and
+#   never a place's guards and townsfolk or a training dummy, whatever the bot's standing with that
+#   place: told "about level 75" of an Orgrimmar Grunt, a bot asked why the grunt was level 75.
+#   Placeholders (named): {creature_name} {creature_level} {level_delta}
 OllamaChat.EnvCommentCreature = You spot a creature named '{creature_name}' and react cautiously.|You spot a creature named '{creature_name}' and assess its threat.|You spot a creature named '{creature_name}' and comment on its behavior.|You spot a creature named '{creature_name}' and consider whether to engage.|You spot a creature named '{creature_name}' and recall what you know about it.|You spot a creature named '{creature_name}' and comment on its appearance.|You spot a creature named '{creature_name}' and decide if it should be avoided.|You spot a creature named '{creature_name}' and speculate on its intentions.
 
 # OllamaChat.EnvCommentGameObject
@@ -5854,7 +5857,8 @@ OllamaChat.Snapshot.MaxSpells = 6
 #    OllamaChat.Snapshot.MaxCreatures
 #        Nearby creatures listed in the snapshot, nearest first. The snapshot
 #        now uses a grid search; it previously walked every creature spawn on
-#        the whole map on every prompt build.
+#        the whole map on every prompt build. A place's guards and townsfolk,
+#        and anything that never fights (a training dummy), are not listed.
 #        Default: 8
 OllamaChat.Snapshot.MaxCreatures = 8
 

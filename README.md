@@ -535,9 +535,15 @@ entries about one side's places and people carry that side's tag, `[horde]`
 or `[alliance]`, and only that side's bots pick them: the `{city}`, `{spot}`,
 `{zone}`, `{quest}`, `{npc}` and `{mount}` pools are tagged, so "the best
 spot in {city} to stand around in" is never Stormwind for a Horde bot, and
-nobody in Orgrimmar wonders what is down the Deeprun Tram. (The guards
-themselves stopped being named as "a creature close by" in v25: friendly
-creatures are never the topic.)
+nobody in Orgrimmar wonders what is down the Deeprun Tram. The guards
+themselves are never "a creature close by". v25 left out creatures
+friendly to the bot, but a city's people are friendly only to those in
+good standing with it, and undead and blood elves start out only Neutral
+with Orgrimmar: to them a grunt was still "around here, about level 75",
+and they asked why it was. Now a place's guards and townsfolk, and a
+training dummy, are scenery whoever is looking: never a topic, and never
+listed in the reply snapshot. Bots still talk of the guards the way
+anyone would ("they'll hold them off").
 
 **Every level in a city.** Someone asking for a buff in Orgrimmar was told
 they were "way too low level for this area". A bot standing in one of its own
