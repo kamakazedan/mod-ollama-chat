@@ -272,9 +272,12 @@ own side's cities, and, standing in one of them, that it is safe and the
 guards are its own (`Outlook_SideText`, `Outlook_HomeCity`: the zone's
 capital flag and team, as the core decides hostile ground). A premise or pool
 value about one side's places or people -- a city, a spot, a starting zone, a
-quest, an NPC, a race's mount -- carries `[horde]` or `[alliance]`, read by
-`TextRules::TakeLevelAndSide` beside the level tag: untagged, a Horde bot
-asked who was going AFK in Stormwind.
+quest, an NPC, a race, a race's mount -- carries `[horde]` or `[alliance]`,
+read by `TextRules::TakeLevelAndSide` beside the level tag: untagged, a Horde
+bot asked who was going AFK in Stormwind, and Horde bots in General argued
+over whether draenei or gnomes dance better. The other side's races come up
+only to be run down (`Pool.enemy_race`), and `{class_races}` is the bot's own
+side's.
 
 A place's guards and townsfolk are scenery (`OllamaIsScenery`), never a
 topic or a line of the snapshot: told "about level 75" of an Orgrimmar

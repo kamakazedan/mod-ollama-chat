@@ -236,7 +236,7 @@ std::string Facts_Bosses(const std::string& instance)
     return out + ")";
 }
 
-std::string Facts_ClassRaces(const std::string& cls)
+std::string Facts_ClassRaces(const std::string& cls, bool alliance)
 {
     static const std::pair<const char*, uint8> kClasses[] = {
         { "warrior", CLASS_WARRIOR }, { "paladin", CLASS_PALADIN }, { "hunter", CLASS_HUNTER },
@@ -257,11 +257,12 @@ std::string Facts_ClassRaces(const std::string& cls)
             classId = id;
     if (!classId)
         return {};
+    const TeamId side = alliance ? TEAM_ALLIANCE : TEAM_HORDE;
     std::vector<std::string> races;
     for (const auto& [race, name] : kRaces)
-        if (sObjectMgr->GetPlayerInfo(race, classId))
+        if (Player::TeamIdForRace(race) == side && sObjectMgr->GetPlayerInfo(race, classId))
             races.emplace_back(name);
-    if (races.empty())
+    if (races.size() < 2)
         return {};
     std::string out;
     for (size_t i = 0; i < races.size(); ++i)

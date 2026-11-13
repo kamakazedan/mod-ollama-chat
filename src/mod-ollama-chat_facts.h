@@ -30,7 +30,9 @@ std::string Facts_Rare(uint32_t level, const std::vector<std::string>& taken);
 // game's data does not say, so the premise still fills.
 std::string Facts_Bosses(const std::string& instance);
 
-// "orcs, tauren, trolls and draenei" for "shamans"; empty when unknown.
-std::string Facts_ClassRaces(const std::string& cls);
+// The races of one side that can be the class: "orcs, tauren and trolls"
+// for "shamans" on the Horde's (`alliance` false). Empty when unknown, and
+// when only one of that side's races can be it: there is nothing to compare.
+std::string Facts_ClassRaces(const std::string& cls, bool alliance);
 
 #endif // MOD_OLLAMA_CHAT_FACTS_H

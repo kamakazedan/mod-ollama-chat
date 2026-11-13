@@ -146,7 +146,7 @@ std::string Premises_Pick(Player* bot)
                             if (slot == "bosses" && (it->first == "dungeon" || it->first == "raid"))
                                 return Facts_Bosses(it->second);
                             if (slot == "class_races" && it->first == "class")
-                                return Facts_ClassRaces(it->second);
+                                return Facts_ClassRaces(it->second, alliance);
                         }
                         return slot == "bosses" ? std::string(" ") : std::string();
                     }

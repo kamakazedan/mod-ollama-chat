@@ -585,7 +585,9 @@ made up ("imagine if murlocs were ten feet tall"). Premises that need
 something specific are handed the real thing from the game's own data
 instead of a category to invent from: `{trinket}`, `{itemset}` and `{rare}`
 near the bot's level, `{bosses}` after a dungeon or raid, and `{class_races}`
-after a class. Premises that could only be answered by inventing something
+after a class (the races of the bot's own side that can be one). Races are
+each side's own: a Horde bot talks about orcs and tauren, and mentions gnomes
+or draenei only to run them down. Premises that could only be answered by inventing something
 (the best prize from the Darkmoon Faire, a ninja-looting story with the item
 in it) are gone.
 
