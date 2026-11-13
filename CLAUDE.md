@@ -211,6 +211,15 @@ mod-dungeon-clear.
 - Watch for nested `ObjectAccessor::GetPlayers()` loops; that is quadratic in
   online characters, per message.
 
+Group quests (`mod-ollama-chat_groupquests.cpp`) are mod-playerbots-plus's:
+who asks for help, who comes along and who leads. Here only their lines, from
+its `BotEventType::GroupQuest*` events, in the zone's General channel. They
+go out with `triggerBotReplies` off: an answer another bot made up ("I have
+it too!") would not be one of the party plus is getting together. An answer
+or invite is said only after the ask it answers went out to be written, and
+carries `writtenAtSeq` too, so a player speaking drops both: otherwise a held
+ask left its answers replying to nothing.
+
 ## Prompt content
 
 Whatever is most concrete and quotable in the prompt is what the model will

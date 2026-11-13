@@ -13,7 +13,7 @@
 //
 // OLLAMA_CHAT_PLAYERBOTS_PLUS is its API version: 0 when it is not in the
 // build, 1 for the market only, 2 for hangouts, bot events and muting, 3 for
-// duels talked into as well.
+// duels talked into as well, 4 for group quests (mod-ollama-chat_groupquests).
 // --------------------------------------------------------------------------
 
 #if __has_include("PlayerbotsPlus.h")

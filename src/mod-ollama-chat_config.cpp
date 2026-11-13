@@ -12,6 +12,7 @@
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_market.h"
+#include "mod-ollama-chat_groupquests.h"
 #include "mod-ollama-chat_marks.h"
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_race.h"
@@ -680,6 +681,15 @@ std::vector<std::vector<std::string>> g_PartyReadyTimeoutWords;
 std::vector<std::string> g_PartyReadyTimeoutLines;
 std::string g_PartyTogetherText;
 std::string g_JoinedLfgPrompt;
+
+bool        g_GroupQuestsEnable                = true;
+std::string g_GroupQuestsPrompt;
+std::string g_GroupQuestsAskText;
+std::string g_GroupQuestsAnswerText;
+std::string g_GroupQuestsInviteText;
+std::string g_GroupQuestsSoloText;
+uint32_t    g_GroupQuestsAnswerDelayMinSeconds = 6;
+uint32_t    g_GroupQuestsAnswerDelayMaxSeconds = 15;
 
 std::vector<std::vector<std::string>> g_BagsCancelPhrases;
 std::vector<std::vector<std::string>> g_BagsCancelNotPhrases;
@@ -3358,6 +3368,36 @@ static void LoadNaturalChatV32Settings()
              g_PartySkipEnable ? "on" : "off");
 }
 
+static void LoadNaturalChatV33Settings()
+{
+    // --- group quests (mod-playerbots-plus), said in General -----------------------------
+    g_GroupQuestsEnable = sConfigMgr->GetOption<bool>("OllamaChat.GroupQuests.Enable", true);
+    g_GroupQuestsPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.GroupQuests.Prompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, out questing in {zone}. Your chat style: "
+        "{bot_personality} {situation} Write it as one line in General chat, 3 to 14 words, the way a player types "
+        "it there: no quotes, no name in front.");
+    g_GroupQuestsAskText = sConfigMgr->GetOption<std::string>("OllamaChat.GroupQuests.AskText",
+        "You have the group quest {quest} and want help with it: you need {need_people}. Ask in General whether "
+        "anyone has it and wants to do it with you, naming the quest in its square brackets exactly as it is "
+        "written here.");
+    g_GroupQuestsAnswerText = sConfigMgr->GetOption<std::string>("OllamaChat.GroupQuests.AnswerText",
+        "{other_name} just asked in General for help with the group quest {quest}. You have it too and want to do "
+        "it: answer them that you are up for it.");
+    g_GroupQuestsInviteText = sConfigMgr->GetOption<std::string>("OllamaChat.GroupQuests.InviteText",
+        "{other_name} just asked in General whether anyone is doing the group quest {quest}. You are getting a "
+        "party together for it, {have} of you now counting them: tell them to come along.");
+    g_GroupQuestsSoloText = sConfigMgr->GetOption<std::string>("OllamaChat.GroupQuests.SoloText",
+        "You have been asking in General for a good while for help with the group quest {quest}, and nobody has "
+        "come. Say you will give it a go on your own then.");
+    g_GroupQuestsAnswerDelayMinSeconds = std::min<uint32_t>(120,
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.GroupQuests.AnswerDelayMinSeconds", 6));
+    g_GroupQuestsAnswerDelayMaxSeconds = std::min<uint32_t>(120,
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.GroupQuests.AnswerDelayMaxSeconds", 15));
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v33: group quests said in General {}.",
+             g_GroupQuestsEnable ? "on" : "off");
+}
+
 static void LoadNaturalChatV30Settings()
 {
     // --- what chat is really like ---------------------------------------------------------
@@ -4331,6 +4371,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV30Settings();
     LoadNaturalChatV31Settings();
     LoadNaturalChatV32Settings();
+    LoadNaturalChatV33Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);
@@ -4785,6 +4826,7 @@ void OllamaChatConfigWorldScript::OnStartup()
     OllamaMarket_Init();
     Stuck_Init();
     Marks_Init();
+    GroupQuests_Init();
     LoadBotPersonalityList();
     LoadBotConversationHistoryFromDB();
     InitializeSentimentTracking();

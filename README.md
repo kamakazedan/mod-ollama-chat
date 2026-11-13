@@ -907,6 +907,12 @@ With both modules in the same build, the bots talk about what it has them do:
   head off to make room. Anywhere else, nobody talks of a duel.
 - **Raid marks:** a rogue that can't sap the star says why in party
   (`OllamaChat.Marks.Say*` and the `Sap*` situations).
+- **Group quests:** bots getting a party together for a group quest say so
+  in General, each in its own style: the ask for help ("LF2M [The Ogre
+  Threat]", the quest linked), the answers of those who have it too, the one
+  getting the party together telling someone who asks to come along, and
+  going it alone when nobody came. Only where a real player is in General to
+  read it, and an ask never talks over one (`OllamaChat.GroupQuests.*`).
 - **Muted lines:** this module has the bots say "Staying", "Following", hello
   on joining a group, and a quest objective done in their own words. Give
   mod-playerbots-plus the longer mute list from its conf, so playerbots' own

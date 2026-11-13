@@ -4135,6 +4135,64 @@ OllamaChat.Marks.SapFailed = "You tried to sap {target} for {player_name} and it
 
 ###############################################################################
 #
+#   OLLAMA CHAT - GROUP QUESTS
+#
+#   mod-playerbots-plus gets random bots together for the quests marked
+#   Group (PlayerbotsPlus.GroupQuests.* in its conf): who asks, who comes
+#   along and who leads is its. Here they say it, in the zone's General
+#   channel, each in its own chat style: the ask for help ("LF2M [The Ogre
+#   Threat]"), the answers of those who have it too, the one getting a party
+#   together telling one who asks to come along, and the one nobody came for
+#   saying it will try it alone. The quest is named in brackets, so it goes
+#   out as a link. Nothing is said where no real player is in General to
+#   read it. An ask, or going alone, is a line nobody asked for: none starts
+#   within Context.AmbientHoldSeconds of a real player speaking there. An
+#   answer follows the ask it answers by a few seconds, and only an ask that
+#   went out to be written; going alone is only said after asks someone could
+#   have read. Any of them is dropped if a player spoke while it was written
+#   (an answer with its ask). Who answers is mod-playerbots-plus's, so other
+#   bots do not take these up as something to reply to. Without
+#   mod-playerbots-plus (with group quests) there are none.
+#
+###############################################################################
+
+#    OllamaChat.GroupQuests.Enable
+#    OllamaChat.GroupQuests.Prompt
+#        Whether they say it, and the prompt it is written from.
+#        Placeholders in Prompt: {bot_name}, {bot_level}, {bot_race},
+#        {bot_class}, {bot_personality}, {zone}, {situation} (one of the four
+#        below).
+#        Default: 1, (below)
+OllamaChat.GroupQuests.Enable = 1
+OllamaChat.GroupQuests.Prompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, out questing in {zone}. Your chat style: {bot_personality} {situation} Write it as one line in General chat, 3 to 14 words, the way a player types it there: no quotes, no name in front."
+
+#    OllamaChat.GroupQuests.AskText
+#    OllamaChat.GroupQuests.AnswerText
+#    OllamaChat.GroupQuests.InviteText
+#    OllamaChat.GroupQuests.SoloText
+#        The situations: an ask for help; an answer, from one who has it too;
+#        the one getting a party together telling one who asked to come
+#        along; and going alone, nobody having come. Placeholders: {quest}
+#        (its name in brackets), {need} and {need_people} ("one more person",
+#        "2 more people": Ask), {have} (how many there are now: Invite),
+#        {other_name} (the one asking: Answer, Invite), {zone}. Empty
+#        silences that one.
+OllamaChat.GroupQuests.AskText = "You have the group quest {quest} and want help with it: you need {need_people}. Ask in General whether anyone has it and wants to do it with you, naming the quest in its square brackets exactly as it is written here."
+OllamaChat.GroupQuests.AnswerText = "{other_name} just asked in General for help with the group quest {quest}. You have it too and want to do it: answer them that you are up for it."
+OllamaChat.GroupQuests.InviteText = "{other_name} just asked in General whether anyone is doing the group quest {quest}. You are getting a party together for it, {have} of you now counting them: tell them to come along."
+OllamaChat.GroupQuests.SoloText = "You have been asking in General for a good while for help with the group quest {quest}, and nobody has come. Say you will give it a go on your own then."
+
+#    OllamaChat.GroupQuests.AnswerDelayMinSeconds
+#    OllamaChat.GroupQuests.AnswerDelayMaxSeconds
+#        An answer waits this long (picked between the two, up to 120
+#        seconds) on top of the usual typing time, so it comes after the ask
+#        it answers.
+#        Default: 6, 15
+OllamaChat.GroupQuests.AnswerDelayMinSeconds = 6
+OllamaChat.GroupQuests.AnswerDelayMaxSeconds = 15
+
+###############################################################################
+#
 #   OLLAMA CHAT - WHAT BOTS CARRY, AND TRADING IT
 #
 #   A bot knows what is in its bags: what it could part with and what it

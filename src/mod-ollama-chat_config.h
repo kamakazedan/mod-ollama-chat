@@ -730,6 +730,16 @@ extern std::vector<std::string> g_PartyReadyTimeoutLines;                // ...o
 extern std::string g_PartyTogetherText;
 extern std::string g_JoinedLfgPrompt;
 
+// Group quests (mod-playerbots-plus), said in General
+extern bool        g_GroupQuestsEnable;
+extern std::string g_GroupQuestsPrompt;
+extern std::string g_GroupQuestsAskText;       // it wants help with one
+extern std::string g_GroupQuestsAnswerText;    // ...one who has it too says it will come
+extern std::string g_GroupQuestsInviteText;    // ...the one getting a party together tells one who asked to come along
+extern std::string g_GroupQuestsSoloText;      // nobody came: it tries alone
+extern uint32_t    g_GroupQuestsAnswerDelayMinSeconds;
+extern uint32_t    g_GroupQuestsAnswerDelayMaxSeconds;
+
 // Taking a gift back out of the trade window
 extern std::vector<std::vector<std::string>> g_BagsCancelPhrases;
 extern std::vector<std::vector<std::string>> g_BagsCancelNotPhrases;
