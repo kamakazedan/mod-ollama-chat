@@ -545,6 +545,7 @@ void LoadEmoteStyles();
 // --------------------------------------------
 // Replies. World thread only.
 extern std::vector<std::vector<std::string>> g_ResponseDropVocatives;   // "kid", where it addresses someone
+extern std::vector<TextRules::PhraseSwap> g_ResponseSwaps;              // "fair point" -> "fair"
 extern std::vector<std::vector<std::string>> g_ResponseInsultWords;     // "knob", "muppet": banter or heat only
 extern std::vector<std::vector<std::string>> g_ResponseProvokeWords;    // what makes one fair: "stfu", "ur mum"
 extern std::vector<std::string> g_ResponseInsultPersonalities;          // styles that are just rude: NAT_RUDE

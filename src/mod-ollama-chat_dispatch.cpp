@@ -689,6 +689,18 @@ namespace
             c.text = dated;
         }
 
+        // "fair point" is just "fair" now: a phrase people have stopped
+        // saying, the way they say it now (Response.Swaps).
+        if (!g_ResponseSwaps.empty())
+        {
+            const std::string now = TextRules::SwapPhrases(c.text, g_ResponseSwaps, [](size_t n)
+                                                           { return size_t(urand(0, uint32(n - 1))); });
+            if (g_DebugEnabled && now != c.text)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} said it the way people say it now: '{}' -> '{}'",
+                         bot->GetName(), c.text, now);
+            c.text = now;
+        }
+
         // "i'm the spider king now. avengers.": the binger naming what it
         // quoted, however often it is told not to. The name goes, the line
         // stays (Response.QuoteSources, .QuoteSourceStyles).

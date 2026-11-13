@@ -32,9 +32,9 @@ bool OllamaIsBotPlayer(Player* player)
     return ai && ai->IsBotAI();
 }
 
-bool OllamaIsSocialHub(Player* player)
+bool OllamaInCity(Player* player)
 {
-    if (!g_CityEnable || !player || !player->IsInWorld())
+    if (!player || !player->IsInWorld())
         return false;
 
     Map* map = player->GetMap();
@@ -46,11 +46,21 @@ bool OllamaIsSocialHub(Player* player)
     if (player->HasRestFlag(REST_FLAG_IN_CITY))
         return true;
 
-    if (g_CityIncludeInns && player->HasRestFlag(REST_FLAG_IN_TAVERN))
-        return true;
-
     return !g_CityExtraIds.empty() &&
            (g_CityExtraIds.contains(player->GetZoneId()) || g_CityExtraIds.contains(player->GetAreaId()));
+}
+
+bool OllamaIsSocialHub(Player* player)
+{
+    if (!g_CityEnable || !player)
+        return false;
+    if (OllamaInCity(player))
+        return true;
+    // An inn, with City.IncludeInns -- never one in an instance.
+    if (!g_CityIncludeInns || !player->IsInWorld() || !player->HasRestFlag(REST_FLAG_IN_TAVERN))
+        return false;
+    Map* map = player->GetMap();
+    return map && !map->Instanceable();
 }
 
 bool OllamaIsScenery(Creature const* creature, Player const* bot)

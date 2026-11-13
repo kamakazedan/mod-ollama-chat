@@ -550,6 +550,12 @@ they were "way too low level for this area". A bot standing in one of its own
 side's cities is now told that people of every level come there
 (`Outlook.HomeCityText`), and every bot that what someone is up to, and why
 they are where they are, is their own business (`Outlook.KnowledgeText`).
+Being told was not enough while the prompt itself said "a level 12 Gnome
+Mage is near you": a bot in General asked why there was a level 12 there.
+In a city (a capital, Dalaran or Shattrath) nobody's level is handed to a
+bot as something it sees any more: a nearby-player line that names one is
+not used there, and someone passing by or hanging out is described without
+it.
 
 **Levels in /say.** Standing near each other, anyone can see anyone's level
 and class just by looking, so "i'm 54, just grinding" told to someone who can
@@ -671,6 +677,10 @@ Repair Bot, Clockwork Rocket Bot and Mimiron's bomb bots, are fine anywhere
 `DropVocatives` takes "kid" out wherever it addresses someone ("just cave mobs
 kid" goes out as "just cave mobs"), and a thank-you on its own ("ty", "cheers
 mate") gets no reply unless it asks something too (`Crowd.ThanksReplyChance`).
+`Swaps` says a phrase people have stopped saying the way they say it now:
+"Fair point, but..." goes out as "Fair, but...", while "that's a fair
+point" stays as it is. Add your own as `old=new`, or `old=new,other` for a
+pick.
 A dead bot is told it is dead, so what it says fits.
 
 ## Food and Water from Mages

@@ -1448,6 +1448,21 @@ OllamaChat.Echo.CommonWords = "i|im|ive|ill|id|you|your|youre|ur|u|ya|the|a|an|t
 #        Default: "kid|kiddo"
 OllamaChat.Response.DropVocatives = "kid|kiddo"
 
+#    OllamaChat.Response.Swaps
+#        Phrases people have stopped saying, and what they say now: a bot's
+#        line says the new words instead. Each entry is old=new, separated by
+#        |; several new ones, separated by commas, and one is picked each time
+#        ("good point=true,fair"). Only where the phrase is a remark of its
+#        own -- "Fair point, but..." goes out as "Fair, but...", "ok fair
+#        point lol" as "ok fair lol" -- never where it is something talked
+#        about: after "a", "the", "that's", "very" and the like ("that's a
+#        fair point" stays), or before "about", "on", "there" and the like
+#        ("fair point about the gear" stays). The new words keep the old
+#        ones' capitals. Matched on whole words, case and apostrophes
+#        ignored. Empty disables.
+#        Default: "fair point=fair"
+OllamaChat.Response.Swaps = "fair point=fair"
+
 #    OllamaChat.Response.InsultWords
 #    OllamaChat.Response.ProvokeWords
 #    OllamaChat.Response.InsultPersonalities
@@ -6319,7 +6334,11 @@ OllamaChat.Relationship.MaxLength = 220
 
 # OllamaChat.EnvCommentNearbyPlayer
 #   Description: A pipe-separated (|) list of template messages for when another player is seen nearby.
+#   In a city, a line that names a level ({player_level} or {level_gap}) is not used: people of every
+#   level are in one, and told "a level 12 Gnome Mage is near you", a bot asked in General why there
+#   was a level 12 there. Keep a line without a level, or cities get none of these.
 #   Placeholders (named): {player_name} {player_race} {player_class} {player_level} {player_state}
+#   {level_gap}
 OllamaChat.EnvCommentNearbyPlayer = You notice {player_name}, a {player_race} {player_class}, {player_state} nearby. Say something to or about them.|{player_name} the {player_class} is {player_state} close by. React to seeing them.|A level {player_level} {player_class} called {player_name} is nearby. Comment on them.|You size up {player_name}, a {player_race} {player_class}. Say what you make of them.|{player_name} is {player_state} within earshot. Greet or remark on them.|You spot {player_name} and note they are {player_state}. Say something fitting.
 
 # OllamaChat.EnvCommentGroupMember

@@ -619,6 +619,126 @@ namespace TextRules
         return out;
     }
 
+    std::vector<PhraseSwap> ParseSwaps(const std::string& raw)
+    {
+        auto trim = [](std::string s)
+        {
+            const size_t b = s.find_first_not_of(" \t");
+            if (b == std::string::npos)
+                return std::string();
+            return s.substr(b, s.find_last_not_of(" \t") - b + 1);
+        };
+        std::vector<PhraseSwap> out;
+        std::stringstream entries(raw);
+        std::string entry;
+        while (std::getline(entries, entry, '|'))
+        {
+            const size_t eq = entry.find('=');
+            if (eq == std::string::npos)
+                continue;
+            PhraseSwap swap;
+            swap.from = CrowdText::Words(entry.substr(0, eq));
+            std::stringstream news(entry.substr(eq + 1));
+            std::string one;
+            while (std::getline(news, one, ','))
+                if (std::string t = trim(one); !t.empty())
+                    swap.to.push_back(std::move(t));
+            if (!swap.from.empty() && !swap.to.empty())
+                out.push_back(std::move(swap));
+        }
+        return out;
+    }
+
+    std::string SwapPhrases(const std::string& text, const std::vector<PhraseSwap>& swaps,
+                            const std::function<size_t(size_t)>& pick)
+    {
+        if (text.empty() || swaps.empty())
+            return text;
+
+        struct Tok
+        {
+            size_t      b = 0;
+            size_t      e = 0;
+            std::string norm;
+        };
+        std::vector<Tok> toks;
+        for (size_t i = 0; i < text.size();)
+        {
+            if (!std::isalnum(static_cast<unsigned char>(text[i])) && text[i] != '\'')
+            {
+                ++i;
+                continue;
+            }
+            Tok t;
+            t.b = i;
+            for (; i < text.size() && (std::isalnum(static_cast<unsigned char>(text[i])) || text[i] == '\''); ++i)
+                if (text[i] != '\'')
+                    t.norm += static_cast<char>(std::tolower(static_cast<unsigned char>(text[i])));
+            t.e = i;
+            if (!t.norm.empty())
+                toks.push_back(std::move(t));
+        }
+
+        // What makes the phrase a thing talked about: a word for it before it
+        // ("a", "thats a", "very"), a word that carries on from it after it
+        // ("about the gear", "there").
+        static const std::unordered_set<std::string> kBefore = {
+            "a", "an", "the", "that", "thats", "this", "these", "those", "its", "your", "ur", "yer", "my", "his",
+            "her", "their", "our", "one", "another", "some", "any", "no", "every", "each", "such", "very",
+            "really", "pretty", "quite", "so", "too", "most", "more", "real", "good", "great", "totally", "fairly"
+        };
+        static const std::unordered_set<std::string> kAfter = {
+            "about", "on", "regarding", "re", "there", "here", "made", "well", "with", "from", "in", "of", "for",
+            "you", "u", "ya", "youve", "uve", "to", "is", "was", "and"
+        };
+        // Only blanks between two of its words, so "fair. point" is not it.
+        auto blanks = [&](size_t from, size_t to)
+        {
+            for (size_t i = from; i < to; ++i)
+                if (text[i] != ' ' && text[i] != '\t')
+                    return false;
+            return true;
+        };
+
+        std::string out;
+        size_t copied = 0;
+        for (size_t k = 0; k < toks.size(); ++k)
+        {
+            for (const PhraseSwap& swap : swaps)
+            {
+                const size_t n = swap.from.size();
+                if (k + n > toks.size())
+                    continue;
+                bool same = true;
+                for (size_t i = 0; i < n && same; ++i)
+                    same = toks[k + i].norm == swap.from[i] && (i == 0 || blanks(toks[k + i - 1].e, toks[k + i].b));
+                if (!same)
+                    continue;
+                if (k > 0 && blanks(toks[k - 1].e, toks[k].b) && kBefore.contains(toks[k - 1].norm))
+                    continue;
+                if (k + n < toks.size() && blanks(toks[k + n - 1].e, toks[k + n].b) &&
+                    kAfter.contains(toks[k + n].norm))
+                    continue;
+
+                const std::string said = text.substr(toks[k].b, toks[k + n - 1].e - toks[k].b);
+                std::string now = swap.to[swap.to.size() > 1 ? std::min(pick(swap.to.size()), swap.to.size() - 1) : 0];
+                const bool allCaps = said.size() > 1 && std::none_of(said.begin(), said.end(), [](unsigned char c)
+                                                                     { return std::islower(c); });
+                if (allCaps)
+                    std::transform(now.begin(), now.end(), now.begin(),
+                                   [](unsigned char c) { return char(std::toupper(c)); });
+                else if (std::isupper(static_cast<unsigned char>(said[0])))
+                    now[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(now[0])));
+
+                out += text.substr(copied, toks[k].b - copied) + now;
+                copied = toks[k + n - 1].e;
+                k += n - 1;
+                break;
+            }
+        }
+        return copied ? out + text.substr(copied) : text;
+    }
+
     std::string NormalizeSourceName(const std::string& name)
     {
         std::string out;

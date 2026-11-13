@@ -27,7 +27,8 @@ class Player;
 // What a passer-by can see about `subject`, as a phrase for a prompt:
 // "Kamidan, a level 23 Human Hunter, riding their mount, a Brown Horse, with
 // their hunter pet, a cat called Whiskers" -- each animal as what it is
-// (mod-ollama-chat_pets). `observer` formats race and class names.
+// (mod-ollama-chat_pets). `observer` formats race and class names, and in a
+// city (OllamaInCity) the level is left out: "Kamidan, a Human Hunter, ...".
 // *outPetGuid gets the subject's pet or companion when one is close to them.
 std::string Presence_Describe(Player* subject, Player* observer, ObjectGuid* outPetGuid = nullptr);
 

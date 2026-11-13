@@ -162,8 +162,12 @@ std::string Presence_Describe(Player* subject, Player* observer, ObjectGuid* out
     if (!subject)
         return "";
 
-    std::string text = SafeFormat("{}, a level {} {}", subject->GetName(), subject->GetLevel(),
-                                  ClassAndRace(subject, observer));
+    // Their level, except in a city, where people of every level are and
+    // nobody's is a sight (OllamaInCity).
+    std::string text = OllamaInCity(observer)
+                           ? subject->GetName() + ", " + TextRules::WithArticle(ClassAndRace(subject, observer))
+                           : SafeFormat("{}, a level {} {}", subject->GetName(), subject->GetLevel(),
+                                        ClassAndRace(subject, observer));
 
     // Each as what it is: "riding their mount, a Swift Brown Horse", "with
     // their hunter pet, a wolf called Howler", "with their companion pet, a

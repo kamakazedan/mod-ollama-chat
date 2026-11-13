@@ -62,6 +62,31 @@ namespace TextRules
     // tuesday", "last tuesday" and "this tuesday" are other days: left alone.
     std::string FixWeekday(const std::string& text, int today);
 
+    // ---- what people say now --------------------------------------------
+
+    // A phrase people have stopped saying and what they say now
+    // (OllamaChat.Response.Swaps, "fair point=fair"): its words, lowercased
+    // the CrowdText way, and the new words as written -- several, separated
+    // by commas, of which one is picked each time.
+    struct PhraseSwap
+    {
+        std::vector<std::string> from;
+        std::vector<std::string> to;
+    };
+
+    // "fair point=fair|good point=true,fair" -> those swaps. An entry with
+    // nothing on one side of its '=' is left out.
+    std::vector<PhraseSwap> ParseSwaps(const std::string& raw);
+
+    // `text` with each swap made where its phrase is a remark of its own:
+    // "Fair point, but..." -> "Fair, but...", "ok fair point lol" -> "ok fair
+    // lol". Not where it is something talked about: after "a", "the",
+    // "that", "very" and the like ("thats a fair point"), nor before "about",
+    // "on", "there" and the like ("fair point about the gear"). The new words
+    // keep the old ones' capitals. `pick(n)` picks one of n new ones (0..n-1).
+    std::string SwapPhrases(const std::string& text, const std::vector<PhraseSwap>& swaps,
+                            const std::function<size_t(size_t)>& pick);
+
     // ---- what a quote is from -------------------------------------------
 
     // Films, shows and characters a line might be put down to, and the words

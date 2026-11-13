@@ -282,6 +282,10 @@ Grunt, a bot asked why the grunt was level 75. Decide it by what a creature
 is, never by `IsFriendlyTo`: a city's people react to someone by that one's
 standing with the city, and undead and blood elves start out only Neutral
 with Orgrimmar.
+Nor is anyone's level in a city (`OllamaInCity`): people of every level
+are there, and "a level 12 Gnome Mage is near you" had a bot ask why
+there was a level 12 there. A prompt about someone a bot sees there
+leaves the level out (`Presence_Describe`, the nearby-player topic).
 
 A race is more than a word in the prompt. What each race says comes from the
 game -- its NPCs' greetings and farewells, its language's attested phrases

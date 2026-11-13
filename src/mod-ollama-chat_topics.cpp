@@ -174,11 +174,20 @@ namespace
             nearby.push_back(other);
         }
 
-        if (!nearby.empty() && !g_EnvCommentNearbyPlayer.empty())
+        // In a city, nobody's level is a sight (OllamaInCity): only the lines
+        // that name none, and no such topic there when every line does.
+        std::vector<std::string> nearbyLines;
+        const bool inCity = OllamaInCity(bot);
+        for (const std::string& line : g_EnvCommentNearbyPlayer)
+            if (!inCity || (line.find("{player_level}") == std::string::npos &&
+                            line.find("{level_gap}") == std::string::npos))
+                nearbyLines.push_back(line);
+
+        if (!nearby.empty() && !nearbyLines.empty())
         {
             Player* subject = nearby[PickIndex(nearby.size())];
-            Add(out, TopicCategory::People, "nearby_player", g_EnvCommentNearbyPlayer,
-                SafeFormat(PickOne(g_EnvCommentNearbyPlayer),
+            Add(out, TopicCategory::People, "nearby_player", nearbyLines,
+                SafeFormat(PickOne(nearbyLines),
                            fmt::arg("player_name", subject->GetName()),
                            fmt::arg("player_class", ClassName(subject)),
                            fmt::arg("player_race", RaceName(subject)),

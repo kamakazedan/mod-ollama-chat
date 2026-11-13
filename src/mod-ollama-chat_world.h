@@ -83,6 +83,14 @@ bool OllamaInBotOnlyDungeon(Player* bot);
 // Never an instance. False when OllamaChat.City.Enable is off.
 bool OllamaIsSocialHub(Player* player);
 
+// In a city: a capital (the game's own "resting in a city" flag) or a zone or
+// area listed in OllamaChat.City.ExtraZoneOrAreaIds -- whether or not city
+// chatter is on, and never an inn. People of every level are in one, so
+// nobody's level there is a sight: a prompt about someone a bot sees in a city
+// does not give it ("a level 12 Gnome Mage is near you" had a bot in General
+// ask why there was a level 12 there).
+bool OllamaInCity(Player* player);
+
 // Part of the scenery around `bot` rather than something to remark on: a
 // place's guards and townsfolk -- anyone not hostile who is a guard, has
 // something to offer (npc flags) or belongs to a faction with standing -- and

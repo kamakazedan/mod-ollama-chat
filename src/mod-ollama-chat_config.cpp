@@ -531,6 +531,7 @@ std::string g_PersonalitySaidLatelyNote;
 uint32_t    g_PersonalitySaidLatelyLines = 5;
 
 std::vector<std::vector<std::string>> g_ResponseDropVocatives;
+std::vector<TextRules::PhraseSwap> g_ResponseSwaps;
 std::vector<std::vector<std::string>> g_ResponseInsultWords;
 std::vector<std::vector<std::string>> g_ResponseProvokeWords;
 std::vector<std::string> g_ResponseInsultPersonalities;
@@ -1759,6 +1760,8 @@ static void LoadNaturalChatV7Settings()
 
     // --- replies --------------------------------------------------------------
     g_ResponseDropVocatives = phrases("OllamaChat.Response.DropVocatives", "kid|kiddo");
+    g_ResponseSwaps = TextRules::ParseSwaps(sConfigMgr->GetOption<std::string>("OllamaChat.Response.Swaps",
+                                                                              "fair point=fair"));
     g_ResponseInsultWords = phrases("OllamaChat.Response.InsultWords",
         "knob|knobhead|knobend|nob|nobhead|twat|dickhead|bellend|pillock|wanker|tosser|prat|muppet|numpty|"
         "plonker|wally|idiot|moron|berk|noob|nub|loser|weirdo");
@@ -2080,10 +2083,10 @@ static void LoadNaturalChatV7Settings()
         "your own way: gg, thanks, nice work, whatever suits you.");
 
     LOG_INFO("module.ollamachat",
-             "[Ollama Chat] Replies: {} word(s) dropped as forms of address, {} rare phrase(s) once per {} s; "
-             "thank-yous answered {}% of the time.",
-             g_ResponseDropVocatives.size(), g_ResponseRarePhrases.size(), g_ResponseRareCooldownSeconds,
-             g_CrowdThanksReplyChance);
+             "[Ollama Chat] Replies: {} word(s) dropped as forms of address, {} phrase(s) said the way people "
+             "say them now, {} rare phrase(s) once per {} s; thank-yous answered {}% of the time.",
+             g_ResponseDropVocatives.size(), g_ResponseSwaps.size(), g_ResponseRarePhrases.size(),
+             g_ResponseRareCooldownSeconds, g_CrowdThanksReplyChance);
 }
 
 // "a|b|c" lists, and "KEY:N" pairs separated by spaces.
