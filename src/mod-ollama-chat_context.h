@@ -51,8 +51,11 @@ uint64_t Context_RecordLine(Player* speaker, ChatChannelSourceLocal source,
 // `target`: who it was aimed at, for an emote -- a line the actor types next
 // is then taken to be aimed at them (Context_LikelyAddressee). Reads nothing
 // of anyone but the actor and the target, under its own lock: safe on the
-// map thread both are on.
-void Context_RecordEvent(Player* actor, const std::string& note, bool toGuild, Player* target = nullptr);
+// map thread both are on. `guildId`, when set, is the guild transcript a
+// guild note goes to instead of the actor's own: the guild an event happened
+// in, handled a tick later, when a guild leave has cleared the actor's.
+void Context_RecordEvent(Player* actor, const std::string& note, bool toGuild, Player* target = nullptr,
+                         uint32_t guildId = 0);
 
 // Sequence number of the newest line `speaker` has in that space, or 0.
 uint64_t Context_LatestLineFrom(Player* speaker, ChatChannelSourceLocal source,

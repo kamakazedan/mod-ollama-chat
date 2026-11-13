@@ -402,7 +402,7 @@ uint64_t Context_RecordLine(Player* speaker, ChatChannelSourceLocal source,
     return AppendLocked(key, std::move(line));
 }
 
-void Context_RecordEvent(Player* actor, const std::string& note, bool toGuild, Player* target)
+void Context_RecordEvent(Player* actor, const std::string& note, bool toGuild, Player* target, uint32_t guildId)
 {
     if (!g_ContextEnable || !actor || !actor->IsInWorld() || note.empty())
         return;
@@ -428,8 +428,9 @@ void Context_RecordEvent(Player* actor, const std::string& note, bool toGuild, P
 
     if (toGuild)
     {
-        if (actor->GetGuildId())
-            AppendLocked("G:" + std::to_string(actor->GetGuildId()), make());
+        // The guild given (where an event happened, a moment ago), else the actor's own.
+        if (const uint32_t guild = guildId ? guildId : actor->GetGuildId())
+            AppendLocked("G:" + std::to_string(guild), make());
         return;
     }
 
@@ -647,8 +648,8 @@ std::string Context_LeadUpText(Player* viewer, Player* speaker, ChatChannelSourc
         leadUp += (leadUp.empty() ? "" : ", and then ") + piece;
     }
 
-    const std::string text = SafeFormat(g_ContextLeadUpText, fmt::arg("player_name", speaker->GetName()),
-                                        fmt::arg("lead_up", leadUp));
+    std::string text = SafeFormat(g_ContextLeadUpText, fmt::arg("player_name", speaker->GetName()),
+                                  fmt::arg("lead_up", leadUp));
     if (text.empty() || text == "[Format Error]")
         return {};
     {
@@ -908,8 +909,8 @@ std::string Context_RationFillers(Player* bot, ChatChannelSourceLocal source,
         }
 
         const bool drop = fillersKept >= g_ContextMaxFillersPerLine ||
-                          recentlySaid.count(pattern) > 0 ||
-                          recentlyUsed.count(pattern) > 0;
+                          recentlySaid.contains(pattern) ||
+                          recentlyUsed.contains(pattern);
         if (drop)
         {
             changed = true;

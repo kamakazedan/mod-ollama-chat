@@ -837,15 +837,15 @@ void Topics_NoteWitnessedEvent(Player* witness, const std::string& text)
 
 void Topics_BroadcastEventToNearby(Player* actor, const std::string& text, float radius)
 {
-    if (!actor || text.empty() || g_TopicEventMemorySize == 0)
+    if (!actor || text.empty() || g_TopicEventMemorySize == 0 || !actor->IsInWorld())
         return;
 
-    for (auto const& pair : ObjectAccessor::GetPlayers())
+    // The actor's own map: only someone there can have seen it. (Was every
+    // player online, for every kill and loot in the world.)
+    for (auto const& ref : actor->GetMap()->GetPlayers())
     {
-        Player* witness = pair.second;
+        Player* witness = ref.GetSource();
         if (!witness || witness == actor || !witness->IsInWorld())
-            continue;
-        if (witness->GetMap() != actor->GetMap())
             continue;
         if (!actor->IsWithinDistInMap(witness, radius))
             continue;

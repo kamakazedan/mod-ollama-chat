@@ -26,6 +26,7 @@
 #include "GameObject.h"
 #include "Group.h"
 #include "Guild.h"
+#include "GuildMgr.h"
 #include "Item.h"
 #include "Log.h"
 #include "Map.h"
@@ -41,6 +42,8 @@
 
 #include <fmt/core.h>
 #include <algorithm>
+#include <chrono>
+#include <mutex>
 #include <random>
 #include <string>
 #include <vector>
@@ -48,6 +51,28 @@
 namespace
 {
     OllamaBotEventChatter eventChatter;
+
+    // Game events as the hooks raise them, most on a map thread (a kill, a
+    // loot, a death, a ding): noted there, handled on the world tick
+    // (Events_Update), where any player may be read -- a guild event's bots
+    // are anywhere in the world -- and the prompt builders are safe to run.
+    struct PendingEvent
+    {
+        ObjectGuid source;
+        std::string type;
+        std::string detail;
+        // As it was when it happened: a guild leave is raised before the
+        // player's guild is cleared (Guild::DeleteMember), and is still the
+        // guild's to hear about a tick later.
+        uint32 guildId = 0;
+        std::chrono::steady_clock::time_point when;
+    };
+    std::mutex g_pendingMutex;
+    std::vector<PendingEvent> g_pending;
+    constexpr size_t kMaxPending = 1024;
+    // Older than this when the tick comes (the module was switched off and on
+    // again in between): the moment has passed.
+    constexpr std::chrono::seconds kPendingStale{ 10 };
 
     bool IsGuildEventType(const std::string& type)
     {
@@ -198,7 +223,7 @@ namespace
                is(g_EventTypeAchievement) || is(g_GuildEventTypeGuildAchievement);
     }
 
-    // Level-ups and achievements fire on map threads: one generator each.
+    // One generator per thread that asks.
     std::mt19937& CongratsRng()
     {
         static thread_local std::mt19937 rng{ std::random_device{}() };
@@ -231,6 +256,45 @@ std::string Events_PickCongrats(Player* bot, const std::string& scopeKey, const 
 
 void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, std::string detail)
 {
+    // Any thread: note it, nothing more.
+    if (!g_Enable || !g_EnableEventChatter || !source || type.empty())
+        return;
+
+    PendingEvent e;
+    e.source  = source->GetGUID();
+    e.type    = std::move(type);
+    e.detail  = std::move(detail);
+    e.guildId = source->GetGuildId();
+    e.when    = std::chrono::steady_clock::now();
+
+    std::lock_guard<std::mutex> lock(g_pendingMutex);
+    if (g_pending.size() < kMaxPending)
+        g_pending.push_back(std::move(e));
+}
+
+void Events_Update()
+{
+    std::vector<PendingEvent> events;
+    {
+        std::lock_guard<std::mutex> lock(g_pendingMutex);
+        if (g_pending.empty())
+            return;
+        events.swap(g_pending);
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    for (const PendingEvent& e : events)
+    {
+        if (now - e.when > kPendingStale)
+            continue;
+        if (Player* source = ObjectAccessor::FindPlayer(e.source))
+            eventChatter.HandleGameEvent(source, e.type, e.detail, e.guildId);
+    }
+}
+
+void OllamaBotEventChatter::HandleGameEvent(Player* source, const std::string& type, const std::string& detail,
+                                            uint32 guildId)
+{
     if (!g_Enable || !g_EnableEventChatter || !source || type.empty())
         return;
 
@@ -244,9 +308,10 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
     if (const std::string memory = MemoryLineFor(source->GetName(), type, detail); !memory.empty())
         Topics_BroadcastEventToNearby(source, memory, g_EventChatterRealPlayerDistance);
 
-    const bool isGuildEvent = source->GetGuild() && g_EnableGuildEventChatter &&
+    // The guild it was in when it happened (Player::GetGuild, at that moment).
+    const bool isGuildEvent = guildId && sGuildMgr->GetGuildById(guildId) && g_EnableGuildEventChatter &&
                               IsGuildEventType(type) &&
-                              GuildHasRealPlayerOnline(source->GetGuildId());
+                              GuildHasRealPlayerOnline(guildId);
 
     bool hasNearbyRealPlayer = false;
     for (auto const& pair : source->GetMap()->GetPlayers())
@@ -273,7 +338,7 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
             ? isGuildEvent
             : (!sourceIsBot || hasNearbyRealPlayer || OllamaGroupHasRealPlayer(source));
         if (audience)
-            Context_RecordEvent(source, note, toGuild);
+            Context_RecordEvent(source, note, toGuild, nullptr, guildId);
     }
 
     if (sourceIsBot && !hasNearbyRealPlayer && !isGuildEvent)
@@ -297,7 +362,6 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
 
     if (isGuildEvent)
     {
-        const uint32 guildId = source->GetGuildId();
         for (auto const& pair : ObjectAccessor::GetPlayers())
         {
             Player* player = pair.second;
@@ -318,7 +382,7 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
                 continue;
 
             // AFK (hanging out in a city, mod-ollama-chat_hangout): did not see
-            // it. The flag, not the hangout state: this can run on a map thread.
+            // it.
             PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(player);
             if (ai && ai->IsBotAI() && !player->isAFK())
                 candidateBots.push_back(player);
@@ -431,9 +495,9 @@ void OllamaBotEventChatter::DispatchGameEvent(Player* source, std::string type, 
         LOG_INFO("module.ollamachat", "[Ollama Chat] Event dispatch complete, {} bots queued.", responses);
 }
 
-std::string OllamaBotEventChatter::BuildPrompt(Player* bot, std::string promptTemplate,
-                                               std::string eventType, std::string eventDetail,
-                                               std::string actorName, ChatChannelSourceLocal chatSource)
+std::string OllamaBotEventChatter::BuildPrompt(Player* bot, const std::string& promptTemplate,
+                                               const std::string& eventType, const std::string& eventDetail,
+                                               const std::string& actorName, ChatChannelSourceLocal chatSource)
 {
     if (!bot || promptTemplate.empty())
         return "";

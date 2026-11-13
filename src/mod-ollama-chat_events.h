@@ -23,15 +23,25 @@
 class OllamaBotEventChatter
 {
 public:
+    // Any thread -- most events are raised on a map thread: noted, and handled
+    // on the next world tick (Events_Update).
     void DispatchGameEvent(Player* source, std::string type, std::string detail);
+
+    // World thread only: the event as it happened, reacted to by the bots who
+    // saw it (or, for a guild event, the guild's).
+    // guildId: the guild `source` was in when it happened.
+    void HandleGameEvent(Player* source, const std::string& type, const std::string& detail, uint32 guildId);
 
     // World thread only -- reads live world state.
     // chatSource is where the reaction will be said; its recent transcript is
     // put in front of the prompt (or at {channel_history}).
-    std::string BuildPrompt(Player* bot, std::string promptTemplate, std::string eventType,
-                            std::string eventDetail, std::string actorName,
+    std::string BuildPrompt(Player* bot, const std::string& promptTemplate, const std::string& eventType,
+                            const std::string& eventDetail, const std::string& actorName,
                             ChatChannelSourceLocal chatSource = SRC_UNDEFINED_LOCAL);
 };
+
+// The game events noted since the last tick, handled. The module's world tick.
+void Events_Update();
 
 // A congratulation from OllamaChat.Events.CongratsLines for `name` ("gz",
 // "grats Kami"), skipping any this bot or this place has said too recently.

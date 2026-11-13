@@ -35,6 +35,16 @@ real player spoke there is dropped at delivery, and none starts within
 `Context.AmbientHoldSeconds` of one. A new kind of unprompted line does both,
 or it talks over people.
 
+A hook that fires on a map thread (a kill, loot, a death, a ding, an
+achievement, gear put on, a potion) notes what happened under a mutex and
+nothing more; the world tick acts on it (`Events_Update`, `Equip_Update`,
+`Potions_Update`, ...). Event chatter used to build its prompts in the hook
+itself, on whichever map thread raised it -- with five map threads running at
+once, a guild event read bots anywhere in the world from there. The one hook
+that answers where it is, `ChatOnEmote` (a text emote is handled on the map
+thread), reads only the two players on that map and state behind a lock --
+the personalities included (`g_BotPersonalityMutex`).
+
 `EventProcessor::AddEvent` (`bot->m_Events`) is **not** a way around this. It
 mutates a container that `Player::Update` walks, so calling it off-thread is the
 same race it looks like it avoids.

@@ -22,6 +22,7 @@
 #include "mod-ollama-chat_conjure.h"
 #include "mod-ollama-chat_buffs.h"
 #include "mod-ollama-chat_equip.h"
+#include "mod-ollama-chat_events.h"
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_mingle.h"
@@ -466,6 +467,9 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 
     // A bot that just joined a group saying hi, or carrying on a conversation.
     Joined_Update();
+
+    // Kills, loot, deaths, dings and the rest, as the hooks noted them.
+    Events_Update();
 
     // A bot putting on a rare or epic it just got, maybe saying so in party.
     Equip_Update();
