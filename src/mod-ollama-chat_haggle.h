@@ -14,6 +14,8 @@
 //     never more than it can spare; a seller takes no less than its share;
 //   - a haggler (`haggle`) opens well under, or over, and meets them part of
 //     the way each time, `rounds` times before it says that is its last;
+//     one that haggles a price it would pay (or take) anyway does it once,
+//     never as its last word, and pays it when they say no;
 //   - an ask far over what it is worth (`ripOffPct`) is taking the mickey,
 //     and a bid far under it (`lowballPct`) a lowball: either is called out
 //     (`callout`), the way its style would; one well under what it is worth
@@ -88,8 +90,9 @@ namespace Haggle
     Decision BuyerAnswer(Settings const& s, Style const& style, Buyer& b, uint64_t ask, uint32_t roll);
 
     // They said no to its offer, with no new price: it comes up, or that was
-    // its last.
-    Decision BuyerRaise(Style const& style, Buyer& b);
+    // its last. `ask` is their price (0: none): one it would pay anyway --
+    // it only haggled for the sport of it -- it now pays.
+    Decision BuyerRaise(Style const& style, Buyer& b, uint64_t ask);
 
     // A bot selling to someone. `worth` and `floor` are for the whole lot.
     struct Seller
@@ -107,8 +110,9 @@ namespace Haggle
     Decision SellerAnswer(Settings const& s, Style const& style, Seller& sl, uint64_t bid, uint32_t roll);
 
     // They said no to its price, with no bid: it comes down, or that was its
-    // last.
-    Decision SellerLower(Style const& style, Seller& sl);
+    // last. `bid` is their bid (0: none): one it would take anyway, it now
+    // takes.
+    Decision SellerLower(Style const& style, Seller& sl, uint64_t bid);
 
     // The most a buyer of this style pays for something worth `worth`, with
     // `spare` to spend; the least a seller of it takes (never under what a

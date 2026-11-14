@@ -110,7 +110,7 @@ namespace Haggle
                 {
                     b.last = p;
                     ++b.counters;
-                    d.move  = CounterMove(style, b.counters);
+                    d.move  = Move::Counter;   // never its last word: told no, it pays theirs
                     d.price = p;
                     return d;
                 }
@@ -148,9 +148,17 @@ namespace Haggle
         return d;
     }
 
-    Decision BuyerRaise(Style const& style, Buyer& b)
+    Decision BuyerRaise(Style const& style, Buyer& b, uint64_t ask)
     {
         Decision d;
+        // Their price is one it would pay: it only haggled for the sport of
+        // it, so it pays that.
+        if (ask && ask <= b.limit)
+        {
+            d.move  = Move::Take;
+            d.price = ask;
+            return d;
+        }
         const uint64_t top = Nice(b.limit, false);
         if (b.counters < style.rounds && top > b.last)
         {
@@ -213,7 +221,7 @@ namespace Haggle
                 {
                     sl.last = p;
                     ++sl.counters;
-                    d.move  = CounterMove(style, sl.counters);
+                    d.move  = Move::Counter;   // never its last word: told no, it takes theirs
                     d.price = p;
                     return d;
                 }
@@ -245,11 +253,19 @@ namespace Haggle
         return d;
     }
 
-    Decision SellerLower(Style const& style, Seller& sl)
+    Decision SellerLower(Style const& style, Seller& sl, uint64_t bid)
     {
         Decision d;
         if (!sl.floor)
             return d;
+        // Their bid is one it would take: it only haggled for the sport of
+        // it, so it takes that.
+        if (bid && bid >= sl.floor)
+        {
+            d.move  = Move::Take;
+            d.price = bid;
+            return d;
+        }
         if (!sl.last)
             return SellerOpen(style, sl);
         const uint64_t bottom = Nice(sl.floor, true);

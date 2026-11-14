@@ -4507,7 +4507,9 @@ OllamaChat.Trade.Enable = 1
 OllamaChat.Trade.OnlyCommerce = 1
 
 #    OllamaChat.Trade.MaxSpendPercent
-#        The most of its money a bot spends on one thing.
+#        The most of its money a bot spends on one thing. Only a bot that
+#        can spare what it would pay (or the asking price, when that is
+#        less) answers someone selling.
 #        Default: 50
 OllamaChat.Trade.MaxSpendPercent = 50
 
@@ -4584,11 +4586,12 @@ OllamaChat.Trade.LowballPercent = 40
 #        How each chat style deals. pay: the most it pays, as a percentage of
 #        what a thing is worth (selling, the least it takes is the same the
 #        other way round: 125 pays up to 125% and sells for 80%). haggle: the
-#        percent chance it haggles a price it would pay anyway, and how far
-#        it opens off its limit (100: at half). rounds: the counter-offers it
-#        makes before its last word (0: takes it or leaves it). callout: the
-#        percent chance it calls out a rip-off or a lowball. A style without
-#        a line uses Default, and a line needs only what differs from it.
+#        percent chance it haggles a price it would pay anyway (once, and
+#        told no it pays it), and how far it opens off its limit (100: at
+#        half). rounds: the counter-offers it makes before its last word (0:
+#        takes it or leaves it). callout: the percent chance it calls out a
+#        rip-off or a lowball. A style without a line uses Default, and a
+#        line needs only what differs from it.
 #        Default: "pay:100|haggle:40|rounds:2|callout:40"
 OllamaChat.Trade.Style.Default = "pay:100|haggle:40|rounds:2|callout:40"
 OllamaChat.Trade.Style.NAT_GOLDMAKER = "pay:75|haggle:90|rounds:3|callout:70"

@@ -920,12 +920,12 @@ namespace
         {
             if (t.side == Side::BotBuys)
             {
-                const Haggle::Decision d = Haggle::BuyerRaise(t.style, t.buyer);
+                const Haggle::Decision d = Haggle::BuyerRaise(t.style, t.buyer, t.theirs);
                 BuyerSays(t, bot, player, p, d, t.theirs);
             }
             else
             {
-                const Haggle::Decision d = Haggle::SellerLower(t.style, t.seller);
+                const Haggle::Decision d = Haggle::SellerLower(t.style, t.seller, t.theirs);
                 SellerSays(t, bot, player, p, d, t.theirs);
             }
             return;
@@ -1083,10 +1083,19 @@ namespace
         const Worth w = WorthOf(p, count, player->GetTeamId());
         std::vector<Player*> bots = CityBots(player, channel);
 
-        // Who could use it, cheaply first: the right level and class, and
-        // some money; then playerbots' own judgement, for a few of them.
+        // Who could use it, cheaply first: the right level and class, and the
+        // gold for it; then playerbots' own judgement, for a few of them.
         const bool wearable = p->InventoryType != INVTYPE_NON_EQUIP &&
                               (p->Class == ITEM_CLASS_WEAPON || p->Class == ITEM_CLASS_ARMOR);
+        auto spareOf = [](Player* bot) { return uint64_t(bot->GetMoney()) * g_TradeMaxSpendPercent / 100; };
+        // The gold for it: what it would pay for it, or their price if that
+        // is less (a quest item it needs, worth more to it, it pays what it
+        // can spare for).
+        auto affords = [&](Player* bot, uint64_t worth)
+        {
+            const uint64_t wouldPay = worth * StyleOf(bot).pay / 100;
+            return spareOf(bot) >= (ask ? std::min(ask, wouldPay) : wouldPay);
+        };
         std::vector<Player*> able;
         for (Player* bot : bots)
         {
@@ -1094,7 +1103,7 @@ namespace
                 continue;
             if (wearable && bot->CanUseItem(p) != EQUIP_ERR_OK)
                 continue;
-            if (w.lot && bot->GetMoney() < w.lot / 4)
+            if (w.lot && !affords(bot, w.lot))
                 continue;
             able.push_back(bot);
         }
@@ -1109,12 +1118,11 @@ namespace
         {
             std::string why;
             const int score = Gifts_Judge(bot, p, suffix, why);
-            if (score >= 50 && score > bestScore)
-            {
-                best      = bot;
-                bestScore = score;
-                bestWhy   = why;
-            }
+            if (score < 50 || score <= bestScore)
+                continue;
+            best      = bot;
+            bestScore = score;
+            bestWhy   = why;
         }
         if (!best || !w.lot)
         {
@@ -1128,7 +1136,7 @@ namespace
         t.theirs = ask;
         // A thing it needs for a quest is worth a bit more to it.
         const uint64_t worthToIt = bestScore >= 90 ? w.lot * 5 / 4 : w.lot;
-        const uint64_t spare = uint64_t(best->GetMoney()) * g_TradeMaxSpendPercent / 100;
+        const uint64_t spare = spareOf(best);
         t.buyer.worth = w.lot;
         t.buyer.limit = Haggle::BuyLimit(t.style, worthToIt, spare);
         if (spare < worthToIt * t.style.pay / 100)
