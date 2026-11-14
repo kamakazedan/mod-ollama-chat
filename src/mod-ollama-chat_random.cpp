@@ -276,6 +276,18 @@ namespace
             prompt += " " + questions[PickIndex(questions.size())];
         }
 
+        // Where it is said: a line for the zone reads differently from one
+        // said to those standing by (the template does not say which).
+        const std::string where = source == SRC_GENERAL_LOCAL ? g_RandomChatterChannelText
+                                : source == SRC_SAY_LOCAL     ? g_RandomChatterSayText
+                                                              : std::string();
+        if (!where.empty())
+        {
+            const std::string text = SafeFormat(where, fmt::arg("channel", Context_ChannelLabel(source, channelName)));
+            if (!text.empty() && text != "[Format Error]")
+                prompt += " " + text;
+        }
+
         prompt += Memory_BuildPromptSection(bot, nullptr);
         prompt += Roleplay_BuildVoicePrompt(bot);
         prompt += Outlook_ForBot(bot);
@@ -716,21 +728,32 @@ void OllamaBotRandomChatter::HandleRandomChatter()
             }
         }
 
-        // Pick what to talk about. Weighted toward the people and the world
-        // around the bot rather than its own inventory.
-        TopicPick topic = Topics_Pick(bot, world);
-        if (!topic.valid)
-        {
-            reschedule();
-            continue;
-        }
-
+        // Where it goes first, then what it is about -- weighted toward the
+        // people and the world around the bot rather than its own inventory.
+        // What is right here (someone near it, its group, what just happened
+        // by it, a creature, an NPC or a thing in sight) is only for where
+        // those here hear it: /say or the party, never a channel the whole
+        // zone reads ("nice mount avenico" went out in General).
         ChatChannelSourceLocal source = SRC_SAY_LOCAL;
         std::string channelName;
         uint32_t channelId = 0;
-        if (!ChooseDestination(bot, world, topic.isGuildTopic, source, channelName, channelId))
+        const bool placed = ChooseDestination(bot, world, false, source, channelName, channelId);
+        const bool local =
+            placed && (source == SRC_SAY_LOCAL || source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL);
+        TopicPick topic = Topics_Pick(bot, world, local);
+        if (topic.valid && topic.isGuildTopic)
         {
-            if (g_DebugEnabled)
+            // A guild topic goes to the guild (one is only picked with
+            // someone real in it), wherever else it could have gone.
+            if (!ChooseDestination(bot, world, true, source, channelName, channelId))
+            {
+                reschedule();
+                continue;
+            }
+        }
+        else if (!topic.valid || !placed)
+        {
+            if (!placed && g_DebugEnabled)
                 LOG_INFO("module.ollamachat",
                          "[Ollama Chat] Bot {} has nowhere to speak; skipping ambient line.",
                          bot->GetName());

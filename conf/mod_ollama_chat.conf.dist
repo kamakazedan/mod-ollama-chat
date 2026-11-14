@@ -425,6 +425,17 @@ OllamaChat.RandomChatterMaxBotsPerPlayer = 2
 #   Note: {bot_personality_name} contains the name/key of the personality (e.g., "grumpy", "helpful"), while {bot_personality} contains the full personality description text.
 OllamaChat.RandomChatterPromptTemplate = "You are a World of Warcraft player. Name: {bot_name}, Level: {bot_level} {bot_class}, {bot_race} {bot_gender}, Spec: {bot_role}, Faction: {bot_faction}. Location: {bot_area}, Zone: {bot_zone}, Map: {bot_map}. MAKE SURE YOU RESPOND USING YOUR PERSONALITY, WHICH IS: {bot_personality_name}: {bot_personality}. {environment_info} Reply casually in under 15 words. No quotes, markdown, symbols, or emojis. Use real WoW slang. Avoid uncommon jargon or formatting."
 
+# OllamaChat.RandomChatterChannelText
+# OllamaChat.RandomChatterSayText
+#   Description: Added to an ambient line's prompt to say where it goes, which the template does not: a channel the
+#                whole zone reads (General, LFG...; {channel}), or /say, heard only by those near. An ambient line
+#                about what is right here -- someone near the bot, its group, what just happened by it, a creature,
+#                an NPC or a thing in sight -- only ever goes to /say or the party ("nice mount avenico" went out in
+#                General); a danger near it may be warned of anywhere. Empty: not added.
+#   Default:     (below)
+OllamaChat.RandomChatterChannelText = "You are typing this in {channel}, which everyone in the zone reads: say it to all of them, not to anyone in particular, and nothing about what only those near you can see."
+OllamaChat.RandomChatterSayText = "You are saying this out loud, so only those near you hear it."
+
 # OllamaChat.RandomChatterPromptVariations
 #   Description: Pipe-separated (|) list of additional prompt instructions that will be randomly selected and appended to the RandomChatterPromptTemplate.
 #                This adds variety to bot responses by changing the angle or focus of their random chatter.
@@ -5248,11 +5259,13 @@ OllamaChat.Wipe.StateBackText = "{back} {is_are} back up already."
 #   of the chat there, within a minute and a half -- the reply prompt says
 #   what the people in the conversation visibly wear (PromptText, {gear}):
 #   whoever spoke, anyone named, the real players in the group and the bot
-#   itself, at most MaxPeople, each by helm, shoulders, chest, trousers,
-#   gloves, boots and weapons, with name, quality and kind ("[Robe of
-#   Evocation] (green cloth robe)"), and nothing on the chest or legs where
-#   that is so. The text tells the bot to go only by that, and not to pile
-#   on.
+#   itself, of those near enough to see (SayDistance yards: someone asking
+#   in General from across the zone is not described, and the bot is told
+#   it cannot know), at most MaxPeople, each by helm, shoulders, chest,
+#   trousers, gloves, boots and weapons, with name, quality and kind
+#   ("[Robe of Evocation] (green cloth robe)"), and nothing on the chest or
+#   legs where that is so. The text tells the bot to go only by that, and
+#   not to pile on.
 #
 #   A real player saying they feel picked on -- BackOffWords: "rude",
 #   "harsh", "leave me alone" -- gets every bot in their group to drop it for
@@ -5282,7 +5295,7 @@ OllamaChat.Gear.BackOffMinutes = 5
 #    OllamaChat.Gear.PromptText
 #    OllamaChat.Gear.BackOffText
 #        Empty: not added.
-OllamaChat.Gear.PromptText = "What the people in this chat are wearing, as anyone can see by looking at them: {gear}. If gear comes up, go only by this. Never make up what someone's gear looks like or is made of -- no wood, trees, rags or sacks -- and never invent gear they are not wearing. A light tease about something real is fine once, but do not pile on: if someone has already teased them about it, let it go."
+OllamaChat.Gear.PromptText = "What the people in this chat are wearing, as anyone can see by looking at them: {gear}. If gear comes up, go only by this. Never make up what someone's gear looks like or is made of -- no wood, trees, rags or sacks -- and never invent gear they are not wearing. Anyone in the chat not described here is too far away to see: you do not know what they have on. A light tease about something real is fine once, but do not pile on: if someone has already teased them about it, let it go."
 OllamaChat.Gear.BackOffText = "{player_name} has said they feel picked on: do not tease them any more. A quick sorry, something kind, or just talk about something else."
 
 ###############################################################################

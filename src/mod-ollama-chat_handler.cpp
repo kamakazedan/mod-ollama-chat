@@ -1110,7 +1110,11 @@ std::string ChatHandler_GetCombatSummary(Player* bot)
 }
 
 
-std::string GenerateBotGameStateSnapshot(Player* bot)
+// `local`: the reply is said where those near the bot hear it (/say, a yell,
+// the party, a whisper to someone beside it). Otherwise -- General and the
+// like -- what is in sight and who is about are left out: the zone does not
+// see them, and a reply there that remarks on them leaks /say into it.
+std::string GenerateBotGameStateSnapshot(Player* bot, bool local)
 {
     // Prepare each section
     std::string combat = ChatHandler_GetCombatSummary(bot);
@@ -1159,15 +1163,13 @@ std::string GenerateBotGameStateSnapshot(Player* bot)
     }
 
     std::string los;
-    std::vector<std::string> losLocs = ChatHandler_GetVisibleLocations(bot);
-    if (!losLocs.empty()) {
-        for (const auto& entry : losLocs) los += " - " + entry + "\n";
-    }
-
     std::string players;
-    std::vector<std::string> nearbyPlayers = ChatHandler_GetVisiblePlayers(bot);
-    if (!nearbyPlayers.empty()) {
-        for (const auto& entry : nearbyPlayers) players += " - " + entry + "\n";
+    if (local)
+    {
+        for (const auto& entry : ChatHandler_GetVisibleLocations(bot))
+            los += " - " + entry + "\n";
+        for (const auto& entry : ChatHandler_GetVisiblePlayers(bot))
+            players += " - " + entry + "\n";
     }
 
     // Use template
@@ -3434,7 +3436,10 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
 
     if(g_EnableChatBotSnapshotTemplate)
     {
-        prompt += GenerateBotGameStateSnapshot(bot);
+        prompt += GenerateBotGameStateSnapshot(bot, source == SRC_SAY_LOCAL || source == SRC_YELL_LOCAL ||
+                                                        source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL ||
+                                                        (source == SRC_WHISPER_LOCAL &&
+                                                         bot->IsWithinDistInMap(player, g_SayDistance)));
     }
 
     // What this bot remembers, and how it feels about people. Bounded by

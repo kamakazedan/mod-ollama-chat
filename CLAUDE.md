@@ -102,6 +102,22 @@ silently loses ambient chatter, and also splits the governor's scope key so
 ambient lines and replies in the same channel stop sharing a cooldown and a
 repetition history.
 
+## What is right here is said where those here hear it
+
+A line about what is right here -- someone near the bot, its group, what
+just happened by it, a creature, an NPC or a thing in sight -- goes only to
+/say or the party, never a channel the whole zone reads: "nice mount avenico"
+went out in General, about a bot riding by the one who said it. An ambient
+line chooses where it goes first, then a topic for that (`Topics_Pick`'s
+`local`; `Here` lists the topics), and its prompt says which it is
+(`RandomChatterChannelText`, `RandomChatterSayText`). A danger near the bot
+may be warned of anywhere, and the place itself talked of. The same goes for
+what comes with a line: a gesture only for whoever can see it
+(`GestureSeen`: the one it is to, near; or, to nobody, a line in /say or the
+party), gear only of people near enough to look at (`Gear_PromptFor`), and
+the snapshot's sights and people only for a reply said face to face. A new
+kind of line about something here does the same.
+
 ## Script registration facts (verified against this fork)
 
 - `PlayerScript(name)` with **no hook list enables every hook**. See

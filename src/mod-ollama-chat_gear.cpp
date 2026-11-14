@@ -246,10 +246,14 @@ std::string Gear_PromptFor(Player* bot, Player* speaker, const std::string& msg,
 
     if (topic && !g_GearPromptText.empty())
     {
+        // What someone wears is seen, not known: the bot's own, and that of
+        // whoever is near enough to look at (SayDistance). Asked in General
+        // by someone a zone away, it cannot know what they have on.
         std::vector<Player*> who;
         auto add = [&](Player* p)
         {
-            if (p && p->IsInWorld() && who.size() < g_GearMaxPeople && std::find(who.begin(), who.end(), p) == who.end())
+            if (p && p->IsInWorld() && (p == bot || bot->IsWithinDistInMap(p, g_SayDistance)) &&
+                who.size() < g_GearMaxPeople && std::find(who.begin(), who.end(), p) == who.end())
                 who.push_back(p);
         };
         add(speaker);

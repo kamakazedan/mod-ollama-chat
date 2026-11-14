@@ -483,6 +483,23 @@ namespace
         return false;
     }
 
+    // A gesture with a line is for whoever can see it: the one the line is
+    // to, near enough to see the bot (SayDistance); or, to nobody in
+    // particular, those who hear the line where it is said -- /say, a yell,
+    // the party. Not with a line in a channel the zone reads (General, guild
+    // chat) or a whisper: a bot answering in General from across the zone
+    // would laugh at whoever asked in front of nobody it was for.
+    bool GestureSeen(Player* bot, ChatChannelSourceLocal source, ObjectGuid to)
+    {
+        if (!to.IsEmpty())
+        {
+            Unit* target = ObjectAccessor::GetUnit(*bot, to);
+            return target && target->IsInWorld() && bot->IsWithinDistInMap(target, g_SayDistance);
+        }
+        return source == SRC_SAY_LOCAL || source == SRC_YELL_LOCAL || source == SRC_PARTY_LOCAL ||
+               source == SRC_RAID_LOCAL;
+    }
+
     // Returns true when the line actually went out.
     bool RouteMessage(Player* bot, PlayerbotAI* botAI, const Completion& c,
                       const OllamaWorldSnapshot& world,
@@ -1248,8 +1265,13 @@ namespace
         // A passer-by gets nothing rude or gross with it.
         if (c.request.gentle && g_PresenceSkipEmotes.contains(c.emoteId))
             c.emoteId = 0;
-        ScheduleBotExpression(bot, ObjectGuid(c.request.targetGuid), c.emoteId,
-                              g_BotExpressionDelayMs);
+        ObjectGuid to(c.request.targetGuid);
+        if (!GestureSeen(bot, c.request.source, to))
+        {
+            c.emoteId = 0;   // nor turns to someone who is not there
+            to.Clear();
+        }
+        ScheduleBotExpression(bot, to, c.emoteId, g_BotExpressionDelayMs);
 
         if (c.request.recordHistory && c.request.targetGuid)
         {

@@ -120,6 +120,8 @@ extern uint32_t    g_ConversationHistorySaveInterval;
 // Prompt Templates
 // --------------------------------------------
 extern std::string g_RandomChatterPromptTemplate;
+extern std::string g_RandomChatterChannelText;   // where an ambient line goes: a channel the zone reads
+extern std::string g_RandomChatterSayText;       // ...or /say, to those near
 extern std::vector<std::string> g_RandomChatterPromptVariations;
 extern std::vector<std::string> g_RandomChatterQuestionVariations;
 extern std::string g_EventChatterPromptTemplate;

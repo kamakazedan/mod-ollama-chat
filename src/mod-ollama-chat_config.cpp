@@ -1059,6 +1059,8 @@ uint32_t    g_ConversationHistorySaveInterval = 10;
 // Prompt Templates
 // --------------------------------------------
 std::string g_RandomChatterPromptTemplate;
+std::string g_RandomChatterChannelText;
+std::string g_RandomChatterSayText;
 std::vector<std::string> g_RandomChatterPromptVariations;
 std::vector<std::string> g_RandomChatterQuestionVariations;
 std::string g_EventChatterPromptTemplate;
@@ -2655,8 +2657,9 @@ static void LoadNaturalChatV14Settings()
     g_GearPromptText = sConfigMgr->GetOption<std::string>("OllamaChat.Gear.PromptText",
         "What the people in this chat are wearing, as anyone can see by looking at them: {gear}. If gear comes up, "
         "go only by this. Never make up what someone's gear looks like or is made of -- no wood, trees, rags or "
-        "sacks -- and never invent gear they are not wearing. A light tease about something real is fine once, "
-        "but do not pile on: if someone has already teased them about it, let it go.");
+        "sacks -- and never invent gear they are not wearing. Anyone in the chat not described here is too far "
+        "away to see: you do not know what they have on. A light tease about something real is fine once, but do "
+        "not pile on: if someone has already teased them about it, let it go.");
     g_GearBackOffText = sConfigMgr->GetOption<std::string>("OllamaChat.Gear.BackOffText",
         "{player_name} has said they feel picked on: do not tease them any more. A quick sorry, something kind, or "
         "just talk about something else.");
@@ -4432,6 +4435,11 @@ void LoadOllamaChatConfig()
     g_EnableRPPersonalities           = sConfigMgr->GetOption<bool>("OllamaChat.EnableRPPersonalities", false);
 
     g_RandomChatterPromptTemplate     = sConfigMgr->GetOption<std::string>("OllamaChat.RandomChatterPromptTemplate", "");
+    g_RandomChatterChannelText        = sConfigMgr->GetOption<std::string>("OllamaChat.RandomChatterChannelText",
+        "You are typing this in {channel}, which everyone in the zone reads: say it to all of them, not to anyone "
+        "in particular, and nothing about what only those near you can see.");
+    g_RandomChatterSayText            = sConfigMgr->GetOption<std::string>("OllamaChat.RandomChatterSayText",
+        "You are saying this out loud, so only those near you hear it.");
 
     // Load random chatter prompt variations
     std::string variationsStr = sConfigMgr->GetOption<std::string>("OllamaChat.RandomChatterPromptVariations", "");

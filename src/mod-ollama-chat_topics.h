@@ -46,6 +46,7 @@ struct TopicPick
     std::string   key;          // provider id, for recency suppression
     std::string   text;         // the formatted prompt fragment
     bool          isGuildTopic = false;
+    bool          here = false;   // about what is right here: for /say or the party only
 };
 
 // Choose a topic for this bot right now. World thread only -- reads live state.
@@ -54,7 +55,12 @@ struct TopicPick
 // category's gatherer runs. Gathering everything up front meant a grid search,
 // a quest-status walk, a spell-map walk and a bag walk on every ambient line,
 // four fifths of which was thrown away.
-TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world);
+//
+// `local`: the line goes where only those near hear it (/say, the party).
+// Otherwise -- General and the like -- nothing about what is right here:
+// someone near the bot, its group, what just happened by it, a creature, an
+// NPC or a thing in sight.
+TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local);
 
 // Record that a bot used a topic, so it is suppressed for the next few picks.
 void Topics_NoteUsed(ObjectGuid botGuid, const std::string& key);

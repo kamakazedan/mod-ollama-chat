@@ -42,6 +42,7 @@
 #include <list>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace
@@ -71,7 +72,23 @@ namespace
         std::string   key;
         std::string   text;
         bool          isGuildTopic = false;
+        bool          here = false;   // about what is right here: /say or the party only (Here)
     };
+
+    // About what is right here, seen or heard by the bot: someone near it,
+    // its group, something that just happened by it, a creature, a body, an
+    // NPC or a thing in sight. Said where those here hear it -- /say, or
+    // the party -- never in a channel the whole zone reads: "nice mount
+    // avenico" went out in General, about a bot riding by the one who said
+    // it. A danger near it may be warned of anywhere ("careful, there's an
+    // elite by the tower"), and the place itself talked of.
+    bool Here(const char* key)
+    {
+        static const std::unordered_set<std::string> keys = {
+            "nearby_player", "group_member", "group_need", "recent_event", "creature", "corpse",
+            "named_npc",     "vendor",       "questgiver", "gameobject" };
+        return keys.contains(key);
+    }
 
     struct WitnessedEvent
     {
@@ -112,7 +129,7 @@ namespace
     {
         if (templates.empty() || formatted.empty() || formatted == "[Format Error]")
             return;
-        out.push_back({ cat, key, std::move(formatted), false });
+        out.push_back({ cat, key, std::move(formatted), false, Here(key) });
     }
 
     std::string DescribePlayerState(Player* p)
@@ -704,7 +721,7 @@ namespace
 
 // --------------------------------------------------------------------------
 
-TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world)
+TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local)
 {
     TopicPick pick;
     if (!bot || !bot->IsInWorld())
@@ -795,6 +812,9 @@ TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world)
             default: break;
         }
 
+        // For a channel, nothing that is only for those here.
+        if (!local)
+            std::erase_if(candidates, [](Candidate const& c) { return c.here; });
         if (candidates.empty())
             continue;
 
@@ -813,6 +833,7 @@ TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world)
         pick.key          = chosen->key;
         pick.text         = chosen->text;
         pick.isGuildTopic = chosen->isGuildTopic;
+        pick.here         = chosen->here;
         return pick;
     }
 

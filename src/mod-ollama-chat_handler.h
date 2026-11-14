@@ -79,7 +79,7 @@ std::string OllamaStyleNudgeFor(Player* bot, const std::string& personality);
 
 // Bounded, distance-sorted snapshot helpers used by the prompt builders and
 // the topic engine.
-std::string GenerateBotGameStateSnapshot(Player* bot);
+std::string GenerateBotGameStateSnapshot(Player* bot, bool local);
 
 class PlayerBotChatHandler : public PlayerScript
 {
