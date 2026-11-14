@@ -834,6 +834,15 @@ extern std::vector<std::vector<std::string>> g_TradeEachWords;
 extern bool        g_CityLifeEnable;
 extern std::string g_CityLifeMountPrompt;     // one who came over to look at a rare mount says so
 extern bool        g_CityLifeDanceEmotes;     // "X bursts into dance.", "X dances with Y."
+extern std::unordered_map<std::string, std::string> g_CityLifeTemperaments;   // chat style -> plus temperament
+extern std::vector<std::string> g_CityLifeShowOffAnnoys;   // chat styles that tell a show-off to stop
+extern uint32_t    g_CityLifeShowOffChance;   // ...the percent of show-offs one near does
+extern float       g_CityLifeShowOffRange;    // ...from this near
+extern std::string g_CityLifeShowOffPrompt;   // ...what it says
+extern std::vector<std::string> g_CityLifeShowOffLines;   // ...or, the model failing, one of these
+extern uint32_t    g_CityLifeShowOffAnswerChance;   // the show-off laughs it off in words too (percent)
+extern std::string g_CityLifeShowOffAnswerPrompt;
+extern std::vector<std::string> g_CityLifeShowOffAnswerLines;
 
 // Taking a gift back out of the trade window
 extern std::vector<std::vector<std::string>> g_BagsCancelPhrases;

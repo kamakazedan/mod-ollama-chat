@@ -776,13 +776,18 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
     if (show("bots"))
         out("City life said in /say: {} - {} rare mounts looked at, {} remarked on, {} not "
                                  "(a player had just spoken, the other side, pacing or no room); {} dances, {} "
-                                 "with the emote",
+                                 "with the emote; {} showing off, {} told to stop by someone near, {} laughed it "
+                                 "off and stopped, {} in words too",
                                  g_CityLifeEnable ? "on" : "off",
                                  (unsigned long long)cityLife.mounts,
                                  (unsigned long long)cityLife.said,
                                  (unsigned long long)cityLife.quiet,
                                  (unsigned long long)cityLife.dances,
-                                 (unsigned long long)cityLife.emoted);
+                                 (unsigned long long)cityLife.emoted,
+                                 (unsigned long long)cityLife.showOffs,
+                                 (unsigned long long)cityLife.toldOff,
+                                 (unsigned long long)cityLife.laughed,
+                                 (unsigned long long)cityLife.answered);
 
     const TradeChatStats trade = TradeChat_GetStats();
     if (show("bots"))

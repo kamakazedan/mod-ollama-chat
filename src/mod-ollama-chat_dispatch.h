@@ -188,6 +188,10 @@ struct OllamaChatRequest
     // conversation running nearby does not take it for a turn of its own.
     bool mingle = false;
 
+    // A bot telling one showing off nearby to stop (mod-ollama-chat_citylife):
+    // once it is out, that one (this guid) laughs it off and stops.
+    uint64_t showOffTold = 0;
+
     // An unprompted line -- ambient chatter, an ask: Context_NextSeq() when
     // it was asked for. A real player who spoke where it goes after that was
     // not heard by it, so it is not sent: it would talk over them ("this

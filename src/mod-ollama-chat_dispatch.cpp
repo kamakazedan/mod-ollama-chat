@@ -2,6 +2,7 @@
 #include "mod-ollama-chat_clock.h"
 #include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_bags.h"
+#include "mod-ollama-chat_citylife.h"
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_config.h"
@@ -1085,6 +1086,8 @@ namespace
             PartyCmd_NoteLeadOffCalled(bot);
         if (c.request.progressKey)
             Progress_NoteDelivered(c.request.progressKey);
+        if (c.request.showOffTold)   // "can you stop that": the show-off laughs it off
+            CityLife_NoteToldOff(bot, c.request.showOffTold);
         if (c.request.noSelfDing)   // a "gz": the one it is for hears it, and thanks once for the lot
             Congrats_NoteBotCongrats(bot, c.request.congratsName, c.request.source,
                                      channel ? channel->GetName() : c.request.channelName, c.request.channelId,

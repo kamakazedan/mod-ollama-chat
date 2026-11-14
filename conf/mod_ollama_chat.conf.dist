@@ -4366,7 +4366,8 @@ OllamaChat.GroupQuests.AnswerDelayMaxSeconds = 15
 #   at whoever speaks, hopping, dancing, errands to the bank, auction house
 #   and mailbox, fishing at the water's edge, flying in and out, and a few
 #   wandering over to look when someone gets on a mount few people about
-#   have. Here the two of those that are said:
+#   have. Here the two of those that are said, and the third, someone
+#   telling a show-off to stop:
 #
 #   - a rare mount: the first of those who came over to look says something
 #     to the rider about it in /say, in its own chat style, told the mount's
@@ -4378,6 +4379,16 @@ OllamaChat.GroupQuests.AnswerDelayMaxSeconds = 15
 #   - a dance: one who starts dancing, or joins someone dancing, does it
 #     with the text emote ("X bursts into dance.", "X dances with Y."). The
 #     dance and its end are mod-playerbots-plus's.
+#   - showing off: how lively each bot is there is mod-playerbots-plus's
+#     temperaments (how often it hops, rears its mount, runs about, sits,
+#     goes AFK, shows off); which temperament a bot is, is its chat style's
+#     (Temperaments below: a joker is a clown, a grumbler calm). A clown now
+#     and then spends a minute or so making its mount rear up and roar over
+#     and over (on foot, hopping about); someone near it whose style it gets
+#     on the nerves of (ShowOffAnnoys) may tell it to pack it in, in /say --
+#     a line nobody asked for, so never over a real player who has just
+#     spoken -- and once that is out, the show-off laughs it off (the laugh
+#     emote, now and then a line too) and stops.
 #
 #   The other way round, this module tells mod-playerbots-plus when a bot is
 #   talking or emoting, so it is not walked off mid-sentence; when someone
@@ -4409,6 +4420,65 @@ OllamaChat.CityLife.MountPrompt = "You are {bot_name}, a level {bot_level} {bot_
 #        the text emote, which says so in chat. 0: it only dances.
 #        Default: 1
 OllamaChat.CityLife.DanceEmotes = 1
+
+#    OllamaChat.CityLife.Temperaments
+#        Which of mod-playerbots-plus's temperaments
+#        (PlayerbotsPlus.CityLife.Temperament.<Name> there) each chat style
+#        is, as "STYLE:temperament" parts, |-separated. A style not listed is
+#        the default temperament (plus's CityLife.* settings themselves).
+#        Empty, or with chat styles off (EnableRPPersonalities = 0): plus
+#        picks by its own TemperamentShares. Read when a bot gets to a
+#        hangout spot, so a change shows on its next visit.
+#        Default: the jokers, pranksters and trolls are clowns; the hype,
+#        excitable, butterfly, banter, social, friendly, newbie, PvP and
+#        gossip styles lively; the quiet, loner, terse veteran, deadpan,
+#        chill, proper, lore buff, nostalgic, grumbler and roleplayer styles
+#        calm
+OllamaChat.CityLife.Temperaments = "NAT_JOKER:clown|NAT_PRANKSTER:clown|NAT_TROLL:clown|NAT_HYPE:lively|NAT_EXCITABLE:lively|NAT_BUTTERFLY:lively|NAT_BANTER:lively|NAT_SOCIAL:lively|NAT_FRIENDLY:lively|NAT_NEWBIE:lively|NAT_PVPER:lively|NAT_GOSSIP:lively|NAT_QUIET:calm|NAT_LONER:calm|NAT_TERSE_VET:calm|NAT_DEADPAN:calm|NAT_CHILL:calm|NAT_PROPER:calm|NAT_LOREBUFF:calm|NAT_NOSTALGIC:calm|NAT_GRUMBLER:calm|NAT_ROLEPLAYER:calm"
+
+#    OllamaChat.CityLife.ShowOffAnnoys
+#        The chat styles that one showing off gets on the nerves of, and
+#        who would say so, |-separated. Empty: nobody says anything (they
+#        still show off, and stop when the bout is over).
+#        Default: grumbler, rude, terse veteran, deadpan, keyboard warrior,
+#        proper, min-maxer, contrarian, roleplayer, expert
+OllamaChat.CityLife.ShowOffAnnoys = "NAT_GRUMBLER|NAT_RUDE|NAT_TERSE_VET|NAT_DEADPAN|NAT_KEYBOARD|NAT_PROPER|NAT_MINMAXER|NAT_CONTRARIAN|NAT_ROLEPLAYER|NAT_EXPERT"
+
+#    OllamaChat.CityLife.ShowOffChance
+#    OllamaChat.CityLife.ShowOffRange
+#        The percent of bouts of showing off that someone near (of a style
+#        above, in sight, up and about, not held back by the usual pacing of
+#        /say) tells to stop, and how near (yards, 5 to 40).
+#        Default: 75, 20
+OllamaChat.CityLife.ShowOffChance = 75
+OllamaChat.CityLife.ShowOffRange = 20
+
+#    OllamaChat.CityLife.ShowOffPrompt
+#    OllamaChat.CityLife.ShowOffLines
+#        What the one it annoys says. Empty prompt: nothing. The lines (|-
+#        separated, said in the bot's own style) go out when the model
+#        fails or passes. Placeholders: {bot_name}, {bot_level}, {bot_race},
+#        {bot_class}, {bot_personality}, {show_name} (the show-off), {doing}
+#        ("making their Swift Brown Wolf rear up and roar", "hopping up and
+#        down on the spot right by you"), {count} (how many times so far),
+#        {zone}. Said of one hopping, a line about a mount is not said.
+#        Default: (below)
+OllamaChat.CityLife.ShowOffPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, standing about in {zone}. Your chat style: {bot_personality} {show_name}, right by you, has been {doing} for a while now, over and over -- {count} times -- and it is getting on your nerves. Tell {show_name} to pack it in, in /say, your way: fed up, sarcastic or deadpan, whatever suits your style. One line, 3 to 12 words, the way a player types it: no quotes, no name in front."
+OllamaChat.CityLife.ShowOffLines = "can you stop that|please stop|mate. stop.|ok we get it|enough already|do you mind|some of us are trying to relax here"
+
+#    OllamaChat.CityLife.ShowOffAnswerChance
+#    OllamaChat.CityLife.ShowOffAnswerPrompt
+#    OllamaChat.CityLife.ShowOffAnswerLines
+#        The show-off always laughs at the one who told it off (the emote)
+#        and stops; this percent of the time it says something too (0:
+#        never). Empty prompt: never. The lines as above. Placeholders:
+#        {bot_name}, {bot_level}, {bot_race}, {bot_class}, {bot_personality}
+#        (the show-off's), {teller_name}, {doing} ("making your mount rear
+#        up and roar", "hopping up and down on the spot"), {zone}.
+#        Default: 60, (below)
+OllamaChat.CityLife.ShowOffAnswerChance = 60
+OllamaChat.CityLife.ShowOffAnswerPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, standing about in {zone}. Your chat style: {bot_personality} You have been {doing}, over and over, just for fun, and {teller_name} has just told you to stop. You think it is hilarious, and you stop. Laugh it off to {teller_name} in /say, your way. One short line, 2 to 10 words, the way a player types it: no quotes, no name in front."
+OllamaChat.CityLife.ShowOffAnswerLines = "lol ok ok|haha fine|someone's grumpy|fine, fine|lol sorry|ok ok, im done"
 
 ###############################################################################
 #

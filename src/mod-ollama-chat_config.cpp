@@ -775,6 +775,15 @@ std::vector<std::vector<std::string>> g_TradeEachWords;
 bool        g_CityLifeEnable                   = true;
 std::string g_CityLifeMountPrompt;
 bool        g_CityLifeDanceEmotes              = true;
+std::unordered_map<std::string, std::string> g_CityLifeTemperaments;
+std::vector<std::string> g_CityLifeShowOffAnnoys;
+uint32_t    g_CityLifeShowOffChance            = 75;
+float       g_CityLifeShowOffRange             = 20.0f;
+std::string g_CityLifeShowOffPrompt;
+std::vector<std::string> g_CityLifeShowOffLines;
+uint32_t    g_CityLifeShowOffAnswerChance      = 60;
+std::string g_CityLifeShowOffAnswerPrompt;
+std::vector<std::string> g_CityLifeShowOffAnswerLines;
 
 std::vector<std::vector<std::string>> g_BagsCancelPhrases;
 std::vector<std::vector<std::string>> g_BagsCancelNotPhrases;
@@ -3838,6 +3847,66 @@ static void LoadNaturalChatV37Settings()
              g_TradeAdMinMinutes, g_TradeAdMaxMinutes);
 }
 
+static void LoadNaturalChatV38Settings()
+{
+    // --- city life by personality (mod-playerbots-plus's temperaments) -------------------
+    g_CityLifeTemperaments.clear();
+    for (const std::string& entry : ReadPipeList("OllamaChat.CityLife.Temperaments",
+             "NAT_JOKER:clown|NAT_PRANKSTER:clown|NAT_TROLL:clown|NAT_HYPE:lively|NAT_EXCITABLE:lively|"
+             "NAT_BUTTERFLY:lively|NAT_BANTER:lively|NAT_SOCIAL:lively|NAT_FRIENDLY:lively|NAT_NEWBIE:lively|"
+             "NAT_PVPER:lively|NAT_GOSSIP:lively|NAT_QUIET:calm|NAT_LONER:calm|NAT_TERSE_VET:calm|NAT_DEADPAN:calm|"
+             "NAT_CHILL:calm|NAT_PROPER:calm|NAT_LOREBUFF:calm|NAT_NOSTALGIC:calm|NAT_GRUMBLER:calm|"
+             "NAT_ROLEPLAYER:calm"))
+    {
+        const size_t colon = entry.find(':');
+        if (colon == std::string::npos)
+            continue;
+        std::string key = entry.substr(0, colon), kind = entry.substr(colon + 1);
+        auto trim = [](std::string& t)
+        {
+            while (!t.empty() && std::isspace(static_cast<unsigned char>(t.front())))
+                t.erase(t.begin());
+            while (!t.empty() && std::isspace(static_cast<unsigned char>(t.back())))
+                t.pop_back();
+        };
+        trim(key);
+        trim(kind);
+        if (!key.empty() && !kind.empty())
+            g_CityLifeTemperaments[key] = kind;
+    }
+
+    // --- showing off, and someone telling them to stop ---------------------------------
+    g_CityLifeShowOffAnnoys = ReadPipeList("OllamaChat.CityLife.ShowOffAnnoys",
+        "NAT_GRUMBLER|NAT_RUDE|NAT_TERSE_VET|NAT_DEADPAN|NAT_KEYBOARD|NAT_PROPER|NAT_MINMAXER|NAT_CONTRARIAN|"
+        "NAT_ROLEPLAYER|NAT_EXPERT");
+    g_CityLifeShowOffChance = std::min<uint32_t>(100,
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.CityLife.ShowOffChance", 75));
+    g_CityLifeShowOffRange = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.CityLife.ShowOffRange", 20.0f),
+                                        5.0f, 40.0f);
+    g_CityLifeShowOffPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.CityLife.ShowOffPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, standing about in {zone}. Your chat style: "
+        "{bot_personality} {show_name}, right by you, has been {doing} for a while now, over and over -- {count} "
+        "times -- and it is getting on your nerves. Tell {show_name} to pack it in, in /say, your way: fed up, "
+        "sarcastic or deadpan, whatever suits your style. One line, 3 to 12 words, the way a player types it: no "
+        "quotes, no name in front.");
+    g_CityLifeShowOffLines = ReadPipeList("OllamaChat.CityLife.ShowOffLines",
+        "can you stop that|please stop|mate. stop.|ok we get it|enough already|do you mind|"
+        "some of us are trying to relax here");
+    g_CityLifeShowOffAnswerChance = std::min<uint32_t>(100,
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.CityLife.ShowOffAnswerChance", 60));
+    g_CityLifeShowOffAnswerPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.CityLife.ShowOffAnswerPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, standing about in {zone}. Your chat style: "
+        "{bot_personality} You have been {doing}, over and over, just for fun, and {teller_name} has just told you to "
+        "stop. You think it is hilarious, and you stop. Laugh it off to {teller_name} in /say, your way. One short "
+        "line, 2 to 10 words, the way a player types it: no quotes, no name in front.");
+    g_CityLifeShowOffAnswerLines = ReadPipeList("OllamaChat.CityLife.ShowOffAnswerLines",
+        "lol ok ok|haha fine|someone's grumpy|fine, fine|lol sorry|ok ok, im done");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v38: city life by personality ({} chat styles given a "
+             "temperament); someone near telling a show-off to stop {}% of the time ({} chat styles that would).",
+             g_CityLifeTemperaments.size(), g_CityLifeShowOffChance, g_CityLifeShowOffAnnoys.size());
+}
+
 static void LoadNaturalChatV30Settings()
 {
     // --- what chat is really like ---------------------------------------------------------
@@ -4816,6 +4885,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV35Settings();
     LoadNaturalChatV36Settings();
     LoadNaturalChatV37Settings();
+    LoadNaturalChatV38Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

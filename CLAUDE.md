@@ -229,14 +229,19 @@ the price), the bot's side accepted only on an exact match.
 
 City life (`mod-ollama-chat_citylife.cpp`) is mod-playerbots-plus's too:
 the crowd hanging out shifting about, hopping, dancing, errands, fishing,
-flights, a few wandering over to look at a rare mount. Here only what is
-said of it (a remark on the mount, the real one by name, from its
-`BotEventType::CityMountShown`; the dance emote, from `CityDance`, played
-with `stateKept`, since the dance and its end are plus's), and what plus is
-told so nobody walks off mid-sentence: `Hangout_Busy` (a bot talking or
-emoting), `Hangout_Spoke` (someone said something in /say: those about look
-round), `Hangout_Gather` (a /say exchange between bots: they walk over to
-talk face to face). A /say line delivered by the dispatcher and an emote
+flights, a few wandering over to look at a rare mount, a clown showing
+off. Here only what is said of it (a remark on the mount, the real one by
+name, from its `BotEventType::CityMountShown`; the dance emote, from
+`CityDance`, played with `stateKept`, since the dance and its end are
+plus's; someone near a show-off whose chat style it annoys telling it to
+stop, from `CityShowOff`, and once that is out -- `showOffTold`, at
+delivery -- the show-off's laugh and `CityCalmDown`), which of plus's
+temperaments a bot is (its chat style's, `CityLife.Temperaments`, given to
+plus's `SetTemperamentProvider`: how lively it is there is plus's), and
+what plus is told so nobody walks off mid-sentence: `Hangout_Busy` (a bot
+talking or emoting), `Hangout_Spoke` (someone said something in /say: those
+about look round), `Hangout_Gather` (a /say exchange between bots: they walk
+over to talk face to face). A /say line delivered by the dispatcher and an emote
 played with `BotPlayTextEmote` already do it; a new way of saying or emoting
 that goes round them must too, or the bot talks while it walks off.
 

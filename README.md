@@ -978,9 +978,12 @@ With both modules in the same build, the bots talk about what it has them do:
   `PlayerbotsPlus.CityLife.*`). When someone gets on a mount few people
   online have, a few wander over for a look and one of them says something
   about it, the real mount by name. A bot that starts dancing, or joins
-  someone dancing, does it with the emote. Bots talking in /say stay put
-  while they do, look round at whoever speaks near them, and walk over to
-  talk face to face (`OllamaChat.CityLife.*`).
+  someone dancing, does it with the emote. How lively each bot is there goes
+  by its chat style (a joker is a clown, a grumbler calm), and when a clown
+  spends a minute making its mount rear up and roar over and over, someone
+  near whose style it annoys may tell it to stop; it laughs it off and stops.
+  Bots talking in /say stay put while they do, look round at whoever speaks
+  near them, and walk over to talk face to face (`OllamaChat.CityLife.*`).
 - **Muted lines:** this module has the bots say "Staying", "Following", hello
   on joining a group, and a quest objective done in their own words. Give
   mod-playerbots-plus the longer mute list from its conf, so playerbots' own
