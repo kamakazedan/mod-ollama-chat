@@ -2186,7 +2186,8 @@ OllamaChat.Conversation.ObserveChance = 30
 
 #    OllamaChat.Conversation.AllowTrade
 #    OllamaChat.Conversation.AllowSay
-#        Where conversations may run besides General.
+#        Where conversations may run besides General. With Trade.OnlyCommerce
+#        (TRADE CHAT), never in Trade, whatever AllowTrade says.
 #        Default: 1, 1
 OllamaChat.Conversation.AllowTrade = 1
 OllamaChat.Conversation.AllowSay = 1
@@ -4449,6 +4450,301 @@ OllamaChat.Report.File = "OllamaChatReport.log"
 
 ###############################################################################
 #
+#   OLLAMA CHAT - TRADE CHAT: BUYING AND SELLING
+#
+#   Trade is where people buy and sell, so with OnlyCommerce that is all bots
+#   do there: no chatter, no banter, no conversations, no answer to anything
+#   that is not an offer. What they say there they mean, and carry out.
+#
+#   - Someone selling something they link ("WTS [Lil Timmy's Peashooter]
+#     6g", "anyone want [Woolen Bag]?") is answered by the bot in that city it
+#     is most use to, the way playerbots judges loot -- an upgrade it can wear
+#     at its level, a quest item it needs, something for its profession --
+#     and only by one with the money for it. It is told what the thing really
+#     is (a blue gun, item level 21, for level 16; hunters, warriors and
+#     rogues use guns) and what it is worth: what the auction house has it
+#     for, else a multiple of what a vendor pays (GearValuePct,
+#     GoodsValuePct).
+#   - Someone buying ("WTB [Linen Cloth] x20") is answered by a bot there
+#     that has some it can spare. "pc [item]" or "how much is [item] worth"
+#     gets what it goes for (PriceCheckChance).
+#   - Each haggles its own way (Style below): one pays the asking price, one
+#     haggles hard, one makes an offer and walks away. An ask far over what
+#     it is worth (RipOffPercent) is called out -- "6g? its 1g 40s on the ah"
+#     -- and a lowball too (LowballPercent), the way its style would; when
+#     nobody wants a thing at a silly price, now and then someone says so
+#     anyway (CalloutChance). Something cheap (BargainPercent) is snapped up.
+#   - The numbers are decided here, not by the model: a line naming any price
+#     but the ones it was given goes out as a stock line instead (StockLines).
+#   - A deal struck -- they take its offer, or it takes theirs -- is carried
+#     out. Close by (WalkYards), the bot walks over and opens the trade;
+#     further off, it says where it is and waits for them (MeetSeconds). In
+#     the window it puts in exactly the money agreed once they put in exactly
+#     the thing agreed -- that many of it, nothing else -- or the thing once
+#     they put in exactly the money; its side is accepted only then, and
+#     theirs finishes it. Playerbots, which turns down any trade with
+#     someone outside a bot's group, is held off it meanwhile.
+#   - Now and then a bot in a city with a real player about puts up
+#     something it can spare: "WTS [Pagan Vest] 1g 50s" (AdLines). A whisper
+#     or a line about it is a haggle like any other.
+#
+#   Needs Favor.Strangers = 1: without it bots trade only within a group,
+#   and nothing is bought or sold here (Trade is still left alone with
+#   OnlyCommerce). .ollama status bots counts it all.
+#
+###############################################################################
+
+#    OllamaChat.Trade.Enable
+#        Bots buying and selling in Trade chat, as above.
+#        Default: 1
+OllamaChat.Trade.Enable = 1
+
+#    OllamaChat.Trade.OnlyCommerce
+#        1: nothing but buying and selling is said in Trade -- no chatter,
+#        conversations or replies there besides the deals above. 0: Trade is
+#        like General again, deals and all.
+#        Default: 1
+OllamaChat.Trade.OnlyCommerce = 1
+
+#    OllamaChat.Trade.MaxSpendPercent
+#        The most of its money a bot spends on one thing.
+#        Default: 50
+OllamaChat.Trade.MaxSpendPercent = 50
+
+#    OllamaChat.Trade.MaxJudged
+#        How many of the bots in the city that could use a thing (the right
+#        level and class, and some money) are asked how much use it is, for
+#        each thing put up.
+#        Default: 30
+OllamaChat.Trade.MaxJudged = 30
+
+#    OllamaChat.Trade.TalkSeconds
+#    OllamaChat.Trade.MeetSeconds
+#        A haggle is forgotten after TalkSeconds without a word; a deal
+#        struck waits MeetSeconds for the trade.
+#        Default: 180, 300
+OllamaChat.Trade.TalkSeconds = 180
+OllamaChat.Trade.MeetSeconds = 300
+
+#    OllamaChat.Trade.WalkYards
+#        A deal struck with someone this close, the bot walks over to trade;
+#        further, it says where it is. 0: it never walks over.
+#        Default: 60
+OllamaChat.Trade.WalkYards = 60
+
+#    OllamaChat.Trade.CalloutChance
+#    OllamaChat.Trade.PriceCheckChance
+#        The percent chance someone calls out a silly price on a thing nobody
+#        wants (and then only one whose style would), and that a price check
+#        is answered.
+#        Default: 50, 70
+OllamaChat.Trade.CalloutChance = 50
+OllamaChat.Trade.PriceCheckChance = 70
+
+#    OllamaChat.Trade.AdMinMinutes
+#    OllamaChat.Trade.AdMaxMinutes
+#    OllamaChat.Trade.AdMinCopper
+#        How often a bot puts something up for sale, on each side: between
+#        AdMin and AdMax minutes, when a real player is on Trade (AdMaxMinutes
+#        0: never). A green or better, or a white thing worth AdMinCopper.
+#        Default: 8, 20, 5000
+OllamaChat.Trade.AdMinMinutes = 8
+OllamaChat.Trade.AdMaxMinutes = 20
+OllamaChat.Trade.AdMinCopper = 5000
+
+#    OllamaChat.Trade.DelayMinMs
+#    OllamaChat.Trade.DelayMaxMs
+#        How long a bot takes to answer, reading and typing.
+#        Default: 2500, 7000
+OllamaChat.Trade.DelayMinMs = 2500
+OllamaChat.Trade.DelayMaxMs = 7000
+
+#    OllamaChat.Trade.GearValuePct
+#    OllamaChat.Trade.GoodsValuePct
+#        What a thing is worth with none on the auction house: a percentage of
+#        what a vendor pays for it. Gear by quality, grey to heirloom
+#        (|-separated); everything else, one figure.
+#        Default: "100|250|500|1000|2500|4000|4000", 300
+OllamaChat.Trade.GearValuePct = "100|250|500|1000|2500|4000|4000"
+OllamaChat.Trade.GoodsValuePct = 300
+
+#    OllamaChat.Trade.RipOffPercent
+#    OllamaChat.Trade.BargainPercent
+#    OllamaChat.Trade.LowballPercent
+#        An ask at RipOffPercent of what a thing is worth or more is taking
+#        the mickey; one at BargainPercent or less is a bargain, snapped up; a
+#        bid at LowballPercent or less is a lowball.
+#        Default: 250, 50, 40
+OllamaChat.Trade.RipOffPercent = 250
+OllamaChat.Trade.BargainPercent = 50
+OllamaChat.Trade.LowballPercent = 40
+
+#    OllamaChat.Trade.Style.Default
+#    OllamaChat.Trade.Style.<KEY>
+#        How each chat style deals. pay: the most it pays, as a percentage of
+#        what a thing is worth (selling, the least it takes is the same the
+#        other way round: 125 pays up to 125% and sells for 80%). haggle: the
+#        percent chance it haggles a price it would pay anyway, and how far
+#        it opens off its limit (100: at half). rounds: the counter-offers it
+#        makes before its last word (0: takes it or leaves it). callout: the
+#        percent chance it calls out a rip-off or a lowball. A style without
+#        a line uses Default, and a line needs only what differs from it.
+#        Default: "pay:100|haggle:40|rounds:2|callout:40"
+OllamaChat.Trade.Style.Default = "pay:100|haggle:40|rounds:2|callout:40"
+OllamaChat.Trade.Style.NAT_GOLDMAKER = "pay:75|haggle:90|rounds:3|callout:70"
+OllamaChat.Trade.Style.NAT_MINMAXER = "pay:90|haggle:70|rounds:2|callout:60"
+OllamaChat.Trade.Style.NAT_EXPERT = "pay:95|haggle:50|rounds:2|callout:70"
+OllamaChat.Trade.Style.NAT_RUDE = "pay:85|haggle:80|rounds:1|callout:95"
+OllamaChat.Trade.Style.NAT_TROLL = "pay:80|haggle:90|rounds:2|callout:95"
+OllamaChat.Trade.Style.NAT_KEYBOARD = "pay:85|haggle:80|rounds:2|callout:95"
+OllamaChat.Trade.Style.NAT_GRUMBLER = "pay:85|haggle:70|rounds:2|callout:80"
+OllamaChat.Trade.Style.NAT_CONTRARIAN = "pay:90|haggle:80|rounds:3|callout:80"
+OllamaChat.Trade.Style.NAT_PVPER = "pay:100|haggle:50|rounds:1|callout:80"
+OllamaChat.Trade.Style.NAT_RAIDER = "pay:100|haggle:40|rounds:1|callout:60"
+OllamaChat.Trade.Style.NAT_BANTER = "pay:100|haggle:60|rounds:2|callout:70"
+OllamaChat.Trade.Style.NAT_JOKER = "pay:105|haggle:50|rounds:2|callout:60"
+OllamaChat.Trade.Style.NAT_PRANKSTER = "pay:100|haggle:60|rounds:2|callout:70"
+OllamaChat.Trade.Style.NAT_FRIENDLY = "pay:120|haggle:15|rounds:1|callout:20"
+OllamaChat.Trade.Style.NAT_SOCIAL = "pay:120|haggle:20|rounds:1|callout:25"
+OllamaChat.Trade.Style.NAT_BUTTERFLY = "pay:125|haggle:10|rounds:1|callout:15"
+OllamaChat.Trade.Style.NAT_HELPFUL_VET = "pay:110|haggle:20|rounds:1|callout:40"
+OllamaChat.Trade.Style.NAT_PROPER = "pay:110|haggle:20|rounds:1|callout:30"
+OllamaChat.Trade.Style.NAT_ROLEPLAYER = "pay:110|haggle:40|rounds:2|callout:40"
+OllamaChat.Trade.Style.NAT_NEWBIE = "pay:130|haggle:10|rounds:0|callout:10"
+OllamaChat.Trade.Style.NAT_EXCITABLE = "pay:125|haggle:10|rounds:1|callout:20"
+OllamaChat.Trade.Style.NAT_HYPE = "pay:120|haggle:20|rounds:1|callout:30"
+OllamaChat.Trade.Style.NAT_GOSSIP = "pay:105|haggle:40|rounds:2|callout:50"
+OllamaChat.Trade.Style.NAT_PETLOVER = "pay:110|haggle:20|rounds:1|callout:25"
+OllamaChat.Trade.Style.NAT_CHILL = "pay:115|haggle:15|rounds:1|callout:20"
+OllamaChat.Trade.Style.NAT_LOWERCASE = "pay:100|haggle:30|rounds:1|callout:40"
+OllamaChat.Trade.Style.NAT_ABBREVIATOR = "pay:100|haggle:40|rounds:1|callout:50"
+OllamaChat.Trade.Style.NAT_TERSE_VET = "pay:95|haggle:30|rounds:1|callout:50"
+OllamaChat.Trade.Style.NAT_QUIET = "pay:110|haggle:10|rounds:0|callout:10"
+OllamaChat.Trade.Style.NAT_LONER = "pay:100|haggle:20|rounds:0|callout:20"
+OllamaChat.Trade.Style.NAT_DEADPAN = "pay:95|haggle:40|rounds:1|callout:70"
+OllamaChat.Trade.Style.NAT_REACTOR = "pay:105|haggle:30|rounds:1|callout:60"
+OllamaChat.Trade.Style.NAT_LOREBUFF = "pay:105|haggle:30|rounds:1|callout:40"
+OllamaChat.Trade.Style.NAT_NOSTALGIC = "pay:105|haggle:30|rounds:1|callout:40"
+OllamaChat.Trade.Style.NAT_BINGER = "pay:105|haggle:40|rounds:2|callout:50"
+OllamaChat.Trade.Style.NAT_NONNATIVE = "pay:105|haggle:30|rounds:1|callout:30"
+
+#    OllamaChat.Trade.SellWords
+#    OllamaChat.Trade.BuyWords
+#    OllamaChat.Trade.CheckWords
+#    OllamaChat.Trade.AskSellerWords
+#    OllamaChat.Trade.AcceptWords
+#    OllamaChat.Trade.RejectWords
+#    OllamaChat.Trade.EachWords
+#        How a line in Trade (or a whisper about a deal) is read: selling,
+#        buying, a price check, asking a seller ("do you sell", "u selling":
+#        buying, though it says sell), taking the price on offer, turning it
+#        down, and a price for each one rather than the lot ("1s each").
+#        |-separated words and phrases; a word ending in * matches any word
+#        it starts. A line that buys or sells is never a price check, though
+#        it says "worth". Prices are read as people type them: "5g",
+#        "1g 50s", "1.5g", "75c".
+#        Default: (below)
+OllamaChat.Trade.SellWords = "wts|selling|sell|for sale|fs|anyone want|anybody want|any1 want|who wants|anyone need|anybody need|obo|or best offer|best offer|make an offer|make me an offer|any offers|cheap|going cheap|price is|asking"
+OllamaChat.Trade.BuyWords = "wtb|buying|buy|looking for|lf|need|needing|anyone have|anyone got|anyone selling|anybody have|anybody got|anybody selling|any1 have|any1 selling|who has|who sells|whos selling|paying|ill take|i will take|ill buy|i will buy|interested|how much for|hm for|i want|want it"
+OllamaChat.Trade.CheckWords = "pc|price check|pricecheck|price on|how much is|how much are|how much does|whats it worth|what is it worth|worth|going rate|ah price|value"
+OllamaChat.Trade.AskSellerWords = "you sell|u sell|you selling|u selling|ya selling|you still selling|u still selling|do you have|do u have|you have any|u have any|you got any|u got any|got any more|have any more"
+OllamaChat.Trade.AcceptWords = "deal|ok|okay|k|kk|sure|yes|yep|yeah|ya|yea|alright|aight|fine|done|sold|agreed|accept|accepted|you got it|its yours|take it|works|lets do it|go on then|sounds good|np|no problem|no prob|trade me|come trade|ill take it"
+OllamaChat.Trade.RejectWords = "no|nah|nope|no thanks|no ty|no thx|pass|too low|too little|lowball|no deal|forget it|nvm|never mind|not for that|thats too low|lol no|rip off|ripoff|insulting|too much|too high|too steep"
+OllamaChat.Trade.EachWords = "each|ea|per|apiece|a piece|per one|a pop"
+
+#    OllamaChat.Trade.PromptTemplate
+#        A bot's line about a deal. Placeholders: {bot_name} {bot_level}
+#        {bot_race} {bot_class} {bot_personality}, {channel} ("Trade chat",
+#        "a whisper to Kami"), {trade} (ChannelText or WhisperText), {item}
+#        (what the thing is and what it is worth), {hint} (what to say: the
+#        Hint* below).
+#        Default: (below)
+OllamaChat.Trade.PromptTemplate = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} {trade} {item} {hint} Write the one line you type into {channel} for it: short and plain, the way players type, no quotes and no name in front."
+
+#    OllamaChat.Trade.ChannelText
+#    OllamaChat.Trade.WhisperText
+#    OllamaChat.Trade.SaidText
+#        What Trade is for, and the words people use there; the same for a
+#        whisper about a deal ({player_name}); and, for any other reply of a
+#        bot to someone it is haggling with, where it stands ({player_name}
+#        {item} {state}: "you offered 1g and they want 1g 40s").
+#        Default: (below)
+OllamaChat.Trade.ChannelText = "This is Trade chat, where people only buy and sell: WTS is want to sell, WTB want to buy, WTT want to trade, PC a price check, PST or /w means whisper them, OBO is or best offer, BoE binds when equipped, and g, s and c are gold, silver and copper. Never chat about anything else here, and say no price but the ones given here."
+OllamaChat.Trade.WhisperText = "You are whispering {player_name} about a deal from Trade chat. Say no price but the ones given here."
+OllamaChat.Trade.SaidText = "You are in the middle of a deal with {player_name} over {item} from Trade chat: {state}. Keep to it."
+
+#    OllamaChat.Trade.WhereNear
+#    OllamaChat.Trade.WhereWalk
+#    OllamaChat.Trade.WhereFar
+#        Where a bot stands for the trade, once a deal is struck: right by
+#        them, walking over (WalkYards), or further off ({place}: its hangout
+#        spot or the area it is in; {yards}).
+#        Default: (below)
+OllamaChat.Trade.WhereNear = "You are right by them, so you'll open the trade."
+OllamaChat.Trade.WhereWalk = "You are walking over to them now to trade."
+OllamaChat.Trade.WhereFar = "You are at {place}, about {yards} yards from them: tell them where to find you for the trade."
+
+#    OllamaChat.Trade.ThenOffer
+#    OllamaChat.Trade.ThenPass
+#    OllamaChat.Trade.ThenAsk
+#        The end of a call-out ({then} in HintRipOff and HintLowball): what it
+#        does about it -- offers {offer}, passes, or asks {offer}.
+#        Default: (below)
+OllamaChat.Trade.ThenOffer = ", and offer {offer} instead"
+OllamaChat.Trade.ThenPass = ", and say you'll pass"
+OllamaChat.Trade.ThenAsk = ", and say you want {offer} for it"
+
+#    OllamaChat.Trade.HintAsk  ...  OllamaChat.Trade.HintCannot
+#        What a bot is told to say. Buying: Ask (no price named, it asks),
+#        Open (no price named, it offers), Take, Bargain (cheap: it takes it
+#        quick), Counter, Final (its last offer), Pass, RipOff (calls it out),
+#        Callout (nobody wants it at that price). PriceCheck. Selling:
+#        SellAsk, SellTake, SellCounter, SellFinal, SellPass, Lowball. Then
+#        Agreed (they took its price), Talk (anything else about the deal) and
+#        Cannot (it can't after all: its bags, or it no longer has it).
+#        Placeholders: {player_name} {item} {price} (theirs) {offer} (its
+#        own) {worth} {why} (what use it is to it) {count} ("one", "20 of
+#        them") {where} (Where* above) {then} (Then* above, or Cannot's
+#        reason) {state} (how the haggle stands).
+#        Default: (below)
+OllamaChat.Trade.HintAsk = "{player_name} is selling {item} without a price, and you want it: {why}. Ask how much, in a few words."
+OllamaChat.Trade.HintOpen = "{player_name} is selling {item} and you want it ({why}): offer them {offer} for it."
+OllamaChat.Trade.HintTake = "{player_name} wants {price} for {item} and you'll pay that: {why}. Say you'll take it for {price}. {where}"
+OllamaChat.Trade.HintBargain = "{player_name} wants only {price} for {item}, which is cheap for it, and you want it: {why}. Say you'll take it for {price}, quick. {where}"
+OllamaChat.Trade.HintCounter = "{player_name} wants {price} for {item}. You want it ({why}), but you'd pay {offer}: offer them {offer}, the way you haggle."
+OllamaChat.Trade.HintFinal = "{player_name} wants {price} for {item}. {offer} is as far as you'll go: offer them {offer} and say it's your last offer."
+OllamaChat.Trade.HintPass = "{player_name} wants {price} for {item}; the most you'd pay is {offer}. Say you'll pass, in a few words."
+OllamaChat.Trade.HintRipOff = "{player_name} wants {price} for {item}, and that's taking the mickey: it's worth about {worth}. Call them out on it, your way, in a few words{then}."
+OllamaChat.Trade.HintCallout = "{player_name} is selling {item} in Trade for {price}, and that's taking the mickey: it's worth about {worth}. Call them out on it, your way, in a few words. You're not buying it."
+OllamaChat.Trade.HintPriceCheck = "{player_name} is asking what {item} goes for. Tell them what it's worth, in a few words."
+OllamaChat.Trade.HintSellAsk = "{player_name} wants to buy {item}, and you have {count} you can spare: say you've got it, for {offer}."
+OllamaChat.Trade.HintSellTake = "{player_name} offers {price} for your {item} and you'll take it: say so. {where}"
+OllamaChat.Trade.HintSellCounter = "{player_name} offers {price} for your {item}. You want {offer} for it: say so, the way you haggle."
+OllamaChat.Trade.HintSellFinal = "{player_name} offers {price} for your {item}. {offer} is as low as you'll go: say it's your last price."
+OllamaChat.Trade.HintSellPass = "{player_name} offers only {price} for your {item}; the least you'd take is {offer}. Say no deal, in a few words."
+OllamaChat.Trade.HintLowball = "{player_name} offers {price} for your {item}, and that's a lowball: it's worth about {worth}. Call them out on it, your way, in a few words{then}."
+OllamaChat.Trade.HintAgreed = "{player_name} has taken your price: {item} for {offer}. Say so in a few words. {where}"
+OllamaChat.Trade.HintTalk = "You're in the middle of a deal with {player_name} over {item}: {state}. Answer what they just said in a few words, keeping to that. {where}"
+OllamaChat.Trade.HintCannot = "You agreed to trade {item} with {player_name} for {offer}, but you can't after all: {then}. Say so, in a few words."
+
+#    OllamaChat.Trade.StockLines
+#        What goes out when the model's line names a price nobody gave it
+#        (or passes, or fails): "kind:line" pairs, in the bot's own typing
+#        style (Personality.CannedStyles). Kinds: ask counter final pass
+#        sellask selltake sellfinal sellpass agreed callout talk.
+#        Placeholders: {offer} (its price) {price} (theirs).
+#        Default: (below)
+OllamaChat.Trade.StockLines = "ask:how much?|counter:{offer}?|final:{offer}, thats my last offer|pass:bit much for me, pass|sellask:{offer} for it|selltake:deal, {offer}|sellfinal:{offer}, cant go lower|sellpass:no deal|agreed:deal, {offer}, trade me|callout:lol no|talk:{offer}"
+
+#    OllamaChat.Trade.AdLines
+#        How a bot puts something up, |-separated, one picked each time and
+#        typed in its own style. Placeholders: {item} (the thing, linked),
+#        {count} (" x20" for a stack, nothing for one) {price}.
+#        Default: (below)
+OllamaChat.Trade.AdLines = "WTS {item}{count} {price}|WTS {item}{count} - {price}|selling {item}{count}, {price}|{item}{count} {price}, pst|WTS {item}{count} {price} pst|WTS {item}{count}, {price} obo"
+
+###############################################################################
+#
 #   OLLAMA CHAT - WHAT BOTS CARRY, AND TRADING IT
 #
 #   A bot knows what is in its bags: what it could part with and what it
@@ -6563,6 +6859,8 @@ OllamaChat.MinP = -1
 OllamaChat.Chatter.UseGeneralChannel = 1
 
 #    OllamaChat.Chatter.UseTradeChannel
+#        Chatter in Trade. With Trade.OnlyCommerce (TRADE CHAT), none, whatever
+#        this says: what bots put up for sale there is all they post.
 #        Default: 1
 OllamaChat.Chatter.UseTradeChannel = 1
 

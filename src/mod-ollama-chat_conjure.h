@@ -61,6 +61,7 @@ struct ConjureStats
     uint64_t refused   = 0;   // could not, and said why
     uint64_t lapsed    = 0;   // declined, cancelled, or not taken in time
     uint64_t takenBack = 0;   // they said to take it back out
+    uint64_t sold      = 0;   // of the completed: sold in Trade chat, not given
     uint64_t strangers = 0;   // asks from someone outside the mage's group
     uint64_t ignored   = 0;   // let go by (someone outside its group)
     uint32_t pending   = 0;
@@ -75,6 +76,21 @@ ConjureStats Conjure_GetStats();
 // Only within a group: playerbots cancels any other trade. World thread.
 std::string Conjure_GiveItems(Player* bot, Player* player, const std::vector<std::pair<uint32_t, uint32_t>>& items,
                               std::string& when);
+
+// Sell `stack` (that stack, whole) to `player` for exactly `price` -- a deal
+// struck in Trade chat (mod-ollama-chat_tradechat). The way the water goes
+// over, except that the bot's side is accepted only once theirs holds exactly
+// `price` and nothing else. It waits up to `waitSeconds` for them to come
+// close enough (0: Conjure.WaitSeconds), then asks them to trade. Empty when
+// it is under way (`when` then says what it waits for), else why it cannot.
+// World thread.
+class Item;
+std::string Conjure_SellItem(Player* bot, Player* player, Item* stack, uint32_t price, uint32_t waitSeconds,
+                             std::string& when);
+
+// Is `bot` selling `player` something right now (waiting, offered, or in the
+// window)? World thread.
+bool Conjure_IsSelling(Player* bot, Player* player);
 
 // Is `bot` handing `player` some of `entry` already (offered, waiting, or in
 // the window)? `entry` 0: anything at all. World thread.

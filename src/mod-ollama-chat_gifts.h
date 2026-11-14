@@ -7,6 +7,7 @@
 #include <string>
 
 class Player;
+struct ItemTemplate;
 
 // --------------------------------------------------------------------------
 // A real player giving away, or selling, something they carry.
@@ -60,6 +61,26 @@ bool Gifts_IsOfferLine(Player* player, const std::string& msg);
 // lately (Gifts.Said*Text). Empty otherwise.
 std::string Gifts_PromptFor(Player* bot);
 
+// How much use `proto` is to `bot`, the way playerbots judges what it loots,
+// and why, in its own words: 0 none, 40 and up it would take it as a gift, 50
+// and up it would pay for it. World thread.
+int Gifts_Judge(Player* bot, ItemTemplate const* proto, int32_t suffix, std::string& why);
+
+// A deal struck in Trade chat (mod-ollama-chat_tradechat): `bot` pays exactly
+// `price` for exactly `count` of `entry` (`suffix`, when not 0, its random
+// property too) from `player`, who is outside its group. Its AI is held when
+// they are close, it asks them to trade once they are within reach, puts the
+// money in when they put exactly that in, and accepts its side only then.
+// Kept for `seconds`. World thread.
+void Gifts_AgreeDeal(Player* bot, Player* player, uint32_t entry, int32_t suffix, uint32_t count, uint32_t price,
+                     uint32_t seconds);
+
+// A deal between them still stands (not paid, not forgotten).
+bool Gifts_HasDeal(Player* bot, Player* player);
+
+// Called off, unless the money is in a window between them right now.
+void Gifts_DropDeal(Player* bot, Player* player);
+
 void Gifts_Tick();     // world tick: a bot that agreed a price puts the money in the trade window
 void Gifts_Update();   // maintenance: old offers and deals are forgotten
 
@@ -74,6 +95,7 @@ struct GiftsStats
     uint64_t countered = 0;  // a bot offered less
     uint64_t paid     = 0;   // a bot paid in a trade window
     uint64_t received = 0;   // a gift from someone outside its group, taken in a trade
+    uint64_t marketPaid = 0; // of the paid: deals struck in Trade chat
     uint32_t deals    = 0;   // prices agreed and not traded yet
 };
 GiftsStats Gifts_GetStats();

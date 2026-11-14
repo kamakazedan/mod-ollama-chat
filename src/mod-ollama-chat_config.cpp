@@ -716,6 +716,62 @@ float       g_CorpseRange                      = 20.0f;
 CorpseStyle g_CorpseStyleDefault;
 std::unordered_map<std::string, CorpseStyle> g_CorpseStyles;
 
+bool        g_TradeEnable                      = true;
+bool        g_TradeOnlyCommerce                = true;
+uint32_t    g_TradeMaxSpendPercent             = 50;
+uint32_t    g_TradeMaxJudged                   = 30;
+uint32_t    g_TradeTalkSeconds                 = 180;
+uint32_t    g_TradeMeetSeconds                 = 300;
+float       g_TradeWalkYards                   = 60.0f;
+uint32_t    g_TradeCalloutChance               = 50;
+uint32_t    g_TradePriceCheckChance            = 70;
+uint32_t    g_TradeAdMinMinutes                = 8;
+uint32_t    g_TradeAdMaxMinutes                = 20;
+uint32_t    g_TradeAdMinCopper                 = 5000;
+uint32_t    g_TradeDelayMinMs                  = 2500;
+uint32_t    g_TradeDelayMaxMs                  = 7000;
+Haggle::Settings g_TradeHaggle;
+Haggle::Style    g_TradeStyleDefault;
+std::unordered_map<std::string, Haggle::Style> g_TradeStyles;
+std::string g_TradePromptTemplate;
+std::string g_TradeChannelText;
+std::string g_TradeWhisperText;
+std::string g_TradeSaidText;
+std::string g_TradeWhereNear;
+std::string g_TradeWhereWalk;
+std::string g_TradeWhereFar;
+std::string g_TradeThenOffer;
+std::string g_TradeThenPass;
+std::string g_TradeThenAsk;
+std::string g_TradeHintAsk;
+std::string g_TradeHintOpen;
+std::string g_TradeHintTake;
+std::string g_TradeHintBargain;
+std::string g_TradeHintCounter;
+std::string g_TradeHintFinal;
+std::string g_TradeHintPass;
+std::string g_TradeHintRipOff;
+std::string g_TradeHintCallout;
+std::string g_TradeHintPriceCheck;
+std::string g_TradeHintSellAsk;
+std::string g_TradeHintSellTake;
+std::string g_TradeHintSellCounter;
+std::string g_TradeHintSellFinal;
+std::string g_TradeHintSellPass;
+std::string g_TradeHintLowball;
+std::string g_TradeHintAgreed;
+std::string g_TradeHintTalk;
+std::string g_TradeHintCannot;
+std::unordered_map<std::string, std::string> g_TradeStockLines;
+std::vector<std::string> g_TradeAdLines;
+std::vector<std::vector<std::string>> g_TradeSellWords;
+std::vector<std::vector<std::string>> g_TradeBuyWords;
+std::vector<std::vector<std::string>> g_TradeCheckWords;
+std::vector<std::vector<std::string>> g_TradeAskSellerWords;
+std::vector<std::vector<std::string>> g_TradeAcceptWords;
+std::vector<std::vector<std::string>> g_TradeRejectWords;
+std::vector<std::vector<std::string>> g_TradeEachWords;
+
 bool        g_CityLifeEnable                   = true;
 std::string g_CityLifeMountPrompt;
 bool        g_CityLifeDanceEmotes              = true;
@@ -3557,6 +3613,231 @@ static void LoadNaturalChatV36Settings()
              g_CorpseBossChance, g_CorpseStyles.size());
 }
 
+namespace
+{
+    // "pay:100|haggle:40|rounds:2|callout:40" on top of `base`: a line needs
+    // only what differs from it.
+    Haggle::Style ReadTradeStyle(const std::string& raw, Haggle::Style base, std::string& bad)
+    {
+        for (const std::string& item : SplitString(raw, '|'))
+        {
+            const size_t colon = item.find(':');
+            std::string name = colon == std::string::npos ? item : item.substr(0, colon);
+            std::string value = colon == std::string::npos ? std::string() : item.substr(colon + 1);
+            auto trim = [](std::string& t)
+            {
+                const size_t b = t.find_first_not_of(" \t\r\n");
+                const size_t e = t.find_last_not_of(" \t\r\n");
+                t = b == std::string::npos ? std::string() : t.substr(b, e - b + 1);
+            };
+            trim(name);
+            trim(value);
+            if (name.empty())
+                continue;
+            const bool number = !value.empty() && value.size() <= 4 &&
+                std::all_of(value.begin(), value.end(), [](unsigned char c) { return std::isdigit(c) != 0; });
+            const uint32_t n = number ? static_cast<uint32_t>(std::stoul(value)) : 0;
+            if (number && name == "pay")
+                base.pay = std::clamp<uint32_t>(n, 10, 500);
+            else if (number && name == "haggle")
+                base.haggle = std::min<uint32_t>(n, 100);
+            else if (number && name == "rounds")
+                base.rounds = std::min<uint32_t>(n, 5);
+            else if (number && name == "callout")
+                base.callout = std::min<uint32_t>(n, 100);
+            else
+                bad += (bad.empty() ? "" : ", ") + item;
+        }
+        return base;
+    }
+}
+
+static void LoadNaturalChatV37Settings()
+{
+    auto phrases = [](const char* key, const char* def)
+    {
+        return CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(key, def));
+    };
+    auto text = [](const char* key, const char* def)
+    {
+        return sConfigMgr->GetOption<std::string>(key, def);
+    };
+
+    // --- Trade chat: buying and selling, and nothing else (mod-ollama-chat_tradechat) -------
+    g_TradeEnable           = sConfigMgr->GetOption<bool>("OllamaChat.Trade.Enable", true);
+    g_TradeOnlyCommerce     = sConfigMgr->GetOption<bool>("OllamaChat.Trade.OnlyCommerce", true);
+    g_TradeMaxSpendPercent  = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.MaxSpendPercent", 50), 100);
+    g_TradeMaxJudged        = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.MaxJudged", 30), 1, 200);
+    g_TradeTalkSeconds      = std::max<uint32_t>(30, sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.TalkSeconds", 180));
+    g_TradeMeetSeconds      = std::max<uint32_t>(30, sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.MeetSeconds", 300));
+    g_TradeWalkYards        = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Trade.WalkYards", 60.0f), 0.0f, 200.0f);
+    g_TradeCalloutChance    = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.CalloutChance", 50), 100);
+    g_TradePriceCheckChance = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.PriceCheckChance", 70), 100);
+    g_TradeAdMinMinutes     = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.AdMinMinutes", 8));
+    g_TradeAdMaxMinutes     = sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.AdMaxMinutes", 20);
+    if (g_TradeAdMaxMinutes && g_TradeAdMaxMinutes < g_TradeAdMinMinutes)
+        g_TradeAdMaxMinutes = g_TradeAdMinMinutes;
+    g_TradeAdMinCopper      = sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.AdMinCopper", 5000);
+    g_TradeDelayMinMs       = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.DelayMinMs", 2500), 30000);
+    g_TradeDelayMaxMs       = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.DelayMaxMs", 7000),
+                                                   g_TradeDelayMinMs, 30000);
+
+    // What things are worth, and what is taking the mickey.
+    g_TradeHaggle = Haggle::Settings{};
+    {
+        const std::vector<std::string> pcts = SplitString(sConfigMgr->GetOption<std::string>(
+            "OllamaChat.Trade.GearValuePct", "100|250|500|1000|2500|4000|4000"), '|');
+        for (size_t i = 0; i < pcts.size() && i < Haggle::kQualities; ++i)
+        {
+            const std::string& v = pcts[i];
+            if (!v.empty() && v.size() <= 6 &&
+                std::all_of(v.begin(), v.end(), [](unsigned char c) { return std::isdigit(c) != 0 || c == ' '; }))
+                g_TradeHaggle.gearValuePct[i] = static_cast<uint32_t>(std::stoul(v));
+        }
+    }
+    g_TradeHaggle.goodsValuePct = sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.GoodsValuePct", 300);
+    g_TradeHaggle.ripOffPct     = std::max<uint32_t>(110, sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.RipOffPercent", 250));
+    g_TradeHaggle.bargainPct    = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.BargainPercent", 50), 95);
+    g_TradeHaggle.lowballPct    = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.LowballPercent", 40), 95);
+
+    // How each chat style deals: Default, then OllamaChat.Trade.Style.<KEY>
+    // on top of it for the styles that differ.
+    std::string bad;
+    g_TradeStyleDefault = ReadTradeStyle(sConfigMgr->GetOption<std::string>("OllamaChat.Trade.Style.Default",
+        "pay:100|haggle:40|rounds:2|callout:40"), Haggle::Style{}, bad);
+    g_TradeStyles.clear();
+    {
+        const std::string prefix = "OllamaChat.Trade.Style.";
+        for (const std::string& key : sConfigMgr->GetKeysByString(prefix))
+        {
+            std::string name = key.substr(prefix.size());
+            for (char& c : name)
+                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            if (name.empty() || name == "DEFAULT")
+                continue;
+            g_TradeStyles[name] = ReadTradeStyle(sConfigMgr->GetOption<std::string>(key, ""), g_TradeStyleDefault, bad);
+        }
+    }
+    if (!bad.empty())
+        LOG_WARN("module.ollamachat", "[Ollama Chat] Ignored parts of OllamaChat.Trade.Style settings that are not "
+                 "pay, haggle, rounds or callout with a number: {}", bad);
+
+    // What it reads in Trade.
+    g_TradeSellWords = phrases("OllamaChat.Trade.SellWords",
+        "wts|selling|sell|for sale|fs|anyone want|anybody want|any1 want|who wants|anyone need|anybody need|obo|"
+        "or best offer|best offer|make an offer|make me an offer|any offers|cheap|going cheap|price is|asking");
+    g_TradeBuyWords = phrases("OllamaChat.Trade.BuyWords",
+        "wtb|buying|buy|looking for|lf|need|needing|anyone have|anyone got|anyone selling|anybody have|anybody got|"
+        "anybody selling|any1 have|any1 selling|who has|who sells|whos selling|paying|ill take|i will take|ill buy|"
+        "i will buy|interested|how much for|hm for|i want|want it");
+    g_TradeCheckWords = phrases("OllamaChat.Trade.CheckWords",
+        "pc|price check|pricecheck|price on|how much is|how much are|how much does|whats it worth|what is it worth|"
+        "worth|going rate|ah price|value");
+    g_TradeAskSellerWords = phrases("OllamaChat.Trade.AskSellerWords",
+        "you sell|u sell|you selling|u selling|ya selling|you still selling|u still selling|do you have|do u have|"
+        "you have any|u have any|you got any|u got any|got any more|have any more");
+    g_TradeAcceptWords = phrases("OllamaChat.Trade.AcceptWords",
+        "deal|ok|okay|k|kk|sure|yes|yep|yeah|ya|yea|alright|aight|fine|done|sold|agreed|accept|accepted|you got it|"
+        "its yours|take it|works|lets do it|go on then|sounds good|np|no problem|no prob|trade me|come trade|"
+        "ill take it");
+    g_TradeRejectWords = phrases("OllamaChat.Trade.RejectWords",
+        "no|nah|nope|no thanks|no ty|no thx|pass|too low|too little|lowball|no deal|forget it|nvm|never mind|"
+        "not for that|thats too low|lol no|rip off|ripoff|insulting|too much|too high|too steep");
+    g_TradeEachWords = phrases("OllamaChat.Trade.EachWords", "each|ea|per|apiece|a piece|per one|a pop");
+
+    // What it is told, and says.
+    g_TradePromptTemplate = text("OllamaChat.Trade.PromptTemplate",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} {trade} "
+        "{item} {hint} Write the one line you type into {channel} for it: short and plain, the way players type, no "
+        "quotes and no name in front.");
+    g_TradeChannelText = text("OllamaChat.Trade.ChannelText",
+        "This is Trade chat, where people only buy and sell: WTS is want to sell, WTB want to buy, WTT want to "
+        "trade, PC a price check, PST or /w means whisper them, OBO is or best offer, BoE binds when equipped, and "
+        "g, s and c are gold, silver and copper. Never chat about anything else here, and say no price but the ones "
+        "given here.");
+    g_TradeWhisperText = text("OllamaChat.Trade.WhisperText",
+        "You are whispering {player_name} about a deal from Trade chat. Say no price but the ones given here.");
+    g_TradeSaidText = text("OllamaChat.Trade.SaidText",
+        "You are in the middle of a deal with {player_name} over {item} from Trade chat: {state}. Keep to it.");
+    g_TradeWhereNear = text("OllamaChat.Trade.WhereNear", "You are right by them, so you'll open the trade.");
+    g_TradeWhereWalk = text("OllamaChat.Trade.WhereWalk", "You are walking over to them now to trade.");
+    g_TradeWhereFar  = text("OllamaChat.Trade.WhereFar",
+        "You are at {place}, about {yards} yards from them: tell them where to find you for the trade.");
+    g_TradeThenOffer = text("OllamaChat.Trade.ThenOffer", ", and offer {offer} instead");
+    g_TradeThenPass  = text("OllamaChat.Trade.ThenPass", ", and say you'll pass");
+    g_TradeThenAsk   = text("OllamaChat.Trade.ThenAsk", ", and say you want {offer} for it");
+
+    g_TradeHintAsk = text("OllamaChat.Trade.HintAsk",
+        "{player_name} is selling {item} without a price, and you want it: {why}. Ask how much, in a few words.");
+    g_TradeHintOpen = text("OllamaChat.Trade.HintOpen",
+        "{player_name} is selling {item} and you want it ({why}): offer them {offer} for it.");
+    g_TradeHintTake = text("OllamaChat.Trade.HintTake",
+        "{player_name} wants {price} for {item} and you'll pay that: {why}. Say you'll take it for {price}. {where}");
+    g_TradeHintBargain = text("OllamaChat.Trade.HintBargain",
+        "{player_name} wants only {price} for {item}, which is cheap for it, and you want it: {why}. Say you'll take "
+        "it for {price}, quick. {where}");
+    g_TradeHintCounter = text("OllamaChat.Trade.HintCounter",
+        "{player_name} wants {price} for {item}. You want it ({why}), but you'd pay {offer}: offer them {offer}, the "
+        "way you haggle.");
+    g_TradeHintFinal = text("OllamaChat.Trade.HintFinal",
+        "{player_name} wants {price} for {item}. {offer} is as far as you'll go: offer them {offer} and say it's your "
+        "last offer.");
+    g_TradeHintPass = text("OllamaChat.Trade.HintPass",
+        "{player_name} wants {price} for {item}; the most you'd pay is {offer}. Say you'll pass, in a few words.");
+    g_TradeHintRipOff = text("OllamaChat.Trade.HintRipOff",
+        "{player_name} wants {price} for {item}, and that's taking the mickey: it's worth about {worth}. Call them "
+        "out on it, your way, in a few words{then}.");
+    g_TradeHintCallout = text("OllamaChat.Trade.HintCallout",
+        "{player_name} is selling {item} in Trade for {price}, and that's taking the mickey: it's worth about "
+        "{worth}. Call them out on it, your way, in a few words. You're not buying it.");
+    g_TradeHintPriceCheck = text("OllamaChat.Trade.HintPriceCheck",
+        "{player_name} is asking what {item} goes for. Tell them what it's worth, in a few words.");
+    g_TradeHintSellAsk = text("OllamaChat.Trade.HintSellAsk",
+        "{player_name} wants to buy {item}, and you have {count} you can spare: say you've got it, for {offer}.");
+    g_TradeHintSellTake = text("OllamaChat.Trade.HintSellTake",
+        "{player_name} offers {price} for your {item} and you'll take it: say so. {where}");
+    g_TradeHintSellCounter = text("OllamaChat.Trade.HintSellCounter",
+        "{player_name} offers {price} for your {item}. You want {offer} for it: say so, the way you haggle.");
+    g_TradeHintSellFinal = text("OllamaChat.Trade.HintSellFinal",
+        "{player_name} offers {price} for your {item}. {offer} is as low as you'll go: say it's your last price.");
+    g_TradeHintSellPass = text("OllamaChat.Trade.HintSellPass",
+        "{player_name} offers only {price} for your {item}; the least you'd take is {offer}. Say no deal, in a few "
+        "words.");
+    g_TradeHintLowball = text("OllamaChat.Trade.HintLowball",
+        "{player_name} offers {price} for your {item}, and that's a lowball: it's worth about {worth}. Call them out "
+        "on it, your way, in a few words{then}.");
+    g_TradeHintAgreed = text("OllamaChat.Trade.HintAgreed",
+        "{player_name} has taken your price: {item} for {offer}. Say so in a few words. {where}");
+    g_TradeHintTalk = text("OllamaChat.Trade.HintTalk",
+        "You're in the middle of a deal with {player_name} over {item}: {state}. Answer what they just said in a few "
+        "words, keeping to that. {where}");
+    g_TradeHintCannot = text("OllamaChat.Trade.HintCannot",
+        "You agreed to trade {item} with {player_name} for {offer}, but you can't after all: {then}. Say so, in a "
+        "few words.");
+
+    g_TradeStockLines.clear();
+    for (const std::string& item : SplitString(text("OllamaChat.Trade.StockLines",
+             "ask:how much?|counter:{offer}?|final:{offer}, thats my last offer|pass:bit much for me, pass|"
+             "sellask:{offer} for it|selltake:deal, {offer}|sellfinal:{offer}, cant go lower|sellpass:no deal|"
+             "agreed:deal, {offer}, trade me|callout:lol no|talk:{offer}"), '|'))
+    {
+        const size_t colon = item.find(':');
+        if (colon != std::string::npos && colon > 0)
+            g_TradeStockLines[item.substr(0, colon)] = item.substr(colon + 1);
+    }
+    g_TradeAdLines.clear();
+    for (const std::string& line : SplitString(text("OllamaChat.Trade.AdLines",
+             "WTS {item}{count} {price}|WTS {item}{count} - {price}|selling {item}{count}, {price}|"
+             "{item}{count} {price}, pst|WTS {item}{count} {price} pst|WTS {item}{count}, {price} obo"), '|'))
+        if (!line.empty())
+            g_TradeAdLines.push_back(line);
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v37: Trade chat {}{} (styles of their own: {}; things put up "
+             "every {}-{} min).", g_TradeEnable ? "on" : "off",
+             g_TradeEnable && g_TradeOnlyCommerce ? ", buying and selling only" : "", g_TradeStyles.size(),
+             g_TradeAdMinMinutes, g_TradeAdMaxMinutes);
+}
+
 static void LoadNaturalChatV30Settings()
 {
     // --- what chat is really like ---------------------------------------------------------
@@ -4534,6 +4815,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV34Settings();
     LoadNaturalChatV35Settings();
     LoadNaturalChatV36Settings();
+    LoadNaturalChatV37Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

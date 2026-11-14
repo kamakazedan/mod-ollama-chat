@@ -7,6 +7,7 @@
 #include "mod-ollama-chat_mingle.h"
 #include "mod-ollama-chat_presence.h"
 #include "mod-ollama-chat_world.h"
+#include "mod-ollama-chat_tradechat.h"
 #include "mod-ollama-chat-utilities.h"
 
 #include "CellImpl.h"
@@ -594,7 +595,8 @@ bool Conversation_PlaceAllowed(ChatChannelSourceLocal source, uint32_t channelId
             if (g_DisableForCustomChannels)
                 return false;
             return channelId == uint32(ChatChannelId::GENERAL) ||
-                   (g_ConversationAllowTrade && channelId == uint32(ChatChannelId::TRADE));
+                   (g_ConversationAllowTrade && !TradeChat_OnlyCommerce() &&
+                    channelId == uint32(ChatChannelId::TRADE));
         default:
             return false;
     }

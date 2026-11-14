@@ -3736,102 +3736,137 @@ namespace TextRules
         return out;
     }
 
-    uint32_t ParsePrice(const std::string& text)
+    namespace
     {
-        std::string s;
-        s.reserve(text.size());
-        for (char c : text)
-            s += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-
-        auto isDigit = [](char c) { return c >= '0' && c <= '9'; };
-        auto isAlpha = [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; };
-        auto coin = [](const std::string& unit) -> uint64_t
+        // The first price in `s` (already lower case) from `from` on, in
+        // copper; `end` is where reading stopped, for the next one.
+        uint32_t ReadPrice(const std::string& s, size_t from, size_t& end)
         {
-            static const char* const gold[]   = { "g", "gold", "golds", "gp" };
-            static const char* const silver[] = { "s", "silver", "silvers", "sil", "sp" };
-            static const char* const copper[] = { "c", "copper", "coppers", "cp" };
-            for (const char* u : gold)
-                if (unit == u)
-                    return 10000;
-            for (const char* u : silver)
-                if (unit == u)
-                    return 100;
-            for (const char* u : copper)
-                if (unit == u)
-                    return 1;
-            return 0;
-        };
-
-        const size_t n = s.size();
-        double total = 0.0;
-        bool   inPrice = false;
-        size_t i = 0;
-        while (i < n)
-        {
-            // A number that starts a word ("x5" and "lvl20" are no prices),
-            // or one that runs on from the coin before it ("1g50s").
-            const bool starts = isDigit(s[i]) &&
-                                (i == 0 || !std::isalnum(static_cast<unsigned char>(s[i - 1])) ||
-                                 (inPrice && isAlpha(s[i - 1])));
-            if (!starts)
+            auto isDigit = [](char c) { return c >= '0' && c <= '9'; };
+            auto isAlpha = [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; };
+            auto coin = [](const std::string& unit) -> uint64_t
             {
-                if (inPrice && s[i] != ' ' && s[i] != '+' && s[i] != ',')
-                    break;   // the price is over: "5g each, 50s for two" is 5g
-                if (inPrice && s[i] == ',' && i + 1 < n && s[i + 1] != ' ')
-                    break;
-                ++i;
-                continue;
-            }
-
-            // "1,500g": a comma before exactly three digits only groups them.
-            auto groups = [&](size_t at)
-            {
-                return s[at] == ',' && at + 3 < n && isDigit(s[at + 1]) && isDigit(s[at + 2]) &&
-                       isDigit(s[at + 3]) && (at + 4 >= n || !isDigit(s[at + 4]));
+                static const char* const gold[]   = { "g", "gold", "golds", "gp" };
+                static const char* const silver[] = { "s", "silver", "silvers", "sil", "sp" };
+                static const char* const copper[] = { "c", "copper", "coppers", "cp" };
+                for (const char* u : gold)
+                    if (unit == u)
+                        return 10000;
+                for (const char* u : silver)
+                    if (unit == u)
+                        return 100;
+                for (const char* u : copper)
+                    if (unit == u)
+                        return 1;
+                return 0;
             };
-            size_t j = i;
-            double value = 0.0;
-            while (j < n && (isDigit(s[j]) || groups(j)))
+
+            const size_t n = s.size();
+            double total = 0.0;
+            bool   inPrice = false;
+            size_t i = from;
+            while (i < n)
             {
-                if (s[j] != ',')
-                    value = value * 10.0 + (s[j] - '0');
-                ++j;
-            }
-            if (j + 1 < n && s[j] == '.' && isDigit(s[j + 1]))
-            {
-                double scale = 0.1;
-                ++j;
-                while (j < n && isDigit(s[j]))
+                // A number that starts a word ("x5" and "lvl20" are no prices),
+                // or one that runs on from the coin before it ("1g50s").
+                const bool starts = isDigit(s[i]) &&
+                                    (i == 0 || !std::isalnum(static_cast<unsigned char>(s[i - 1])) ||
+                                     (inPrice && isAlpha(s[i - 1])));
+                if (!starts)
                 {
-                    value += (s[j] - '0') * scale;
-                    scale /= 10.0;
+                    if (inPrice && s[i] != ' ' && s[i] != '+' && s[i] != ',')
+                        break;   // the price is over: "5g each, 50s for two" is 5g
+                    if (inPrice && s[i] == ',' && i + 1 < n && s[i + 1] != ' ')
+                        break;
+                    ++i;
+                    continue;
+                }
+
+                // "1,500g": a comma before exactly three digits only groups them.
+                auto groups = [&](size_t at)
+                {
+                    return s[at] == ',' && at + 3 < n && isDigit(s[at + 1]) && isDigit(s[at + 2]) &&
+                           isDigit(s[at + 3]) && (at + 4 >= n || !isDigit(s[at + 4]));
+                };
+                size_t j = i;
+                double value = 0.0;
+                while (j < n && (isDigit(s[j]) || groups(j)))
+                {
+                    if (s[j] != ',')
+                        value = value * 10.0 + (s[j] - '0');
                     ++j;
                 }
+                if (j + 1 < n && s[j] == '.' && isDigit(s[j + 1]))
+                {
+                    double scale = 0.1;
+                    ++j;
+                    while (j < n && isDigit(s[j]))
+                    {
+                        value += (s[j] - '0') * scale;
+                        scale /= 10.0;
+                        ++j;
+                    }
+                }
+
+                size_t k = j;
+                if (k < n && s[k] == ' ')
+                    ++k;
+                size_t e = k;
+                while (e < n && isAlpha(s[e]))
+                    ++e;
+                const uint64_t mult = coin(s.substr(k, e - k));
+                if (mult)
+                {
+                    total += value * double(mult);
+                    inPrice = true;
+                    i = e;
+                    continue;
+                }
+                if (inPrice)
+                    break;   // "5g and 20 more": the price was 5g
+                i = j;
             }
 
-            size_t k = j;
-            if (k < n && s[k] == ' ')
-                ++k;
-            size_t e = k;
-            while (e < n && isAlpha(s[e]))
-                ++e;
-            const uint64_t mult = coin(s.substr(k, e - k));
-            if (mult)
-            {
-                total += value * double(mult);
-                inPrice = true;
-                i = e;
-                continue;
-            }
-            if (inPrice)
-                break;   // "5g and 20 more": the price was 5g
-            i = j;
+            end = i;
+            if (total <= 0.0)
+                return 0;
+            constexpr double kCap = 2147483647.0;   // the gold cap, in copper
+            return total >= kCap ? uint32_t(kCap) : uint32_t(total + 0.5);
         }
 
-        if (total <= 0.0)
-            return 0;
-        constexpr double kCap = 2147483647.0;   // the gold cap, in copper
-        return total >= kCap ? uint32_t(kCap) : uint32_t(total + 0.5);
+        std::string Lower(const std::string& text)
+        {
+            std::string s;
+            s.reserve(text.size());
+            for (char c : text)
+                s += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            return s;
+        }
+    }
+
+    uint32_t ParsePrice(const std::string& text)
+    {
+        size_t end = 0;
+        return ReadPrice(Lower(text), 0, end);
+    }
+
+    std::vector<uint32_t> PricesIn(const std::string& text)
+    {
+        std::vector<uint32_t> out;
+        const std::string s = Lower(text);
+        size_t from = 0;
+        while (from < s.size() && out.size() < 16)
+        {
+            size_t end = s.size();
+            const uint32_t price = ReadPrice(s, from, end);
+            if (!price)
+                break;
+            out.push_back(price);
+            if (end <= from)
+                break;
+            from = end;
+        }
+        return out;
     }
 
     std::string MoneyWords(uint32_t copper)

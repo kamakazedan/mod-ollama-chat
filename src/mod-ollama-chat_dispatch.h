@@ -161,6 +161,14 @@ struct OllamaChatRequest
     // mount" (mod-ollama-chat_presence).
     std::vector<std::vector<std::string>> mustNotSay;
 
+    // A line about a deal (mod-ollama-chat_tradechat): it has to name
+    // `mustPrice` (copper) when that is set, and no price but that and
+    // `okPrices` (their ask, what it is worth, what the auction house has it
+    // for) -- a number the model made up is a price nobody agreed to. When
+    // it does not, `fallbackText` goes out instead.
+    uint32_t              mustPrice = 0;
+    std::vector<uint32_t> okPrices;
+
     // The tank calling the end of a dungeon-clear run (mod-ollama-chat_partycmd):
     // once it is out, the rest of the group says gg.
     bool doneCall = false;

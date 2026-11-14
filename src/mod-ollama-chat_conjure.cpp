@@ -219,6 +219,14 @@ namespace
         std::vector<ObjectGuid> placedGuids;       // the stacks this put in (or found in already): the gift
         bool                  refreshed  = false;
         bool                  begun      = false;  // their trade, opened on the mage's side by this (a stranger)
+
+        // Sold in Trade chat (mod-ollama-chat_tradechat), not given: the bot's
+        // side is accepted only once theirs holds exactly `price` and nothing
+        // else, and only `stack` goes in -- that stack, whole.
+        uint32_t              price       = 0;
+        ObjectGuid            stack;
+        uint32_t              waitSeconds = 0;     // how long it waits for them to come over (0: Conjure.WaitSeconds)
+        uint32_t              moneyBefore = 0;     // its money when it went in
         Clock::time_point     created{};
         Clock::time_point     since{};             // entered this state
         Clock::time_point     lastAnswer{};
@@ -387,6 +395,27 @@ namespace
         if (!mine)
             return;
 
+        // A sale: the stack agreed, whole, if it is still there as it was.
+        if (!g.stack.IsEmpty())
+        {
+            Item* item = mage->GetItemByGuid(g.stack);
+            if (!item || g.items.empty() || item->GetEntry() != g.items.front().itemId ||
+                item->GetCount() != g.items.front().count || mine->HasItem(item->GetGUID()))
+                return;
+            g.items.front().before = req->GetItemCount(item->GetEntry());
+            uint8 slot = 0;
+            while (slot < TRADE_SLOT_TRADED_COUNT && mine->GetItem(TradeSlots(slot)))
+                ++slot;
+            if (slot >= TRADE_SLOT_TRADED_COUNT)
+                return;
+            WorldPacket packet(CMSG_SET_TRADE_ITEM, 3);
+            packet << uint8(slot) << uint8(item->GetBagSlot()) << uint8(item->GetSlot());
+            mage->GetSession()->HandleSetTradeItemOpcode(packet);
+            if (mine->HasItem(item->GetGUID()))
+                g.placedGuids.push_back(item->GetGUID());
+            return;
+        }
+
         std::unordered_map<uint32_t, uint32_t> already;
         for (uint8 s = 0; s < TRADE_SLOT_TRADED_COUNT; ++s)
             if (Item* item = mine->GetItem(TradeSlots(s)))
@@ -438,8 +467,8 @@ namespace
     {
         TradeData* mine   = mage->GetTradeData();
         TradeData* theirs = req->GetTradeData();
-        if (!mine || !theirs || mine->IsAccepted() || mine->IsInAcceptProcess() || theirs->GetMoney() ||
-            mine->GetMoney() || mine->GetSpell())
+        if (!mine || !theirs || mine->IsAccepted() || mine->IsInAcceptProcess() ||
+            theirs->GetMoney() != uint64(g.price) || mine->GetMoney() || mine->GetSpell())
             return;
         bool any = false;
         for (uint8 slot = 0; slot < TRADE_SLOT_COUNT; ++slot)
@@ -1035,7 +1064,7 @@ void Conjure_Update()
 
         if (!done && g.state == GiftState::Waiting)
         {
-            if (now - g.created > waitLimit)
+            if (now - g.created > (g.waitSeconds ? std::chrono::seconds(g.waitSeconds) : waitLimit))
             {
                 CloseEmptyTrade(mage, req);
                 ++g_stats.lapsed;
@@ -1102,8 +1131,12 @@ void Conjure_Update()
         {
             if (mage->GetTrader() != req)
             {
-                if (g.placed && ReceivedAll(g, req))
+                if (g.placed && ReceivedAll(g, req) && (!g.price || mage->GetMoney() >= g.moneyBefore + g.price))
+                {
                     ++g_stats.completed;
+                    if (g.price)
+                        ++g_stats.sold;
+                }
                 else
                     ++g_stats.lapsed;
                 done = true;
@@ -1120,6 +1153,7 @@ void Conjure_Update()
             {
                 if (!g.placed)
                 {
+                    g.moneyBefore = mage->GetMoney();
                     PlaceItems(g, mage, req);
                     g.placed   = true;
                     g.placedAt = now;
@@ -1229,6 +1263,71 @@ std::string Conjure_GiveItems(Player* bot, Player* player, const std::vector<std
     g_gifts.push_back(std::move(gift));
     CountWatched();
     return {};
+}
+
+std::string Conjure_SellItem(Player* bot, Player* player, Item* stack, uint32_t price, uint32_t waitSeconds,
+                             std::string& when)
+{
+    when.clear();
+    if (!bot || !player || !stack || !price)
+        return "there is nothing to sell";
+    if (!Favor_TradesWithStrangers() && !InGroupWith(player, bot))
+        return "you only trade with people in your group";
+    if (!bot->IsAlive())
+        return "you are dead";
+    if (!player->IsAlive())
+        return "they are dead, and nobody can trade with a ghost";
+    if (bot->GetMapId() != player->GetMapId())
+        return "you are nowhere near them";
+    const uint64_t botGuid = bot->GetGUID().GetRawValue();
+    const uint64_t reqGuid = player->GetGUID().GetRawValue();
+    if (FindGift(botGuid, reqGuid))
+        return "you are already handing them something, so one thing at a time";
+    if (stack->IsSoulBound() && !stack->IsBOPTradable())
+        return "it is soulbound";
+
+    ItemPosCountVec dest;
+    if (player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, stack->GetEntry(), stack->GetCount()) != EQUIP_ERR_OK)
+        return "their bags are full, so they need to make room first";
+
+    const auto now = Clock::now();
+    Gift gift;
+    gift.botGuid       = botGuid;
+    gift.requesterGuid = reqGuid;
+    gift.created = gift.since = gift.lastAnswer = now;
+    gift.items.push_back({ stack->GetEntry(), 0, stack->GetCount(), 0 });
+    gift.price       = price;
+    gift.stack       = stack->GetGUID();
+    gift.waitSeconds = waitSeconds;
+
+    if (bot->GetTrader() == player)
+    {
+        gift.windowOpen = true;
+        g_gifts.push_back(std::move(gift));
+        CountWatched();
+        return {};
+    }
+    when = WaitReason(bot, player, gift.items);
+    if (!when.empty())
+    {
+        ++g_stats.waited;
+        g_gifts.push_back(std::move(gift));
+        CountWatched();
+        return {};
+    }
+    if (!StartGift(gift, bot, player))
+        return "something got in the way of the trade";
+    g_gifts.push_back(std::move(gift));
+    CountWatched();
+    return {};
+}
+
+bool Conjure_IsSelling(Player* bot, Player* player)
+{
+    if (!bot || !player)
+        return false;
+    const Gift* gift = FindGift(bot->GetGUID().GetRawValue(), player->GetGUID().GetRawValue());
+    return gift && gift->price;
 }
 
 bool Conjure_IsGiving(Player* bot, Player* player, uint32_t entry)

@@ -797,6 +797,10 @@ namespace TextRules
     // 0 when there is none. Capped at 1,000,000 gold.
     uint32_t ParsePrice(const std::string& text);
 
+    // Every price in `text`, in the order written: "6g? its 1g 40s on the ah,
+    // ill do 1g" -> {60000, 14000, 10000}.
+    std::vector<uint32_t> PricesIn(const std::string& text);
+
     // A price as people write it: "1g 50s", "35s", "80c"; "0c" for nothing.
     std::string MoneyWords(uint32_t copper);
 }

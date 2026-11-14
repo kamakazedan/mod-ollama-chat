@@ -12,6 +12,8 @@
 #include <mutex>
 #include <ctime>
 #include <bitset>
+
+#include "mod-ollama-chat_haggle.h"
 #include "ScriptMgr.h"  // Ensure WorldScript is defined
 #include "mod-ollama-chat_textrules.h"
 
@@ -770,6 +772,63 @@ extern uint32_t    g_CorpseDelayMaxMs;
 extern float       g_CorpseRange;             // yards from the body
 extern CorpseStyle g_CorpseStyleDefault;
 extern std::unordered_map<std::string, CorpseStyle> g_CorpseStyles;   // personality key, upper case
+
+// Trade chat: buying and selling, and nothing else (mod-ollama-chat_tradechat). World thread.
+extern bool        g_TradeEnable;
+extern bool        g_TradeOnlyCommerce;          // nothing but deals said in Trade
+extern uint32_t    g_TradeMaxSpendPercent;       // of a bot's money, on one thing
+extern uint32_t    g_TradeMaxJudged;             // bots asked about one thing put up
+extern uint32_t    g_TradeTalkSeconds;           // a haggle forgotten after this long quiet
+extern uint32_t    g_TradeMeetSeconds;           // a deal waits this long for the trade
+extern float       g_TradeWalkYards;             // closer than this, it walks over to trade
+extern uint32_t    g_TradeCalloutChance;         // a rip-off nobody wants: someone says so
+extern uint32_t    g_TradePriceCheckChance;      // "pc [item]" answered
+extern uint32_t    g_TradeAdMinMinutes;          // things bots put up, on each side
+extern uint32_t    g_TradeAdMaxMinutes;          // (0: none)
+extern uint32_t    g_TradeAdMinCopper;           // white things worth less are not put up
+extern uint32_t    g_TradeDelayMinMs;
+extern uint32_t    g_TradeDelayMaxMs;
+extern Haggle::Settings g_TradeHaggle;
+extern Haggle::Style    g_TradeStyleDefault;
+extern std::unordered_map<std::string, Haggle::Style> g_TradeStyles;   // personality key, upper case
+extern std::string g_TradePromptTemplate;
+extern std::string g_TradeChannelText;
+extern std::string g_TradeWhisperText;
+extern std::string g_TradeSaidText;
+extern std::string g_TradeWhereNear;
+extern std::string g_TradeWhereWalk;
+extern std::string g_TradeWhereFar;
+extern std::string g_TradeThenOffer;
+extern std::string g_TradeThenPass;
+extern std::string g_TradeThenAsk;
+extern std::string g_TradeHintAsk;
+extern std::string g_TradeHintOpen;
+extern std::string g_TradeHintTake;
+extern std::string g_TradeHintBargain;
+extern std::string g_TradeHintCounter;
+extern std::string g_TradeHintFinal;
+extern std::string g_TradeHintPass;
+extern std::string g_TradeHintRipOff;
+extern std::string g_TradeHintCallout;
+extern std::string g_TradeHintPriceCheck;
+extern std::string g_TradeHintSellAsk;
+extern std::string g_TradeHintSellTake;
+extern std::string g_TradeHintSellCounter;
+extern std::string g_TradeHintSellFinal;
+extern std::string g_TradeHintSellPass;
+extern std::string g_TradeHintLowball;
+extern std::string g_TradeHintAgreed;
+extern std::string g_TradeHintTalk;
+extern std::string g_TradeHintCannot;
+extern std::unordered_map<std::string, std::string> g_TradeStockLines;   // "ask", "counter"... -> the line
+extern std::vector<std::string> g_TradeAdLines;
+extern std::vector<std::vector<std::string>> g_TradeSellWords;
+extern std::vector<std::vector<std::string>> g_TradeBuyWords;
+extern std::vector<std::vector<std::string>> g_TradeCheckWords;
+extern std::vector<std::vector<std::string>> g_TradeAskSellerWords;   // "do you sell": buying, though it says sell
+extern std::vector<std::vector<std::string>> g_TradeAcceptWords;
+extern std::vector<std::vector<std::string>> g_TradeRejectWords;
+extern std::vector<std::vector<std::string>> g_TradeEachWords;
 
 // City life (mod-playerbots-plus), said in /say: a rare mount looked at, a dance
 extern bool        g_CityLifeEnable;

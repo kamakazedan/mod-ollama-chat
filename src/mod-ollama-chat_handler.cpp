@@ -71,6 +71,7 @@
 #include "mod-ollama-chat_race.h"
 #include "mod-ollama-chat_banter.h"
 #include "mod-ollama-chat_clock.h"
+#include "mod-ollama-chat_tradechat.h"
 #include <iomanip>
 #include <unordered_set>
 #include "SpellMgr.h"
@@ -1234,6 +1235,17 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
 
     const std::string contextChannel = channel ? channel->GetName() : std::string();
 
+    // Trade chat is for buying and selling (mod-ollama-chat_tradechat): what
+    // is said there is the market's to answer, and nothing else answers it --
+    // no chat, no banter, no bot answering a bot.
+    if (channel && TradeChat_IsTrade(channel))
+    {
+        if (!senderIsBot && TradeChat_HandleHumanLine(player, msg, channel, scopeKey))
+            return;
+        if (TradeChat_OnlyCommerce())
+            return;
+    }
+
     // --- party instructions -----------------------------------------------
     // "ready", "mb", "wait": in a dungeon with a dungeon-clear tank these
     // steer the run, and the tank answers -- nobody else. Looked at before the
@@ -1263,6 +1275,11 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
 
         // "dc on", "dc pause": mod-dungeon-clear answers those itself.
         if (partyLine == PartyCmdLine::DcCommand)
+            return;
+
+        // A whisper about a deal from Trade, or about something the bot put up
+        // for sale there: the haggle's, and nothing else answers it.
+        if (sourceLocal == SRC_WHISPER_LOCAL && receiver && TradeChat_HandleWhisper(player, receiver, msg, scopeKey))
             return;
 
         bool handled = false;
@@ -3522,6 +3539,13 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         const std::string said = Gifts_PromptFor(bot);
         if (!said.empty())
             prompt += " " + said;
+    }
+
+    // A deal with them from Trade chat, or the haggle over one.
+    {
+        const std::string deal = TradeChat_PromptFor(bot, player);
+        if (!deal.empty())
+            prompt += " " + deal;
     }
 
     // When gear comes up, what people really wear -- and leave alone anyone

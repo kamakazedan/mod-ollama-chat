@@ -201,6 +201,22 @@ mod-dungeon-clear.
   `Hangout_GoDuel` at the end of the exchange hands them over: the walk out
   to the gates and the duel are mod-playerbots-plus's.
 
+## Trade chat is buying and selling, and the numbers are the module's
+
+With `Trade.OnlyCommerce`, nothing is said in Trade but deals
+(`mod-ollama-chat_tradechat.cpp`): the handler returns for every Trade line
+the market does not take, ambient chatter and conversations leave Trade out,
+and a spare thing given away goes to General. A new kind of line never goes
+to Trade unless it is about a deal.
+
+What a bot pays or asks is decided in `mod-ollama-chat_haggle.cpp` (pure, by
+its chat style's `Trade.Style`), never by the model: a line about a deal
+carries `OllamaChatRequest::mustPrice` and `okPrices`, and one that names any
+other price goes out as its stock line, or not at all when it has none. A deal is carried out by Gifts (the
+bot buys: `Gifts_AgreeDeal`, exactly that many of that thing for exactly the
+price) or Conjure (the bot sells: `Conjure_SellItem`, that stack for exactly
+the price), the bot's side accepted only on an exact match.
+
 ## Performance traps specific to this module
 
 - Never walk `Map::GetCreatureBySpawnIdStore()` — it is every spawn on the map.

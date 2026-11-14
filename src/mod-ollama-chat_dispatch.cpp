@@ -10,6 +10,7 @@
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_events.h"
 #include "mod-ollama-chat_textrules.h"
+#include "mod-ollama-chat_tradechat.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_hangout.h"
@@ -611,17 +612,48 @@ namespace
             return;
         }
 
+        // A line about a deal names the price agreed or offered, and no price
+        // nobody named: the model's numbers are no deal.
+        bool priceWrong = false;
+        if (c.request.mustPrice || !c.request.okPrices.empty())
+        {
+            const std::vector<uint32_t> prices = TextRules::PricesIn(TextRules::WithoutBracketNames(c.text));
+            bool named = !c.request.mustPrice;
+            for (uint32_t p : prices)
+            {
+                if (p == c.request.mustPrice)
+                    named = true;
+                else if (std::find(c.request.okPrices.begin(), c.request.okPrices.end(), p) ==
+                         c.request.okPrices.end())
+                    priceWrong = true;
+            }
+            priceWrong = priceWrong || !named;
+        }
+
         // A line that has to say something in particular: the model's, if it
         // did say it, else the stock one.
         if (!c.request.fallbackText.empty() && c.text != c.request.fallbackText &&
-            (Context_IsPassReply(c.text) || CrowdText::Words(c.text).empty() ||
+            (Context_IsPassReply(c.text) || CrowdText::Words(c.text).empty() || priceWrong ||
              (!c.request.mustSay.empty() &&
               !CrowdText::ContainsPhrase(CrowdText::Words(c.text), c.request.mustSay))))
         {
             if (g_DebugEnabled)
                 LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} did not say what it had to ('{}'): '{}' instead.",
                          bot->GetName(), c.text, c.request.fallbackText);
+            if (priceWrong)
+                TradeChat_NoteFallback();
             c.text = c.request.fallbackText;
+        }
+        else if (priceWrong && c.request.fallbackText.empty())
+        {
+            // ...and with no stock line to say instead, nothing: a price
+            // nobody named is never said.
+            ++g_droppedPhrase;
+            TradeChat_NoteFallback();
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} named a price nobody gave it: '{}' dropped.",
+                         bot->GetName(), c.text);
+            return;
         }
 
         // The prompt lets a bot that overheard someone else's exchange decline

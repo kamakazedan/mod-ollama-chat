@@ -47,6 +47,7 @@
 #include "mod-ollama-chat_plus.h"
 #include "mod-ollama-chat_report.h"
 #include "mod-ollama-chat_corpse.h"
+#include "mod-ollama-chat_tradechat.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
 #include <thread>
@@ -782,6 +783,21 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
                                  (unsigned long long)cityLife.quiet,
                                  (unsigned long long)cityLife.dances,
                                  (unsigned long long)cityLife.emoted);
+
+    const TradeChatStats trade = TradeChat_GetStats();
+    if (show("bots"))
+        out("Trade chat: {}{} - {} lines heard ({} not buying or selling: left alone); {} things put up, {} wanted, "
+            "{} price checks, {} nobody wanted or had; {} said about deals ({} counter-offers, {} rip-offs and "
+            "lowballs called out, {} walked away from, {} with a made-up price, said as a stock line); {} deals "
+            "struck, {} walked over to trade, {} traded, {} never were; {} things bots put up; {} haggling now",
+            g_TradeEnable ? "on" : "off", g_TradeEnable && g_TradeOnlyCommerce ? ", buying and selling only" : "",
+            (unsigned long long)trade.heard, (unsigned long long)trade.ignored, (unsigned long long)trade.sales,
+            (unsigned long long)trade.wants, (unsigned long long)trade.checks, (unsigned long long)trade.nobody,
+            (unsigned long long)trade.answered, (unsigned long long)trade.counters,
+            (unsigned long long)trade.callouts, (unsigned long long)trade.passed,
+            (unsigned long long)trade.fallbacks, (unsigned long long)trade.agreed, (unsigned long long)trade.walked,
+            (unsigned long long)trade.done, (unsigned long long)trade.lapsed, (unsigned long long)trade.ads,
+            trade.talking);
 
     const CorpseStats corpse = Corpse_GetStats();
     if (show("bots"))

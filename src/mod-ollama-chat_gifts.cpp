@@ -76,6 +76,18 @@ namespace
         Clock::time_point lastAccept{};
         Clock::time_point made{};
         Clock::time_point until{};
+
+        // A deal struck in Trade chat (mod-ollama-chat_tradechat): exactly
+        // `count` of it (`suffix`, when not 0, its random property too) for
+        // exactly the price, and the bot opens the trade itself once they are
+        // close. 0: the old way, any number of it.
+        uint32_t          count   = 0;
+        int32_t           suffix  = 0;
+        bool              market  = false;
+        bool              ours    = false;   // the bot asked them to trade: theirs to take up
+        uint32_t          offers  = 0;       // times it asked
+        Clock::time_point nextOffer{};
+        Clock::time_point offeredAt{};
     };
     std::vector<Deal> g_deals;
 
@@ -242,10 +254,17 @@ namespace
             return j;
         }
 
-        const std::string qualifier = suffix ? fmt::format("{},{}", proto->ItemId, suffix)
-                                             : std::to_string(proto->ItemId);
-        Value<ItemUsage>* value = ai->GetAiObjectContext()->GetValue<ItemUsage>("item usage", qualifier);
-        switch (value ? value->Get() : ITEM_USAGE_NONE)
+        // A value of its own, not the context's: the context keeps one for
+        // every item it is ever asked about, for as long as the bot is on,
+        // and Trade chat asks dozens of bots about everything sold there.
+        ItemUsage usage = ITEM_USAGE_NONE;
+        if (ai->GetAiObjectContext())
+        {
+            ItemUsageValue value(ai);
+            value.Qualify(suffix ? fmt::format("{},{}", proto->ItemId, suffix) : std::to_string(proto->ItemId));
+            usage = value.Calculate();
+        }
+        switch (usage)
         {
             case ITEM_USAGE_QUEST:        j.score = 95; j.why = "you need it for a quest"; break;
             case ITEM_USAGE_EQUIP:
@@ -726,6 +745,57 @@ bool Gifts_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSo
     return true;
 }
 
+int Gifts_Judge(Player* bot, ItemTemplate const* proto, int32_t suffix, std::string& why)
+{
+    why.clear();
+    PlayerbotAI* ai = bot && proto ? PlayerbotsMgr::instance().GetPlayerbotAI(bot) : nullptr;
+    if (!ai)
+        return 0;
+    const Judgement j = Judge(bot, ai, proto, suffix);
+    why = j.why;
+    return j.score;
+}
+
+void Gifts_AgreeDeal(Player* bot, Player* player, uint32_t entry, int32_t suffix, uint32_t count, uint32_t price,
+                     uint32_t seconds)
+{
+    if (!bot || !player || !entry)
+        return;
+    const uint64_t b = bot->GetGUID().GetRawValue(), p = player->GetGUID().GetRawValue();
+    g_deals.erase(std::remove_if(g_deals.begin(), g_deals.end(),
+                                 [&](const Deal& d) { return d.bot == b && d.player == p && !d.filled; }),
+                  g_deals.end());
+    Deal d;
+    d.bot    = b;
+    d.player = p;
+    d.entry  = entry;
+    d.price  = price;
+    d.count  = std::max<uint32_t>(1, count);
+    d.suffix = suffix;
+    d.market = true;
+    d.made   = Clock::now();
+    d.until  = d.made + std::chrono::seconds(std::max<uint32_t>(30, seconds));
+    g_deals.push_back(d);
+}
+
+bool Gifts_HasDeal(Player* bot, Player* player)
+{
+    if (!bot || !player)
+        return false;
+    const uint64_t b = bot->GetGUID().GetRawValue(), p = player->GetGUID().GetRawValue();
+    return std::any_of(g_deals.begin(), g_deals.end(), [&](const Deal& d) { return d.bot == b && d.player == p; });
+}
+
+void Gifts_DropDeal(Player* bot, Player* player)
+{
+    if (!bot || !player)
+        return;
+    const uint64_t b = bot->GetGUID().GetRawValue(), p = player->GetGUID().GetRawValue();
+    g_deals.erase(std::remove_if(g_deals.begin(), g_deals.end(),
+                                 [&](const Deal& d) { return d.bot == b && d.player == p && !d.filled; }),
+                  g_deals.end());
+}
+
 bool Gifts_IsOfferLine(Player* player, const std::string& msg)
 {
     if (!player || g_lines.empty())
@@ -806,8 +876,28 @@ void Gifts_Tick()
             }
             d.accepted = false;
             d.begun    = false;
+            d.ours     = false;
             if (stranger && !bot->IsInCombat() && bot->IsWithinDistInMap(player, kHoldNear))
                 Favor_HoldAi(bot);
+            // Struck in Trade chat: close enough, and neither trading, the bot
+            // asks them to trade -- twice at most, a little apart.
+            if (d.market && !d.filled && d.offers < 2 && now >= d.nextOffer && !bot->IsInCombat() &&
+                !player->IsInCombat() && bot->IsAlive() && player->IsAlive() && !bot->GetTradeData() &&
+                !player->GetTradeData() && bot->IsWithinDistInMap(player, TRADE_DISTANCE - 1.5f) &&
+                bot->HasEnoughMoney(d.price))
+            {
+                bot->SetFacingToObject(player);
+                WorldPacket packet(CMSG_INITIATE_TRADE, 8);
+                packet << player->GetGUID();
+                bot->GetSession()->HandleInitiateTradeOpcode(packet);
+                ++d.offers;
+                d.nextOffer = now + std::chrono::seconds(20);
+                if (bot->GetTrader() == player)
+                {
+                    d.ours      = true;
+                    d.offeredAt = now;
+                }
+            }
             if (d.filled)
             {
                 // The window closed with the money in it: paid, if the money
@@ -816,6 +906,8 @@ void Gifts_Tick()
                 if (bot->GetMoney() + d.price <= d.moneyBefore + 1 && bot->HasItemCount(d.entry, 1, false))
                 {
                     ++g_stats.paid;
+                    if (d.market)
+                        ++g_stats.marketPaid;
                     if (g_DebugEnabled)
                         LOG_INFO("module.ollamachat", "[Ollama Chat] {} paid {} {} for {}.", bot->GetName(),
                                  player->GetName(), TextRules::MoneyWords(d.price), d.entry);
@@ -828,9 +920,29 @@ void Gifts_Tick()
         }
 
         bool offered = false;
-        for (uint8 slot = 0; slot < TRADE_SLOT_TRADED_COUNT && !offered; ++slot)
-            if (Item* item = theirs->GetItem(TradeSlots(slot)))
-                offered = item->GetEntry() == d.entry;
+        if (d.market)
+        {
+            // Exactly what was agreed, and nothing else of theirs: the number
+            // agreed, of the one agreed (its random property too), no money.
+            uint32_t count = 0;
+            bool other = theirs->GetMoney() != 0;
+            for (uint8 slot = 0; slot < TRADE_SLOT_TRADED_COUNT; ++slot)
+                if (Item* item = theirs->GetItem(TradeSlots(slot)))
+                {
+                    if (item->GetEntry() == d.entry &&
+                        (!d.suffix || item->GetItemRandomPropertyId() == d.suffix))
+                        count += item->GetCount();
+                    else
+                        other = true;
+                }
+            if (theirs->GetItem(TRADE_SLOT_NONTRADED))
+                other = true;
+            offered = !other && count == d.count;
+        }
+        else
+            for (uint8 slot = 0; slot < TRADE_SLOT_TRADED_COUNT && !offered; ++slot)
+                if (Item* item = theirs->GetItem(TradeSlots(slot)))
+                    offered = item->GetEntry() == d.entry;
 
         const uint32_t want = offered ? d.price : 0;
         if (mine->GetMoney() != want && (!want || bot->HasEnoughMoney(want)) &&
@@ -844,6 +956,22 @@ void Gifts_Tick()
             d.filled = offered;
         }
 
+        // Struck in Trade chat: a window nothing has gone into -- its ask
+        // to trade not taken up in half a minute, or the deal run out -- is
+        // closed, so the bot is not held there for ever.
+        if (d.market && !d.filled)
+        {
+            bool empty = theirs->GetMoney() == 0 && mine->GetMoney() == 0;
+            for (uint8 slot = 0; slot < TRADE_SLOT_COUNT && empty; ++slot)
+                empty = !theirs->GetItem(TradeSlots(slot)) && !mine->GetItem(TradeSlots(slot));
+            if (empty && ((d.ours && now - d.offeredAt > std::chrono::seconds(30)) || now >= d.until))
+            {
+                bot->TradeCancel(true);
+                ++it;
+                continue;
+            }
+        }
+
         // Someone outside its group: held, and its side accepted for it when
         // the window holds the thing agreed, nothing else of theirs, and on
         // its side the price agreed and nothing more. Their accept then
@@ -854,7 +982,7 @@ void Gifts_Tick()
             // Their trade: playerbots, held off it, never takes it up, so it
             // is taken up here, once -- unless the bot offered it, handing
             // them something (Conjure_GiveItems).
-            if (!d.begun && !Conjure_IsGiving(bot, player, 0))
+            if (!d.begun && !d.ours && !Conjure_IsGiving(bot, player, 0))
             {
                 d.begun = true;
                 WorldPacket begin;

@@ -886,6 +886,36 @@ style -- the hype merchant nearly always, the quiet one hardly ever -- and
 not when it died anyway. Healthstones and mana gems count: what matters is
 what the game says the item does. See `OllamaChat.Potions.*`.
 
+## Trade Chat: Buying and Selling
+
+Trade is for buying and selling, so that is all bots do there: no chatter,
+no banter, no conversations. What they say there they mean, and carry out.
+
+- **You sell** -- "WTS [Lil Timmy's Peashooter] 6g". The bot in your city it
+  is most use to answers: an upgrade it can wear at its level, a quest item it
+  needs, something for its profession -- and only one with the gold. It knows
+  what the thing is (a blue gun for level 16 that hunters, warriors and rogues
+  use) and what it is worth: what the auction house has it for, else a multiple
+  of its vendor price.
+- **You buy** -- "WTB [Linen Cloth] x20". A bot with some to spare offers it.
+  "pc [item]" gets what it goes for.
+- **Haggling by personality.** A newbie pays what you ask, a goldmaker opens
+  low and comes up a little at a time, a rude one makes one offer and walks.
+  Ask far too much and you will be told -- "6g? its 1g 40s on the ah" -- and a
+  lowball for their own things gets the same. The prices come from the module,
+  not the model: a line that names any other price goes out as a plain stock
+  line instead, or not at all.
+- **The trade.** Strike a deal ("deal, come trade me") and a bot close by walks
+  over and opens the trade; one further off says where it is and waits. It puts
+  in exactly the gold agreed when you put in exactly the thing agreed -- that
+  many of it, nothing else -- and only then accepts its side. Selling, it puts
+  the thing in and accepts only when your side holds exactly the price.
+- **Their own things.** Now and then a bot puts something it can spare up for
+  sale ("WTS [Pagan Vest] 1g 50s"); whisper it or answer in Trade to haggle.
+
+See `OllamaChat.Trade.*`, and `OllamaChat.Trade.Style.<KEY>` for each
+personality's way with money. Needs `OllamaChat.Favor.Strangers = 1`.
+
 ## Giving Things Away
 
 Players don't hand their things to strangers for nothing, so bots don't

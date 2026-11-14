@@ -43,6 +43,7 @@
 #include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_report.h"
 #include "mod-ollama-chat_corpse.h"
+#include "mod-ollama-chat_tradechat.h"
 
 #include "CellImpl.h"
 #include "Channel.h"
@@ -181,7 +182,9 @@ namespace
             };
 
             addChannel(ChatChannelId::GENERAL,           g_ChatterUseGeneralChannel);
-            addChannel(ChatChannelId::TRADE,             g_ChatterUseTradeChannel);
+            // Trade is for buying and selling only (mod-ollama-chat_tradechat
+            // puts things up there itself): no chatter.
+            addChannel(ChatChannelId::TRADE,             g_ChatterUseTradeChannel && !TradeChat_OnlyCommerce());
             addChannel(ChatChannelId::LOOKING_FOR_GROUP, g_ChatterUseLfgChannel);
             addChannel(ChatChannelId::GUILD_RECRUITMENT, g_ChatterUseGuildRecruitmentChannel);
         }
@@ -354,7 +357,10 @@ namespace
                 outChannelId   = ch->GetChannelId();
                 return true;
             };
-            if (need.kind == NeedKind::Spare && hub && tryChannel(ChatChannelId::TRADE, g_ChatterUseTradeChannel))
+            // Something free to whoever wants it is no sale: not in Trade when
+            // Trade is for buying and selling only.
+            if (need.kind == NeedKind::Spare && hub && !TradeChat_OnlyCommerce() &&
+                tryChannel(ChatChannelId::TRADE, g_ChatterUseTradeChannel))
                 return true;
             if (need.kind == NeedKind::Quest &&
                 tryChannel(ChatChannelId::LOOKING_FOR_GROUP, g_ChatterUseLfgChannel))
@@ -479,6 +485,9 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
     // A bot spitting on the body of a named enemy, saluting a boss's.
     Corpse_Update();
 
+    // Trade chat: walking over to trade, deals done, things put up for sale.
+    TradeChat_Tick();
+
     // A bot putting on a rare or epic it just got, maybe saying so in party.
     Equip_Update();
 
@@ -518,6 +527,7 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
     {
         maintenanceTimer = 30000;
         Governor_Update();
+        TradeChat_Update();
         Topics_Update();
         Context_Update();
         Links_Update();
