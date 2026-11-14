@@ -21,6 +21,8 @@ public:
     // Diagnostics. Half of what was wrong with this module was invisible
     // because there was no way to ask it what it thought it was doing.
     static bool HandleOllamaStatusCommand(ChatHandler* handler, Optional<std::string> section);
+    // Every count, written to the report file (mod-ollama-chat_report).
+    static bool HandleOllamaReportCommand(ChatHandler* handler);
     static bool HandleOllamaTestCommand(ChatHandler* handler, Acore::ChatCommands::Tail prompt);
 };
 

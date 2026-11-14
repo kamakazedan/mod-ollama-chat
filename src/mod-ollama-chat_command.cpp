@@ -45,6 +45,7 @@
 #include "mod-ollama-chat_rolls.h"
 #include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_plus.h"
+#include "mod-ollama-chat_report.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
 #include <thread>
@@ -82,6 +83,7 @@ ChatCommandTable OllamaChatConfigCommand::GetCommands() const
     {
         { "reload",      HandleOllamaReloadCommand,  SEC_ADMINISTRATOR, Console::Yes },
         { "status",      HandleOllamaStatusCommand,  SEC_ADMINISTRATOR, Console::Yes },
+        { "report",      HandleOllamaReportCommand,  SEC_ADMINISTRATOR, Console::Yes },
         { "test",        HandleOllamaTestCommand,    SEC_ADMINISTRATOR, Console::Yes },
         { "sentiment",   ollamaSentimentCommandTable },
         { "personality", ollamaPersonalityCommandTable }
@@ -513,7 +515,22 @@ static const char* PlusStatus()
 #endif
 }
 
-static bool StatusSummary(ChatHandler* handler)
+// How long ago, in a word: "45s", "12m", "3h", "2d".
+static std::string Ago(uint32_t seconds)
+{
+    if (seconds < 60)
+        return std::to_string(seconds) + "s";
+    if (seconds < 3600)
+        return std::to_string(seconds / 60) + "m";
+    if (seconds < 86400)
+        return std::to_string(seconds / 3600) + "h";
+    return std::to_string(seconds / 86400) + "d";
+}
+
+// .ollama status: what it talks to, whether it is keeping up, what is going
+// on right now, and what looks wrong -- requests failing lately, or piling up
+// faster than the model writes them.
+std::vector<std::string> OllamaStatus_Overview()
 {
     const OllamaDispatchStats dispatch = OllamaDispatch_GetStats();
     const GovernorStats       gov      = Governor_GetStats();
@@ -521,71 +538,94 @@ static bool StatusSummary(ChatHandler* handler)
     const ConversationStats   conv     = Conversation_GetStats();
     const MingleStats         mingle   = Mingle_GetStats();
 
-    handler->PSendSysMessage("|cff00ff00[Ollama Chat]|r {} - {} ({}) at {}",
-                             g_Enable ? "on" : "|cffff0000OFF|r", g_OllamaModel,
-                             OllamaProvider_Name(g_OllamaProvider), g_OllamaUrl);
-    handler->PSendSysMessage("Requests: {} waiting, {} being written by {} workers; {} asked for, {} said, {} failed",
-                             dispatch.queuedRequests, dispatch.inFlight, dispatch.workers,
-                             (unsigned long long)dispatch.totalSubmitted,
-                             (unsigned long long)dispatch.totalDelivered,
-                             (unsigned long long)dispatch.totalFailed);
-    handler->PSendSysMessage("Held back: {} by pacing, {} by the bot, {} stock phrases; {} lines in the last minute",
-                             (unsigned long long)dispatch.totalDroppedGovernor,
-                             (unsigned long long)dispatch.totalDroppedPassed,
-                             (unsigned long long)dispatch.totalDroppedPhrase, gov.sendsLastMinute);
-    handler->PSendSysMessage("Right now: {} crowd replies, {} conversations, {} bot chats in /say",
-                             crowd.active, conv.active, mingle.running);
-    if (!dispatch.lastError.empty())
-        handler->PSendSysMessage("|cffff0000Last error:|r {}", dispatch.lastError);
-    else
-        handler->PSendSysMessage("Last error: none");
-    handler->PSendSysMessage("More: .ollama status chat | city | party | bots | all   Hangouts, marks, the auction "
-                             "house: {}", PlusStatus());
-    return true;
+    std::vector<std::string> issues;
+    if (g_OllamaUrl.rfind("https://", 0) == 0 && !OllamaHttp_TlsAvailable())
+        issues.push_back("The URL is https:// but this build has no HTTPS (no OpenSSL): every request fails.");
+    if (dispatch.failedLast10Min)
+        issues.push_back(fmt::format("{} request{} failed in the last 10 min; the last, {} ago: {}",
+                                     dispatch.failedLast10Min, dispatch.failedLast10Min == 1 ? "" : "s",
+                                     Ago(dispatch.lastErrorAgoS), dispatch.lastError));
+    else if (dispatch.totalSubmitted >= 50 && dispatch.totalFailed * 10 > dispatch.totalSubmitted)
+        issues.push_back(fmt::format("{} of {} requests failed since start ({}%).",
+                                     (unsigned long long)dispatch.totalFailed,
+                                     (unsigned long long)dispatch.totalSubmitted,
+                                     (unsigned long long)(dispatch.totalFailed * 100 / dispatch.totalSubmitted)));
+    const uint32_t behind = std::max<uint32_t>(20, dispatch.workers * 8);
+    if (g_Enable && dispatch.queuedRequests >= behind)
+        issues.push_back(fmt::format("Falling behind: {} requests waiting for the model, {} worker{} writing.",
+                                     dispatch.queuedRequests, dispatch.workers, dispatch.workers == 1 ? "" : "s"));
+
+    std::vector<std::string> out;
+    const std::string state = !g_Enable        ? std::string("|cffff0000OFF|r")
+                              : issues.empty() ? std::string("on, working")
+                                               : fmt::format("on, |cffffd000{} thing{} to look at|r", issues.size(),
+                                                             issues.size() == 1 ? "" : "s");
+    out.push_back(fmt::format("|cff00ff00[Ollama Chat]|r {} -- {} ({}) at {}", state, g_OllamaModel,
+                              OllamaProvider_Name(g_OllamaProvider), g_OllamaUrl));
+    out.push_back(fmt::format("Requests: {} waiting, {} being written by {} workers; since start {} asked for, {} "
+                              "said, {} failed.",
+                              dispatch.queuedRequests, dispatch.inFlight, dispatch.workers,
+                              (unsigned long long)dispatch.totalSubmitted,
+                              (unsigned long long)dispatch.totalDelivered,
+                              (unsigned long long)dispatch.totalFailed));
+    out.push_back(fmt::format("Last minute: {} lines out. Held back since start: {} by pacing, {} by the bot, {} "
+                              "stock phrases.",
+                              gov.sendsLastMinute, (unsigned long long)dispatch.totalDroppedGovernor,
+                              (unsigned long long)dispatch.totalDroppedPassed,
+                              (unsigned long long)dispatch.totalDroppedPhrase));
+    out.push_back(fmt::format("Right now: {} crowd replies, {} conversations, {} bot chats in /say.", crowd.active,
+                              conv.active, mingle.running));
+    for (const std::string& issue : issues)
+        out.push_back("|cffff8000 ! " + issue + "|r");
+    if (issues.empty() && !dispatch.lastError.empty())
+        out.push_back(fmt::format("Last error, {} ago: {}", Ago(dispatch.lastErrorAgoS), dispatch.lastError));
+    out.push_back(fmt::format("More: .ollama status chat | talk | city | party | bots. Everything: .ollama report ({}{}). "
+                              "Hangouts, marks, the auction house: {}",
+                              g_OllamaReportFile,
+                              g_OllamaReportMinutes ? fmt::format(", also every {} min", g_OllamaReportMinutes)
+                                                    : std::string(),
+                              PlusStatus()));
+    return out;
 }
 
-bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Optional<std::string> section)
+// Every count behind one part, or all of them ("all"): what .ollama status
+// <part> prints, and the full report holds. "chat" is the requests on their
+// way (the endpoint, the queue, what was held back and why), "talk" what goes
+// into the prompts, "city" cities, presence and mingling, "party" groups and
+// dungeons, "bots" what bots do for people (buffs, orders, trades...).
+std::vector<std::string> OllamaStatus_Lines(const std::string& want)
 {
-    // ".ollama status" is a few lines; ".ollama status chat|city|party|bots|all"
-    // the counts behind them. Every line at once filled the chat window.
-    std::string want = section ? *section : std::string();
-    for (char& c : want)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    if (want.empty())
-        return StatusSummary(handler);
-    if (want != "chat" && want != "city" && want != "party" && want != "bots" && want != "all")
+    std::vector<std::string> lines;
+    auto out = [&lines](std::string_view f, auto&&... args)
     {
-        handler->SendSysMessage("Usage: .ollama status [chat|city|party|bots|all]");
-        handler->SetSentErrorMessage(true);
-        return false;
-    }
+        lines.push_back(Acore::StringFormat(f, std::forward<decltype(args)>(args)...));
+    };
     auto show = [&want](const char* name) { return want == "all" || want == name; };
     const OllamaDispatchStats dispatch = OllamaDispatch_GetStats();
     const GovernorStats       gov      = Governor_GetStats();
 
-    handler->PSendSysMessage("|cff00ff00[Ollama Chat] Status: {}|r", want);
     // The API key is deliberately not shown here.
     if (show("chat"))
-        handler->PSendSysMessage("Module: {}   Provider: {}   Endpoint: {}   Model: {}   ApiKey: {}   HTTPS: {}",
+        out("Module: {}   Provider: {}   Endpoint: {}   Model: {}   ApiKey: {}   HTTPS: {}",
                              g_Enable ? "enabled" : "DISABLED",
                              OllamaProvider_Name(g_OllamaProvider),
                              g_OllamaUrl, g_OllamaModel,
                              g_OllamaApiKey.empty() ? "not set" : "set",
                              OllamaHttp_TlsAvailable() ? "available" : "NOT BUILT (no OpenSSL)");
     if (show("chat"))
-        handler->PSendSysMessage("Think: {}", OllamaCapability_StatusText());
+        out("Think: {}", OllamaCapability_StatusText());
 
     if (show("chat"))
-        handler->PSendSysMessage("Dispatcher: {} workers, {} queued, {} in flight, {} awaiting delivery",
+        out("Dispatcher: {} workers, {} queued, {} in flight, {} awaiting delivery",
                              dispatch.workers, dispatch.queuedRequests,
                              dispatch.inFlight, dispatch.pendingDeliveries);
     if (show("chat"))
-        handler->PSendSysMessage("Totals: {} submitted, {} delivered, {} failed",
+        out("Totals: {} submitted, {} delivered, {} failed",
                              (unsigned long long)dispatch.totalSubmitted,
                              (unsigned long long)dispatch.totalDelivered,
                              (unsigned long long)dispatch.totalFailed);
     if (show("chat"))
-        handler->PSendSysMessage("Dropped: {} queue-full, {} empty-after-cleanup, {} by governor, {} passed by the bot, "
+        out("Dropped: {} queue-full, {} empty-after-cleanup, {} by governor, {} passed by the bot, "
                              "{} stock or off-era phrases",
                              (unsigned long long)dispatch.totalDroppedQueueFull,
                              (unsigned long long)dispatch.totalDroppedEmpty,
@@ -594,16 +634,16 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)dispatch.totalDroppedPhrase);
 
     if (show("chat"))
-        handler->PSendSysMessage("Governor: {} bots, {} scopes tracked, {} sends in the last minute",
+        out("Governor: {} bots, {} scopes tracked, {} sends in the last minute",
                              gov.trackedBots, gov.trackedScopes, gov.sendsLastMinute);
     if (show("chat"))
-        handler->PSendSysMessage("Blocked: {} cooldown, {} rate, {} repetition, {} chain-depth, {} no-audience",
+        out("Blocked: {} cooldown, {} rate, {} repetition, {} chain-depth, {} no-audience",
                              gov.blockedCooldown, gov.blockedRate, gov.blockedRepetition,
                              gov.blockedChainDepth, gov.blockedNoAudience);
 
     const CrowdStats crowd = Crowd_GetStats();
     if (show("chat"))
-        handler->PSendSysMessage("Crowds: {} ({} running, {} started) - {} voices asked, {} spoke ({} late), "
+        out("Crowds: {} ({} running, {} started) - {} voices asked, {} spoke ({} late), "
                              "{} said nothing, {} skipped, {} answer-backs",
                              (g_CrowdEnable && g_ContextEnable) ? "on" : "off", crowd.active,
                              (unsigned long long)crowd.plansStarted,
@@ -616,7 +656,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
 
     const ConversationStats conv = Conversation_GetStats();
     if (show("chat"))
-        handler->PSendSysMessage("Conversations: {} ({} running) - {} started ({} by players, {} by bots), "
+        out("Conversations: {} ({} running) - {} started ({} by players, {} by bots), "
                              "{} turns, {} lines, {} joined, {} wound down, {} fizzled",
                              (g_ConversationEnable && g_CrowdEnable && g_ContextEnable) ? "on" : "off",
                              conv.active,
@@ -631,7 +671,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
 
     const PresenceStats presence = Presence_GetStats();
     if (show("city"))
-        handler->PSendSysMessage("Cities: {} (chatter x{})   Presence: {} - {} gestures ({} at pets), {} remarks",
+        out("Cities: {} (chatter x{})   Presence: {} - {} gestures ({} at pets), {} remarks",
                              g_CityEnable ? "on" : "off", g_CityChatterMultiplier,
                              g_PresenceEnable ? "on" : "off",
                              (unsigned long long)presence.emotes,
@@ -640,7 +680,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
 
     const PartyCmdStats party = PartyCmd_GetStats();
     if (show("party"))
-        handler->PSendSysMessage("Party instructions: {} (dungeon clear {}) - {} started ({} by the tank when "
+        out("Party instructions: {} (dungeon clear {}) - {} started ({} by the tank when "
                              "nobody answered its ready check), {} paused ({} rests, "
                              "{} the tank called over itself), {} resumed, "
                              "{} waited for players, {} refused; {} runs called done, {} gg, {} bots left after, "
@@ -669,7 +709,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
 
     const ConjureStats conjure = Conjure_GetStats();
     if (show("bots"))
-        handler->PSendSysMessage("Conjured food and water: {} - {} asked ({} from outside the group, {} let go "
+        out("Conjured food and water: {} - {} asked ({} from outside the group, {} let go "
                              "by), {} trades offered, {} traded, {} waited first, {} refused, {} lapsed, {} pending",
                              g_ConjureEnable ? "on" : "off",
                              (unsigned long long)conjure.asked,
@@ -684,7 +724,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
 
     const BuffStats buffs = Buff_GetStats();
     if (show("bots"))
-        handler->PSendSysMessage("Buffs on request: {} - {} asked, {} cast, {} times without a word, {} said no, {} "
+        out("Buffs on request: {} - {} asked, {} cast, {} times without a word, {} said no, {} "
                              "said why not, {} let go by, {} did not go off, {} thank-yous answered, {} pending",
                              g_BuffEnable ? "on" : "off",
                              (unsigned long long)buffs.asked,
@@ -699,7 +739,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
 
     const OrdersStats orders = Orders_GetStats();
     if (show("bots"))
-        handler->PSendSysMessage("Orders: {} - {} given, {} commands sent, {} playerbots had already, {} put right "
+        out("Orders: {} - {} given, {} commands sent, {} playerbots had already, {} put right "
                              "after playerbots read them otherwise, {} could not, {} trades offered, {} unstuck, "
                              "{} playerbots commands left alone",
                              g_OrdersEnable ? "on" : "off",
@@ -714,7 +754,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
 
     const MarksStats marks = Marks_GetStats();
     if (show("party"))
-        handler->PSendSysMessage("Saps that could not be done: {}, the rogue said why {} times ({})   Raid marks, "
+        out("Saps that could not be done: {}, the rogue said why {} times ({})   Raid marks, "
                              "getting back up, muted lines: {}",
                              (unsigned long long)marks.heard,
                              (unsigned long long)marks.explained,
@@ -723,7 +763,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
 
     const GroupQuestsStats groupQuests = GroupQuests_GetStats();
     if (show("bots"))
-        handler->PSendSysMessage("Group quests said in General: {} - {} asks, answers and goes-alone heard, {} "
+        out("Group quests said in General: {} - {} asks, answers and goes-alone heard, {} "
                                  "written, {} not (nobody real there, a player had just spoken, or no room)",
                                  g_GroupQuestsEnable ? "on" : "off",
                                  (unsigned long long)groupQuests.heard,
@@ -732,7 +772,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
 
     const CityLifeStats cityLife = CityLife_GetStats();
     if (show("bots"))
-        handler->PSendSysMessage("City life said in /say: {} - {} rare mounts looked at, {} remarked on, {} not "
+        out("City life said in /say: {} - {} rare mounts looked at, {} remarked on, {} not "
                                  "(a player had just spoken, the other side, pacing or no room); {} dances, {} "
                                  "with the emote",
                                  g_CityLifeEnable ? "on" : "off",
@@ -745,7 +785,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
     const BagsStats  bags  = Bags_GetStats();
     const NeedsStats needs = Needs_GetStats();
     if (show("bots"))
-        handler->PSendSysMessage("Bags: {} - told what they carry {} times, {} asks for something ({} traded over, {} "
+        out("Bags: {} - told what they carry {} times, {} asks for something ({} traded over, {} "
                              "kept, {} told to invite first, {} said no and {} let go by to someone outside the "
                              "group), {} spare things offered",
                              g_BagsEnable ? "on" : "off",
@@ -759,7 +799,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)bags.offers);
     const JoinedStats joined = Joined_GetStats();
     if (show("party"))
-        handler->PSendSysMessage("Joining a group: {} - {} joins with a real player, {} said hi, {} carried on a "
+        out("Joining a group: {} - {} joins with a real player, {} said hi, {} carried on a "
                              "conversation, {} said nothing",
                              g_JoinedEnable ? "on" : "off",
                              (unsigned long long)joined.joins,
@@ -767,8 +807,8 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)joined.carriedOn,
                              (unsigned long long)joined.quiet);
     const CongratsStats cheers = Congrats_GetStats();
-    if (show("chat"))
-        handler->PSendSysMessage("Congratulations: {} - {} dings noted ({} achievements too common for a gz, {} "
+    if (show("talk"))
+        out("Congratulations: {} - {} dings noted ({} achievements too common for a gz, {} "
                              "dings guild chat was not told of), {} gz answered only by the one they were for, {} "
                              "thank-yous, {} more gz after it ({} for nobody in particular)",
                              g_CongratsEnable ? "on" : "off",
@@ -779,8 +819,8 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)cheers.thanked,
                              (unsigned long long)cheers.repeat,
                              (unsigned long long)cheers.nobody);
-    if (show("chat"))
-        handler->PSendSysMessage("Asks with a reason: {} ({}%) - {} quest groups, {} errands, {} spare things, {} for a "
+    if (show("talk"))
+        out("Asks with a reason: {} ({}%) - {} quest groups, {} errands, {} spare things, {} for a "
                              "few silver; {} tries found nothing; {} replies told what it is really doing",
                              g_NeedsEnable ? "on" : "off", g_NeedsChance,
                              (unsigned long long)needs.asked[size_t(NeedKind::Quest)],
@@ -792,15 +832,15 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
 
     const LinksStats   links   = Links_GetStats();
     const PhrasesStats phrases = Phrases_GetStats();
-    if (show("chat"))
-        handler->PSendSysMessage("Level outlook: {} ({} bands)   Links: {} - {} linked, {} not found, {} remembered{}",
+    if (show("talk"))
+        out("Level outlook: {} ({} bands)   Links: {} - {} linked, {} not found, {} remembered{}",
                              g_OutlookEnable ? "on" : "off", Outlook_BandCount(),
                              g_LinksEnable ? "on" : "off",
                              (unsigned long long)links.linked,
                              (unsigned long long)links.unresolved,
                              links.remembered, links.indexed ? ", names indexed" : "");
     if (show("chat"))
-        handler->PSendSysMessage("Stock phrases: {} dropped as said lately, {} as a hobby horse said lately, {} as "
+        out("Stock phrases: {} dropped as said lately, {} as a hobby horse said lately, {} as "
                              "not in Wrath, {} as not at the bot's level, {} as breaking the fourth wall ({} winks "
                              "at it let through), {} cooling down",
                              (unsigned long long)phrases.droppedOverused,
@@ -812,7 +852,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              phrases.coolingDown);
     const PremiseStats premises = Premises_GetStats();
     if (show("chat"))
-        handler->PSendSysMessage("Echoes: {} - {} lines echoed other bots, {} phrases counted; {} owed lines asked for "
+        out("Echoes: {} - {} lines echoed other bots, {} phrases counted; {} owed lines asked for "
                              "again   Premises: {} fixed, {} from templates ({} templates, {} pools), {} times none fitted",
                              g_EchoEnable ? "on" : "off",
                              (unsigned long long)phrases.echoes, phrases.phrasesTracked,
@@ -824,13 +864,13 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
     const StuckStats    stuck    = Stuck_GetStats();
     const ProgressStats progress = Progress_GetStats();
     if (show("bots"))
-        handler->PSendSysMessage("Stuck on a mount: {} bots taken off what they were stuck on, {} said so   The "
+        out("Stuck on a mount: {} bots taken off what they were stuck on, {} said so   The "
                              "rest: {}",
                              (unsigned long long)stuck.heard,
                              (unsigned long long)stuck.remarks,
                              PlusStatus());
     if (show("party"))
-        handler->PSendSysMessage("Quest progress: {} - {} objectives and {} quests finished by grouped bots, {} said in "
+        out("Quest progress: {} - {} objectives and {} quests finished by grouped bots, {} said in "
                              "party, {} left to whoever said it first, {} let go",
                              g_ProgressEnable ? "on" : "off",
                              (unsigned long long)progress.objectives,
@@ -840,17 +880,17 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)progress.lapsed);
     const EquipStats equip = Equip_GetStats();
     if (show("party"))
-        handler->PSendSysMessage("New gear: {} - {} rares or epics put on, {} by a grouped bot that just got it, {} "
+        out("New gear: {} - {} rares or epics put on, {} by a grouped bot that just got it, {} "
                              "said so in party",
                              g_EquipEnable ? "on" : "off",
                              (unsigned long long)equip.noted,
                              (unsigned long long)equip.fresh,
                              (unsigned long long)equip.said);
     if (show("city"))
-        handler->PSendSysMessage("City hangouts: {}", PlusStatus());
+        out("City hangouts: {}", PlusStatus());
     const GiftsStats gifts = Gifts_GetStats();
     if (show("bots"))
-        handler->PSendSysMessage("Things given away and sold: {} - {} given away, {} sold; {} said yes please, {} nobody "
+        out("Things given away and sold: {} - {} given away, {} sold; {} said yes please, {} nobody "
                              "could use; {} asked the price, {} agreed one, {} offered less, {} paid, {} gifts "
                              "taken from someone outside the group ({} agreed and not traded yet)",
                              g_GiftsEnable ? "on" : "off",
@@ -866,7 +906,7 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              gifts.deals);
     const WipeStats wipe = Wipe_GetStats();
     if (show("party"))
-        handler->PSendSysMessage("Deaths in groups: {} - {} uh-ohs for the tank, {} wipes ({} sorries from the tank, {} "
+        out("Deaths in groups: {} - {} uh-ohs for the tank, {} wipes ({} sorries from the tank, {} "
                              "calls to run back), {} running back on their own",
                              g_WipeEnable ? "on" : "off",
                              (unsigned long long)wipe.tankDown,
@@ -876,8 +916,8 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)wipe.runBack);
     const GearStats gear = Gear_GetStats();
     const AsideStats aside = Aside_GetStats();
-    if (show("chat"))
-        handler->PSendSysMessage("Gear talk: {} - {} prompts told what people wear, {} players who felt picked on   "
+    if (show("talk"))
+        out("Gear talk: {} - {} prompts told what people wear, {} players who felt picked on   "
                              "Asides: {} - {} whispered ({} about something said, {} about something else)",
                              g_GearEnable ? "on" : "off",
                              (unsigned long long)gear.described,
@@ -887,8 +927,8 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)aside.onLines,
                              (unsigned long long)aside.idle);
     const KnowledgeStats known = Knowledge_GetStats();
-    if (show("chat"))
-        handler->PSendSysMessage("Knowledge: {} - answers put in prompts: {} how to get an item, {} where a place is, {} "
+    if (show("talk"))
+        out("Knowledge: {} - answers put in prompts: {} how to get an item, {} where a place is, {} "
                              "ask a guard for any trainer, {} a question just before ({} told to get it wrong on "
                              "purpose); {} guard direction menus, {} items sold by vendors (0 until the first "
                              "question)",
@@ -901,8 +941,8 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              known.menus,
                              known.sold);
     const WantsStats wants = Wants_GetStats();
-    if (show("chat"))
-        handler->PSendSysMessage("Wanted gear: {} - {} lines saying someone is after a kind of item, {} reply prompts "
+    if (show("talk"))
+        out("Wanted gear: {} - {} lines saying someone is after a kind of item, {} reply prompts "
                              "told where one comes from ({} follow-ups); {} bosses in {} dungeons with gear known (0 "
                              "until the first such line)",
                              g_WantsEnable ? "on" : "off",
@@ -912,19 +952,19 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              wants.bosses, wants.dungeons);
     const RollsStats rolls = Rolls_GetStats();
     if (show("party"))
-        handler->PSendSysMessage("Loot rolls: {} - {} put in a group's chat, {} very low or high ones remarked on",
+        out("Loot rolls: {} - {} put in a group's chat, {} very low or high ones remarked on",
                              g_RollsEnable ? "on" : "off",
                              (unsigned long long)rolls.noted,
                              (unsigned long long)rolls.reactions);
     const PotionStats potions = Potions_GetStats();
     if (show("party"))
-        handler->PSendSysMessage("Potions in a pinch: {} - {} drunk low in a dungeon, {} by a bot that came "
+        out("Potions in a pinch: {} - {} drunk low in a dungeon, {} by a bot that came "
                              "through the fight, {} said so after it",
                              g_PotionsEnable ? "on" : "off", (unsigned long long)potions.noted,
                              (unsigned long long)potions.lived, (unsigned long long)potions.said);
     const ContextThreadStats thread = Context_GetThreadStats();
     if (show("party"))
-        handler->PSendSysMessage("Keeping the thread: {} unprompted lines held back where a real player had just "
+        out("Keeping the thread: {} unprompted lines held back where a real player had just "
                              "spoken (for {}s), {} dropped as written before one did; {} replies told what a short "
                              "line came right after",
                              (unsigned long long)OllamaRandomChatter_HeldBack(), g_ContextAmbientHoldSeconds,
@@ -932,28 +972,28 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)thread.leadUps);
     const RaceStats   races  = Race_GetStats();
     const BanterStats banter = Banter_GetStats();
-    if (show("chat"))
-        handler->PSendSysMessage("Cries, races and banter: {} replies told of their own side's battle cry, {} of the "
+    if (show("talk"))
+        out("Cries, races and banter: {} replies told of their own side's battle cry, {} of the "
                              "other side's; {} of something a race says ({} phrases known); {} lines told they "
                              "could slip in one of their own; {} replies told to give a tease back",
                              (unsigned long long)races.cries, (unsigned long long)races.enemyCries,
                              (unsigned long long)races.heard, races.phrases, (unsigned long long)races.used,
                              (unsigned long long)banter.teases);
-    if (show("chat"))
-        handler->PSendSysMessage("Sides: {} - Horde cities {}; Alliance cities {}; {} prompts said a bot was in its "
+    if (show("talk"))
+        out("Sides: {} - Horde cities {}; Alliance cities {}; {} prompts said a bot was in its "
                              "own side's city",
                              (g_OutlookEnable && !g_OutlookSideText.empty()) ? "on" : "off",
                              Outlook_SideCities(false), Outlook_SideCities(true),
                              (unsigned long long)Outlook_HomeCityPrompts());
-    if (show("chat"))
-        handler->PSendSysMessage("Chat itself: {} - {} prompts told what General and Trade have really been like "
+    if (show("talk"))
+        out("Chat itself: {} - {} prompts told what General and Trade have really been like "
                              "(replies when the talk was of chat, and /say exchanges between bots)",
                              (g_OutlookChatStates.empty() || (g_OutlookChatText.empty() && g_MingleChatText.empty()))
                                  ? "off" : "on",
                              (unsigned long long)Outlook_ChatPrompts());
     const MingleStats mingle = Mingle_GetStats();
     if (show("city"))
-        handler->PSendSysMessage("Mingling: {} - {} running, {} asked for, {} written ({} unusable), {} ran to the end, "
+        out("Mingling: {} - {} running, {} asked for, {} written ({} unusable), {} ran to the end, "
                              "{} cut short, {} lines, {} emotes at each other; {} greetings between bots; {} pairs "
                              "talked themselves into a duel and went out to the gates",
                              g_MingleEnable ? "on" : "off", mingle.running,
@@ -967,25 +1007,71 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                              (unsigned long long)mingle.greetings,
                              (unsigned long long)mingle.duels);
 
-    if (show("chat"))
-        handler->PSendSysMessage("Roleplay: {} (strictness {})   Emote reactions: {}",
+    if (show("talk"))
+        out("Roleplay: {} (strictness {})   Emote reactions: {}",
                              g_RoleplayEnable ? "on" : "off",
                              (uint32)g_RoleplayStrictness,
                              g_EnableEmoteReactions ? "on" : "off");
-    if (show("chat"))
-        handler->PSendSysMessage("Topic weights: people {} / world {} / activity {} / self {} / guild {} / the game {} / the auction house {}{}",
+    if (show("talk"))
+        out("Topic weights: people {} / world {} / activity {} / self {} / guild {} / the game {} / the auction house {}{}",
                              g_TopicWeightPeople, g_TopicWeightWorld, g_TopicWeightActivity,
                              g_TopicWeightSelf, g_TopicWeightGuild, g_TopicWeightTalk, g_TopicWeightMarket,
                              OllamaMarket_Available() ? fmt::format(" ({} dealings heard of)", OllamaMarket_Heard())
                                                       : std::string(" (no mod-playerbots-plus)"));
 
-    if (!dispatch.lastError.empty())
-        handler->PSendSysMessage("|cffff0000Last error:|r {}", dispatch.lastError);
-    else
-        handler->PSendSysMessage("Last error: none");
+    if (show("chat"))
+    {
+        if (!dispatch.lastError.empty())
+            out("|cffff0000Last error, {} ago:|r {}", Ago(dispatch.lastErrorAgoS), dispatch.lastError);
+        else
+            out("Last error: none");
+    }
 
+    return lines;
+}
+
+bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Optional<std::string> section)
+{
+    // ".ollama status" is a few lines: whether it is working, and what looks
+    // wrong. ".ollama status chat|talk|city|party|bots" the counts behind one
+    // part; all of them at once fill the chat window, so "all" writes the
+    // full report instead (.ollama report).
+    std::string want = section ? *section : std::string();
+    for (char& c : want)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (want.empty())
+    {
+        for (const std::string& line : OllamaStatus_Overview())
+            handler->SendSysMessage(line);
+        return true;
+    }
+    if (want == "all")
+        return HandleOllamaReportCommand(handler);
+    if (want != "chat" && want != "talk" && want != "city" && want != "party" && want != "bots")
+    {
+        handler->SendSysMessage("Usage: .ollama status [chat|talk|city|party|bots]  (everything: .ollama report)");
+        handler->SetSentErrorMessage(true);
+        return false;
+    }
+    handler->SendSysMessage("|cff00ff00[Ollama Chat]|r status " + want + ":");
+    for (const std::string& line : OllamaStatus_Lines(want))
+        handler->SendSysMessage(line);
     return true;
 }
+
+bool OllamaChatConfigCommand::HandleOllamaReportCommand(ChatHandler* handler)
+{
+    std::string where;
+    uint32_t lines = 0;
+    if (!OllamaReport_Write(where, lines))
+    {
+        handler->SendErrorMessage("Ollama Chat: the report was not written -- " + where + ".", false);
+        return false;
+    }
+    handler->SendSysMessage(fmt::format("Ollama Chat: the full report, {} lines, is in {}", lines, where));
+    return true;
+}
+
 
 bool OllamaChatConfigCommand::HandleOllamaTestCommand(ChatHandler* handler, Acore::ChatCommands::Tail prompt)
 {

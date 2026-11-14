@@ -260,8 +260,8 @@ OllamaChat.Model    = <the model id LM Studio shows in its server tab>
 1. Edit the four settings above in `mod-ollama-chat.conf`.
 2. Restart `worldserver`, or run `.ollama reload` in game or `ollama reload`
    on the console.
-3. Run `.ollama status`. The first line now shows the provider and whether a
-   key is set (the key itself is never printed).
+3. Run `.ollama status chat`. The first line now shows the provider and whether
+   a key is set (the key itself is never printed).
 4. Run `.ollama test hello` to send one request and see the reply, or the
    provider's error message if something is wrong (bad key, wrong model name,
    wrong URL).
@@ -270,7 +270,7 @@ OllamaChat.Model    = <the model id LM Studio shows in its server tab>
 
 - **HTTPS requires an OpenSSL build.** The CMake output says
   `[mod-ollama-chat] OpenSSL found - HTTPS support enabled` when it is, and
-  `.ollama status` shows `HTTPS: available`. Without it, an `https://` URL is
+  `.ollama status chat` shows `HTTPS: available`. Without it, an `https://` URL is
   reported as an error at startup and every request fails. On Windows install
   OpenSSL (for example `vcpkg install openssl` or the Win64 OpenSSL installer)
   and re-run CMake; on Linux install `libssl-dev` or `openssl-devel`.
@@ -368,14 +368,35 @@ Lists all available personalities and their descriptions.
 > [!NOTE]
 > All commands can also be executed from the server console by replacing the leading dot (.) with the command prefix used in your console (typically none or a custom prefix).
 
-### `.ollama status`
+### `.ollama status [chat|talk|city|party|bots]`
 
-Shows what the module currently thinks it is doing. Reports the endpoint and
-model, whether think mode is supported and why, dispatcher queue depth and
-worker count, delivery and drop counters, governor state (including *why*
-replies were suppressed), and the last error.
+On its own, a few lines: what the module talks to, whether it is keeping up
+(requests waiting, written, failed), what was held back in the last minute,
+what is going on right now, and, in orange, anything that looks wrong --
+requests failing lately, requests piling up faster than the model writes
+them, an `https://` URL in a build without HTTPS. This is the first thing to
+run when bots go quiet.
 
-This is the first thing to run when bots go quiet.
+With a part, the counts behind it:
+
+- `chat` -- the requests on their way: endpoint, model, key set or not,
+  HTTPS, think mode, the queue, what was dropped and blocked and why, crowds,
+  conversations, stock phrases, echoes, the last error.
+- `talk` -- what goes into the prompts: congratulations, asks, links, gear
+  talk, knowledge, sides, chat itself, roleplay, topic weights.
+- `city` -- cities, presence and mingling.
+- `party` -- groups and dungeons: party instructions, quest progress, gear,
+  deaths, loot rolls, potions.
+- `bots` -- what bots do for people: food and water, buffs, orders, bags,
+  group quests, city life, things given away.
+
+### `.ollama report`
+
+Writes every count, part by part, to `OllamaChatReport.log` in the server's
+logs folder (`OllamaChat.Report.File`), and says where. The module also
+writes it every `OllamaChat.Report.Minutes` (10), so the latest is there to
+read, or send on, when something went wrong and nobody was in game.
+`.ollama status all` does the same.
 
 ### `.ollama test <prompt>`
 
@@ -728,7 +749,7 @@ doesn't, and nobody else chimes in: that's the end of it.
 
 Bots in your group are left to playerbots, which keeps its own group buffed
 ("buff us" in party chat is an order), and nobody flagged for PvP is buffed
-by a bot that is not. `.ollama status` counts asks, casts, refusals and
+by a bot that is not. `.ollama status bots` counts asks, casts, refusals and
 thank-yous. See `OllamaChat.Buff.*`.
 
 ## Trading with Strangers

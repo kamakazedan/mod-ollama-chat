@@ -345,6 +345,15 @@ line. The one opening is a real player raising it (`Phrases_Check`'s
   need no CMake change.
 - New tables go in `data/sql/characters/base/` and must be
   `CREATE TABLE IF NOT EXISTS`.
+- `.ollama status` is a few lines (`OllamaStatus_Overview`): whether it is
+  working, and an issue only for what someone should act on, with a threshold
+  that keeps it quiet when all is well. A new count goes in a part of
+  `OllamaStatus_Lines` (`chat`, `talk`, `city`, `party`, `bots`), which the
+  full report (`mod-ollama-chat_report.cpp`, `Report.File`) writes out whole;
+  never in the overview.
+- A module's own log file is set up in worldserver.conf, not its module conf:
+  the core sets the logs up before it reads module confs, so an
+  `Appender.*`/`Logger.*` there does nothing until `.reload config`.
 
 ## Checking your work without a full build
 

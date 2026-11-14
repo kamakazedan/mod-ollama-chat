@@ -697,6 +697,9 @@ std::string g_GroupQuestsSoloText;
 uint32_t    g_GroupQuestsAnswerDelayMinSeconds = 6;
 uint32_t    g_GroupQuestsAnswerDelayMaxSeconds = 15;
 
+uint32_t    g_OllamaReportMinutes              = 10;
+std::string g_OllamaReportFile                 = "OllamaChatReport.log";
+
 bool        g_CityLifeEnable                   = true;
 std::string g_CityLifeMountPrompt;
 bool        g_CityLifeDanceEmotes              = true;
@@ -3439,6 +3442,22 @@ static void LoadNaturalChatV34Settings()
              g_CityLifeEnable ? "on" : "off", g_CityLifeDanceEmotes ? "on" : "off");
 }
 
+static void LoadNaturalChatV35Settings()
+{
+    // --- the full report (mod-ollama-chat_report): world thread only ------------------------
+    g_OllamaReportMinutes = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Report.Minutes", 10), 1440);
+    g_OllamaReportFile    = sConfigMgr->GetOption<std::string>("OllamaChat.Report.File", "OllamaChatReport.log");
+    if (g_OllamaReportFile.empty())
+        g_OllamaReportFile = "OllamaChatReport.log";
+
+    if (g_OllamaReportMinutes)
+        LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v35: the full report goes to {} every {} min, and whenever "
+                 ".ollama report asks.", g_OllamaReportFile, g_OllamaReportMinutes);
+    else
+        LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v35: the full report goes to {} whenever .ollama report "
+                 "asks.", g_OllamaReportFile);
+}
+
 static void LoadNaturalChatV30Settings()
 {
     // --- what chat is really like ---------------------------------------------------------
@@ -4414,6 +4433,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV32Settings();
     LoadNaturalChatV33Settings();
     LoadNaturalChatV34Settings();
+    LoadNaturalChatV35Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

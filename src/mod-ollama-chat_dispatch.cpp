@@ -132,12 +132,19 @@ namespace
 
     std::mutex  g_errorMutex;
     std::string g_lastError;
+    std::chrono::steady_clock::time_point g_lastErrorAt{};
+    std::deque<std::chrono::steady_clock::time_point> g_errorTimes;   // the last hour's failures
 
     void RecordError(const std::string& what)
     {
         ++g_totalFailed;
+        const auto now = std::chrono::steady_clock::now();
         std::lock_guard<std::mutex> lock(g_errorMutex);
         g_lastError = what;
+        g_lastErrorAt = now;
+        g_errorTimes.push_back(now);
+        while (now - g_errorTimes.front() > std::chrono::hours(1))
+            g_errorTimes.pop_front();
     }
 
     // A line that came to nothing still has to reach the world thread when
@@ -1447,6 +1454,12 @@ OllamaDispatchStats OllamaDispatch_GetStats()
     {
         std::lock_guard<std::mutex> lock(g_errorMutex);
         stats.lastError = g_lastError;
+        const auto now = std::chrono::steady_clock::now();
+        if (!g_lastError.empty())
+            stats.lastErrorAgoS = static_cast<uint32_t>(
+                std::chrono::duration_cast<std::chrono::seconds>(now - g_lastErrorAt).count());
+        for (auto it = g_errorTimes.rbegin(); it != g_errorTimes.rend() && now - *it <= std::chrono::minutes(10); ++it)
+            ++stats.failedLast10Min;
     }
 
     stats.inFlight              = g_inFlight.load();

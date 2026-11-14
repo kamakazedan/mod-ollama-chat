@@ -109,7 +109,7 @@ OllamaChat.Url = http://localhost:11434/api/generate
 #                  Leave empty for a local server that needs none.
 #                  Surrounding quotes and whitespace are ignored.
 #
-#                  Never printed: ".ollama status" and the startup log only
+#                  Never printed: ".ollama status chat" and the startup log only
 #                  say whether one is set. If a provider answers HTTP 401/403
 #                  the module logs one clear line saying what to check.
 #                  Keep this file readable only by the account that runs
@@ -1211,7 +1211,7 @@ OllamaChat.RAGPromptTemplate = "RELEVANT INFORMATION:\n{rag_info}\nUse this info
 #          * If Ollama refuses the string level, the module falls back to the
 #            boolean form permanently for that model and logs it once.
 #
-#        ".ollama status" reports whatever has been detected so far.
+#        ".ollama status chat" reports whatever has been detected so far.
 #
 #        Other providers (OllamaChat.Provider = openai / anthropic): there is
 #        no capability endpoint to ask and a live probe would be a billed
@@ -2715,7 +2715,7 @@ OllamaChat.Personality.MaxReplyLength.NAT_EXPERT = 250
 #   With no bot tank (you tank), anyone may answer as usual.
 #
 #   Only works when mod-dungeon-clear is part of the same build;
-#   .ollama status says whether it was found.
+#   .ollama status party says whether it was found.
 #
 #   Phrase lists are separated by |; words are matched lowercase with
 #   punctuation and apostrophes dropped ("let's go!" = "lets go"); a
@@ -4277,6 +4277,44 @@ OllamaChat.CityLife.DanceEmotes = 1
 
 ###############################################################################
 #
+#   OLLAMA CHAT - STATUS AND THE FULL REPORT
+#
+#   In game the module says little, and the rest goes to a file:
+#
+#   .ollama status          a few lines: what it talks to, whether it is
+#                           keeping up (requests waiting, failing), what is
+#                           going on right now, and what looks wrong.
+#   .ollama status <part>   the counts behind one part: chat (the requests on
+#                           their way: the endpoint, think mode, the queue,
+#                           what was held back and why), talk (what goes into
+#                           the prompts), city (cities, presence, mingling),
+#                           party (groups and dungeons), bots (buffs, orders,
+#                           trades and the rest bots do for people).
+#   .ollama report          every count, written to Report.File now (also
+#                           ".ollama status all").
+#
+#   The file is written again every Report.Minutes as well, so the latest is
+#   there to read, or to send on, when something has gone wrong and nobody
+#   was in game to look. Hangouts, raid marks and the auction house are
+#   mod-playerbots-plus's: .pbp status, and its own report file.
+#
+###############################################################################
+
+#    OllamaChat.Report.Minutes
+#        How often the full report is written to Report.File, in minutes (at
+#        most 1440). 0: only when .ollama report asks.
+#        Default: 10
+OllamaChat.Report.Minutes = 10
+
+#    OllamaChat.Report.File
+#        The full report's file: a name, in the server's logs folder
+#        (LogsDir in worldserver.conf), or a whole path. Written over each
+#        time.
+#        Default: "OllamaChatReport.log"
+OllamaChat.Report.File = "OllamaChatReport.log"
+
+###############################################################################
+#
 #   OLLAMA CHAT - WHAT BOTS CARRY, AND TRADING IT
 #
 #   A bot knows what is in its bags: what it could part with and what it
@@ -4851,8 +4889,8 @@ OllamaChat.Aside.FactDeaths = "{subject} has died {deaths} times since joining t
 #   second, once per restart; the log says how long). Zones come from the
 #   world map; a district ("Trade District") only where the map around the
 #   spot is loaded already -- nothing is loaded for this. Holiday-only
-#   vendors and anything in an instance are left out. .ollama status shows
-#   how many answers went into prompts.
+#   vendors and anything in an instance are left out. .ollama status talk
+#   shows how many answers went into prompts.
 #
 #   Templates take {placeholders} as listed; no other braces, and no double
 #   quotes inside a value (the server's config reader drops every one).
@@ -5211,7 +5249,8 @@ OllamaChat.Potions.ManaPrompt = "You are {bot_name}, a level {bot_level} {bot_ra
 #   And now and then two bots standing close just greet each other without a
 #   word (Mingle.Emote.*).
 #
-#   .ollama status shows how many were asked for, written, finished and cut.
+#   .ollama status city shows how many were asked for, written, finished and
+#   cut.
 #
 ###############################################################################
 
@@ -5811,7 +5850,8 @@ OllamaChat.Race.StyleChance = "NAT_ROLEPLAYER:25 NAT_LOREBUFF:10 NAT_JOKER:6 NAT
 #   A name nothing matches just loses its brackets: a made-up "[Sword of
 #   Doom]" reads as Sword of Doom. A line never grows past what the client
 #   accepts (255 bytes); a link that would not fit stays as text.
-#   .ollama status shows how many names were linked and how many were not.
+#   .ollama status talk shows how many names were linked and how many were
+#   not.
 #
 ###############################################################################
 

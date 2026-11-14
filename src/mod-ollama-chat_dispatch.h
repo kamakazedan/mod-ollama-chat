@@ -263,6 +263,8 @@ struct OllamaDispatchStats
     uint64_t totalRetried;            // owed lines asked for again without a stock phrase
     uint64_t totalFailed;
     std::string lastError;
+    uint32_t lastErrorAgoS   = UINT32_MAX;   // seconds since lastError (UINT32_MAX: none yet)
+    uint32_t failedLast10Min = 0;            // requests that failed in the last ten minutes
 };
 OllamaDispatchStats OllamaDispatch_GetStats();
 

@@ -41,6 +41,7 @@
 #include "mod-ollama-chat_race.h"
 #include "mod-ollama-chat_potions.h"
 #include "mod-ollama-chat_market.h"
+#include "mod-ollama-chat_report.h"
 
 #include "CellImpl.h"
 #include "Channel.h"
@@ -439,6 +440,9 @@ OllamaBotRandomChatter::OllamaBotRandomChatter() : WorldScript("OllamaBotRandomC
 
 void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 {
+    // The full report, on the clock: switched off, it says so.
+    OllamaReport_Update(diff);
+
     if (!g_Enable)
         return;
 
