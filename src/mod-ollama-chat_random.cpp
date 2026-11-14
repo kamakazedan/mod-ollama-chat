@@ -42,6 +42,7 @@
 #include "mod-ollama-chat_potions.h"
 #include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_report.h"
+#include "mod-ollama-chat_corpse.h"
 
 #include "CellImpl.h"
 #include "Channel.h"
@@ -474,6 +475,9 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 
     // Kills, loot, deaths, dings and the rest, as the hooks noted them.
     Events_Update();
+
+    // A bot spitting on the body of a named enemy, saluting a boss's.
+    Corpse_Update();
 
     // A bot putting on a rare or epic it just got, maybe saying so in party.
     Equip_Update();

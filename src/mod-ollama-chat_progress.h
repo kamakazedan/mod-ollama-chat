@@ -11,7 +11,10 @@
 // and "Quest completed [...]" on top. Nobody needs 1 of 6 of anything. Those
 // whispers are muted (OllamaChat.Mute.Patterns); what a bot says instead, in
 // party chat and in its own words, is the moment something is done: the last
-// kill or item a quest wants, or the whole quest ready to hand in.
+// kill or item a quest wants, or the whole quest ready to hand in. It is told
+// what that was by name -- a single kill as who it was ("You have just killed
+// Gath'Ilzogg"), never "the last of the 1" -- and what the quest still needs
+// ("kill Lieutenant Fangore, kill Tharil'zun"), from its log as it is then.
 //
 // Only for bots in a group with a real player. A few seconds pass first, so
 // the kill that finishes the quest as well as the objective gets one line,

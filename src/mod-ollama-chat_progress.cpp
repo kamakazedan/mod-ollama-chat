@@ -45,16 +45,21 @@ namespace
     };
     std::unordered_map<uint64_t, BotSeen> g_seen;
 
-    // Something finished, waiting the moment it takes to say so.
+    // Something finished, waiting the moment it takes to say so. Said from
+    // the quest itself and the bot's log as they are when it is said: what
+    // was finished, by name, and what the quest still needs.
     struct Done
     {
-        uint64_t          bot     = 0;
-        uint32_t          group   = 0;   // guid counter
-        uint32_t          questId = 0;
-        int32_t           part    = -1;  // -1: the whole quest; else which objective
-        std::string       text;          // what was finished, for the prompt
-        Clock::time_point due{};
-        Clock::time_point first{};
+        uint64_t             bot      = 0;
+        uint32_t             group    = 0;   // guid counter
+        uint32_t             questId  = 0;
+        bool                 complete = false;   // the whole quest is done
+        std::vector<int32_t> parts;              // the objectives just finished (item ones after the kills)
+        Clock::time_point    due{};
+        Clock::time_point    first{};
+
+        // What everyone in the group who finished it too knows it by.
+        int32_t KeyPart() const { return complete || parts.empty() ? -1 : parts.front(); }
     };
     std::vector<Done> g_due;
 
@@ -112,7 +117,143 @@ namespace
         return "[" + q->GetTitle() + "]";
     }
 
-    void Note(Player* bot, uint32_t group, Quest const* quest, int32_t part, std::string text)
+    // What the quest log calls a kill or object objective: the quest's own
+    // words for it when it has some ("Ritual performed"; a kill credit's
+    // creature has a name nobody sees), else the creature's or the object's
+    // name. *own says which.
+    std::string ObjectiveName(Quest const* q, uint8 i, bool* own)
+    {
+        *own = false;
+        if (!q->ObjectiveText[i].empty())
+        {
+            *own = true;
+            return q->ObjectiveText[i];
+        }
+        const int32 id = q->RequiredNpcOrGo[i];
+        if (id > 0)
+        {
+            CreatureTemplate const* ct = sObjectMgr->GetCreatureTemplate(uint32(id));
+            return ct ? ct->Name : std::string();
+        }
+        if (id < 0)
+        {
+            GameObjectTemplate const* go = sObjectMgr->GetGameObjectTemplate(uint32(-id));
+            return go ? go->name : std::string();
+        }
+        return {};
+    }
+
+    // One objective just finished, the way Progress.*Text says it: a single
+    // kill by name ("You have just killed Gath'Ilzogg..."), never "the last of
+    // the 1", which read as a batch of things.
+    std::string PartText(Quest const* q, int32_t part)
+    {
+        std::string out;
+        if (part >= 0 && part < QUEST_OBJECTIVES_COUNT)
+        {
+            const uint8 i = uint8(part);
+            const uint32 need = q->RequiredNpcOrGoCount[i];
+            bool own = false;
+            const std::string what = ObjectiveName(q, i, &own);
+            if (what.empty())
+                return {};
+            const std::string& text = own                        ? g_ProgressGoalText
+                                      : q->RequiredNpcOrGo[i] > 0 ? (need == 1 ? g_ProgressKillOneText : g_ProgressKillText)
+                                                                  : (need == 1 ? g_ProgressUseOneText : g_ProgressUseText);
+            out = SafeFormat(text, fmt::arg("count", need), fmt::arg("what", what), fmt::arg("quest", QuestName(q)));
+        }
+        else if (part >= QUEST_OBJECTIVES_COUNT && part < QUEST_OBJECTIVES_COUNT + QUEST_ITEM_OBJECTIVES_COUNT)
+        {
+            const uint8 i = uint8(part - QUEST_OBJECTIVES_COUNT);
+            ItemTemplate const* proto = sObjectMgr->GetItemTemplate(q->RequiredItemId[i]);
+            if (!proto)
+                return {};
+            const uint32 need = q->RequiredItemCount[i];
+            out = SafeFormat(need == 1 ? g_ProgressItemOneText : g_ProgressItemText, fmt::arg("count", need),
+                             fmt::arg("what", "[" + proto->Name1 + "]"), fmt::arg("quest", QuestName(q)));
+        }
+        return out == "[Format Error]" ? std::string() : out;
+    }
+
+    // What the quest still needs, from the bot's own log as it is now: "kill
+    // Lieutenant Fangore, kill Tharil'zun and 4 more [Gnoll Paw] (2 of 6)",
+    // so a bot that has one of four named enemies down knows there are three
+    // to go, and who. Empty when nothing it can count is left.
+    std::string LeftText(Player* bot, Quest const* q)
+    {
+        auto const& log = bot->getQuestStatusMap();
+        auto it = log.find(q->GetQuestId());
+        if (it == log.end() || it->second.Status != QUEST_STATUS_INCOMPLETE)
+            return {};
+        QuestStatusData const& status = it->second;
+
+        std::vector<std::string> parts;
+        for (uint8 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
+        {
+            const uint32 need = q->RequiredNpcOrGoCount[i];
+            const uint32 have = status.CreatureOrGOCount[i];
+            if (!need || !q->RequiredNpcOrGo[i] || have >= need)
+                continue;
+            bool own = false;
+            const std::string what = ObjectiveName(q, i, &own);
+            if (what.empty())
+                continue;
+            if (own)
+                parts.push_back(need == 1 ? what : fmt::format("{} ({} of {})", what, have, need));
+            else if (q->RequiredNpcOrGo[i] > 0)
+                parts.push_back(need == 1 ? "kill " + what
+                                          : fmt::format("kill {} more {} ({} of {})", need - have, what, have, need));
+            else
+                parts.push_back(need == 1 ? "the " + what
+                                          : fmt::format("{} more {} ({} of {})", need - have, what, have, need));
+        }
+        for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
+        {
+            const uint32 need = q->RequiredItemCount[i];
+            const uint32 have = status.ItemCount[i];
+            if (!need || !q->RequiredItemId[i] || have >= need)
+                continue;
+            ItemTemplate const* proto = sObjectMgr->GetItemTemplate(q->RequiredItemId[i]);
+            if (!proto)
+                continue;
+            parts.push_back(need == 1 ? "[" + proto->Name1 + "]"
+                                      : fmt::format("{} more [{}] ({} of {})", need - have, proto->Name1, have, need));
+        }
+        if (parts.empty())
+            return {};
+
+        std::string list;
+        for (size_t i = 0; i < parts.size(); ++i)
+            list += (i == 0 ? "" : (i + 1 == parts.size() ? " and " : ", ")) + parts[i];
+        const std::string out = SafeFormat(g_ProgressLeftText, fmt::arg("left", list));
+        if (out.empty() || out == "[Format Error]")
+            return {};
+        return " " + out;   // after {done} in the prompt
+    }
+
+    // What was done, for the prompt's {done}: each objective just finished,
+    // then, if that was all of it, the quest ready to hand in.
+    std::string DoneText(const Done& d, Quest const* q)
+    {
+        std::string out;
+        for (int32_t part : d.parts)
+        {
+            const std::string text = PartText(q, part);
+            if (!text.empty())
+                out += (out.empty() ? "" : " ") + text;
+        }
+        if (d.complete)
+        {
+            const std::string ender = EnderName(q->GetQuestId());
+            const std::string text = SafeFormat(g_ProgressQuestText, fmt::arg("quest", QuestName(q)),
+                fmt::arg("ender", ender.empty() ? std::string("whoever gave it out") : ender));
+            if (!text.empty() && text != "[Format Error]")
+                out += (out.empty() ? "" : " ") + text;
+        }
+        return out;
+    }
+
+    void Note(Player* bot, uint32_t group, Quest const* quest, bool complete, const std::vector<int32_t>& parts)
     {
         const auto now = Clock::now();
         const uint64_t guid = bot->GetGUID().GetRawValue();
@@ -120,24 +261,21 @@ namespace
         {
             if (d.bot != guid || d.questId != quest->GetQuestId())
                 continue;
-            // The same kill finished the quest as well: one line about the quest.
-            if (part < 0)
-            {
-                d.part = -1;
-                d.text = std::move(text);
-            }
-            else if (d.part >= 0 && d.part != part)
-                d.text += ", and " + text;
+            // The same kill finished the quest as well: one line about it all.
+            d.complete = d.complete || complete;
+            for (int32_t part : parts)
+                if (std::find(d.parts.begin(), d.parts.end(), part) == d.parts.end())
+                    d.parts.push_back(part);
             return;
         }
         Done d;
-        d.bot     = guid;
-        d.group   = group;
-        d.questId = quest->GetQuestId();
-        d.part    = part;
-        d.text    = std::move(text);
-        d.first   = now;
-        d.due     = now + std::chrono::seconds(std::max<uint32_t>(1, g_ProgressDelaySeconds));
+        d.bot      = guid;
+        d.group    = group;
+        d.questId  = quest->GetQuestId();
+        d.complete = complete;
+        d.parts    = parts;
+        d.first    = now;
+        d.due      = now + std::chrono::seconds(std::max<uint32_t>(1, g_ProgressDelaySeconds));
         g_due.push_back(std::move(d));
     }
 
@@ -173,63 +311,48 @@ namespace
             const QuestSeen prev = it->second;
             it->second = cur;
 
-            if (prev.status == QUEST_STATUS_INCOMPLETE && cur.status == QUEST_STATUS_COMPLETE)
-            {
-                ++g_stats.quests;
-                const std::string ender = EnderName(questId);
-                Note(bot, group, quest, -1,
-                     SafeFormat(g_ProgressQuestText, fmt::arg("quest", QuestName(quest)),
-                                fmt::arg("ender", ender.empty() ? std::string("whoever gave it out") : ender)));
-                continue;
-            }
-            if (cur.status != QUEST_STATUS_INCOMPLETE)
-                continue;
-
+            // The objectives finished since the last look: what was just
+            // done, by name -- the one that finished the quest too.
+            std::vector<int32_t> finished;
             for (uint8 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
             {
                 const uint32 need = quest->RequiredNpcOrGoCount[i];
-                const int32 id = quest->RequiredNpcOrGo[i];
-                if (!need || !id || prev.kills[i] >= need || cur.kills[i] < need)
+                if (!need || !quest->RequiredNpcOrGo[i] || prev.kills[i] >= need || cur.kills[i] < need)
                     continue;
-                std::string what;
-                if (id > 0)
-                {
-                    if (CreatureTemplate const* ct = sObjectMgr->GetCreatureTemplate(uint32(id)))
-                        what = ct->Name;
-                }
-                else if (GameObjectTemplate const* go = sObjectMgr->GetGameObjectTemplate(uint32(-id)))
-                    what = go->name;
-                if (what.empty())
-                    continue;
-                ++g_stats.objectives;
-                Note(bot, group, quest, i,
-                     SafeFormat(id > 0 ? g_ProgressKillText : g_ProgressUseText, fmt::arg("count", need),
-                                fmt::arg("what", what), fmt::arg("quest", QuestName(quest))));
+                bool own = false;
+                if (!ObjectiveName(quest, i, &own).empty())
+                    finished.push_back(i);
             }
             for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
             {
                 const uint32 need = quest->RequiredItemCount[i];
                 if (!need || !quest->RequiredItemId[i] || prev.items[i] >= need || cur.items[i] < need)
                     continue;
-                ItemTemplate const* proto = sObjectMgr->GetItemTemplate(quest->RequiredItemId[i]);
-                if (!proto)
-                    continue;
-                ++g_stats.objectives;
-                Note(bot, group, quest, QUEST_OBJECTIVES_COUNT + i,
-                     SafeFormat(g_ProgressItemText, fmt::arg("count", need),
-                                fmt::arg("what", "[" + proto->Name1 + "]"), fmt::arg("quest", QuestName(quest))));
+                if (sObjectMgr->GetItemTemplate(quest->RequiredItemId[i]))
+                    finished.push_back(QUEST_OBJECTIVES_COUNT + i);
             }
+
+            if (prev.status == QUEST_STATUS_INCOMPLETE && cur.status == QUEST_STATUS_COMPLETE)
+            {
+                ++g_stats.quests;
+                Note(bot, group, quest, true, finished);
+                continue;
+            }
+            if (cur.status != QUEST_STATUS_INCOMPLETE || finished.empty())
+                continue;
+            g_stats.objectives += finished.size();
+            Note(bot, group, quest, false, finished);
         }
         for (auto it = seen.quests.begin(); it != seen.quests.end();)
             it = inLog.contains(it->first) ? std::next(it) : seen.quests.erase(it);
     }
 
-    bool Say(Player* bot, const Done& d, uint64_t key)
+    bool Say(Player* bot, const std::string& done, const std::string& left, uint64_t key)
     {
         PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
         Group* group = bot->GetGroup();
         if (!ai || !ai->GetChatHelper() || !group || g_DisableForParty || !OllamaGroupHasRealPlayer(bot) ||
-            g_ProgressPrompt.empty() || d.text.empty() || d.text == "[Format Error]")
+            g_ProgressPrompt.empty() || done.empty())
             return false;
 
         const ChatChannelSourceLocal source = group->isRaidGroup() ? SRC_RAID_LOCAL : SRC_PARTY_LOCAL;
@@ -245,7 +368,7 @@ namespace
                                         fmt::arg("bot_race", ai->GetChatHelper()->FormatRace(bot->getRace())),
                                         fmt::arg("bot_class", ai->GetChatHelper()->FormatClass(bot->getClass())),
                                         fmt::arg("bot_personality", GetPersonalityPromptAddition(personality)),
-                                        fmt::arg("done", d.text));
+                                        fmt::arg("done", done), fmt::arg("left", left));
         if (prompt.empty() || prompt == "[Format Error]")
             return false;
         prompt += Roleplay_BuildVoicePrompt(bot);
@@ -324,7 +447,7 @@ void Progress_Update(uint32_t diff)
             later.push_back(std::move(d));
             continue;
         }
-        const uint64_t key = SaidKey(d.group, d.questId, d.part);
+        const uint64_t key = SaidKey(d.group, d.questId, d.KeyPart());
         auto said = g_said.find(key);
         if (said != g_said.end() && said->second.out && now - said->second.at < std::chrono::minutes(2))
         {
@@ -358,7 +481,10 @@ void Progress_Update(uint32_t diff)
 
         Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(d.bot));
         Group* group = bot && bot->IsInWorld() ? bot->GetGroup() : nullptr;
-        if (!group || group->GetGUID().GetCounter() != d.group || !bot->IsAlive() || !Say(bot, d, key))
+        Quest const* quest = sObjectMgr->GetQuestTemplate(d.questId);
+        const std::string done = quest ? DoneText(d, quest) : std::string();
+        const std::string left = quest && bot && !d.complete ? LeftText(bot, quest) : std::string();
+        if (!group || group->GetGUID().GetCounter() != d.group || !bot->IsAlive() || !Say(bot, done, left, key))
         {
             ++g_stats.lapsed;
             continue;
@@ -367,8 +493,8 @@ void Progress_Update(uint32_t diff)
         g_groupLast[d.group] = now;
         g_said[key] = SaidMark{ now, false };
         if (g_DebugEnabled)
-            LOG_INFO("module.ollamachat", "[Ollama Chat] {} tells the group it finished something: {}", bot->GetName(),
-                     d.text);
+            LOG_INFO("module.ollamachat", "[Ollama Chat] {} tells the group it finished something: {}{}",
+                     bot->GetName(), done, left);
     }
     g_due.swap(later);
 

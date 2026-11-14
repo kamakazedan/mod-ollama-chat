@@ -4,6 +4,7 @@
 #include "mod-ollama-chat_lately.h"
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_corpse.h"
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_expression.h"
@@ -578,6 +579,7 @@ void ChatOnKill::OnPlayerCreatureKill(Player* killer, Creature* victim)
     if (!killer || !victim)
         return;
     Lately_NoteKill(killer, victim);   // what it was grinding, and where
+    Corpse_NoteKill(killer, victim);   // something worth an emote at the body
     eventChatter.DispatchGameEvent(killer, g_EventTypeDefeated, victim->GetName());
 }
 
@@ -592,6 +594,7 @@ void ChatOnKill::OnPlayerCreatureKilledByPet(Player* owner, Creature* victim)
     if (!owner || !victim)
         return;
     Lately_NoteKill(owner, victim);
+    Corpse_NoteKill(owner, victim);
     eventChatter.DispatchGameEvent(owner, g_EventTypePetDefeated, victim->GetName());
 }
 

@@ -38,7 +38,7 @@ or it talks over people.
 A hook that fires on a map thread (a kill, loot, a death, a ding, an
 achievement, gear put on, a potion) notes what happened under a mutex and
 nothing more; the world tick acts on it (`Events_Update`, `Equip_Update`,
-`Potions_Update`, ...). Event chatter used to build its prompts in the hook
+`Potions_Update`, `Corpse_Update`, ...). Event chatter used to build its prompts in the hook
 itself, on whichever map thread raised it -- with five map threads running at
 once, a guild event read bots anywhere in the world from there. The one hook
 that answers where it is, `ChatOnEmote` (a text emote is handled on the map

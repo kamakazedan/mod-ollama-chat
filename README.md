@@ -856,6 +856,15 @@ Fanglords, which Mutanus needs) leaves the run stuck later: take the skip back.
 Needs mod-dungeon-clear with named skips (`dc skip <boss>`); see
 `OllamaChat.PartyCommands.Skip*`.
 
+## Quest Progress
+
+Playerbots' "Kobold Vermin 3/10" whispers are muted; a bot in your group says
+in party, in its own words, when a bit of a quest is done. It is told what by
+name -- a single kill as who it was ("You have just killed Gath'Ilzogg") --
+and what the quest still needs, from its own quest log, so one of four named
+enemies down comes out as "gath's down, fangore next" rather than "finally
+done with those things". See `OllamaChat.Progress.*`.
+
 ## New Gear
 
 A bot in your group that puts on a rare or epic it just got (loot, a roll it
@@ -1053,6 +1062,14 @@ a log line.
   "why you sighing at me?" and the bot that sighed answers, knowing what it did.
   Emote at a bot and then say something, and that bot takes it as said to it
   (`OllamaChat.Emote.EventText`).
+- **Over the body** — a bot that has just killed a named enemy (a rare, or one
+  of a kind such as a quest's named target), an elite out in the world, or a
+  boss may emote at the body once the fight is over, the way its chat style
+  would: the rude one spits on it, the joker struts round it like a chicken,
+  the roleplayer salutes it or mourns it, the quiet one maybe nods. When you
+  land the killing blow, one of your group's bots near the body may do it
+  instead. No model call; only with a real player near enough to see; once in
+  a few minutes per bot at most. See `OllamaChat.Corpse.*`.
 
 ## Think Mode
 

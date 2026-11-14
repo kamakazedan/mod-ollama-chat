@@ -2581,6 +2581,116 @@ OllamaChat.Emote.PetEmotes = "pet|pat|cuddle|love|purr|hug"
 
 ###############################################################################
 #
+#   OLLAMA CHAT - EMOTES AT THE BODY
+#
+#   A bot that has just killed something worth it may emote at the body, by
+#   its chat style: spits on it, laughs at it, gloats over it, salutes it,
+#   mourns it ("Lianon spits on Gath'Ilzogg.").
+#
+#   Worth it: a named enemy -- a rare, or one of a kind (a creature with a
+#   single spawn in the world, like a quest's named target) -- an elite out
+#   in the world (not in a dungeon or raid, where they are every pull), or a
+#   boss, in a dungeon or out. Never anything grey to whoever killed it,
+#   anyone's pet or totem, or anything in a battleground.
+#
+#   Who: the bot that landed the killing blow, or whose pet did; when a real
+#   player did, one of their group's bots near the body. One roll a kill, no
+#   bot more than once in CooldownSeconds. A moment later (DelayMinMs to
+#   DelayMaxMs), once it is out of the fight and within Range of the body,
+#   it turns to it and plays the emote -- only with a real player near
+#   enough to see it. Those about know what it did, so a bot asked why it
+#   spat on him can say.
+#
+#   Needs EnableBotEmotes = 1. .ollama status bots counts them.
+#
+###############################################################################
+
+#    OllamaChat.Corpse.Enable
+#        Default: 1
+OllamaChat.Corpse.Enable = 1
+
+#    OllamaChat.Corpse.NamedChance
+#    OllamaChat.Corpse.EliteChance
+#    OllamaChat.Corpse.BossChance
+#        The percent chance a bot emotes at the body, for a named enemy, an
+#        elite out in the world and a boss, before its chat style's share
+#        (Style below).
+#        Default: 30, 8, 40
+OllamaChat.Corpse.NamedChance = 30
+OllamaChat.Corpse.EliteChance = 8
+OllamaChat.Corpse.BossChance = 40
+
+#    OllamaChat.Corpse.CooldownSeconds
+#        The least time between two of these from the same bot, so one
+#        working through an elite camp does not spit on every one.
+#        Default: 180
+OllamaChat.Corpse.CooldownSeconds = 180
+
+#    OllamaChat.Corpse.DelayMinMs
+#    OllamaChat.Corpse.DelayMaxMs
+#        How long after the kill it looks to do it.
+#        Default: 1500, 4000
+OllamaChat.Corpse.DelayMinMs = 1500
+OllamaChat.Corpse.DelayMaxMs = 4000
+
+#    OllamaChat.Corpse.Range
+#        How close to the body it has to be, in yards. It waits up to 10
+#        seconds for the fight to end and to come that close (bots come back
+#        to whoever they follow), then lets it go.
+#        Default: 20
+OllamaChat.Corpse.Range = 20
+
+#    OllamaChat.Corpse.Style.Default
+#    OllamaChat.Corpse.Style.<KEY>
+#        What each chat style does at the body, and how likely it is to:
+#        "<percent>|emote|emote|...". The percent is of the chances above (200
+#        is twice as likely, 0 never); the emotes are names as in EMOTE
+#        STYLES, one repeated picked more often, and each is aimed at the
+#        body, so pick ones that read right that way ("spits on X", "laughs
+#        at X", "mourns the death of X"). A style without a line of its own
+#        uses Default, and a line needs only what differs from it: "50" is
+#        half as likely, with Default's emotes.
+#        Default: "100|laugh|laugh|cheer|flex|roar|spit|gloat|salute"
+OllamaChat.Corpse.Style.Default = "100|laugh|laugh|cheer|flex|roar|spit|gloat|salute"
+OllamaChat.Corpse.Style.NAT_TERSE_VET = "40|nod|nod|spit|salute"
+OllamaChat.Corpse.Style.NAT_LOWERCASE = "80|laugh|laugh|cheer|shrug|flex"
+OllamaChat.Corpse.Style.NAT_FRIENDLY = "70|cheer|cheer|laugh|salute|flex"
+OllamaChat.Corpse.Style.NAT_PROPER = "70|salute|salute|bow|pray"
+OllamaChat.Corpse.Style.NAT_DEADPAN = "100|golfclap|golfclap|shrug|bored|stare|yawn"
+OllamaChat.Corpse.Style.NAT_NEWBIE = "120|cheer|cheer|gasp|shudder|bounce|awe"
+OllamaChat.Corpse.Style.NAT_MINMAXER = "60|golfclap|nod|flex|shrug"
+OllamaChat.Corpse.Style.NAT_GRUMBLER = "120|spit|spit|scoff|sigh|scowl|mutter"
+OllamaChat.Corpse.Style.NAT_SOCIAL = "100|cheer|cheer|laugh|flex|dance"
+OllamaChat.Corpse.Style.NAT_ABBREVIATOR = "80|laugh|laugh|cheer|flex|shrug"
+OllamaChat.Corpse.Style.NAT_QUIET = "30|nod|nod|sigh"
+OllamaChat.Corpse.Style.NAT_NONNATIVE = "70|cheer|laugh|salute|bow"
+OllamaChat.Corpse.Style.NAT_HELPFUL_VET = "50|nod|salute|golfclap"
+OllamaChat.Corpse.Style.NAT_EXCITABLE = "150|cheer|cheer|bounce|dance|roar|flex"
+OllamaChat.Corpse.Style.NAT_BANTER = "150|laugh|smirk|grin|mock|gloat|snicker"
+OllamaChat.Corpse.Style.NAT_JOKER = "160|cackle|laugh|chicken|guffaw|dance|poke"
+OllamaChat.Corpse.Style.NAT_TROLL = "200|spit|spit|rasp|mock|chicken|gloat|violin|insult"
+OllamaChat.Corpse.Style.NAT_KEYBOARD = "200|gloat|gloat|mock|spit|taunt|insult|violin|laugh"
+OllamaChat.Corpse.Style.NAT_CONTRARIAN = "100|scoff|scoff|shrug|yawn|bored"
+OllamaChat.Corpse.Style.NAT_REACTOR = "140|laugh|laugh|guffaw|cheer|gasp|roar"
+OllamaChat.Corpse.Style.NAT_HYPE = "160|roar|roar|flex|cheer|cheer|dance"
+OllamaChat.Corpse.Style.NAT_PRANKSTER = "180|fart|fart|poke|rasp|chicken|bonk|burp|dance"
+OllamaChat.Corpse.Style.NAT_PETLOVER = "60|sigh|mourn|pity|cheer"
+OllamaChat.Corpse.Style.NAT_LOREBUFF = "80|salute|mourn|peer|bow|sigh"
+OllamaChat.Corpse.Style.NAT_GOSSIP = "110|gasp|giggle|snicker|smirk|laugh"
+OllamaChat.Corpse.Style.NAT_PVPER = "200|spit|spit|gloat|crack|flex|roar|taunt|laugh"
+OllamaChat.Corpse.Style.NAT_NOSTALGIC = "80|sigh|salute|mourn|nod"
+OllamaChat.Corpse.Style.NAT_ROLEPLAYER = "120|salute|salute|spit|mourn|pray|roar|bow"
+OllamaChat.Corpse.Style.NAT_CHILL = "80|shrug|shrug|yawn|laugh|dance"
+OllamaChat.Corpse.Style.NAT_GOLDMAKER = "60|smirk|smirk|gloat|golfclap"
+OllamaChat.Corpse.Style.NAT_RAIDER = "70|golfclap|flex|nod|roar|cheer"
+OllamaChat.Corpse.Style.NAT_BINGER = "120|salute|roar|laugh|cheer|gloat|cackle"
+OllamaChat.Corpse.Style.NAT_BUTTERFLY = "100|cheer|cheer|giggle|dance|shimmy|laugh"
+OllamaChat.Corpse.Style.NAT_EXPERT = "50|nod|nod|golfclap|shrug|peer"
+OllamaChat.Corpse.Style.NAT_RUDE = "200|spit|spit|spit|rude|rude|laugh|mock|gloat|slap"
+OllamaChat.Corpse.Style.NAT_LONER = "30|nod|shrug|spit|sigh"
+
+###############################################################################
+#
 #   OLLAMA CHAT - PER STYLE NUDGES AND LONGER REPLIES
 #
 #   Two more settings any personality key can have, the same way as its
@@ -4041,6 +4151,11 @@ OllamaChat.Joined.DelayMaxMs = 5000
 #   What a bot says instead, in party chat and in its own words, is the
 #   moment something is done: the last kill or item a quest wants ("that's
 #   the 10 kobolds"), or the whole quest ready to hand in (to whom, too).
+#   It is told what was done by name -- a single kill as who it was, "You
+#   have just killed Gath'Ilzogg" -- and, from its quest log as it is then,
+#   what the quest still needs ("kill Lieutenant Fangore, kill Tharil'zun"),
+#   so one of four named enemies down is "one down, three to go", not
+#   "finally done with those things".
 #
 #   Only for bots in a group with a real player. DelaySeconds pass first, so
 #   the kill that finishes the quest as well as the objective gets one line,
@@ -4066,19 +4181,38 @@ OllamaChat.Progress.GapSeconds = 20
 
 #    OllamaChat.Progress.Prompt
 #    OllamaChat.Progress.KillText
+#    OllamaChat.Progress.KillOneText
 #    OllamaChat.Progress.UseText
+#    OllamaChat.Progress.UseOneText
 #    OllamaChat.Progress.ItemText
+#    OllamaChat.Progress.ItemOneText
+#    OllamaChat.Progress.GoalText
 #    OllamaChat.Progress.QuestText
+#    OllamaChat.Progress.LeftText
 #        Prompt: {bot_name} {bot_level} {bot_race} {bot_class}
-#        {bot_personality}, {done} (one of the four below; "{~a|b}" picks one
-#        each time). KillText, UseText (an object to use) and ItemText:
-#        {count}, {what}, {quest}; QuestText: {quest}, {ender} (who it is
-#        handed in to).
-OllamaChat.Progress.Prompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, questing with your group. Your chat style: {bot_personality} You have just got {done}. {~Tell the group|Let the group know|Say so} in party chat in a few words, the way players do when a bit of a quest is done: no exclamation-mark hype, and nobody needs every detail."
-OllamaChat.Progress.KillText = "the last of the {count} {what} you had to kill for {quest}"
-OllamaChat.Progress.UseText = "the last of the {count} {what} you had to do for {quest}"
-OllamaChat.Progress.ItemText = "the last of the {count} {what} that {quest} wants"
-OllamaChat.Progress.QuestText = "everything {quest} needs: it is ready to hand in to {ender}"
+#        {bot_personality}, {done} (what was just done: a sentence from the
+#        texts below for each objective finished, then QuestText if that was
+#        all of it), {left} (LeftText, when the quest still needs something;
+#        empty otherwise). "{~a|b}" picks one each time.
+#        The texts: KillText (the last of several kills), KillOneText (a
+#        single kill: who it was), UseText and UseOneText (an object to use),
+#        ItemText and ItemOneText (the last of several of an item, or the one
+#        it wants), GoalText (an objective the quest gives its own words,
+#        such as "Ritual performed": {what} is those words) -- {count},
+#        {what}, {quest}. QuestText: {quest}, {ender} (who it is handed in
+#        to). LeftText: {left}, what is still to do from the bot's quest log
+#        ("kill Lieutenant Fangore, kill 4 more Redridge Mongrel (6 of 10)
+#        and [Gnoll Paw]").
+OllamaChat.Progress.Prompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, questing with your group. Your chat style: {bot_personality} {done}{left} {~Tell the group|Let the group know|Say so} in party chat in a few words, the way players do when a bit of a quest is done -- by name if it was someone in particular, and maybe what is left: no exclamation-mark hype, and nobody needs every detail."
+OllamaChat.Progress.KillText = "You have just killed the last of the {count} {what} that {quest} wanted."
+OllamaChat.Progress.KillOneText = "You have just killed {what}, who {quest} wants dead."
+OllamaChat.Progress.UseText = "You have just done the last of the {count} {what} for {quest}."
+OllamaChat.Progress.UseOneText = "You have just seen to the {what} for {quest}."
+OllamaChat.Progress.ItemText = "You have just got the last of the {count} {what} that {quest} wants."
+OllamaChat.Progress.ItemOneText = "You have just got the {what} that {quest} wants."
+OllamaChat.Progress.GoalText = "You have just done this for {quest}: {what}."
+OllamaChat.Progress.QuestText = "You now have everything {quest} needs: it is ready to hand in to {ender}."
+OllamaChat.Progress.LeftText = "What it still needs: {left}."
 
 ###############################################################################
 #

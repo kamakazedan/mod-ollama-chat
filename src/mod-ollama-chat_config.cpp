@@ -647,9 +647,14 @@ uint32_t    g_ProgressDelaySeconds         = 3;
 uint32_t    g_ProgressGapSeconds           = 20;
 std::string g_ProgressPrompt;
 std::string g_ProgressKillText;
+std::string g_ProgressKillOneText;
 std::string g_ProgressUseText;
+std::string g_ProgressUseOneText;
 std::string g_ProgressItemText;
+std::string g_ProgressItemOneText;
+std::string g_ProgressGoalText;
 std::string g_ProgressQuestText;
+std::string g_ProgressLeftText;
 
 bool        g_LinksDescribeEnable          = true;
 uint32_t    g_LinksDescribeMax             = 3;
@@ -699,6 +704,17 @@ uint32_t    g_GroupQuestsAnswerDelayMaxSeconds = 15;
 
 uint32_t    g_OllamaReportMinutes              = 10;
 std::string g_OllamaReportFile                 = "OllamaChatReport.log";
+
+bool        g_CorpseEnable                     = true;
+uint32_t    g_CorpseNamedChance                = 30;
+uint32_t    g_CorpseEliteChance                = 8;
+uint32_t    g_CorpseBossChance                 = 40;
+uint32_t    g_CorpseCooldownSeconds            = 180;
+uint32_t    g_CorpseDelayMinMs                 = 1500;
+uint32_t    g_CorpseDelayMaxMs                 = 4000;
+float       g_CorpseRange                      = 20.0f;
+CorpseStyle g_CorpseStyleDefault;
+std::unordered_map<std::string, CorpseStyle> g_CorpseStyles;
 
 bool        g_CityLifeEnable                   = true;
 std::string g_CityLifeMountPrompt;
@@ -2174,17 +2190,27 @@ static void LoadNaturalChatV10Settings()
     g_ProgressGapSeconds   = sConfigMgr->GetOption<uint32_t>("OllamaChat.Progress.GapSeconds", 20);
     g_ProgressPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.Prompt",
         "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, questing with your group. Your chat style: "
-        "{bot_personality} You have just got {done}. {~Tell the group|Let the group know|Say so} in party chat in a "
-        "few words, the way players do when a bit of a quest is done: no exclamation-mark hype, and nobody needs "
-        "every detail.");
+        "{bot_personality} {done}{left} {~Tell the group|Let the group know|Say so} in party chat in a few words, "
+        "the way players do when a bit of a quest is done -- by name if it was someone in particular, and maybe "
+        "what is left: no exclamation-mark hype, and nobody needs every detail.");
     g_ProgressKillText = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.KillText",
-        "the last of the {count} {what} you had to kill for {quest}");
+        "You have just killed the last of the {count} {what} that {quest} wanted.");
+    g_ProgressKillOneText = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.KillOneText",
+        "You have just killed {what}, who {quest} wants dead.");
     g_ProgressUseText = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.UseText",
-        "the last of the {count} {what} you had to do for {quest}");
+        "You have just done the last of the {count} {what} for {quest}.");
+    g_ProgressUseOneText = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.UseOneText",
+        "You have just seen to the {what} for {quest}.");
     g_ProgressItemText = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.ItemText",
-        "the last of the {count} {what} that {quest} wants");
+        "You have just got the last of the {count} {what} that {quest} wants.");
+    g_ProgressItemOneText = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.ItemOneText",
+        "You have just got the {what} that {quest} wants.");
+    g_ProgressGoalText = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.GoalText",
+        "You have just done this for {quest}: {what}.");
     g_ProgressQuestText = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.QuestText",
-        "everything {quest} needs: it is ready to hand in to {ender}");
+        "You now have everything {quest} needs: it is ready to hand in to {ender}.");
+    g_ProgressLeftText = sConfigMgr->GetOption<std::string>("OllamaChat.Progress.LeftText",
+        "What it still needs: {left}.");
 
     // --- what a named item or quest is -----------------------------------------------
     g_LinksDescribeEnable     = sConfigMgr->GetOption<bool>("OllamaChat.Links.DescribeEnable", true);
@@ -3458,6 +3484,79 @@ static void LoadNaturalChatV35Settings()
                  "asks.", g_OllamaReportFile);
 }
 
+namespace
+{
+    // "<percent>|emote|emote|..." on top of `base`: a number first sets how
+    // likely (percent of the kind's chance), the emotes replace base's list.
+    // Either may be left out.
+    CorpseStyle ReadCorpseStyle(const std::string& raw, CorpseStyle base, std::string& unknown)
+    {
+        std::vector<std::string> items = SplitString(raw, '|');
+        std::string list;
+        for (size_t i = 0; i < items.size(); ++i)
+        {
+            const size_t b = items[i].find_first_not_of(" \t\r\n");
+            if (b == std::string::npos)
+                continue;
+            const std::string item = items[i].substr(b, items[i].find_last_not_of(" \t\r\n") - b + 1);
+            const bool number = item.size() <= 4 &&
+                std::all_of(item.begin(), item.end(), [](unsigned char c) { return std::isdigit(c) != 0; });
+            if (i == 0 && number)
+                base.percent = std::min<uint32_t>(static_cast<uint32_t>(std::stoul(item)), 1000);
+            else
+                list += (list.empty() ? "" : "|") + item;
+        }
+        if (!list.empty())
+        {
+            std::vector<uint32_t> emotes = ReadEmoteList(list, &unknown);
+            if (!emotes.empty())
+                base.emotes = std::move(emotes);
+        }
+        return base;
+    }
+}
+
+static void LoadNaturalChatV36Settings()
+{
+    // --- an emote at the body of something worth it (mod-ollama-chat_corpse) ------------------
+    g_CorpseEnable          = sConfigMgr->GetOption<bool>("OllamaChat.Corpse.Enable", true);
+    g_CorpseNamedChance     = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Corpse.NamedChance", 30), 100);
+    g_CorpseEliteChance     = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Corpse.EliteChance", 8), 100);
+    g_CorpseBossChance      = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Corpse.BossChance", 40), 100);
+    g_CorpseCooldownSeconds = sConfigMgr->GetOption<uint32_t>("OllamaChat.Corpse.CooldownSeconds", 180);
+    g_CorpseDelayMinMs      = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Corpse.DelayMinMs", 1500), 30000);
+    g_CorpseDelayMaxMs      = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Corpse.DelayMaxMs", 4000),
+                                                   g_CorpseDelayMinMs, 30000);
+    g_CorpseRange           = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Corpse.Range", 20.0f), 2.0f, 40.0f);
+
+    // How each chat style takes it: Default, then OllamaChat.Corpse.Style.<KEY>
+    // on top of it for the styles that differ.
+    std::string unknown;
+    g_CorpseStyleDefault = ReadCorpseStyle(sConfigMgr->GetOption<std::string>("OllamaChat.Corpse.Style.Default",
+        "100|laugh|laugh|cheer|flex|roar|spit|gloat|salute"), CorpseStyle{}, unknown);
+    g_CorpseStyles.clear();
+    {
+        const std::string prefix = "OllamaChat.Corpse.Style.";
+        for (const std::string& key : sConfigMgr->GetKeysByString(prefix))
+        {
+            std::string name = key.substr(prefix.size());
+            for (char& c : name)
+                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            if (name.empty() || name == "DEFAULT")
+                continue;
+            g_CorpseStyles[name] = ReadCorpseStyle(sConfigMgr->GetOption<std::string>(key, ""), g_CorpseStyleDefault,
+                                                   unknown);
+        }
+    }
+    if (!unknown.empty())
+        LOG_WARN("module.ollamachat", "[Ollama Chat] Unknown emote names in OllamaChat.Corpse.Style settings: {}",
+                 unknown);
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v36: emotes at the body {} (named {}%, elites {}%, bosses {}%; "
+             "{} chat styles of their own).", g_CorpseEnable ? "on" : "off", g_CorpseNamedChance, g_CorpseEliteChance,
+             g_CorpseBossChance, g_CorpseStyles.size());
+}
+
 static void LoadNaturalChatV30Settings()
 {
     // --- what chat is really like ---------------------------------------------------------
@@ -4434,6 +4533,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV33Settings();
     LoadNaturalChatV34Settings();
     LoadNaturalChatV35Settings();
+    LoadNaturalChatV36Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

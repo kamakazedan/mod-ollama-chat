@@ -46,6 +46,7 @@
 #include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_plus.h"
 #include "mod-ollama-chat_report.h"
+#include "mod-ollama-chat_corpse.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
 #include <thread>
@@ -781,6 +782,17 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
                                  (unsigned long long)cityLife.quiet,
                                  (unsigned long long)cityLife.dances,
                                  (unsigned long long)cityLife.emoted);
+
+    const CorpseStats corpse = Corpse_GetStats();
+    if (show("bots"))
+        out("Emotes at the body: {} - {} kills worth it with a real player near ({} named, {} elites, {} bosses), "
+            "{} rolled for, {} played; {} with nobody near enough to see, {} let go (still fighting, too far, the "
+            "body gone)",
+            g_CorpseEnable ? "on" : "off",
+            (unsigned long long)corpse.kills, (unsigned long long)corpse.named,
+            (unsigned long long)corpse.elites, (unsigned long long)corpse.bosses,
+            (unsigned long long)corpse.rolled, (unsigned long long)corpse.emoted,
+            (unsigned long long)corpse.unseen, (unsigned long long)corpse.lapsed);
 
     const BagsStats  bags  = Bags_GetStats();
     const NeedsStats needs = Needs_GetStats();

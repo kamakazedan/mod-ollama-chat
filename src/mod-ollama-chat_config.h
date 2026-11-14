@@ -687,9 +687,14 @@ extern uint32_t    g_ProgressDelaySeconds;   // after it is done, before it is s
 extern uint32_t    g_ProgressGapSeconds;     // one such line per group in this long
 extern std::string g_ProgressPrompt;
 extern std::string g_ProgressKillText;
+extern std::string g_ProgressKillOneText;   // a single kill: who it was
 extern std::string g_ProgressUseText;
+extern std::string g_ProgressUseOneText;
 extern std::string g_ProgressItemText;
+extern std::string g_ProgressItemOneText;
+extern std::string g_ProgressGoalText;      // an objective the quest gives its own words
 extern std::string g_ProgressQuestText;
+extern std::string g_ProgressLeftText;      // what the quest still needs
 
 // What a named item or quest is (mod-ollama-chat_links)
 extern bool        g_LinksDescribeEnable;
@@ -748,6 +753,23 @@ extern uint32_t    g_GroupQuestsAnswerDelayMaxSeconds;
 // The full report (mod-ollama-chat_report): every count, in a file
 extern uint32_t    g_OllamaReportMinutes;     // written this often (0: only by .ollama report)
 extern std::string g_OllamaReportFile;        // in the logs folder, unless a whole path
+
+// An emote at the body of something worth it (mod-ollama-chat_corpse). World thread.
+struct CorpseStyle
+{
+    uint32_t              percent = 100;   // of the kind's chance
+    std::vector<uint32_t> emotes;          // TEXT_EMOTE_*: one repeated is picked more often
+};
+extern bool        g_CorpseEnable;
+extern uint32_t    g_CorpseNamedChance;       // percent, for a rare or one of a kind
+extern uint32_t    g_CorpseEliteChance;       // an elite out in the world
+extern uint32_t    g_CorpseBossChance;
+extern uint32_t    g_CorpseCooldownSeconds;   // per bot
+extern uint32_t    g_CorpseDelayMinMs;
+extern uint32_t    g_CorpseDelayMaxMs;
+extern float       g_CorpseRange;             // yards from the body
+extern CorpseStyle g_CorpseStyleDefault;
+extern std::unordered_map<std::string, CorpseStyle> g_CorpseStyles;   // personality key, upper case
 
 // City life (mod-playerbots-plus), said in /say: a rare mount looked at, a dance
 extern bool        g_CityLifeEnable;
