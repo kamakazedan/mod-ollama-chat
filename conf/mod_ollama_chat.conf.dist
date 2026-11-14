@@ -2416,6 +2416,17 @@ OllamaChat.Pets.Words = "pet|pets|companion|companions|critter|critters|minion|m
 #        Default: (below)
 OllamaChat.Pets.MountWords = "mount|mounts|mounted|ride|rides|riding|horse|horses|steed|steeds|kodo|kodos|raptor|raptors|mechanostrider|ram|rams|elekk|hawkstrider|nightsaber|frostsaber|charger|warhorse|felsteed|dreadsteed|deathcharger|mammoth|drake|proto drake|gryphon|wyvern|flying mount|epic mount"
 
+#    OllamaChat.Pets.MountRemarkMinutes
+#        Once a bot is handed someone's mount to remark on -- a passer-by
+#        (Presence), someone near it mounted up (the nearby_player topic), a
+#        rare mount a few came over to look at (city life) -- nobody else is
+#        told of that mount for this many minutes, and a passer-by's line
+#        naming it is not said: "nice mount" from everyone who walks by is one
+#        line said over and over. A /say exchange between bots leaves it out
+#        too. 0: no such wait.
+#        Default: 10
+OllamaChat.Pets.MountRemarkMinutes = 10
+
 ###############################################################################
 #
 #   OLLAMA CHAT - WHAT A BOT HAS BEEN UP TO
@@ -4497,6 +4508,144 @@ OllamaChat.CityLife.ShowOffAnswerLines = "lol ok ok|haha fine|someone's grumpy|f
 
 ###############################################################################
 #
+#   RARE GEAR: SHOWN OFF, AND ASKED AFTER, IN A CITY'S GENERAL
+#
+#   Now and then a bot in a city shows off a really rare thing it has on --
+#   "check out my [Hand of Edward the Odd]" -- or asks where one is found,
+#   in the city's General, and the people about talk it over: where it
+#   drops and how rare it is, from the world's own loot tables (with
+#   mod-playerbots-plus API 8; without it, none of this happens), never a
+#   creature or a place made up. Its line may open a conversation about it
+#   (ConversationChance), the facts in its premise; a reply to it is told
+#   what the thing is and how rare (Links), and, asked where to find one,
+#   where it drops (Knowledge.Drop*).
+#
+#   Really rare is a weapon or armour of MinQuality or better that drops
+#   less often than MaxDropPercent per kill of anything that can drop it,
+#   over every one the world has of them (and not less often than
+#   MinDropPercent: a leftover in the tables), that no creature or chest
+#   gives more often than MaxBestPercent (a boss's loot is no rare find),
+#   from a creature out in the world. On the stock world tables that is
+#   about 420 blues and 80 epics, most of them world drops. A bot shows off
+#   one it has on; it asks after one it could wear: its class may, a weapon
+#   skill it has, the heaviest armour it wears (a cloak, a ring or a trinket
+#   is any), stats for its class, needing a level from AskLevelsBelow under
+#   its own to AskLevelsAbove over, and one it does not have.
+#
+#   Which bots do it is their chat style's: ShowStyles and AskStyles give
+#   each style the percent that would (ShowDefault, AskDefault: any other),
+#   rolled when a city bot's unprompted line looks for one (Chance). The
+#   same thing is not talked of again on the realm for ItemMinutes, a
+#   city's General hears one such line in PlaceMinutes, and a bot says one
+#   in BotMinutes. .ollama status city counts them.
+#
+#   Templates take {placeholders} as listed; no other braces, and no double
+#   quotes inside a value.
+#
+###############################################################################
+
+#    OllamaChat.RareGear.Enable
+#        Default: 1
+OllamaChat.RareGear.Enable = 1
+
+#    OllamaChat.RareGear.Chance
+#        The percent of a city bot's unprompted lines that look for a rare
+#        thing to show off or ask after (its style then decides whether it
+#        would). 0: never.
+#        Default: 8
+OllamaChat.RareGear.Chance = 8
+
+#    OllamaChat.RareGear.MaxDropPercent
+#    OllamaChat.RareGear.MinDropPercent
+#    OllamaChat.RareGear.MaxBestPercent
+#    OllamaChat.RareGear.MinQuality
+#        Really rare: drops less often than MaxDropPercent (percent per kill
+#        of anything that can drop it -- 0.05 is once in 2,000 kills), not
+#        less often than MinDropPercent, from no creature or chest more often
+#        than MaxBestPercent, of MinQuality or better (3 rare, 4 epic, 5
+#        legendary).
+#        Default: 0.05, 0.0005, 1.0, 3
+OllamaChat.RareGear.MaxDropPercent = 0.05
+OllamaChat.RareGear.MinDropPercent = 0.0005
+OllamaChat.RareGear.MaxBestPercent = 1.0
+OllamaChat.RareGear.MinQuality = 3
+
+#    OllamaChat.RareGear.ShowStyles
+#    OllamaChat.RareGear.ShowDefault
+#    OllamaChat.RareGear.AskStyles
+#    OllamaChat.RareGear.AskDefault
+#        By chat style (KEY:percent, separated by |), how many of the times
+#        a bot looks would it show off a rare thing it has on, or ask where
+#        to find one; the Default for any style not listed. The hype man,
+#        the excitable and the newbie show off; the newbie, the min-maxer and
+#        the raider ask; the quiet, the loner and the terse veteran seldom
+#        do either.
+#        Default: (below), 25, (below), 30
+OllamaChat.RareGear.ShowStyles = "NAT_HYPE:100|NAT_EXCITABLE:90|NAT_NEWBIE:80|NAT_BUTTERFLY:70|NAT_SOCIAL:60|NAT_PVPER:60|NAT_BANTER:50|NAT_RAIDER:50|NAT_MINMAXER:40|NAT_TROLL:40|NAT_JOKER:40|NAT_PRANKSTER:40|NAT_GOSSIP:40|NAT_FRIENDLY:35|NAT_KEYBOARD:30|NAT_REACTOR:30|NAT_RUDE:30|NAT_PETLOVER:30|NAT_GOLDMAKER:25|NAT_CONTRARIAN:20|NAT_ROLEPLAYER:20|NAT_EXPERT:20|NAT_NOSTALGIC:20|NAT_CHILL:15|NAT_LOREBUFF:15|NAT_DEADPAN:10|NAT_PROPER:10|NAT_GRUMBLER:10|NAT_HELPFUL_VET:10|NAT_QUIET:5|NAT_LONER:5|NAT_TERSE_VET:5"
+OllamaChat.RareGear.ShowDefault = 25
+OllamaChat.RareGear.AskStyles = "NAT_NEWBIE:100|NAT_MINMAXER:80|NAT_RAIDER:70|NAT_GOLDMAKER:60|NAT_EXCITABLE:50|NAT_HYPE:50|NAT_PVPER:50|NAT_SOCIAL:40|NAT_BUTTERFLY:40|NAT_FRIENDLY:35|NAT_LOREBUFF:20|NAT_GRUMBLER:20|NAT_DEADPAN:15|NAT_EXPERT:10|NAT_QUIET:10|NAT_LONER:10|NAT_TERSE_VET:10|NAT_HELPFUL_VET:5"
+OllamaChat.RareGear.AskDefault = 30
+
+#    OllamaChat.RareGear.ItemMinutes
+#    OllamaChat.RareGear.PlaceMinutes
+#    OllamaChat.RareGear.BotMinutes
+#        Not the same thing again on the realm for ItemMinutes; one such line
+#        in a city's General in PlaceMinutes; one from a bot in BotMinutes.
+#        Default: 180, 20, 240
+OllamaChat.RareGear.ItemMinutes = 180
+OllamaChat.RareGear.PlaceMinutes = 20
+OllamaChat.RareGear.BotMinutes = 240
+
+#    OllamaChat.RareGear.AskLevelsBelow
+#    OllamaChat.RareGear.AskLevelsAbove
+#        A bot asks after a thing needing a level from this far under its
+#        own to this far over.
+#        Default: 3, 3
+OllamaChat.RareGear.AskLevelsBelow = 3
+OllamaChat.RareGear.AskLevelsAbove = 3
+
+#    OllamaChat.RareGear.ConversationChance
+#        The percent of these lines that open a conversation about the thing
+#        in General (as Conversation.* runs them), where one can start.
+#        Default: 60
+OllamaChat.RareGear.ConversationChance = 60
+
+#    OllamaChat.RareGear.ShowText
+#    OllamaChat.RareGear.ShowAngles
+#    OllamaChat.RareGear.AskText
+#    OllamaChat.RareGear.AskAngles
+#        The line, for its prompt: ShowText to show one off, AskText to ask
+#        after one -- {item} its name, {what} what it is and how rarely it
+#        drops ("an epic one-handed mace, item level 62, for level 57 and up,
+#        binds when equipped, a rare drop: about once in 18,000 kills of
+#        anything that can drop it"), {angle} one of the Angles, so no two
+#        read alike. The one asking is not told where it drops.
+#        Default: (below)
+OllamaChat.RareGear.ShowText = "You are wearing {item}, and you are very pleased with it: {what}. Hardly anyone has one. Show it off to everyone in the chat {angle} Write its name in square brackets, exactly as it is: [{item}]."
+OllamaChat.RareGear.ShowAngles = "and celebrate it.|and fish for a little praise.|and ask if anyone else has ever seen one.|and try to be modest about it, and fail.|and get everyone to guess how rare it is.|and say you still cannot believe your luck.|and ask what everyone thinks of it.|and say it was worth every kill."
+OllamaChat.RareGear.AskText = "You would love to have {item}: {what}. You know it is very rare, but not where it comes from. Ask everyone in the chat {angle} Write its name in square brackets, exactly as it is: [{item}]."
+OllamaChat.RareGear.AskAngles = "where it drops.|whether anyone has ever seen one drop.|whether it is even worth farming for.|what to farm for it.|how rare it really is.|where people go to farm one."
+
+#    OllamaChat.RareGear.ShowPremise
+#    OllamaChat.RareGear.AskPremise
+#        What a conversation it opens is about, for every line of it: {name}
+#        who showed it off or asked, {item}, {what} as above, {facts} where
+#        it drops (Knowledge.Drop*).
+#        Default: (below)
+OllamaChat.RareGear.ShowPremise = "{name}'s {item} ({what}), which {name} is showing off. {facts}"
+OllamaChat.RareGear.AskPremise = "where to find {item} ({what}), which {name} is after. {facts}"
+
+#    OllamaChat.RareGear.ShowLines
+#    OllamaChat.RareGear.AskLines
+#        When the model's line does not name the thing, or fails: one of
+#        these, {item} its name, in the bot's own style
+#        (Personality.CannedStyles).
+#        Default: (below)
+OllamaChat.RareGear.ShowLines = "check out my [{item}]|look what i got: [{item}]|finally got my hands on [{item}]|anyone else got one of these? [{item}]|[{item}] :D"
+OllamaChat.RareGear.AskLines = "where can i find [{item}]?|anyone know where [{item}] drops?|what drops [{item}]?|anyone ever seen [{item}] drop?"
+
+###############################################################################
+#
 #   OLLAMA CHAT - STATUS AND THE FULL REPORT
 #
 #   In game the module says little, and the rest goes to a file:
@@ -5394,11 +5543,16 @@ OllamaChat.Aside.FactDeaths = "{subject} has died {deaths} times since joining t
 #       kind most of them are (KindText: "Reagents"), the nearest one to the
 #       asker and where it stands (NearestText), that it costs tokens or
 #       honor rather than gold (TokensText); which professions make it
-#       (CraftText, CraftAlsoText); that nothing sells or makes it, so it is
-#       looted, gathered or earned (NoVendorText), and then that players can
-#       trade it (TradeText) -- or that it binds when picked up (BoundText).
-#       Vendors of the other faction do not count; when only they sell it,
-#       EnemyOnlyText says so.
+#       (CraftText, CraftAlsoText); with mod-playerbots-plus, where it
+#       drops, from the world's own loot tables -- a world drop at about
+#       what level (DropWorldText), a dungeon's (DropInstanceText), or what
+#       drops it and where they are (DropFromText), the best odds by name
+#       (DropBestText), chests (DropChestText, DropChestOnlyText) and how
+#       rarely, "about once in 18,000 kills" -- else that nothing sells or
+#       makes it, so it is looted, gathered or earned (NoVendorText); and
+#       then that players can trade it (TradeText) -- or that it binds when
+#       picked up (BoundText). Vendors of the other faction do not count;
+#       when only they sell it, EnemyOnlyText says so.
 #     * A place in a town or city -- a class or profession trainer, the bank,
 #       the auction house, the inn, the flight master and the rest: what the
 #       guards say when asked for directions (the gossip menus behind their
@@ -5446,7 +5600,7 @@ OllamaChat.Knowledge.Enable = 1
 #        question about where something is or how to get it. Words and
 #        phrases as CrowdText reads them, separated by |.
 #        Default: (below)
-OllamaChat.Knowledge.QuestionWords = "where|wheres|whereabouts|who sells|what sells|anyone sell|anybody sell|anyone selling|anybody selling|who has|how do i get|how do you get|how to get|how can i get|how would i get|how do i find|how to find|any idea where|know where|cant find|cannot find|can not find"
+OllamaChat.Knowledge.QuestionWords = "where|wheres|whereabouts|who sells|what sells|anyone sell|anybody sell|anyone selling|anybody selling|who has|how do i get|how do you get|how to get|how can i get|how would i get|how do i find|how to find|any idea where|know where|cant find|cannot find|can not find|what drops|what drop|drops from|drop from|farm for|farming for"
 OllamaChat.Knowledge.NotAskingWords = "wts|sell it|sell this|sell my|sell these|sell them|sell those|to sell|can i sell|do i sell|im selling|i am selling|i sell"
 
 #    OllamaChat.Knowledge.TrainerWords
@@ -5530,6 +5684,38 @@ OllamaChat.Knowledge.NoVendorText = "No vendor sells it and no profession makes 
 OllamaChat.Knowledge.EnemyOnlyText = "Only the other faction's vendors sell it."
 OllamaChat.Knowledge.TradeText = "Players can trade it, so the auction house might have some."
 OllamaChat.Knowledge.BoundText = "It binds when picked up, so nobody can trade it to anyone."
+
+#    OllamaChat.Knowledge.WorldDropKinds
+#    OllamaChat.Knowledge.NotSoldText
+#    OllamaChat.Knowledge.DropWorldText
+#    OllamaChat.Knowledge.DropInstanceText
+#    OllamaChat.Knowledge.DropBestText
+#    OllamaChat.Knowledge.DropFromText
+#    OllamaChat.Knowledge.DropChestText
+#    OllamaChat.Knowledge.DropChestOnlyText
+#        Where an item no vendor sells drops, with mod-playerbots-plus (API 8:
+#        where things drop, from the world's own loot tables). Dropped by
+#        WorldDropKinds kinds of creature or more, it is a world drop
+#        (DropWorldText {kinds} {levels} {once}: the levels most of them are,
+#        and about once in how many kills) -- or, nine in ten of them in one
+#        dungeon or raid, that place's (DropInstanceText {place} {kinds}
+#        {levels} {once}: Shadowfang's eighteen kinds of creature in
+#        Shadowfang Keep) -- and the few that give it at least twice as
+#        often as most are named (DropBestText {creatures} {once}). Fewer
+#        kinds, they are named, with their level and where they are
+#        (DropFromText {creatures} {others} {once}). Chests that have it too
+#        (DropChestText), or only chests (DropChestOnlyText {once}).
+#        NotSoldText says nothing sells or makes it when where it drops
+#        follows (else NoVendorText). Empty leaves that part out.
+#        Default: 12, (below)
+OllamaChat.Knowledge.WorldDropKinds = 12
+OllamaChat.Knowledge.NotSoldText = "No vendor sells it and no profession makes it."
+OllamaChat.Knowledge.DropWorldText = "It is a world drop: any of {kinds} kinds of creature around level {levels} can drop it, about once in {once} kills of them."
+OllamaChat.Knowledge.DropInstanceText = "It drops from the creatures of {place}: any of {kinds} kinds of them, level {levels}, can drop it, about once in {once} kills."
+OllamaChat.Knowledge.DropBestText = "The best odds are off {creatures}: about once in {once} kills."
+OllamaChat.Knowledge.DropFromText = "It drops from {creatures}{others}: about once in {once} kills."
+OllamaChat.Knowledge.DropChestText = "Chests out in the world can have it too."
+OllamaChat.Knowledge.DropChestOnlyText = "No creature drops it: chests out in the world have it, about once in {once} of them."
 
 #    OllamaChat.Knowledge.PlaceText
 #    OllamaChat.Knowledge.MarkText
@@ -6581,6 +6767,19 @@ OllamaChat.EnvCommentMarketBought = "You just bought {item} off the auction hous
 #        not talk about the same thing twice in a row.
 #        Default: 4
 OllamaChat.Topic.MemoryCount = 4
+
+#    OllamaChat.Topic.PlaceRepeatMinutes
+#    OllamaChat.Topic.PlaceRepeatExempt
+#        A topic anyone brought up where a line would be said -- a city's
+#        General, /say in a zone, a party, a guild -- in the last this many
+#        minutes is not picked for it again: three bots in a row on the time
+#        of day in Stormwind's General read like a script. PlaceRepeatExempt
+#        lists topics this leaves alone (game_talk, the premises, which
+#        never repeat a premise anyway). A showing-off of rare gear counts as
+#        the equipped_item topic. 0: no such check.
+#        Default: 10, game_talk
+OllamaChat.Topic.PlaceRepeatMinutes = 10
+OllamaChat.Topic.PlaceRepeatExempt = "game_talk"
 
 #    OllamaChat.Topic.EventMemorySize
 #        How many witnessed events each bot remembers -- "Kaelan killed a Fjord

@@ -47,6 +47,7 @@ struct TopicPick
     std::string   text;         // the formatted prompt fragment
     bool          isGuildTopic = false;
     bool          here = false;   // about what is right here: for /say or the party only
+    ObjectGuid    mountOf{};      // someone the bot is told is mounted up: once said, the mount was remarked on
 };
 
 // Choose a topic for this bot right now. World thread only -- reads live state.
@@ -60,10 +61,17 @@ struct TopicPick
 // Otherwise -- General and the like -- nothing about what is right here:
 // someone near the bot, its group, what just happened by it, a creature, an
 // NPC or a thing in sight.
-TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local);
+//
+// `place` is where the line would be heard (`guildPlace`, a guild topic's:
+// its guild chat), as the caller names places: a topic anyone brought up
+// there in the last Topic.PlaceRepeatMinutes is not picked again
+// (Topic.PlaceRepeatExempt aside). Empty: no such check.
+TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local,
+                      const std::string& place = std::string(), const std::string& guildPlace = std::string());
 
-// Record that a bot used a topic, so it is suppressed for the next few picks.
-void Topics_NoteUsed(ObjectGuid botGuid, const std::string& key);
+// Record that a bot used a topic, so it is suppressed for the next few picks
+// -- its own, and, with `place`, anyone's there.
+void Topics_NoteUsed(ObjectGuid botGuid, const std::string& key, const std::string& place = std::string());
 
 // --- witnessed event memory ----------------------------------------------
 //

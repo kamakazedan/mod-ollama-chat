@@ -13,7 +13,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace
@@ -77,6 +80,34 @@ namespace
             if (w.size() > 2 && !Plain(w))
                 phrases.push_back({ std::move(w) });
     }
+}
+
+namespace
+{
+    std::mutex g_mountRemarkMutex;
+    std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> g_mountRemarked;   // rider -> when
+}
+
+void Pets_NoteMountRemarked(ObjectGuid rider)
+{
+    if (!g_PetsMountRemarkMinutes || rider.IsEmpty())
+        return;
+    const auto now = std::chrono::steady_clock::now();
+    std::lock_guard<std::mutex> lock(g_mountRemarkMutex);
+    g_mountRemarked[rider.GetRawValue()] = now;
+    if (g_mountRemarked.size() > 512)
+        std::erase_if(g_mountRemarked, [&](auto const& kv)
+                      { return now - kv.second >= std::chrono::minutes(g_PetsMountRemarkMinutes); });
+}
+
+bool Pets_MountRemarkedLately(ObjectGuid rider)
+{
+    if (!g_PetsMountRemarkMinutes || rider.IsEmpty())
+        return false;
+    std::lock_guard<std::mutex> lock(g_mountRemarkMutex);
+    auto it = g_mountRemarked.find(rider.GetRawValue());
+    return it != g_mountRemarked.end() &&
+           std::chrono::steady_clock::now() - it->second < std::chrono::minutes(g_PetsMountRemarkMinutes);
 }
 
 PetsSeen Pets_Seen(Player* who, float range)

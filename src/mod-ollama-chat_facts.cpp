@@ -195,6 +195,11 @@ std::string Facts_Rare(uint32_t level, const std::vector<std::string>& taken)
     return PickBand(Rares(), lo, level + 5, taken);
 }
 
+bool Facts_SaneName(const std::string& name)
+{
+    return Sane(name);
+}
+
 std::string Facts_Bosses(const std::string& instance)
 {
     // The few the dungeon finder calls something else.

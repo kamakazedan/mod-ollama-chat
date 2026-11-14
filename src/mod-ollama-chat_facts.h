@@ -30,6 +30,10 @@ std::string Facts_Rare(uint32_t level, const std::vector<std::string>& taken);
 // game's data does not say, so the premise still fills.
 std::string Facts_Bosses(const std::string& instance);
 
+// Is it a name a player could have come across: not a placeholder, a test
+// or a deprecated thing ("[PH] ...", "Monster - ...", "Deprecated ...").
+bool Facts_SaneName(const std::string& name);
+
 // The races of one side that can be the class: "orcs, tauren and trolls"
 // for "shamans" on the Horde's (`alliance` false). Empty when unknown, and
 // when only one of that side's races can be it: there is nothing to compare.

@@ -329,7 +329,7 @@ namespace
         for (Player* p : group)
         {
             const TextRules::Animals a = Pets_Seen(p).animals;
-            if (!a.mount.empty())
+            if (!a.mount.empty() && !Pets_MountRemarkedLately(p->GetGUID()))   // not handed round again
                 facts.insert("mount");
             if (!a.petKind.empty() || !a.companion.empty())
                 facts.insert("pet");

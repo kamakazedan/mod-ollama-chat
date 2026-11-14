@@ -3,6 +3,7 @@
 #include "mod-ollama-chat_clock.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_links.h"
+#include "mod-ollama-chat_pets.h"
 #include "mod-ollama-chat_premises.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_world.h"
@@ -73,6 +74,7 @@ namespace
         std::string   text;
         bool          isGuildTopic = false;
         bool          here = false;   // about what is right here: /say or the party only (Here)
+        ObjectGuid    mountOf{};      // told someone is mounted up (TopicPick::mountOf)
     };
 
     // About what is right here, seen or heard by the bot: someone near it,
@@ -104,6 +106,21 @@ namespace
 
     std::mutex g_mutex;
     std::unordered_map<uint64_t, BotTopicState> g_state;
+
+    // When each topic was last brought up where it was said, by anyone:
+    // place (Topics_Pick) -> topic key -> when.
+    using Heard = std::unordered_map<std::string, Clock::time_point>;
+    std::unordered_map<std::string, Heard> g_heard;
+
+    bool HeardLately(const Heard& heard, const std::string& key, Clock::time_point now)
+    {
+        if (!g_TopicPlaceRepeatMinutes ||
+            std::find(g_TopicPlaceRepeatExempt.begin(), g_TopicPlaceRepeatExempt.end(), key) !=
+                g_TopicPlaceRepeatExempt.end())
+            return false;
+        auto it = heard.find(key);
+        return it != heard.end() && now - it->second < std::chrono::minutes(g_TopicPlaceRepeatMinutes);
+    }
 
     // --- helpers ----------------------------------------------------------
 
@@ -138,7 +155,9 @@ namespace
             return "";
         if (p->isDead())          return "lying dead";
         if (p->IsInCombat())      return "fighting";
-        if (p->IsMounted())       return "mounted up";
+        // A mount another bot was just handed to remark on is not handed
+        // round again (Pets.MountRemarkMinutes).
+        if (p->IsMounted())       return Pets_MountRemarkedLately(p->GetGUID()) ? "passing by" : "mounted up";
         if (p->IsInFlight())      return "flying overhead";
         if (p->isAFK())           return "standing idle";
         if (p->IsSitState())      return "sitting down";
@@ -203,15 +222,20 @@ namespace
         if (!nearby.empty() && !nearbyLines.empty())
         {
             Player* subject = nearby[PickIndex(nearby.size())];
+            const std::string& line  = PickOne(nearbyLines);
+            const std::string  state = DescribePlayerState(subject);
+            const size_t before = out.size();
             Add(out, TopicCategory::People, "nearby_player", nearbyLines,
-                SafeFormat(PickOne(nearbyLines),
+                SafeFormat(line,
                            fmt::arg("player_name", subject->GetName()),
                            fmt::arg("player_class", ClassName(subject)),
                            fmt::arg("player_race", RaceName(subject)),
                            fmt::arg("player_level", subject->GetLevel()),
-                           fmt::arg("player_state", DescribePlayerState(subject)),
+                           fmt::arg("player_state", state),
                            fmt::arg("level_gap",
                                     int32(subject->GetLevel()) - int32(bot->GetLevel()))));
+            if (out.size() > before && state == "mounted up" && line.find("{player_state}") != std::string::npos)
+                out.back().mountOf = subject->GetGUID();
         }
 
         // Group members by name and what they are doing.
@@ -721,7 +745,8 @@ namespace
 
 // --------------------------------------------------------------------------
 
-TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local)
+TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local, const std::string& place,
+                      const std::string& guildPlace)
 {
     TopicPick pick;
     if (!bot || !bot->IsInWorld())
@@ -756,13 +781,20 @@ TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local)
         cats.push_back({ TopicCategory::Guild, g_TopicWeightGuild });
     }
 
-    // Recently used topic keys, so a bot does not repeat itself.
+    // Recently used topic keys, so a bot does not repeat itself; and what
+    // was just brought up where this would be said, so nobody else does.
     std::deque<std::string> recent;
+    Heard heard, guildHeard;
+    const auto now = Clock::now();
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         auto it = g_state.find(bot->GetGUID().GetRawValue());
         if (it != g_state.end())
             recent = it->second.recentKeys;
+        if (auto h = g_heard.find(place); !place.empty() && h != g_heard.end())
+            heard = h->second;
+        if (auto h = g_heard.find(guildPlace); !guildPlace.empty() && h != g_heard.end())
+            guildHeard = h->second;
     }
 
     // Weighted order: draw categories without replacement, so if the first
@@ -815,6 +847,10 @@ TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local)
         // For a channel, nothing that is only for those here.
         if (!local)
             std::erase_if(candidates, [](Candidate const& c) { return c.here; });
+        // Nor what someone brought up there a moment ago (Topic.PlaceRepeatMinutes):
+        // three bots in a row on the time of day in one General is a script.
+        std::erase_if(candidates, [&](Candidate const& c)
+                      { return HeardLately(c.isGuildTopic ? guildHeard : heard, c.key, now); });
         if (candidates.empty())
             continue;
 
@@ -834,13 +870,14 @@ TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local)
         pick.text         = chosen->text;
         pick.isGuildTopic = chosen->isGuildTopic;
         pick.here         = chosen->here;
+        pick.mountOf      = chosen->mountOf;
         return pick;
     }
 
     return pick;
 }
 
-void Topics_NoteUsed(ObjectGuid botGuid, const std::string& key)
+void Topics_NoteUsed(ObjectGuid botGuid, const std::string& key, const std::string& place)
 {
     if (key.empty())
         return;
@@ -849,6 +886,8 @@ void Topics_NoteUsed(ObjectGuid botGuid, const std::string& key)
         OllamaMarket_NoteTalked(botGuid);   // that dealing has had its say
 
     std::lock_guard<std::mutex> lock(g_mutex);
+    if (!place.empty())
+        g_heard[place][key] = Clock::now();
     auto& state = g_state[botGuid.GetRawValue()];
     state.recentKeys.push_back(key);
     while (state.recentKeys.size() > g_TopicMemoryCount)
@@ -917,5 +956,12 @@ void Topics_Update()
         it = (memory.empty() && it->second.recentKeys.empty())
                  ? g_state.erase(it)
                  : std::next(it);
+    }
+
+    const auto keep = std::chrono::minutes(std::max<uint32_t>(1, g_TopicPlaceRepeatMinutes));
+    for (auto place = g_heard.begin(); place != g_heard.end();)
+    {
+        std::erase_if(place->second, [&](auto const& kv) { return now - kv.second >= keep; });
+        place = place->second.empty() ? g_heard.erase(place) : std::next(place);
     }
 }

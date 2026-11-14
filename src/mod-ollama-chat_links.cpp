@@ -1,6 +1,7 @@
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_crowd.h"
+#include "mod-ollama-chat_drops.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat-utilities.h"
 
@@ -612,6 +613,13 @@ std::string Links_DescribeItem(ItemTemplate const* p)
         out += ", binds when equipped";
     else if (gear && p->Bonding == BIND_WHEN_PICKED_UP)
         out += ", binds when picked up";
+    // A rare find, as the loot tables have it (mod-ollama-chat_drops).
+    if (gear && p->Quality >= ITEM_QUALITY_RARE)
+    {
+        const double pct = Drops_Pct(p->ItemId);
+        if (pct > 0.0 && pct < g_TradeRareDropPct)
+            out += ", a rare drop: about once in " + Drops_OnceIn(pct) + " kills of anything that can drop it";
+    }
     if (p->Class == ITEM_CLASS_QUEST && p->StartQuest)
         if (Quest const* starts = sObjectMgr->GetQuestTemplate(p->StartQuest))
             out += ", which starts the quest '" + starts->GetTitle() + "'";

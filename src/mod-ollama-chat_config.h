@@ -847,6 +847,49 @@ extern uint32_t    g_CityLifeShowOffAnswerChance;   // the show-off laughs it of
 extern std::string g_CityLifeShowOffAnswerPrompt;
 extern std::vector<std::string> g_CityLifeShowOffAnswerLines;
 
+// Rare gear: shown off, or asked after, in a city's General (mod-ollama-chat_raregear)
+extern bool        g_RareGearEnable;
+extern uint32_t    g_RareGearChance;          // percent of a city bot's unprompted lines that look for one
+extern float       g_RareGearMaxDropPct;      // really rare: drops less often than this (percent per kill)
+extern float       g_RareGearMinDropPct;      // ...and not less than this: a leftover in the tables
+extern float       g_RareGearMaxBestPct;      // ...and no creature or chest gives it more often than this
+extern uint32_t    g_RareGearMinQuality;      // ...of this quality or better (3: rare)
+extern std::unordered_map<std::string, uint32_t> g_RareGearShowStyles;   // chat style -> percent that would show one off
+extern uint32_t    g_RareGearShowDefault;     // ...any other style
+extern std::unordered_map<std::string, uint32_t> g_RareGearAskStyles;    // chat style -> percent that would ask after one
+extern uint32_t    g_RareGearAskDefault;
+extern uint32_t    g_RareGearItemMinutes;     // the same thing not talked of again on the realm for this long
+extern uint32_t    g_RareGearPlaceMinutes;    // one city's General hears one in this long
+extern uint32_t    g_RareGearBotMinutes;      // a bot says one in this long
+extern uint32_t    g_RareGearAskLevelsBelow;  // asked after: needing a level this far below the bot's...
+extern uint32_t    g_RareGearAskLevelsAbove;  // ...to this far above
+extern uint32_t    g_RareGearConversationChance;   // percent that open a conversation about it
+extern std::string g_RareGearShowText;
+extern std::string g_RareGearAskText;
+extern std::vector<std::string> g_RareGearShowAngles;
+extern std::vector<std::string> g_RareGearAskAngles;
+extern std::string g_RareGearShowPremise;
+extern std::string g_RareGearAskPremise;
+extern std::vector<std::string> g_RareGearShowLines;   // the model failing, one of these
+extern std::vector<std::string> g_RareGearAskLines;
+
+// Where things drop (mod-ollama-chat_knowledge, with mod-playerbots-plus API 8)
+extern uint32_t    g_KnowledgeWorldDropKinds; // dropped by this many kinds of creature or more: a world drop
+extern std::string g_KnowledgeNotSoldText;
+extern std::string g_KnowledgeDropWorldText;
+extern std::string g_KnowledgeDropInstanceText;
+extern std::string g_KnowledgeDropBestText;
+extern std::string g_KnowledgeDropFromText;
+extern std::string g_KnowledgeDropChestText;
+extern std::string g_KnowledgeDropChestOnlyText;
+
+// A mount remarked on: nobody else handed it for this long
+extern uint32_t    g_PetsMountRemarkMinutes;
+
+// Topics: not the same one again where it was just said
+extern uint32_t    g_TopicPlaceRepeatMinutes;
+extern std::vector<std::string> g_TopicPlaceRepeatExempt;
+
 // Taking a gift back out of the trade window
 extern std::vector<std::vector<std::string>> g_BagsCancelPhrases;
 extern std::vector<std::vector<std::string>> g_BagsCancelNotPhrases;

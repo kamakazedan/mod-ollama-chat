@@ -786,6 +786,44 @@ uint32_t    g_CityLifeShowOffAnswerChance      = 60;
 std::string g_CityLifeShowOffAnswerPrompt;
 std::vector<std::string> g_CityLifeShowOffAnswerLines;
 
+bool        g_RareGearEnable                   = true;
+uint32_t    g_RareGearChance                   = 8;
+float       g_RareGearMaxDropPct               = 0.05f;
+float       g_RareGearMinDropPct               = 0.0005f;
+float       g_RareGearMaxBestPct               = 1.0f;
+uint32_t    g_RareGearMinQuality               = 3;
+std::unordered_map<std::string, uint32_t> g_RareGearShowStyles;
+uint32_t    g_RareGearShowDefault              = 25;
+std::unordered_map<std::string, uint32_t> g_RareGearAskStyles;
+uint32_t    g_RareGearAskDefault               = 30;
+uint32_t    g_RareGearItemMinutes              = 180;
+uint32_t    g_RareGearPlaceMinutes             = 20;
+uint32_t    g_RareGearBotMinutes               = 240;
+uint32_t    g_RareGearAskLevelsBelow           = 3;
+uint32_t    g_RareGearAskLevelsAbove           = 3;
+uint32_t    g_RareGearConversationChance       = 60;
+std::string g_RareGearShowText;
+std::string g_RareGearAskText;
+std::vector<std::string> g_RareGearShowAngles;
+std::vector<std::string> g_RareGearAskAngles;
+std::string g_RareGearShowPremise;
+std::string g_RareGearAskPremise;
+std::vector<std::string> g_RareGearShowLines;
+std::vector<std::string> g_RareGearAskLines;
+
+uint32_t    g_KnowledgeWorldDropKinds          = 12;
+std::string g_KnowledgeNotSoldText;
+std::string g_KnowledgeDropWorldText;
+std::string g_KnowledgeDropInstanceText;
+std::string g_KnowledgeDropBestText;
+std::string g_KnowledgeDropFromText;
+std::string g_KnowledgeDropChestText;
+std::string g_KnowledgeDropChestOnlyText;
+
+uint32_t    g_PetsMountRemarkMinutes           = 10;
+uint32_t    g_TopicPlaceRepeatMinutes          = 10;
+std::vector<std::string> g_TopicPlaceRepeatExempt;
+
 std::vector<std::vector<std::string>> g_BagsCancelPhrases;
 std::vector<std::vector<std::string>> g_BagsCancelNotPhrases;
 std::string g_BagsHintCancel;
@@ -2733,7 +2771,8 @@ static void LoadNaturalChatV15Settings()
     g_KnowledgeQuestionWords = phrases("OllamaChat.Knowledge.QuestionWords",
         "where|wheres|whereabouts|who sells|what sells|anyone sell|anybody sell|anyone selling|anybody selling|"
         "who has|how do i get|how do you get|how to get|how can i get|how would i get|how do i find|how to find|"
-        "any idea where|know where|cant find|cannot find|can not find");
+        "any idea where|know where|cant find|cannot find|can not find|what drops|what drop|drops from|drop from|"
+        "farm for|farming for");
     g_KnowledgeNotAskingWords = phrases("OllamaChat.Knowledge.NotAskingWords",
         "wts|sell it|sell this|sell my|sell these|sell them|sell those|to sell|can i sell|do i sell|im selling|"
         "i am selling|i sell");
@@ -3915,6 +3954,119 @@ static void LoadNaturalChatV38Settings()
              g_CityLifeTemperaments.size(), g_CityLifeShowOffChance, g_CityLifeShowOffAnnoys.size());
 }
 
+static void LoadNaturalChatV39Settings()
+{
+    // "NAT_HYPE:100|NAT_QUIET:5" -> chat style -> percent.
+    auto weights = [](const char* key, const char* def)
+    {
+        std::unordered_map<std::string, uint32_t> out;
+        for (const std::string& entry : ReadPipeList(key, def))
+        {
+            const size_t colon = entry.find(':');
+            if (colon == std::string::npos)
+                continue;
+            std::string name = entry.substr(0, colon);
+            while (!name.empty() && std::isspace(static_cast<unsigned char>(name.back())))
+                name.pop_back();
+            for (char& ch : name)
+                ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+            if (!name.empty())
+                out[name] = std::min<uint32_t>(100, uint32_t(std::strtoul(entry.c_str() + colon + 1, nullptr, 10)));
+        }
+        return out;
+    };
+
+    // --- rare gear, shown off or asked after in a city's General --------------------------
+    g_RareGearEnable     = sConfigMgr->GetOption<bool>("OllamaChat.RareGear.Enable", true);
+    g_RareGearChance     = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.RareGear.Chance", 8));
+    g_RareGearMaxDropPct = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.RareGear.MaxDropPercent", 0.05f),
+                                      0.0f, 100.0f);
+    g_RareGearMinDropPct = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.RareGear.MinDropPercent", 0.0005f),
+                                      0.0f, 100.0f);
+    g_RareGearMaxBestPct = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.RareGear.MaxBestPercent", 1.0f),
+                                      0.0f, 100.0f);
+    g_RareGearMinQuality = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.RareGear.MinQuality", 3),
+                                                2, 5);
+    g_RareGearShowStyles = weights("OllamaChat.RareGear.ShowStyles",
+        "NAT_HYPE:100|NAT_EXCITABLE:90|NAT_NEWBIE:80|NAT_BUTTERFLY:70|NAT_SOCIAL:60|NAT_PVPER:60|NAT_BANTER:50|"
+        "NAT_RAIDER:50|NAT_MINMAXER:40|NAT_TROLL:40|NAT_JOKER:40|NAT_PRANKSTER:40|NAT_GOSSIP:40|NAT_FRIENDLY:35|"
+        "NAT_KEYBOARD:30|NAT_REACTOR:30|NAT_RUDE:30|NAT_PETLOVER:30|NAT_GOLDMAKER:25|NAT_CONTRARIAN:20|"
+        "NAT_ROLEPLAYER:20|NAT_EXPERT:20|NAT_NOSTALGIC:20|NAT_CHILL:15|NAT_LOREBUFF:15|NAT_DEADPAN:10|"
+        "NAT_PROPER:10|NAT_GRUMBLER:10|NAT_HELPFUL_VET:10|NAT_QUIET:5|NAT_LONER:5|NAT_TERSE_VET:5");
+    g_RareGearShowDefault = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.RareGear.ShowDefault", 25));
+    g_RareGearAskStyles = weights("OllamaChat.RareGear.AskStyles",
+        "NAT_NEWBIE:100|NAT_MINMAXER:80|NAT_RAIDER:70|NAT_GOLDMAKER:60|NAT_EXCITABLE:50|NAT_HYPE:50|NAT_PVPER:50|"
+        "NAT_SOCIAL:40|NAT_BUTTERFLY:40|NAT_FRIENDLY:35|NAT_LOREBUFF:20|NAT_GRUMBLER:20|NAT_DEADPAN:15|"
+        "NAT_EXPERT:10|NAT_QUIET:10|NAT_LONER:10|NAT_TERSE_VET:10|NAT_HELPFUL_VET:5");
+    g_RareGearAskDefault  = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.RareGear.AskDefault", 30));
+    g_RareGearItemMinutes  = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.RareGear.ItemMinutes", 180));
+    g_RareGearPlaceMinutes = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.RareGear.PlaceMinutes", 20));
+    g_RareGearBotMinutes   = std::max<uint32_t>(1, sConfigMgr->GetOption<uint32_t>("OllamaChat.RareGear.BotMinutes", 240));
+    g_RareGearAskLevelsBelow = std::min<uint32_t>(80, sConfigMgr->GetOption<uint32_t>("OllamaChat.RareGear.AskLevelsBelow", 3));
+    g_RareGearAskLevelsAbove = std::min<uint32_t>(80, sConfigMgr->GetOption<uint32_t>("OllamaChat.RareGear.AskLevelsAbove", 3));
+    g_RareGearConversationChance = std::min<uint32_t>(100,
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.RareGear.ConversationChance", 60));
+    g_RareGearShowText = sConfigMgr->GetOption<std::string>("OllamaChat.RareGear.ShowText",
+        "You are wearing {item}, and you are very pleased with it: {what}. Hardly anyone has one. Show it off to "
+        "everyone in the chat {angle} Write its name in square brackets, exactly as it is: [{item}].");
+    g_RareGearAskText = sConfigMgr->GetOption<std::string>("OllamaChat.RareGear.AskText",
+        "You would love to have {item}: {what}. You know it is very rare, but not where it comes from. Ask everyone "
+        "in the chat {angle} Write its name in square brackets, exactly as it is: [{item}].");
+    g_RareGearShowAngles = ReadPipeList("OllamaChat.RareGear.ShowAngles",
+        "and celebrate it.|and fish for a little praise.|and ask if anyone else has ever seen one.|"
+        "and try to be modest about it, and fail.|and get everyone to guess how rare it is.|"
+        "and say you still cannot believe your luck.|and ask what everyone thinks of it.|"
+        "and say it was worth every kill.");
+    g_RareGearAskAngles = ReadPipeList("OllamaChat.RareGear.AskAngles",
+        "where it drops.|whether anyone has ever seen one drop.|whether it is even worth farming for.|"
+        "what to farm for it.|how rare it really is.|where people go to farm one.");
+    g_RareGearShowPremise = sConfigMgr->GetOption<std::string>("OllamaChat.RareGear.ShowPremise",
+        "{name}'s {item} ({what}), which {name} is showing off. {facts}");
+    g_RareGearAskPremise = sConfigMgr->GetOption<std::string>("OllamaChat.RareGear.AskPremise",
+        "where to find {item} ({what}), which {name} is after. {facts}");
+    g_RareGearShowLines = ReadPipeList("OllamaChat.RareGear.ShowLines",
+        "check out my [{item}]|look what i got: [{item}]|finally got my hands on [{item}]|"
+        "anyone else got one of these? [{item}]|[{item}] :D");
+    g_RareGearAskLines = ReadPipeList("OllamaChat.RareGear.AskLines",
+        "where can i find [{item}]?|anyone know where [{item}] drops?|what drops [{item}]?|"
+        "anyone ever seen [{item}] drop?");
+
+    // --- where things drop, for a question about where to get one ------------------------------
+    g_KnowledgeWorldDropKinds = std::max<uint32_t>(2, sConfigMgr->GetOption<uint32_t>("OllamaChat.Knowledge.WorldDropKinds", 12));
+    g_KnowledgeNotSoldText = sConfigMgr->GetOption<std::string>("OllamaChat.Knowledge.NotSoldText",
+        "No vendor sells it and no profession makes it.");
+    g_KnowledgeDropWorldText = sConfigMgr->GetOption<std::string>("OllamaChat.Knowledge.DropWorldText",
+        "It is a world drop: any of {kinds} kinds of creature around level {levels} can drop it, about once in "
+        "{once} kills of them.");
+    g_KnowledgeDropInstanceText = sConfigMgr->GetOption<std::string>("OllamaChat.Knowledge.DropInstanceText",
+        "It drops from the creatures of {place}: any of {kinds} kinds of them, level {levels}, can drop it, about "
+        "once in {once} kills.");
+    g_KnowledgeDropBestText = sConfigMgr->GetOption<std::string>("OllamaChat.Knowledge.DropBestText",
+        "The best odds are off {creatures}: about once in {once} kills.");
+    g_KnowledgeDropFromText = sConfigMgr->GetOption<std::string>("OllamaChat.Knowledge.DropFromText",
+        "It drops from {creatures}{others}: about once in {once} kills.");
+    g_KnowledgeDropChestText = sConfigMgr->GetOption<std::string>("OllamaChat.Knowledge.DropChestText",
+        "Chests out in the world can have it too.");
+    g_KnowledgeDropChestOnlyText = sConfigMgr->GetOption<std::string>("OllamaChat.Knowledge.DropChestOnlyText",
+        "No creature drops it: chests out in the world have it, about once in {once} of them.");
+
+    // --- a mount remarked on is not handed round again ---------------------------------------
+    g_PetsMountRemarkMinutes = std::min<uint32_t>(240,
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.Pets.MountRemarkMinutes", 10));
+
+    // --- topics: not the same one again where it was just said -------------------------------
+    g_TopicPlaceRepeatMinutes = std::min<uint32_t>(240,
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.PlaceRepeatMinutes", 10));
+    g_TopicPlaceRepeatExempt = ReadPipeList("OllamaChat.Topic.PlaceRepeatExempt", "game_talk");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v39: rare gear in city General {} ({}% of a city bot's "
+             "unprompted lines look, {} styles weighted to show one off, {} to ask; under {}% a kill); topics not "
+             "said again in one place for {} min ({} exempt).",
+             g_RareGearEnable ? "on" : "off", g_RareGearChance, g_RareGearShowStyles.size(),
+             g_RareGearAskStyles.size(), g_RareGearMaxDropPct, g_TopicPlaceRepeatMinutes,
+             g_TopicPlaceRepeatExempt.size());
+}
+
 static void LoadNaturalChatV30Settings()
 {
     // --- what chat is really like ---------------------------------------------------------
@@ -4899,6 +5051,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV36Settings();
     LoadNaturalChatV37Settings();
     LoadNaturalChatV38Settings();
+    LoadNaturalChatV39Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

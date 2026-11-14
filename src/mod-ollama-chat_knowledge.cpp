@@ -2,6 +2,7 @@
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_crowd.h"
+#include "mod-ollama-chat_drops.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_textrules.h"
@@ -97,6 +98,7 @@ namespace
     Index g;
 
     std::unordered_map<uint64_t, std::string> g_placeOf;   // spawn -> "Trade District, Stormwind City"
+    std::unordered_map<uint32_t, std::string> g_creaturePlace;   // creature -> "in Tirisfal Glades", "in Uldaman, a dungeon"
     KnowledgeStats g_stats;
 
     // Who is on a question a moment after it was asked: the one who asked
@@ -896,6 +898,185 @@ namespace
         return CrowdText::JoinNames(kinds);
     }
 
+    // "Uldaman, a dungeon".
+    std::string MapText(MapEntry const* map)
+    {
+        if (!map || !map->name[0] || !*map->name[0])
+            return {};
+        return std::string(map->name[0]) +
+               (map->IsRaid() ? ", a raid" : map->IsBattlegroundOrArena() ? ", a battleground" : ", a dungeon");
+    }
+
+    // Where each of `entries` is: the dungeon, raid or battleground it is
+    // in, else the zones most of them stand in -- "in Tirisfal Glades", "in
+    // Badlands and Searing Gorge", "in Uldaman, a dungeon". Worked out once
+    // per creature, in one walk over the spawns for all of them; empty for
+    // one nobody sees out in the world (a boss something summons).
+    void PlacesOf(const std::vector<uint32_t>& entries)
+    {
+        std::unordered_set<uint32_t> want;
+        for (uint32_t e : entries)
+            if (e && !g_creaturePlace.contains(e))
+                want.insert(e);
+        if (want.empty())
+            return;
+        Build();   // the zones' rectangles
+        // creature -> zone (or an instance's map, with the top bit) -> how many stand there
+        std::unordered_map<uint32_t, std::unordered_map<uint32_t, uint32_t>> where;
+        for (auto const& [spawnId, data] : sObjectMgr->GetAllCreatureData())
+            for (uint32_t id : { data.id, data.id2, data.id3 })
+            {
+                if (!id || !want.contains(id))
+                    continue;
+                MapEntry const* map = sMapStore.LookupEntry(data.mapid);
+                if (!map)
+                    continue;
+                const uint32_t key = map->Instanceable() ? (0x80000000u | data.mapid)
+                                                         : ZoneByRect(data.mapid, data.posX, data.posY);
+                if (key)
+                    ++where[id][key];
+            }
+        for (uint32_t e : want)
+        {
+            std::vector<std::pair<uint32_t, uint32_t>> order(where[e].begin(), where[e].end());
+            std::sort(order.begin(), order.end(), [](const auto& a, const auto& b)
+                      { return a.second != b.second ? a.second > b.second : a.first < b.first; });
+            std::string text;
+            if (!order.empty() && (order[0].first & 0x80000000u))
+            {
+                const std::string map = MapText(sMapStore.LookupEntry(order[0].first & 0x7FFFFFFFu));
+                if (!map.empty())
+                    text = "in " + map;
+            }
+            else
+            {
+                std::vector<std::string> zones;
+                for (const auto& [zone, count] : order)
+                {
+                    if (zone & 0x80000000u)
+                        continue;
+                    const std::string name = AreaName(zone);
+                    if (name.empty() || std::find(zones.begin(), zones.end(), name) != zones.end())
+                        continue;
+                    if (zones.size() == 2)
+                    {
+                        zones.push_back("elsewhere");
+                        break;
+                    }
+                    zones.push_back(name);
+                }
+                if (!zones.empty())
+                    text = "in " + CrowdText::JoinNames(zones);
+            }
+            g_creaturePlace[e] = text;
+        }
+    }
+
+    // "Stonevault Brawler (elite, level 38 to 39, in Uldaman, a dungeon)".
+    std::string CreatureText(uint32_t entry)
+    {
+        CreatureTemplate const* t = sObjectMgr->GetCreatureTemplate(entry);
+        if (!t || t->Name.empty())
+            return {};
+        std::string rank;
+        switch (t->rank)
+        {
+            case CREATURE_ELITE_ELITE:     rank = "elite, ";      break;
+            case CREATURE_ELITE_RAREELITE: rank = "rare elite, "; break;
+            case CREATURE_ELITE_WORLDBOSS: rank = "a boss, ";     break;
+            case CREATURE_ELITE_RARE:      rank = "a rare, ";     break;
+            default: break;
+        }
+        const std::string level = t->minlevel == t->maxlevel
+                                      ? "level " + std::to_string(t->minlevel)
+                                      : "level " + std::to_string(t->minlevel) + " to " + std::to_string(t->maxlevel);
+        auto place = g_creaturePlace.find(entry);
+        const std::string where = (place == g_creaturePlace.end() || place->second.empty()) ? std::string()
+                                                                                            : ", " + place->second;
+        return t->Name + " (" + rank + level + where + ")";
+    }
+
+    // Where a thing drops, as the loot tables have it: a world drop, what
+    // drops it and where they are, how rarely, the best odds, chests.
+    std::string DropFacts(ItemTemplate const* proto)
+    {
+        DropsFrom from;
+        if (!proto || !Drops_Sources(proto->ItemId, from))
+            return {};
+        const double pct = Drops_Pct(proto->ItemId);
+        std::vector<std::string> parts;
+        if (from.kinds == 0)
+        {
+            if (from.chests && from.bestPct > 0.0)
+                parts.push_back(Say(g_KnowledgeDropChestOnlyText, fmt::arg("once", Drops_OnceIn(from.bestPct))));
+        }
+        else
+        {
+            std::vector<uint32_t> top;
+            for (uint32_t c : from.creature)
+                if (c)
+                    top.push_back(c);
+            PlacesOf(top);
+            const std::string once = Drops_OnceIn(pct > 0.0 ? pct : from.bestPct);
+            if (from.kinds >= g_KnowledgeWorldDropKinds && from.minLevel)
+            {
+                const std::string levels = from.minLevel == from.maxLevel
+                                               ? std::to_string(from.minLevel)
+                                               : std::to_string(from.minLevel) + " to " + std::to_string(from.maxLevel);
+                // Every one of them in one dungeon: its trash, not a world drop.
+                MapEntry const* only = from.onlyMap >= 0 ? sMapStore.LookupEntry(uint32(from.onlyMap)) : nullptr;
+                const std::string inside = (only && only->Instanceable()) ? MapText(only) : std::string();
+                if (!inside.empty())
+                    parts.push_back(Say(g_KnowledgeDropInstanceText, fmt::arg("kinds", from.kinds),
+                                        fmt::arg("place", inside), fmt::arg("levels", levels), fmt::arg("once", once)));
+                else
+                    parts.push_back(Say(g_KnowledgeDropWorldText, fmt::arg("kinds", from.kinds),
+                                        fmt::arg("levels", levels), fmt::arg("once", once)));
+                // The few that give it far more often than most, by name.
+                if (!top.empty() && pct > 0.0 && from.chancePct[0] >= 2.0 * pct)
+                {
+                    std::vector<std::string> best;
+                    for (size_t i = 0; i < top.size(); ++i)
+                        if (from.chancePct[i] >= 2.0 * pct)
+                        {
+                            const std::string text = CreatureText(top[i]);
+                            if (!text.empty())
+                                best.push_back(text);
+                        }
+                    if (!best.empty())
+                        parts.push_back(Say(g_KnowledgeDropBestText, fmt::arg("creatures", CrowdText::JoinNames(best)),
+                                            fmt::arg("once", Drops_OnceIn(from.chancePct[0]))));
+                }
+            }
+            else
+            {
+                std::vector<std::string> names;
+                for (uint32_t c : top)
+                {
+                    const std::string text = CreatureText(c);
+                    if (!text.empty())
+                        names.push_back(text);
+                }
+                if (!names.empty())
+                {
+                    const uint32_t more = from.kinds > names.size() ? from.kinds - uint32_t(names.size()) : 0;
+                    const std::string others = !more ? std::string()
+                                             : more == 1 ? std::string(", and one other kind of creature")
+                                                         : ", and " + std::to_string(more) + " other kinds of creature";
+                    parts.push_back(Say(g_KnowledgeDropFromText, fmt::arg("creatures", CrowdText::JoinNames(names)),
+                                        fmt::arg("others", others), fmt::arg("once", once)));
+                }
+            }
+            if (from.chests && !parts.empty())
+                parts.push_back(g_KnowledgeDropChestText);
+        }
+        std::string out;
+        for (const std::string& p : parts)
+            if (!p.empty())
+                out += (out.empty() ? "" : " ") + p;
+        return out;
+    }
+
     std::string ItemFacts(ItemTemplate const* proto, Player* asker)
     {
         const std::string item = proto->Name1;
@@ -998,13 +1179,19 @@ namespace
                 if (SkillLineEntry const* line = sSkillLineStore.LookupEntry(skill))
                     if (line->name[0] && *line->name[0])
                         crafts.push_back(line->name[0]);
+        // Where it drops, when no vendor here sells it (mod-ollama-chat_drops).
+        const std::string drops = vendors.empty() ? DropFacts(proto) : std::string();
+        if (!drops.empty())
+            ++g_stats.drops;
         if (enemyOnly)
             parts.push_back(g_KnowledgeEnemyOnlyText);
         if (!crafts.empty())
             parts.push_back(Say(vendors.empty() ? g_KnowledgeCraftText : g_KnowledgeCraftAlsoText,
                                 fmt::arg("professions", CrowdText::JoinNames(crafts))));
         else if (vendors.empty() && !enemyOnly)
-            parts.push_back(g_KnowledgeNoVendorText);
+            parts.push_back(drops.empty() ? g_KnowledgeNoVendorText : g_KnowledgeNotSoldText);
+        if (!drops.empty())
+            parts.push_back(drops);
 
         if (proto->Bonding == BIND_WHEN_PICKED_UP || proto->Bonding == BIND_QUEST_ITEM)
             parts.push_back(g_KnowledgeBoundText);
@@ -1110,6 +1297,13 @@ std::string Knowledge_PromptFor(Player* bot, Player* speaker, const std::string&
     if (followUp && !wrong && !g_KnowledgeFollowText.empty())
         out += " " + g_KnowledgeFollowText;
     return out;
+}
+
+std::string Knowledge_DropFacts(ItemTemplate const* proto)
+{
+    if (!proto)
+        return {};
+    return DropFacts(proto);
 }
 
 KnowledgeStats Knowledge_GetStats()

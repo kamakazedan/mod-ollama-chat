@@ -143,15 +143,21 @@ namespace
 
         // Only what it was told of: someone on foot is not told "nice mount"
         // (a compliment with nothing real to go on was one), nor someone
-        // with no pet out "cute pet".
+        // with no pet out "cute pet" -- nor someone whose mount another bot
+        // was just handed to remark on (Presence_Describe left it out).
         const PetsSeen seen = Pets_Seen(subject);
-        if (seen.animals.mount.empty())
+        const bool mountTold = !seen.animals.mount.empty() && !Pets_MountRemarkedLately(subject->GetGUID());
+        if (!mountTold)
             request.mustNotSay = g_PetsMountWords;
         if (seen.animals.petKind.empty() && seen.animals.companion.empty())
             request.mustNotSay.insert(request.mustNotSay.end(), g_PetsWords.begin(), g_PetsWords.end());
 
         if (OllamaDispatch_Submit(std::move(request)))
+        {
             ++g_stats.remarks;
+            if (mountTold)
+                Pets_NoteMountRemarked(subject->GetGUID());
+        }
     }
 }
 
@@ -172,9 +178,15 @@ std::string Presence_Describe(Player* subject, Player* observer, ObjectGuid* out
     // Each as what it is: "riding their mount, a Swift Brown Horse", "with
     // their hunter pet, a wolf called Howler", "with their companion pet, a
     // Mechanical Squirrel, following them" (mod-ollama-chat_pets). The mount
-    // comes first, as what they are doing.
-    const PetsSeen seen = Pets_Seen(subject);
-    if (seen.animals.mount.empty())
+    // comes first, as what they are doing -- unless a bot was just handed it
+    // to remark on (Pets.MountRemarkMinutes): then they are only riding by.
+    PetsSeen seen = Pets_Seen(subject);
+    if (!seen.animals.mount.empty() && Pets_MountRemarkedLately(subject->GetGUID()))
+    {
+        seen.animals.mount.clear();
+        text += ", passing by";
+    }
+    else if (seen.animals.mount.empty())
     {
         if (subject->GetUInt32Value(UNIT_NPC_EMOTESTATE) == EMOTE_STATE_DANCE)
             text += ", dancing";

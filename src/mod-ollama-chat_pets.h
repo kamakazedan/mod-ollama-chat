@@ -41,4 +41,11 @@ PetsSeen Pets_Seen(Player* who, float range = 20.0f);
 
 std::string Pets_StateTextFor(Player* bot, const std::string& message);
 
+// Someone's mount, put in front of a bot to remark on. For
+// Pets.MountRemarkMinutes after that, nobody else is told of it (a passer-by,
+// someone near, a /say exchange): "nice mount" from everyone who walks by is
+// one line said over and over.
+void Pets_NoteMountRemarked(ObjectGuid rider);
+bool Pets_MountRemarkedLately(ObjectGuid rider);
+
 #endif // MOD_OLLAMA_CHAT_PETS_H

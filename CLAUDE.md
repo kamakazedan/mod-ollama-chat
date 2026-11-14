@@ -327,6 +327,17 @@ became "kill Guard Howe"), and a remark about a passer-by is handed something
 real to remark on, with what is not there (`OllamaChatRequest::mustNotSay`:
 mount words for someone on foot) dropped at delivery.
 
+Where a thing drops is real too: `mod-ollama-chat_drops` reads
+mod-playerbots-plus's sums from the loot tables (`DropChance`, API 7;
+`DropSourcesOf`, API 8), and `Knowledge_DropFacts` turns them into what a
+reply is told -- a world drop and its levels, a dungeon's (nine in ten of
+its creatures on that map), or the creatures by name and where they stand,
+about once in how many kills. Without API 8 nothing is said of where
+anything drops, and rare gear (`mod-ollama-chat_raregear`: a bot in a city
+showing off a really rare thing it wears in General, or asking after one it
+could wear) never happens; a premise or a line about a drop never names a
+creature or a place the tables do not.
+
 What chat itself is like is real too. When the talk is of chat, a reply is
 told how busy General and Trade have really been (`Outlook_ChatFor`, counted
 by `Context_ChannelLines`) and that every channel is in everyone's chat
@@ -385,6 +396,21 @@ rest are not ("the way a real player would", about the bot itself, is fine). A
 model repeats what it is told, and `Response.FourthWallPhrases` then drops the
 line. The one opening is a real player raising it (`Phrases_Check`'s
 `answeringPlayer`).
+
+## Nothing over and over
+
+A topic someone brought up somewhere is not picked for that place again for
+`Topic.PlaceRepeatMinutes` (`Topics_Pick`'s `place`: a channel by name and
+side, /say by zone, a party, a guild; `TopicPlace` in random.cpp), whoever
+would say it; `game_talk` is exempt, the premises keep their own cooldowns.
+A mount handed to one bot to remark on is not handed to another for
+`Pets.MountRemarkMinutes` (`Pets_NoteMountRemarked`: presence, the
+nearby_player topic, city life's rare mount; `Presence_Describe` and
+mingle's `[mount]` then leave it out, and a passer-by's line naming it is
+dropped). A new kind of remark about someone's mount notes it and checks it
+the same way. Rare gear has its own: the same item not again on the realm
+for `RareGear.ItemMinutes`, one line in a city's General in
+`RareGear.PlaceMinutes`, a bot one in `RareGear.BotMinutes`.
 
 ## Conventions
 

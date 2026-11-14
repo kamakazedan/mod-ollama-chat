@@ -32,6 +32,8 @@
 #include "mod-ollama-chat_partycmd.h"
 #include "mod-ollama-chat_premises.h"
 #include "mod-ollama-chat_progress.h"
+#include "mod-ollama-chat_raregear.h"
+#include "mod-ollama-chat_pets.h"
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_gifts.h"
 #include "mod-ollama-chat_gear.h"
@@ -96,6 +98,27 @@ namespace
             return false;
         ++g_heldBack;
         return true;
+    }
+
+    // Where a line is heard, for not bringing a topic up there again so soon
+    // (Topics_Pick): a channel by its name and side (a zone's General is its
+    // own), /say by the zone, the party by the group, the guild by the guild.
+    std::string TopicPlace(Player* bot, ChatChannelSourceLocal source, const std::string& channelName)
+    {
+        switch (source)
+        {
+            case SRC_GUILD_LOCAL:
+            case SRC_OFFICER_LOCAL:
+                return "guild:" + std::to_string(bot->GetGuildId());
+            case SRC_PARTY_LOCAL:
+            case SRC_RAID_LOCAL:
+                return "group:" + std::to_string(bot->GetGroup() ? bot->GetGroup()->GetGUID().GetCounter() : 0);
+            case SRC_SAY_LOCAL:
+            case SRC_YELL_LOCAL:
+                return "say:" + std::to_string(bot->GetZoneId());
+            default:
+                return "channel:" + channelName + ":" + std::to_string(uint32(bot->GetTeamId()));
+        }
     }
 
     // Decide where an ambient line would go, before spending an LLM call on it.
@@ -728,6 +751,78 @@ void OllamaBotRandomChatter::HandleRandomChatter()
             }
         }
 
+        // Now and then, in a city, a really rare thing: shown off, or asked
+        // after, in General for the whole city (mod-ollama-chat_raregear) --
+        // by its chat style, one such line in a city's General at a time.
+        if (hub && g_RareGearEnable && g_RareGearChance > 0 && urand(1, 100) <= g_RareGearChance &&
+            OllamaInCity(bot) && !g_DisableForCustomChannels && g_ChatterUseGeneralChannel &&
+            world.RealPlayerInZoneAndFaction(bot) && !(bot->GetGroup() && OllamaGroupHasRealPlayer(bot)))
+        {
+            Channel* ch = OllamaResolveZoneChannel(bot, ChatChannelId::GENERAL);
+            const std::string rarePlace = ch ? TopicPlace(bot, SRC_GENERAL_LOCAL, ch->GetName()) : std::string();
+            RareGearLine line;
+            if (ch && world.RealPlayerInChannel(ch) && RareGear_PlaceFree(rarePlace))
+            {
+                const std::string rareScope = Governor_MakeScopeKey(
+                    ChatChannelSourceLocalStr[SRC_GENERAL_LOCAL], ch->GetChannelId(), ch->GetName(), 0,
+                    bot->GetZoneId());
+                const std::string rareKey = Crowd_KeyFor(rareScope, SRC_GENERAL_LOCAL, uint32(bot->GetTeamId()));
+                if (!Conversation_IsActive(rareKey) && Governor_CanSend(bot->GetGUID(), rareScope) &&
+                    RareGear_Pick(bot, rarePlace, line) && !HeldBack(bot, SRC_GENERAL_LOCAL, ch->GetName()))
+                {
+                    // Often the line opens a conversation about it: where it
+                    // drops and how rare it is, the facts in its premise.
+                    std::string premise = line.premise;
+                    while (!premise.empty() && (premise.back() == '.' || premise.back() == ' '))
+                        premise.pop_back();
+                    const bool talk = !premise.empty() && g_RareGearConversationChance > 0 &&
+                                      urand(1, 100) <= g_RareGearConversationChance &&
+                                      Conversation_PlaceAllowed(SRC_GENERAL_LOCAL, ch->GetChannelId()) &&
+                                      Conversation_CanOpen(rareKey) &&
+                                      Conversation_BeginWithOpener(bot, SRC_GENERAL_LOCAL, ch->GetName(),
+                                                                   ch->GetChannelId(), rareScope, rareKey, premise,
+                                                                   {});
+                    std::string prompt =
+                        BuildRandomChatterPrompt(bot, line.environment, SRC_GENERAL_LOCAL, ch->GetName(), true);
+                    bool sent = false;
+                    if (!prompt.empty())
+                    {
+                        OllamaChatRequest request;
+                        request.botGuid     = rawGuid;
+                        request.source      = SRC_GENERAL_LOCAL;
+                        request.channelName = ch->GetName();
+                        request.channelId   = ch->GetChannelId();
+                        request.chainDepth  = 0;
+                        request.scopeKey    = rareScope;
+                        request.prompt      = std::move(prompt);
+                        request.botName     = bot->GetName();
+                        request.kind        = OllamaRequestKind::RandomChatter;
+                        request.triggerBotReplies = true;
+                        request.openerKey   = talk ? rareKey : std::string();
+                        request.writtenAtSeq = Context_NextSeq();
+                        // It names the thing, or its stock line goes out instead.
+                        request.mustSay      = { CrowdText::Words(line.name) };
+                        request.fallbackText = line.fallback;
+                        sent = OllamaDispatch_Submit(std::move(request));
+                    }
+                    if (sent)
+                    {
+                        RareGear_NoteSaid(bot, line, rarePlace, talk);
+                        if (line.kind == RareGearKind::Show)
+                            Topics_NoteUsed(bot->GetGUID(), "equipped_item", rarePlace);
+                        if (g_DebugEnabled)
+                            LOG_INFO("module.ollamachat", "[Ollama Chat] {} {} [{}] in {}{}.", bot->GetName(),
+                                     line.kind == RareGearKind::Show ? "shows off" : "asks where to find",
+                                     line.name, ch->GetName(), talk ? ", opening a conversation" : "");
+                    }
+                    else if (talk)
+                        Conversation_OpenerLost(rareKey, rawGuid);   // the place is free again
+                    reschedule();
+                    continue;
+                }
+            }
+        }
+
         // Where it goes first, then what it is about -- weighted toward the
         // people and the world around the bot rather than its own inventory.
         // What is right here (someone near it, its group, what just happened
@@ -740,7 +835,11 @@ void OllamaBotRandomChatter::HandleRandomChatter()
         const bool placed = ChooseDestination(bot, world, false, source, channelName, channelId);
         const bool local =
             placed && (source == SRC_SAY_LOCAL || source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL);
-        TopicPick topic = Topics_Pick(bot, world, local);
+        // Not what anyone just brought up where it would go.
+        const std::string guildPlace =
+            bot->GetGuild() ? TopicPlace(bot, SRC_GUILD_LOCAL, std::string()) : std::string();
+        TopicPick topic = Topics_Pick(bot, world, local,
+                                      placed ? TopicPlace(bot, source, channelName) : std::string(), guildPlace);
         if (topic.valid && topic.isGuildTopic)
         {
             // A guild topic goes to the guild (one is only picked with
@@ -860,7 +959,11 @@ void OllamaBotRandomChatter::HandleRandomChatter()
         request.writtenAtSeq = Context_NextSeq();
 
         if (OllamaDispatch_Submit(std::move(request)))
-            Topics_NoteUsed(bot->GetGUID(), topic.key);
+        {
+            Topics_NoteUsed(bot->GetGUID(), topic.key, TopicPlace(bot, source, channelName));
+            if (!opener && !topic.mountOf.IsEmpty())
+                Pets_NoteMountRemarked(topic.mountOf);   // nobody else is handed it for a while
+        }
         else if (opener)
             Conversation_OpenerLost(openerKey, rawGuid);   // the queue is full: free the place again
 

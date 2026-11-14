@@ -17,7 +17,8 @@
 // 5 for city life (mod-ollama-chat_citylife, and mod-ollama-chat_hangout's
 // Hangout_Busy, Hangout_Spoke and Hangout_Gather), 6 for city life by
 // temperament and showing off, 7 for what things are worth and how rarely
-// they drop (mod-ollama-chat_tradechat).
+// they drop (mod-ollama-chat_tradechat), 8 for where things drop
+// (mod-ollama-chat_drops: knowledge's answers and rare gear).
 // --------------------------------------------------------------------------
 
 #if __has_include("PlayerbotsPlus.h")

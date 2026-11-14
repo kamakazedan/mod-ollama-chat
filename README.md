@@ -492,7 +492,13 @@ maze". Two things went wrong, and both are fixed:
 ## What Bots Talk About
 
 Topics are chosen from weighted categories rather than uniformly, and each bot
-suppresses whatever it used in its last few picks.
+suppresses whatever it used in its last few picks. Nobody brings up a topic
+someone else just did in the same place either: once a bot has remarked on
+the time of day in Stormwind's General, the next ten minutes of General there
+talk about something else (`OllamaChat.Topic.PlaceRepeatMinutes`). The same
+goes for someone's mount: once a bot has been handed it to remark on, the
+rest leave it be for ten minutes, so you don't get "nice mount" from everyone
+you ride past (`OllamaChat.Pets.MountRemarkMinutes`).
 
 | Category | Default weight | Examples |
 |---|---|---|
@@ -991,6 +997,22 @@ With both modules in the same build, the bots talk about what it has them do:
   near whose style it annoys may tell it to stop; it laughs it off and stops.
   Bots talking in /say stay put while they do, look round at whoever speaks
   near them, and walk over to talk face to face (`OllamaChat.CityLife.*`).
+- **Rare gear:** now and then a bot in a city shows off a really rare thing
+  it's wearing in General ("check out my [Hand of Edward the Odd]"), or asks
+  where one is found, and the people about talk it over. Really rare means
+  a blue or better that drops less often than once in 2,000 kills and that
+  no boss hands out: on the stock tables, about 420 blues and 80 epics. Bots
+  ask after things they could wear, around their level. Show-offs are the
+  hype men, the excitable and the newbies; askers the newbies, min-maxers and
+  raiders; the quiet ones seldom bother. Only one such line in a city's
+  General every 20 minutes, and the same item not again for three hours
+  (`OllamaChat.RareGear.*`).
+- **Where things drop:** asked where to get something no vendor sells, a bot
+  answers from the world's loot tables: a world drop around level 58 to 61,
+  about once in 18,000 kills, best odds off a few named creatures; a
+  dungeon's trash; or which creatures drop it and where they are. And a
+  rare blue or epic someone links is described as a rare drop, with the
+  odds (`OllamaChat.Knowledge.Drop*`).
 - **Muted lines:** this module has the bots say "Staying", "Following", hello
   on joining a group, and a quest objective done in their own words. Give
   mod-playerbots-plus the longer mute list from its conf, so playerbots' own

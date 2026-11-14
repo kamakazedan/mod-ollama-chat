@@ -7,6 +7,7 @@
 #include "mod-ollama-chat_handler.h"
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_personality.h"
+#include "mod-ollama-chat_pets.h"
 #include "mod-ollama-chat_plus.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_world.h"
@@ -129,6 +130,7 @@ namespace
             return;
         }
         ++g_stats.said;
+        Pets_NoteMountRemarked(rider->GetGUID());   // the rest about leave it be for a while
         if (g_DebugEnabled)
             LOG_INFO("module.ollamachat", "[Ollama Chat] City life: {} to say something about {}'s {} ({}).",
                      bot->GetName(), rider->GetName(), event.what, event.detail);

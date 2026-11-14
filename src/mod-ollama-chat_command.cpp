@@ -48,6 +48,8 @@
 #include "mod-ollama-chat_report.h"
 #include "mod-ollama-chat_corpse.h"
 #include "mod-ollama-chat_tradechat.h"
+#include "mod-ollama-chat_raregear.h"
+#include "mod-ollama-chat_drops.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
 #include <thread>
@@ -962,12 +964,13 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
                              (unsigned long long)aside.idle);
     const KnowledgeStats known = Knowledge_GetStats();
     if (show("talk"))
-        out("Knowledge: {} - answers put in prompts: {} how to get an item, {} where a place is, {} "
-                             "ask a guard for any trainer, {} a question just before ({} told to get it wrong on "
-                             "purpose); {} guard direction menus, {} items sold by vendors (0 until the first "
-                             "question)",
+        out("Knowledge: {} - answers put in prompts: {} how to get an item ({} where it drops), {} where a "
+                             "place is, {} ask a guard for any trainer, {} a question just before ({} told to get it "
+                             "wrong on purpose); {} guard direction menus, {} items sold by vendors (0 until the "
+                             "first question)",
                              g_KnowledgeEnable ? "on" : "off",
                              (unsigned long long)known.items,
+                             (unsigned long long)known.drops,
                              (unsigned long long)known.places,
                              (unsigned long long)known.headings,
                              (unsigned long long)known.followUps,
@@ -1041,12 +1044,27 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
                              (unsigned long long)mingle.emotes,
                              (unsigned long long)mingle.greetings,
                              (unsigned long long)mingle.duels);
+    const RareGearStats rare = RareGear_GetStats();
+    if (show("city"))
+        out("Rare gear in city General: {} - {} shown off, {} asked where to find one, {} of them opening a "
+                             "conversation; {} times the style was for it and nothing fitted; {} really rare things "
+                             "in the world (0 until the first ask){}",
+                             g_RareGearEnable ? "on" : "off",
+                             (unsigned long long)rare.shown,
+                             (unsigned long long)rare.asked,
+                             (unsigned long long)rare.conversations,
+                             (unsigned long long)rare.none,
+                             rare.pool,
+                             Drops_SourcesKnown() ? "" : " (where things drop is not known: needs mod-playerbots-plus API 8)");
 
     if (show("talk"))
         out("Roleplay: {} (strictness {})   Emote reactions: {}",
                              g_RoleplayEnable ? "on" : "off",
                              (uint32)g_RoleplayStrictness,
                              g_EnableEmoteReactions ? "on" : "off");
+    if (show("talk"))
+        out("Topics not brought up again in one place for {} min ({} exempt)", g_TopicPlaceRepeatMinutes,
+                             g_TopicPlaceRepeatExempt.size());
     if (show("talk"))
         out("Topic weights: people {} / world {} / activity {} / self {} / guild {} / the game {} / the auction house {}{}",
                              g_TopicWeightPeople, g_TopicWeightWorld, g_TopicWeightActivity,

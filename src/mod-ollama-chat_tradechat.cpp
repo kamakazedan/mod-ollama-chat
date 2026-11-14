@@ -4,6 +4,7 @@
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
+#include "mod-ollama-chat_drops.h"
 #include "mod-ollama-chat_favor.h"
 #include "mod-ollama-chat_gifts.h"
 #include "mod-ollama-chat_governor.h"
@@ -397,33 +398,6 @@ namespace
         return Haggle::Value(g_TradeHaggle, p->SellPrice, p->Quality, gear);
     }
 
-    // How rarely it drops, in percent (per kill of what can drop it): 0 when
-    // nothing does, or nobody knows.
-    double DropPct(ItemTemplate const* p)
-    {
-#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 7
-        return PlayerbotsPlus::DropChance(p->ItemId);
-#else
-        (void)p;
-        return 0.0;
-#endif
-    }
-
-    // "20,800": once in how many, the way people say it -- two figures.
-    std::string OnceIn(double pct)
-    {
-        double n = 100.0 / pct;
-        if (n >= 100.0)
-        {
-            const double step = std::pow(10.0, std::floor(std::log10(n)) - 1.0);
-            n = std::round(n / step) * step;
-        }
-        std::string digits = std::to_string(uint64_t(std::llround(n)));
-        for (int i = int(digits.size()) - 3; i > 0; i -= 3)
-            digits.insert(size_t(i), ",");
-        return digits;
-    }
-
     Worth WorthOf(ItemTemplate const* p, uint32_t count, TeamId team)
     {
         Worth w;
@@ -446,9 +420,9 @@ namespace
         if (w.vendor)
             out += "; a vendor pays about " + Money(Shown(w.vendor)) + " for it";
         out += ").";
-        const double pct = p ? DropPct(p) : 0.0;
+        const double pct = p ? Drops_Pct(p->ItemId) : 0.0;
         if (pct > 0.0 && pct < g_TradeRareDropPct)
-            out += " It is a rare drop: about once in " + OnceIn(pct) + " kills of anything that can drop it.";
+            out += " It is a rare drop: about once in " + Drops_OnceIn(pct) + " kills of anything that can drop it.";
         return out;
     }
 
