@@ -786,6 +786,7 @@ extern uint32_t    g_TradePriceCheckChance;      // "pc [item]" answered
 extern uint32_t    g_TradeAdMinMinutes;          // things bots put up, on each side
 extern uint32_t    g_TradeAdMaxMinutes;          // (0: none)
 extern uint32_t    g_TradeAdMinCopper;           // white things worth less are not put up
+extern float       g_TradeRareDropPct;           // dropping less often than this (percent): said to be a rare drop
 extern uint32_t    g_TradeDelayMinMs;
 extern uint32_t    g_TradeDelayMaxMs;
 extern Haggle::Settings g_TradeHaggle;

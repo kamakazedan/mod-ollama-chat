@@ -8,8 +8,10 @@
 // own. mod-ollama-chat_tradechat does the rest: who answers, and saying it.
 //
 // The idea is the one a real player goes by:
-//   - something is worth what the auction house has it for, or else a
-//     multiple of what a vendor pays for it, more for better quality;
+//   - something is worth what the auction house has it for, or else what
+//     mod-playerbots-plus's market reckons (far more the rarer it drops), or
+//     without it a multiple of what a vendor pays for it, more for better
+//     quality;
 //   - a buyer pays up to its own share of that (its chat style's `pay`), and
 //     never more than it can spare; a seller takes no less than its share;
 //   - a haggler (`haggle`) opens well under, or over, and meets them part of
@@ -34,7 +36,7 @@ namespace Haggle
         // What something is worth with nothing on the auction house to go by,
         // as a percentage of what a vendor pays for it: gear by quality,
         // everything else in one figure.
-        std::array<uint32_t, kQualities> gearValuePct{ 100, 250, 500, 1000, 2500, 4000, 4000 };
+        std::array<uint32_t, kQualities> gearValuePct{ 100, 250, 500, 1250, 2500, 4000, 4000 };
         uint32_t goodsValuePct = 300;
 
         uint32_t ripOffPct  = 250;   // an ask this far over what it is worth: taking the mickey

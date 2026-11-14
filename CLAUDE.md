@@ -209,6 +209,17 @@ the market does not take, ambient chatter and conversations leave Trade out,
 and a spare thing given away goes to General. A new kind of line never goes
 to Trade unless it is about a deal.
 
+What a thing is worth with nothing on the auction house is
+mod-playerbots-plus's market's (`PlayerbotsPlus::ItemWorth`, API 7: by
+quality, far more the rarer it drops, from the world's own loot tables), so a
+bot in Trade never names a worth the auction house bots would not ask; the
+module's own `Trade.GearValuePct` is only for a build without it. A deal in
+something that cannot change hands -- bound when picked up, a quest's, bound
+to an account (`CanChangeHands`) -- is left alone, whoever offers it, and a
+bot offers only what it could hand a stranger (`CanHandOver`: not bound to
+it; a bind-on-pickup thing's two hours of trading are for those who were
+there when it dropped, never a stranger).
+
 What a bot pays or asks is decided in `mod-ollama-chat_haggle.cpp` (pure, by
 its chat style's `Trade.Style`), never by the model: a line about a deal
 carries `OllamaChatRequest::mustPrice` and `okPrices`, and one that names any

@@ -15,7 +15,9 @@
 // build, 1 for the market only, 2 for hangouts, bot events and muting, 3 for
 // duels talked into as well, 4 for group quests (mod-ollama-chat_groupquests),
 // 5 for city life (mod-ollama-chat_citylife, and mod-ollama-chat_hangout's
-// Hangout_Busy, Hangout_Spoke and Hangout_Gather).
+// Hangout_Busy, Hangout_Spoke and Hangout_Gather), 6 for city life by
+// temperament and showing off, 7 for what things are worth and how rarely
+// they drop (mod-ollama-chat_tradechat).
 // --------------------------------------------------------------------------
 
 #if __has_include("PlayerbotsPlus.h")

@@ -728,6 +728,7 @@ uint32_t    g_TradePriceCheckChance            = 70;
 uint32_t    g_TradeAdMinMinutes                = 8;
 uint32_t    g_TradeAdMaxMinutes                = 20;
 uint32_t    g_TradeAdMinCopper                 = 5000;
+float       g_TradeRareDropPct                 = 0.5f;
 uint32_t    g_TradeDelayMinMs                  = 2500;
 uint32_t    g_TradeDelayMaxMs                  = 7000;
 Haggle::Settings g_TradeHaggle;
@@ -3687,6 +3688,7 @@ static void LoadNaturalChatV37Settings()
     if (g_TradeAdMaxMinutes && g_TradeAdMaxMinutes < g_TradeAdMinMinutes)
         g_TradeAdMaxMinutes = g_TradeAdMinMinutes;
     g_TradeAdMinCopper      = sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.AdMinCopper", 5000);
+    g_TradeRareDropPct      = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Trade.RareDropPercent", 0.5f), 0.0f, 100.0f);
     g_TradeDelayMinMs       = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.DelayMinMs", 2500), 30000);
     g_TradeDelayMaxMs       = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.DelayMaxMs", 7000),
                                                    g_TradeDelayMinMs, 30000);
@@ -3695,7 +3697,7 @@ static void LoadNaturalChatV37Settings()
     g_TradeHaggle = Haggle::Settings{};
     {
         const std::vector<std::string> pcts = SplitString(sConfigMgr->GetOption<std::string>(
-            "OllamaChat.Trade.GearValuePct", "100|250|500|1000|2500|4000|4000"), '|');
+            "OllamaChat.Trade.GearValuePct", "100|250|500|1250|2500|4000|4000"), '|');
         for (size_t i = 0; i < pcts.size() && i < Haggle::kQualities; ++i)
         {
             const std::string& v = pcts[i];

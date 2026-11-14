@@ -792,13 +792,14 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
     const TradeChatStats trade = TradeChat_GetStats();
     if (show("bots"))
         out("Trade chat: {}{} - {} lines heard ({} not buying or selling: left alone); {} things put up, {} wanted, "
-            "{} price checks, {} nobody wanted or had; {} said about deals ({} counter-offers, {} rip-offs and "
+            "{} price checks, {} nobody wanted or had, {} in things that cannot change hands (or not on the seller, "
+            "unbound): left alone; {} said about deals ({} counter-offers, {} rip-offs and "
             "lowballs called out, {} walked away from, {} with a made-up price, said as a stock line); {} deals "
             "struck, {} walked over to trade, {} traded, {} never were; {} things bots put up; {} haggling now",
             g_TradeEnable ? "on" : "off", g_TradeEnable && g_TradeOnlyCommerce ? ", buying and selling only" : "",
             (unsigned long long)trade.heard, (unsigned long long)trade.ignored, (unsigned long long)trade.sales,
             (unsigned long long)trade.wants, (unsigned long long)trade.checks, (unsigned long long)trade.nobody,
-            (unsigned long long)trade.answered, (unsigned long long)trade.counters,
+            (unsigned long long)trade.bound, (unsigned long long)trade.answered, (unsigned long long)trade.counters,
             (unsigned long long)trade.callouts, (unsigned long long)trade.passed,
             (unsigned long long)trade.fallbacks, (unsigned long long)trade.agreed, (unsigned long long)trade.walked,
             (unsigned long long)trade.done, (unsigned long long)trade.lapsed, (unsigned long long)trade.ads,

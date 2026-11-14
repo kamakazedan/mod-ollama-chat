@@ -1283,7 +1283,9 @@ std::string Conjure_SellItem(Player* bot, Player* player, Item* stack, uint32_t 
     const uint64_t reqGuid = player->GetGUID().GetRawValue();
     if (FindGift(botGuid, reqGuid))
         return "you are already handing them something, so one thing at a time";
-    if (stack->IsSoulBound() && !stack->IsBOPTradable())
+    // Bound to it: no trade, unless still in a bind-on-pickup thing's two
+    // hours and they were there when it dropped.
+    if (stack->IsSoulBound() && (!stack->IsBOPTradable() || stack->IsBindedNotWith(player)))
         return "it is soulbound";
 
     ItemPosCountVec dest;

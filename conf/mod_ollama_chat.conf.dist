@@ -4533,8 +4533,9 @@ OllamaChat.Report.File = "OllamaChatReport.log"
 #     and only by one with the money for it. It is told what the thing really
 #     is (a blue gun, item level 21, for level 16; hunters, warriors and
 #     rogues use guns) and what it is worth: what the auction house has it
-#     for, else a multiple of what a vendor pays (GearValuePct,
-#     GoodsValuePct).
+#     for, else what mod-playerbots-plus's market reckons -- far more the
+#     rarer it drops -- or without it a multiple of what a vendor pays
+#     (GearValuePct, GoodsValuePct); and, when it is, that it is a rare drop.
 #   - Someone buying ("WTB [Linen Cloth] x20") is answered by a bot there
 #     that has some it can spare. "pc [item]" or "how much is [item] worth"
 #     gets what it goes for (PriceCheckChance).
@@ -4557,6 +4558,11 @@ OllamaChat.Report.File = "OllamaChatReport.log"
 #   - Now and then a bot in a city with a real player about puts up
 #     something it can spare: "WTS [Pagan Vest] 1g 50s" (AdLines). A whisper
 #     or a line about it is a haggle like any other.
+#   - Nothing that cannot change hands is dealt in. An offer, a want or a
+#     price check of something bound when picked up, a quest's or bound to an
+#     account gets no answer, nor does anyone selling a thing they do not
+#     carry unbound (worn, or bound to them); and a bot never offers a thing
+#     bound to it.
 #
 #   Needs Favor.Strangers = 1: without it bots trade only within a group,
 #   and nothing is bought or sold here (Trade is still left alone with
@@ -4633,12 +4639,25 @@ OllamaChat.Trade.DelayMaxMs = 7000
 
 #    OllamaChat.Trade.GearValuePct
 #    OllamaChat.Trade.GoodsValuePct
-#        What a thing is worth with none on the auction house: a percentage of
-#        what a vendor pays for it. Gear by quality, grey to heirloom
-#        (|-separated); everything else, one figure.
-#        Default: "100|250|500|1000|2500|4000|4000", 300
-OllamaChat.Trade.GearValuePct = "100|250|500|1000|2500|4000|4000"
+#        What a thing is worth with none on the auction house. With
+#        mod-playerbots-plus in the build, what its market reckons
+#        (PlayerbotsPlus.Market.Price.*: by quality, far more the rarer it
+#        drops, by the world's own loot tables -- Lil Timmy's Peashooter about
+#        5g 45s), so the bots in Trade and on the auction house agree; these
+#        two only without it: a percentage of what a vendor pays for it. Gear
+#        by quality, grey to heirloom (|-separated); everything else, one
+#        figure.
+#        Default: "100|250|500|1250|2500|4000|4000", 300
+OllamaChat.Trade.GearValuePct = "100|250|500|1250|2500|4000|4000"
 OllamaChat.Trade.GoodsValuePct = 300
+
+#    OllamaChat.Trade.RareDropPercent
+#        With mod-playerbots-plus: a thing that drops less often than this
+#        (percent, per kill of anything that can drop it) is said to be a
+#        rare drop when a bot is told what it is worth ("about once in 20,800
+#        kills"), for it to make something of. 0: never said.
+#        Default: 0.5
+OllamaChat.Trade.RareDropPercent = 0.5
 
 #    OllamaChat.Trade.RipOffPercent
 #    OllamaChat.Trade.BargainPercent

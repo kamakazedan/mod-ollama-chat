@@ -12,6 +12,7 @@
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_personality.h"
+#include "mod-ollama-chat_plus.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
@@ -378,25 +379,64 @@ namespace
 
     struct Worth
     {
-        uint64_t lot    = 0;   // what it is worth: the auction house, else by its vendor price
+        uint64_t lot    = 0;   // what it is worth: the auction house, else what the market reckons (ValueOf)
         uint64_t ah     = 0;   // what the auction house has the lot for, 0 when nobody has one up
         uint64_t vendor = 0;   // what a vendor pays for the lot
     };
 
+    // One of it, with nobody selling one: what the market reckons (with
+    // mod-playerbots-plus: by quality, far more the rarer it drops), else a
+    // multiple of what a vendor pays, by quality.
+    uint64_t ValueOf(ItemTemplate const* p)
+    {
+#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 7
+        if (const uint64_t worth = PlayerbotsPlus::ItemWorth(p->ItemId))
+            return worth;
+#endif
+        const bool gear = p->Class == ITEM_CLASS_WEAPON || p->Class == ITEM_CLASS_ARMOR;
+        return Haggle::Value(g_TradeHaggle, p->SellPrice, p->Quality, gear);
+    }
+
+    // How rarely it drops, in percent (per kill of what can drop it): 0 when
+    // nothing does, or nobody knows.
+    double DropPct(ItemTemplate const* p)
+    {
+#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 7
+        return PlayerbotsPlus::DropChance(p->ItemId);
+#else
+        (void)p;
+        return 0.0;
+#endif
+    }
+
+    // "20,800": once in how many, the way people say it -- two figures.
+    std::string OnceIn(double pct)
+    {
+        double n = 100.0 / pct;
+        if (n >= 100.0)
+        {
+            const double step = std::pow(10.0, std::floor(std::log10(n)) - 1.0);
+            n = std::round(n / step) * step;
+        }
+        std::string digits = std::to_string(uint64_t(std::llround(n)));
+        for (int i = int(digits.size()) - 3; i > 0; i -= 3)
+            digits.insert(size_t(i), ",");
+        return digits;
+    }
+
     Worth WorthOf(ItemTemplate const* p, uint32_t count, TeamId team)
     {
         Worth w;
-        const bool gear = p->Class == ITEM_CLASS_WEAPON || p->Class == ITEM_CLASS_ARMOR;
         w.vendor = uint64_t(p->SellPrice) * count;
         w.ah     = AuctionUnit(p->ItemId, team) * count;
-        const uint64_t value = Haggle::Value(g_TradeHaggle, p->SellPrice, p->Quality, gear) * count;
-        w.lot = w.ah ? w.ah : value;
+        w.lot    = w.ah ? w.ah : ValueOf(p) * count;
         return w;
     }
 
-    // "It is worth about 1g 45s (nobody has one on the auction house; a vendor
-    // pays 14s 56c)."
-    std::string WorthText(Worth const& w)
+    // "It is worth about 5g 40s (nobody has one on the auction house; a vendor
+    // pays 14s 56c for it). It is a rare drop: about once in 20,800 kills of
+    // anything that can drop it."
+    std::string WorthText(Worth const& w, ItemTemplate const* p)
     {
         if (!w.lot)
             return "Nobody can say what it is worth: it is not on the auction house and a vendor pays nothing for it.";
@@ -405,8 +445,31 @@ namespace
                     : std::string("nobody has one on the auction house");
         if (w.vendor)
             out += "; a vendor pays about " + Money(Shown(w.vendor)) + " for it";
-        return out + ").";
+        out += ").";
+        const double pct = p ? DropPct(p) : 0.0;
+        if (pct > 0.0 && pct < g_TradeRareDropPct)
+            out += " It is a rare drop: about once in " + OnceIn(pct) + " kills of anything that can drop it.";
+        return out;
     }
+
+    // ---- what can change hands ------------------------------------------------------
+
+    // A kind of thing anyone could hand to someone else: not bound when
+    // picked up, not a quest's, not bound to an account.
+    bool CanChangeHands(ItemTemplate const* p)
+    {
+        return p && p->Bonding != BIND_WHEN_PICKED_UP && p->Bonding != BIND_QUEST_ITEM &&
+               p->Bonding != BIND_QUEST_ITEM1 && !p->HasFlag(ITEM_FLAG_IS_BOUND_TO_ACCOUNT);
+    }
+
+    // This one could go to a stranger in a trade: of such a kind, and not
+    // bound to whoever has it. (A thing bound when picked up can go, for two
+    // hours, to those who were there when it dropped: never a stranger.)
+    bool CanHandOver(Item* item)
+    {
+        return item && CanChangeHands(item->GetTemplate()) && !item->IsSoulBound() && !item->IsInTrade();
+    }
+
 
     // ---- who is about ------------------------------------------------------------
 
@@ -459,8 +522,7 @@ namespace
         std::vector<Item*> out;
         auto take = [&](Item* item)
         {
-            if (item && item->GetEntry() == entry && (!item->IsSoulBound() || item->IsBOPTradable()) &&
-                !item->IsInTrade())
+            if (item && item->GetEntry() == entry && CanHandOver(item))
                 out.push_back(item);
         };
         for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
@@ -586,7 +648,7 @@ namespace
         const std::string tradeText = t.whisper
             ? SafeFormat(g_TradeWhisperText, fmt::arg("player_name", player->GetName()))
             : g_TradeChannelText;
-        const std::string itemText = Facts(p) + ". " + WorthText({ t.worth, t.ah, t.vendor });
+        const std::string itemText = Facts(p) + ". " + WorthText({ t.worth, t.ah, t.vendor }, p);
         std::string prompt = SafeFormat(g_TradePromptTemplate,
             fmt::arg("bot_name", bot->GetName()),
             fmt::arg("bot_level", bot->GetLevel()),
@@ -1034,7 +1096,7 @@ namespace
         uint32_t have = 0;
         auto add = [&](Item* item)
         {
-            if (item && item->GetEntry() == entry && (!item->IsSoulBound() || item->IsBOPTradable()))
+            if (item && item->GetEntry() == entry && CanHandOver(item))
                 have += item->GetCount();
         };
         for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
@@ -1077,7 +1139,7 @@ namespace
         ++g_stats.sales;
         if (!CanCarry(player, p->ItemId, count))
         {
-            ++g_stats.nobody;   // not on them, or bound to them: nothing to trade
+            ++g_stats.bound;   // not on them, or bound to them: nothing to trade, and nobody answers
             return;
         }
         const Worth w = WorthOf(p, count, player->GetTeamId());
@@ -1278,7 +1340,7 @@ namespace
             std::vector<Option> options;
             auto consider = [&](Item* item)
             {
-                if (!item || (item->IsSoulBound() && !item->IsBOPTradable()) || item->IsInTrade())
+                if (!CanHandOver(item))
                     return;
                 ItemTemplate const* p = item->GetTemplate();
                 if (!p || HandedOutFree(p) || !p->SellPrice)
@@ -1498,6 +1560,15 @@ bool TradeChat_HandleHumanLine(Player* player, const std::string& msg, Channel* 
 
     ItemTemplate const* p = entry ? sObjectMgr->GetItemTemplate(entry) : nullptr;
     const bool check = line.check, buys = line.buys, sells = line.sells;
+
+    // A deal in a thing nobody can trade -- bound when picked up, a quest's,
+    // bound to an account: there is none to be had, and nobody answers it.
+    if (p && !CanChangeHands(p) && (buys || check || sells || line.accept || line.price))
+    {
+        record();
+        ++g_stats.bound;
+        return true;
+    }
 
     // Answering something a bot put up -- linking it, or right after it went
     // up: wanting it, taking it, asking about it, or a price for it. Not

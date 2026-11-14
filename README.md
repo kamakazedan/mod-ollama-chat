@@ -895,8 +895,11 @@ no banter, no conversations. What they say there they mean, and carry out.
   is most use to answers: an upgrade it can wear at its level, a quest item it
   needs, something for its profession -- and only one with the gold. It knows
   what the thing is (a blue gun for level 16 that hunters, warriors and rogues
-  use) and what it is worth: what the auction house has it for, else a multiple
-  of its vendor price.
+  use) and what it is worth: what the auction house has it for, else what
+  mod-playerbots-plus's market reckons -- far more the rarer it drops, by the
+  server's own loot tables (the Peashooter, about once in 20,800 kills: about
+  5g 45s) -- or, without it, a multiple of its vendor price. A rare drop, it is
+  told so.
 - **You buy** -- "WTB [Linen Cloth] x20". A bot with some to spare offers it.
   "pc [item]" gets what it goes for.
 - **Haggling by personality.** A newbie pays what you ask, a goldmaker opens
@@ -912,6 +915,10 @@ no banter, no conversations. What they say there they mean, and carry out.
   the thing in and accepts only when your side holds exactly the price.
 - **Their own things.** Now and then a bot puts something it can spare up for
   sale ("WTS [Pagan Vest] 1g 50s"); whisper it or answer in Trade to haggle.
+- **No trolling.** Nobody answers an offer, a want or a price check of
+  something that can't be traded (bind on pickup, a quest item, bound to an
+  account), or someone selling a thing they don't carry unbound. A bot never
+  offers anything soulbound.
 
 See `OllamaChat.Trade.*`, and `OllamaChat.Trade.Style.<KEY>` for each
 personality's way with money. Needs `OllamaChat.Favor.Strangers = 1`.

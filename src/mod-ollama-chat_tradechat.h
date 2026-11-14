@@ -21,7 +21,16 @@ class Player;
 //     profession -- and only one with the money for it. It is told what the
 //     thing really is (a blue gun, item level 21, for level 16; hunters,
 //     warriors and rogues use guns) and what it is worth: what the auction
-//     house has it for, else a multiple of what a vendor pays.
+//     house has it for, else what mod-playerbots-plus's market reckons -- by
+//     quality, far more the rarer it drops, from the world's own loot tables
+//     (and how rare, when it is: "about once in 20,800 kills") -- or,
+//     without it, a multiple of what a vendor pays.
+//   * Nothing that cannot change hands is dealt in: an offer, a want or a
+//     price check of a thing bound when picked up, a quest's or bound to an
+//     account is left alone, as is anyone selling what they do not carry
+//     unbound (worn, or bound to them). A bot never offers a thing bound to
+//     it, nor one in the two hours a thing bound when picked up can still go
+//     to those who were there when it dropped: a stranger never was.
 //   * A real player buying ("WTB [Linen Cloth] x20") is answered by a bot
 //     there that has some it can spare.
 //   * "pc [item]", "how much is [item] worth": a bot says what it goes for.
@@ -94,6 +103,7 @@ struct TradeChatStats
     uint64_t lapsed    = 0;   // deals struck that nobody came to trade
     uint64_t ads       = 0;   // things bots put up for sale
     uint64_t fallbacks = 0;   // the model named another price: a stock line instead, or nothing
+    uint64_t bound     = 0;   // deals in something that cannot change hands (or not on the seller, unbound): left alone
     uint32_t talking   = 0;   // haggles going on now
 };
 TradeChatStats TradeChat_GetStats();
