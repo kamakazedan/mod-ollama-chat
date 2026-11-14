@@ -40,6 +40,14 @@ class Player;
 // starts, the skip waits for it. Needs a mod-dungeon-clear whose `dc skip`
 // takes a boss (DcCommandApi.h).
 //
+// How hard the tank pulls can be asked the same way (PartyCommands.Pace*):
+// "be more aggressive", "pull faster", "speed it up" have it go straight into
+// each pack (mod-dungeon-clear's Leeroy, `dc pull off`), and "slow down",
+// "pull slower", "not so fast" have it pull at its normal pace again
+// (Dynamic) -- see TextRules::MatchPullPace. The tank says ok in its own
+// style, or that it pulls that way already. Asked before the run starts, it
+// starts that way. Only with a bot tank.
+//
 // These are looked at before the BlacklistCommands and DisableForParty checks:
 // "ready", "wait" and "drink" are on the blacklist because they are playerbots
 // commands too, and DisableForParty is about chatter, not about steering a run.
@@ -187,6 +195,9 @@ struct PartyCmdStats
     uint64_t skipsBefore  = 0;   // ...of them asked for before the run started
     uint64_t skipsRefused = 0;   // asks the tank said no to: dead already, being fought, skipped already
     uint64_t unskips      = 0;   // skips taken back
+    uint64_t paceFaster   = 0;   // asked to pull faster: Leeroy
+    uint64_t paceSlower   = 0;   // asked to slow down: dynamic again
+    uint64_t paceAlready  = 0;   // ...when it pulled that way already
 };
 PartyCmdStats PartyCmd_GetStats();
 

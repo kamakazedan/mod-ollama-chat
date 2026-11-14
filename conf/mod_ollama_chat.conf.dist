@@ -3077,6 +3077,65 @@ OllamaChat.PartyCommands.HintSkip = "{player_name} asked to skip {skipped}, and 
 OllamaChat.PartyCommands.HintSkipNo = "{player_name} asked to skip {skipped}, but {reason} Tell them so in a few words, in your own chat style.{recent_acks}"
 OllamaChat.PartyCommands.HintUnskip = "{player_name} wants to do {skipped} after all, and you agree: {plan} Tell them in a few words, in your own chat style.{recent_acks}"
 
+#    OllamaChat.PartyCommands.PaceEnable
+#        How hard the tank pulls, asked in party during a dungeon-clear run
+#        led by a bot tank (or before it starts). "be aggressive", "be more
+#        aggressive", "pull faster", "speed it up", "leeroy it" have it go
+#        straight into each pack and fight it where it stands
+#        (mod-dungeon-clear's Leeroy pull mode, `dc pull off`); "slow down",
+#        "pull slower", "not so fast", "take it slow" have it pull at its
+#        normal pace again (Dynamic, `dc pull dynamic`: an easy pack straight
+#        in, a big or bunched-up one pulled back to the group first). The
+#        tank says ok in its own chat style ("ok ill be more aggressive with
+#        my pulls", "ok, normal pace from here"), or that it pulls that way
+#        already: asked to slow down while it pulls everything back to camp
+#        (Advanced, set from the addon), it stays that way. Said before the
+#        run starts, the run starts that way; "ready, pull faster" starts it
+#        and says both. A pause in the line ("wait, slow down") is a pause.
+#        Nobody else answers the line.
+#        Default: 1
+OllamaChat.PartyCommands.PaceEnable = 1
+
+#    OllamaChat.PartyCommands.PaceFasterWords
+#    OllamaChat.PartyCommands.PaceSlowerWords
+#        The asks, phrases separated by |, matched on whole words; a phrase
+#        starting with = is the whole line ("=faster" is "faster" alone, not
+#        "im faster than you"). Where one is inside another ("no more chain
+#        pulls" holds "chain pulls") the longer one counts; a line with both
+#        apart ("slow down then speed up") is neither. A word typed long or
+#        one letter short ("fasterrr", "be more agressive") counts as
+#        itself.
+#        Default: (below)
+OllamaChat.PartyCommands.PaceFasterWords = "be aggressive|be more aggressive|=more aggressive|bit more aggressive|little more aggressive|more aggressive pulls|pull more aggressive|go more aggressive|get more aggressive|=aggressive|=aggro|go aggressive|get aggressive|aggressive pulls|pull aggressive|pull aggressively|pull more aggressively|play aggressive|be aggro|be more aggro|go faster|pull faster|pull quicker|pull quick|faster pls|faster please|faster plz|bit faster|little faster|lil faster|faster pace|faster pulls|quicker pulls|bigger pulls|pull bigger|pull more packs|pull more mobs|pull more at once|chain pull|chain pulls|chain pulling|=faster|=quicker|speed up|speed it up|pick up the pace|step it up|pace it up|full send|=zerg|zerg it|=leeroy|leeroy it|go leeroy|leeroy mode|leeroy them|leeroy everything|leeroy jenkins|just run in|run straight in|charge in|just charge|no need to pull back|no need to pull them back|pulling too slow|pulls too slow|too slow pulls|going too slow|youre too slow|ur too slow|you are too slow"
+OllamaChat.PartyCommands.PaceSlowerWords = "slow down|slow it down|slow the pulls|slow your pulls|slow ur pulls|=slow|=slow pls|=slow please|=slower|slower pls|slower please|slower plz|bit slower|little slower|lil slower|pull slower|pull slow|slower pulls|slower pace|smaller pulls|pull smaller|less aggressive|be less aggressive|less aggressive pulls|not so aggressive|less aggro|not so fast|=too fast|=too fast pls|going too fast|pulling too fast|youre too fast|ur too fast|you are too fast|thats too fast|too many mobs|too many at once|dont rush|quit rushing|rushing it|take it slow|easy on the pulls|easy with the pulls|careful with the pulls|careful with pulls|careful pulls|pull carefully|pull careful|play it safe|play safe|safer pulls|pull safer|normal pace|normal speed|regular pace|usual pace|normal pulls|back to normal pace|back to normal pulls|back to normal speed|one pack at a time|no more chain pulls|no more chain pulling|dont chain pull|no more leeroy|dont leeroy|no leeroy"
+
+#    OllamaChat.PartyCommands.PaceQuestionWords
+#    OllamaChat.PartyCommands.PaceNegationWords
+#    OllamaChat.PartyCommands.PaceMaxWords
+#        A question word anywhere makes it talk ("why so slow", "are we
+#        going too fast?"); "can you pull faster?" still asks. A negation
+#        outside the ask makes it none ("dont slow down"); one inside it is
+#        the ask ("dont rush", "not so fast"). Lines longer than PaceMaxWords
+#        words are conversation.
+#        Default: (below), 12
+OllamaChat.PartyCommands.PaceQuestionWords = "why|how come|should we|shall we|do we|did we|did you|didnt|was it|was that|were we|are we|arent we|r we|is it|is that|isnt|wonder|or not"
+OllamaChat.PartyCommands.PaceNegationWords = "not|dont|do not|cant|cannot|wont|shouldnt|wouldnt|couldnt|never|aint|no need to"
+OllamaChat.PartyCommands.PaceMaxWords = 12
+
+#    OllamaChat.PartyCommands.HintFaster
+#    OllamaChat.PartyCommands.HintSlower
+#    OllamaChat.PartyCommands.HintPaceAlready
+#        What the tank is told when it answers. Placeholders: {player_name},
+#        {player_message}, {plan} (what it does now: "from the next pack on
+#        you go straight into each pack and fight it where it stands, with no
+#        pulling it back to the group first."), {asked} ("pull faster",
+#        "slow down"), {already} (HintPaceAlready: how it pulls already),
+#        {recent_acks}.
+#        Default: (below)
+OllamaChat.PartyCommands.HintFaster = "{player_name} asked you to pull faster, and you will: {plan} Say ok to that in party, in a few words and in your own chat style -- that you will be more aggressive with your pulls.{recent_acks}"
+OllamaChat.PartyCommands.HintSlower = "{player_name} asked you to slow down, and you will: {plan} Say ok to that in party, in a few words and in your own chat style -- that you will pull at a normal pace now.{recent_acks}"
+OllamaChat.PartyCommands.HintPaceAlready = "{player_name} asked you to {asked}, but you are already {already}. Tell them so in party, in a few words and in your own chat style.{recent_acks}"
+
 #    OllamaChat.Party.DungeonGlossary
 #        Added to every party and raid chat prompt inside a dungeon or raid,
 #        so "mb" reads as a mana break and not "my bad". Empty disables.

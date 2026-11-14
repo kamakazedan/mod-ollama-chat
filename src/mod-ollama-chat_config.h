@@ -518,6 +518,13 @@ extern std::string g_BagsHintNo;      // a bot outside their group that won't pa
 // next boss", "skip oggleflint", "dont skip jergosh".
 extern bool        g_PartySkipEnable;
 extern TextRules::SkipRules g_PartySkipRules;
+
+// How hard the tank pulls, asked in party (mod-ollama-chat_partycmd)
+extern bool        g_PartyPaceEnable;
+extern TextRules::PaceRules g_PartyPaceRules;
+extern std::string g_PartyCmdHintFaster;
+extern std::string g_PartyCmdHintSlower;
+extern std::string g_PartyCmdHintPaceAlready;
 extern std::vector<std::vector<std::string>> g_PartySkipLaterWords;   // a skipped one back, but in its turn
 extern std::string g_PartyCmdHintSkip;         // the tank agrees: {skipped} {next} {plan}
 extern std::string g_PartyCmdHintSkipNo;       // ...or cannot: {skipped} {reason}

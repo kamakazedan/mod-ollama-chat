@@ -198,6 +198,34 @@ namespace TextRules
     // chat commands ("dc on", "dc pause").
     bool IsDungeonClearCommand(const std::string& cleanText);
 
+    // ---- how hard the tank pulls ---------------------------------------------
+
+    struct PaceRules
+    {
+        std::vector<CommandPhrase> faster;                 // "be aggressive", "pull faster", "speed it up"
+        std::vector<CommandPhrase> slower;                 // "slow down", "pull slower", "not so fast"
+        std::vector<std::vector<std::string>> negations;   // "dont slow down": no ask to slow down
+        std::vector<std::vector<std::string>> questions;   // "why", "should we": talk, not an ask
+        uint32_t maxWords = 12;
+    };
+
+    enum class PullPace : uint8_t
+    {
+        None,
+        Faster,   // "be more aggressive", "pull faster", "speed it up", "leeroy it"
+        Slower    // "slow down", "pull slower", "not so fast", "normal pace pls"
+    };
+
+    // A short party line asking the tank to pull harder or easier. "can you
+    // pull faster?" and "slow down pls" ask; "why so slow", "should we slow
+    // down" (a question about it), "dont slow down" (negated, but not "dont
+    // rush", which is the ask itself) and a line asking both apart ("slow
+    // down then speed up") do not. Where one ask runs over another ("no more
+    // chain pulls" holds "chain pulls"), the longer one is it. A word typed
+    // long or a letter short ("fasterrr", "be more agressive") counts as
+    // itself.
+    PullPace MatchPullPace(const std::string& cleanText, const PaceRules& rules);
+
     // ---- skipping a boss -----------------------------------------------------
 
     struct SkipRules

@@ -862,6 +862,22 @@ Fanglords, which Mutanus needs) leaves the run stuck later: take the skip back.
 Needs mod-dungeon-clear with named skips (`dc skip <boss>`); see
 `OllamaChat.PartyCommands.Skip*`.
 
+## Pulling Faster or Slower
+
+"be aggressive", "be more aggressive", "pull faster", "speed it up" or
+"leeroy it" in party has the tank go straight into each pack and fight it
+where it stands (mod-dungeon-clear's Leeroy pull mode). "slow down", "pull
+slower", "not so fast" or "take it slow" has it pull at its normal pace
+again (Dynamic: easy packs straight in, big or bunched-up ones pulled back to
+the group first). The tank says ok in its own style ("ok ill be more
+aggressive with my pulls", "sure, normal pace from here"), or that it already
+pulls that way; one pulling everything back to camp (Advanced, set from the
+addon) stays that way when asked to slow down. Asked before the run starts,
+it starts that way, and "ready, pull faster" starts it and says both. A
+question ("why so slow?", "are we going too fast?") stays chat, and "wait,
+slow down" is a pause. Every run starts at the normal pace, a wipe too. See
+`OllamaChat.PartyCommands.Pace*`.
+
 ## Quest Progress
 
 Playerbots' "Kobold Vermin 3/10" whispers are muted; a bot in your group says

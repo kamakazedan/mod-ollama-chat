@@ -518,6 +518,12 @@ std::string g_BagsHintNo;
 
 bool        g_PartySkipEnable              = true;
 TextRules::SkipRules g_PartySkipRules;
+
+bool        g_PartyPaceEnable                  = true;
+TextRules::PaceRules g_PartyPaceRules;
+std::string g_PartyCmdHintFaster;
+std::string g_PartyCmdHintSlower;
+std::string g_PartyCmdHintPaceAlready;
 std::vector<std::vector<std::string>> g_PartySkipLaterWords;
 std::string g_PartyCmdHintSkip;
 std::string g_PartyCmdHintSkipNo;
@@ -3954,6 +3960,63 @@ static void LoadNaturalChatV38Settings()
              g_CityLifeTemperaments.size(), g_CityLifeShowOffChance, g_CityLifeShowOffAnnoys.size());
 }
 
+static void LoadNaturalChatV40Settings()
+{
+    auto phrases = [](const char* key, const char* def)
+    {
+        return CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(key, def));
+    };
+
+    // --- how hard the tank pulls, asked in party ------------------------------------------------
+    g_PartyPaceEnable = sConfigMgr->GetOption<bool>("OllamaChat.PartyCommands.PaceEnable", true);
+    g_PartyPaceRules  = TextRules::PaceRules{};
+    g_PartyPaceRules.faster = TextRules::ParseCommandPhrases(sConfigMgr->GetOption<std::string>(
+        "OllamaChat.PartyCommands.PaceFasterWords",
+        "be aggressive|be more aggressive|=more aggressive|bit more aggressive|little more aggressive|"
+        "more aggressive pulls|pull more aggressive|go more aggressive|get more aggressive|=aggressive|=aggro|"
+        "go aggressive|get aggressive|aggressive pulls|pull aggressive|pull aggressively|pull more aggressively|"
+        "play aggressive|be aggro|be more aggro|go faster|pull faster|pull quicker|pull quick|faster pls|"
+        "faster please|faster plz|bit faster|little faster|lil faster|faster pace|faster pulls|quicker pulls|"
+        "bigger pulls|pull bigger|pull more packs|pull more mobs|pull more at once|chain pull|chain pulls|"
+        "chain pulling|=faster|=quicker|speed up|speed it up|pick up the pace|step it up|pace it up|full send|"
+        "=zerg|zerg it|=leeroy|leeroy it|go leeroy|leeroy mode|leeroy them|leeroy everything|leeroy jenkins|"
+        "just run in|run straight in|charge in|just charge|no need to pull back|no need to pull them back|"
+        "pulling too slow|pulls too slow|too slow pulls|going too slow|youre too slow|ur too slow|"
+        "you are too slow"));
+    g_PartyPaceRules.slower = TextRules::ParseCommandPhrases(sConfigMgr->GetOption<std::string>(
+        "OllamaChat.PartyCommands.PaceSlowerWords",
+        "slow down|slow it down|slow the pulls|slow your pulls|slow ur pulls|=slow|=slow pls|=slow please|"
+        "=slower|slower pls|slower please|slower plz|bit slower|little slower|lil slower|pull slower|pull slow|"
+        "slower pulls|slower pace|smaller pulls|pull smaller|less aggressive|be less aggressive|"
+        "less aggressive pulls|not so aggressive|less aggro|not so fast|=too fast|=too fast pls|going too fast|"
+        "pulling too fast|youre too fast|ur too fast|you are too fast|thats too fast|too many mobs|"
+        "too many at once|dont rush|quit rushing|rushing it|take it slow|easy on the pulls|easy with the pulls|"
+        "careful with the pulls|careful with pulls|careful pulls|pull carefully|pull careful|play it safe|"
+        "play safe|safer pulls|pull safer|normal pace|normal speed|regular pace|usual pace|normal pulls|"
+        "back to normal pace|back to normal pulls|back to normal speed|one pack at a time|no more chain pulls|"
+        "no more chain pulling|dont chain pull|no more leeroy|dont leeroy|no leeroy"));
+    g_PartyPaceRules.questions = phrases("OllamaChat.PartyCommands.PaceQuestionWords",
+        "why|how come|should we|shall we|do we|did we|did you|didnt|was it|was that|were we|are we|arent we|r we|"
+        "is it|is that|isnt|wonder|or not");
+    g_PartyPaceRules.negations = phrases("OllamaChat.PartyCommands.PaceNegationWords",
+        "not|dont|do not|cant|cannot|wont|shouldnt|wouldnt|couldnt|never|aint|no need to");
+    g_PartyPaceRules.maxWords = std::clamp<uint32_t>(
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.PartyCommands.PaceMaxWords", 12), 2, 40);
+    g_PartyCmdHintFaster = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.HintFaster",
+        "{player_name} asked you to pull faster, and you will: {plan} Say ok to that in party, in a few words and "
+        "in your own chat style -- that you will be more aggressive with your pulls.{recent_acks}");
+    g_PartyCmdHintSlower = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.HintSlower",
+        "{player_name} asked you to slow down, and you will: {plan} Say ok to that in party, in a few words and in "
+        "your own chat style -- that you will pull at a normal pace now.{recent_acks}");
+    g_PartyCmdHintPaceAlready = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.HintPaceAlready",
+        "{player_name} asked you to {asked}, but you are already {already}. Tell them so in party, in a few words "
+        "and in your own chat style.{recent_acks}");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v40: how hard the tank pulls, asked in party, {} ({} "
+             "phrases to pull faster, {} to slow down).",
+             g_PartyPaceEnable ? "on" : "off", g_PartyPaceRules.faster.size(), g_PartyPaceRules.slower.size());
+}
+
 static void LoadNaturalChatV39Settings()
 {
     // "NAT_HYPE:100|NAT_QUIET:5" -> chat style -> percent.
@@ -5052,6 +5115,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV37Settings();
     LoadNaturalChatV38Settings();
     LoadNaturalChatV39Settings();
+    LoadNaturalChatV40Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

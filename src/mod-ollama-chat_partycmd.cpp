@@ -404,7 +404,7 @@ namespace
     // The tank says what happened, in party, as itself.
     void Acknowledge(Player* player, Player* tank, const std::string& msg, uint64_t seq,
                      ChatChannelSourceLocal source, const std::string& scopeKey,
-                     Outcome outcome, const std::string& detail)
+                     Outcome outcome, const std::string& detail, const std::string& extra = std::string())
     {
         const std::string* templ = nullptr;
         switch (outcome)
@@ -433,6 +433,7 @@ namespace
         // A hint written before {recent_acks} existed still gets it.
         if (templ->find("{recent_acks}") == std::string::npos)
             hint += recent;
+        hint += extra;   // and what else the line asked, done too ("ready, pull faster")
 
         TankAnswers(player, tank, msg, seq, source, scopeKey, std::move(hint));
     }
@@ -1025,6 +1026,119 @@ namespace
                      CrowdText::JoinNames(skipped), map->GetMapName(), running ? "" : " (once the run starts)", clean);
         return SkipResult::Handled;
     }
+
+    // ---- how hard the tank pulls ----------------------------------------------------
+
+    // mod-dungeon-clear's pull setting (DcKey::PullSetting) on the tank that
+    // leads: 0 "off" is Leeroy -- straight into each pack, fought where it
+    // stands; 1 "on" is Advanced -- every pack pulled back to a camp first; 2
+    // "dynamic", the default, decides pack by pack. `dc pull off|on|dynamic`
+    // sets it, before the run too (`dc on` applies it as the run starts).
+    // Both are older than DcCommandApi.h's first version.
+    constexpr uint32_t kPullLeeroy   = 0;
+    constexpr uint32_t kPullAdvanced = 1;
+    constexpr uint32_t kPullDynamic  = 2;
+
+    bool PullSettingOf(Player* tank, uint32_t& setting)
+    {
+        PlayerbotAI* ai = tank ? PlayerbotsMgr::instance().GetPlayerbotAI(tank) : nullptr;
+        AiObjectContext* ctx = ai ? ai->GetAiObjectContext() : nullptr;
+        auto* value = ctx ? ctx->GetValue<uint32>(DcKey::PullSetting) : nullptr;
+        if (!value)
+            return false;
+        setting = value->Get();
+        return true;
+    }
+
+    enum class PaceResult : uint8_t
+    {
+        NotOne,    // no pull setting to read: ordinary chat
+        Set,       // changed, and read back so
+        Already,   // it pulls that way already (or slower still)
+        Refused    // mod-dungeon-clear said no, and whispered why
+    };
+
+    // "be more aggressive": Leeroy. "slow down": back to Dynamic -- from
+    // Leeroy only, Dynamic being the normal pace and Advanced slower still.
+    PaceResult SetPace(Player* player, Player* tank, TextRules::PullPace pace, uint32_t& before)
+    {
+        if (!PullSettingOf(tank, before))
+            return PaceResult::NotOne;
+        const bool faster = pace == TextRules::PullPace::Faster;
+        if (faster ? before == kPullLeeroy : before != kPullLeeroy)
+            return PaceResult::Already;
+        const uint32_t want = faster ? kPullLeeroy : kPullDynamic;
+        Dispatch(player, tank, "dc pull", faster ? "off" : "dynamic");
+        uint32_t after = before;
+        return PullSettingOf(tank, after) && after == want ? PaceResult::Set : PaceResult::Refused;
+    }
+
+    // What it does now, for the tank to be told.
+    std::string PacePlan(TextRules::PullPace pace, bool running)
+    {
+        const char* when = running ? "from the next pack on" : "once the run starts,";
+        return pace == TextRules::PullPace::Faster
+                   ? fmt::format("{} you go straight into each pack and fight it where it stands, with no pulling it "
+                                 "back to the group first.", when)
+                   : fmt::format("{} you pull at a normal pace again: an easy pack you still go straight into, a big "
+                                 "or bunched-up one you pull back to the group first.", when);
+    }
+
+    // How it pulls already.
+    const char* PaceNow(uint32_t setting)
+    {
+        switch (setting)
+        {
+            case kPullLeeroy:
+                return "going straight into every pack and fighting it where it stands, as fast as you pull";
+            case kPullAdvanced:
+                return "pulling every pack back to the group before you fight it, the slowest and safest way there is";
+            default:
+                return "pulling at a normal pace: an easy pack you go straight into, a big or bunched-up one you pull "
+                       "back to the group first";
+        }
+    }
+
+    const char* PaceAsked(TextRules::PullPace pace)
+    {
+        return pace == TextRules::PullPace::Faster ? "pull faster" : "slow down";
+    }
+
+    // The tank answers a pace ask on its own.
+    void PaceAck(Player* player, Player* tank, const std::string& msg, uint64_t seq, ChatChannelSourceLocal source,
+                 const std::string& scopeKey, PaceResult result, TextRules::PullPace pace, uint32_t before,
+                 bool running)
+    {
+        const std::string& templ = result == PaceResult::Already                ? g_PartyCmdHintPaceAlready
+                                 : pace == TextRules::PullPace::Faster          ? g_PartyCmdHintFaster
+                                                                                : g_PartyCmdHintSlower;
+        if (templ.empty())
+            return;
+        const std::string recent = RecentAcksText(tank);
+        std::string hint = SafeFormat(templ,
+                                      fmt::arg("player_name", player->GetName()),
+                                      fmt::arg("player_message", TextRules::StripChatMarkup(msg)),
+                                      fmt::arg("plan", PacePlan(pace, running)),
+                                      fmt::arg("asked", PaceAsked(pace)),
+                                      fmt::arg("already", PaceNow(before)),
+                                      fmt::arg("recent_acks", recent),
+                                      fmt::arg("pass_token", g_ContextPassToken));
+        if (hint == "[Format Error]")
+            return;
+        if (templ.find("{recent_acks}") == std::string::npos)
+            hint += recent;
+        TankAnswers(player, tank, msg, seq, source, scopeKey, std::move(hint));
+    }
+
+    // ...or with the start or resume it came with ("ready, pull faster").
+    std::string PaceNote(Player* player, PaceResult result, TextRules::PullPace pace, uint32_t before)
+    {
+        if (result == PaceResult::Already)
+            return fmt::format(" {} also asked you to {}, but you are already {}.", player->GetName(),
+                               PaceAsked(pace), PaceNow(before));
+        return fmt::format(" {} also asked you to {}, and you will: {} Say that too.", player->GetName(),
+                           PaceAsked(pace), PacePlan(pace, true));
+    }
 #endif
 #endif
 }
@@ -1104,6 +1218,10 @@ PartyCmdLine PartyCmd_Classify(Player* player, const std::string& msg, ChatChann
     if (g_PartySkipEnable &&
         TextRules::MatchSkipAsk(clean, g_PartySkipRules, SkipNames(player, tank)).kind != TextRules::SkipKind::None)
         return PartyCmdLine::Instruction;
+    // "be more aggressive", "slow down" -- a pause stays a pause.
+    if (g_PartyPaceEnable && intent != TextRules::PartyIntent::Pause && OllamaIsBotPlayer(tank) &&
+        TextRules::MatchPullPace(clean, g_PartyPaceRules) != TextRules::PullPace::None)
+        return PartyCmdLine::Instruction;
 #endif
 
     if (intent == TextRules::PartyIntent::None)
@@ -1160,11 +1278,53 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
     }
 #endif
 
-    if (intent == TextRules::PartyIntent::None)
-        return false;
-
     const bool running = DcLeaderSignal::FindRunOwner(player) != nullptr;
     const bool paused  = running && DcLeaderSignal::IsInPausedDungeonClearRun(player);
+
+    // "be more aggressive", "pull faster": the tank goes Leeroy; "slow down",
+    // "pull slower": back to its normal pace. With "ready" in it the run
+    // starts as well, and the tank says both; a pause is a pause. A bot tank
+    // only: a player who tanks pulls as they like.
+    std::string paceNote;
+#if OLLAMA_CHAT_DC_SKIPS
+    if (g_PartyPaceEnable && intent != TextRules::PartyIntent::Pause && OllamaIsBotPlayer(tank))
+    {
+        const TextRules::PullPace pace = TextRules::MatchPullPace(clean, g_PartyPaceRules);
+        uint32_t before = kPullDynamic;
+        const PaceResult result =
+            pace == TextRules::PullPace::None ? PaceResult::NotOne : SetPace(player, tank, pace, before);
+        if (result == PaceResult::Refused)
+        {
+            ++g_stats.refused;
+            return false;   // dungeon clear whispered why
+        }
+        if (result != PaceResult::NotOne)
+        {
+            if (result == PaceResult::Already)
+                ++g_stats.paceAlready;
+            else if (pace == TextRules::PullPace::Faster)
+                ++g_stats.paceFaster;
+            else
+                ++g_stats.paceSlower;
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] {} asked the tank to {} in {}: '{}' ({}).",
+                         player->GetName(), PaceAsked(pace), map->GetMapName(), clean,
+                         result == PaceResult::Already ? "it pulls that way already"
+                         : pace == TextRules::PullPace::Faster ? "Leeroy now" : "dynamic again");
+            const bool alsoGo = (intent == TextRules::PartyIntent::Start && (!running || paused)) ||
+                                (intent == TextRules::PartyIntent::Resume && paused);
+            if (!alsoGo)
+            {
+                PaceAck(player, tank, msg, seq, source, scopeKey, result, pace, before, running);
+                return true;
+            }
+            paceNote = PaceNote(player, result, pace, before);
+        }
+    }
+#endif
+
+    if (intent == TextRules::PartyIntent::None)
+        return false;
 
     // "ok im done", "full": the end of a break, and nothing else.
     if (intent == TextRules::PartyIntent::Resume && !paused)
@@ -1241,7 +1401,8 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
     if (!missing.empty())
     {
         ++g_stats.waiting;
-        Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Waiting, CrowdText::JoinNames(missing));
+        Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Waiting, CrowdText::JoinNames(missing),
+                    paceNote);
         return true;
     }
 
@@ -1256,7 +1417,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
         ++g_stats.resumed;
         g_breaks.erase(GroupKey(player));   // said ready before everyone had rested: over all the same
         ReleaseStaysFor(player);
-        Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Resumed, std::string());
+        Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Resumed, std::string(), paceNote);
     }
     else
     {
@@ -1272,7 +1433,7 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
 #if OLLAMA_CHAT_DC_SKIPS
         ApplyPendingSkips(player, tank);   // "skip the first boss", said before
 #endif
-        Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Started, std::string());
+        Acknowledge(player, tank, msg, seq, source, scopeKey, Outcome::Started, std::string(), paceNote);
     }
 
     if (g_DebugEnabled)

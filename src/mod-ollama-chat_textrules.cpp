@@ -1545,6 +1545,64 @@ namespace TextRules
     }
     }
 
+    // ---- how hard the tank pulls -------------------------------------------------
+
+    namespace
+    {
+        PullPace ReadPace(const std::vector<std::string>& words, const PaceRules& rules)
+        {
+            bool fast = false, slow = false;
+            const std::vector<bool> fastCovered = Coverage(words, rules.faster, fast);
+            const std::vector<bool> slowCovered = Coverage(words, rules.slower, slow);
+            fast = fast && !NegatedOutside(words, fastCovered, rules.negations);
+            slow = slow && !NegatedOutside(words, slowCovered, rules.negations);
+            if (fast && slow)
+            {
+                // One ask over the other ("no more chain pulls", "not so
+                // aggressive pulls") is the longer one; apart, it asks both.
+                bool overlap = false;
+                size_t fastWords = 0, slowWords = 0;
+                for (size_t i = 0; i < words.size(); ++i)
+                {
+                    overlap = overlap || (fastCovered[i] && slowCovered[i]);
+                    fastWords += fastCovered[i] ? 1 : 0;
+                    slowWords += slowCovered[i] ? 1 : 0;
+                }
+                if (!overlap || fastWords == slowWords)
+                    return PullPace::None;
+                return slowWords > fastWords ? PullPace::Slower : PullPace::Faster;
+            }
+            return fast ? PullPace::Faster : (slow ? PullPace::Slower : PullPace::None);
+        }
+    }
+
+    PullPace MatchPullPace(const std::string& cleanText, const PaceRules& rules)
+    {
+        const std::vector<std::string> words = CrowdText::Words(cleanText);
+        if (words.empty() || (rules.maxWords > 0 && words.size() > rules.maxWords) ||
+            IsDungeonClearCommand(cleanText) || CrowdText::ContainsPhrase(words, rules.questions))
+            return PullPace::None;
+        const PullPace pace = ReadPace(words, rules);
+        if (pace != PullPace::None)
+            return pace;
+
+        // "fasterrr", "sloooow down": typed long.
+        std::vector<std::string> squeezed;
+        bool changed = false;
+        for (const std::string& w : words)
+        {
+            squeezed.push_back(SqueezeLetters(w));
+            changed = changed || squeezed.back() != w;
+        }
+        if (!changed)
+            return PullPace::None;
+        PaceRules squeezedRules = rules;
+        squeezedRules.faster    = SqueezePhrases(rules.faster);
+        squeezedRules.slower    = SqueezePhrases(rules.slower);
+        squeezedRules.negations = SqueezePhrases(rules.negations);
+        return ReadPace(squeezed, squeezedRules);
+    }
+
     // ---- skipping a boss -------------------------------------------------------
 
     namespace
