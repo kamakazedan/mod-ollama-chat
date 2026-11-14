@@ -46,7 +46,9 @@ class Player;
 // "pull slower", "not so fast" have it pull at its normal pace again
 // (Dynamic) -- see TextRules::MatchPullPace. The tank says ok in its own
 // style, or that it pulls that way already. Asked before the run starts, it
-// starts that way. Only with a bot tank.
+// starts that way; as the answer to the tank's "everyone ready?" ("go
+// leeroy", "be aggressive"), it is a yes as well, and the run starts. Only
+// with a bot tank.
 //
 // These are looked at before the BlacklistCommands and DisableForParty checks:
 // "ready", "wait" and "drink" are on the blacklist because they are playerbots

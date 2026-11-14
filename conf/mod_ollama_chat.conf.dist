@@ -3091,8 +3091,11 @@ OllamaChat.PartyCommands.HintUnskip = "{player_name} wants to do {skipped} after
 #        already: asked to slow down while it pulls everything back to camp
 #        (Advanced, set from the addon), it stays that way. Said before the
 #        run starts, the run starts that way; "ready, pull faster" starts it
-#        and says both. A pause in the line ("wait, slow down") is a pause.
-#        Nobody else answers the line.
+#        and says both, and so does the ask on its own as the answer to the
+#        tank's are-you-ready (Party.ReadyWindowSeconds): "go leeroy", "be
+#        aggressive" or "take it slow" is a yes as well, and the run starts.
+#        A pause in the line ("wait, slow down") is a pause. Nobody else
+#        answers the line.
 #        Default: 1
 OllamaChat.PartyCommands.PaceEnable = 1
 
@@ -3106,7 +3109,7 @@ OllamaChat.PartyCommands.PaceEnable = 1
 #        one letter short ("fasterrr", "be more agressive") counts as
 #        itself.
 #        Default: (below)
-OllamaChat.PartyCommands.PaceFasterWords = "be aggressive|be more aggressive|=more aggressive|bit more aggressive|little more aggressive|more aggressive pulls|pull more aggressive|go more aggressive|get more aggressive|=aggressive|=aggro|go aggressive|get aggressive|aggressive pulls|pull aggressive|pull aggressively|pull more aggressively|play aggressive|be aggro|be more aggro|go faster|pull faster|pull quicker|pull quick|faster pls|faster please|faster plz|bit faster|little faster|lil faster|faster pace|faster pulls|quicker pulls|bigger pulls|pull bigger|pull more packs|pull more mobs|pull more at once|chain pull|chain pulls|chain pulling|=faster|=quicker|speed up|speed it up|pick up the pace|step it up|pace it up|full send|=zerg|zerg it|=leeroy|leeroy it|go leeroy|leeroy mode|leeroy them|leeroy everything|leeroy jenkins|just run in|run straight in|charge in|just charge|no need to pull back|no need to pull them back|pulling too slow|pulls too slow|too slow pulls|going too slow|youre too slow|ur too slow|you are too slow"
+OllamaChat.PartyCommands.PaceFasterWords = "be aggressive|be more aggressive|=more aggressive|bit more aggressive|little more aggressive|more aggressive pulls|pull more aggressive|go more aggressive|get more aggressive|=aggressive|=aggro|go aggressive|get aggressive|aggressive pulls|pull aggressive|pull aggressively|pull more aggressively|play aggressive|be aggro|be more aggro|pull fast|go fast|=fast|fast pulls|pull harder|go harder|go hard|go faster|pull faster|pull quicker|pull quick|faster pls|faster please|faster plz|bit faster|little faster|lil faster|faster pace|faster pulls|quicker pulls|bigger pulls|pull bigger|pull more packs|pull more mobs|pull more at once|chain pull|chain pulls|chain pulling|=faster|=quicker|speed up|speed it up|pick up the pace|step it up|pace it up|full send|=zerg|zerg it|=leeroy|leeroy it|go leeroy|leeroy mode|leeroy them|leeroy everything|leeroy jenkins|just run in|run straight in|charge in|just charge|no need to pull back|no need to pull them back|pulling too slow|pulls too slow|too slow pulls|going too slow|youre too slow|ur too slow|you are too slow"
 OllamaChat.PartyCommands.PaceSlowerWords = "slow down|slow it down|slow the pulls|slow your pulls|slow ur pulls|=slow|=slow pls|=slow please|=slower|slower pls|slower please|slower plz|bit slower|little slower|lil slower|pull slower|pull slow|slower pulls|slower pace|smaller pulls|pull smaller|less aggressive|be less aggressive|less aggressive pulls|not so aggressive|less aggro|not so fast|=too fast|=too fast pls|going too fast|pulling too fast|youre too fast|ur too fast|you are too fast|thats too fast|too many mobs|too many at once|dont rush|quit rushing|rushing it|take it slow|easy on the pulls|easy with the pulls|careful with the pulls|careful with pulls|careful pulls|pull carefully|pull careful|play it safe|play safe|safer pulls|pull safer|normal pace|normal speed|regular pace|usual pace|normal pulls|back to normal pace|back to normal pulls|back to normal speed|one pack at a time|no more chain pulls|no more chain pulling|dont chain pull|no more leeroy|dont leeroy|no leeroy"
 
 #    OllamaChat.PartyCommands.PaceQuestionWords
@@ -3196,7 +3199,9 @@ OllamaChat.Party.GreetSituation = "The group has just come in and nobody has pul
 #        "yeah 2 min" and "not yet" do not, and neither does "ok", "good" or
 #        "im good" on its own: those answer too many other things ("need
 #        water?" "im good"). Phrases separated by |, matched on whole words.
-#        Later on, "ready" and the rest of StartPhrases still start it.
+#        An ask about how hard to pull (PartyCommands.Pace*: "go leeroy", "be
+#        aggressive", "take it slow") answers it too, and the run starts that
+#        way. Later on, "ready" and the rest of StartPhrases still start it.
 #        Default: (below), 180
 OllamaChat.Party.ReadyYesPhrases = "yes|yep|yup|yeah|ye|ya|yea|y|sure|aye|go|gogo|go go|of course|ofc|sure thing|why not|mhm|yes please|do it|lets do it|go for it|go ahead|go on|go on then|whenever|when you are|ready when you are|yes im ready|yeah im ready|yep im ready|born ready|yes lets go|yeah lets go|yep lets go|lets"
 OllamaChat.Party.ReadyWindowSeconds = 180

@@ -3975,14 +3975,14 @@ static void LoadNaturalChatV40Settings()
         "be aggressive|be more aggressive|=more aggressive|bit more aggressive|little more aggressive|"
         "more aggressive pulls|pull more aggressive|go more aggressive|get more aggressive|=aggressive|=aggro|"
         "go aggressive|get aggressive|aggressive pulls|pull aggressive|pull aggressively|pull more aggressively|"
-        "play aggressive|be aggro|be more aggro|go faster|pull faster|pull quicker|pull quick|faster pls|"
-        "faster please|faster plz|bit faster|little faster|lil faster|faster pace|faster pulls|quicker pulls|"
-        "bigger pulls|pull bigger|pull more packs|pull more mobs|pull more at once|chain pull|chain pulls|"
-        "chain pulling|=faster|=quicker|speed up|speed it up|pick up the pace|step it up|pace it up|full send|"
-        "=zerg|zerg it|=leeroy|leeroy it|go leeroy|leeroy mode|leeroy them|leeroy everything|leeroy jenkins|"
-        "just run in|run straight in|charge in|just charge|no need to pull back|no need to pull them back|"
-        "pulling too slow|pulls too slow|too slow pulls|going too slow|youre too slow|ur too slow|"
-        "you are too slow"));
+        "play aggressive|be aggro|be more aggro|pull fast|go fast|=fast|fast pulls|pull harder|go harder|go hard|"
+        "go faster|pull faster|pull quicker|pull quick|faster pls|faster please|faster plz|bit faster|"
+        "little faster|lil faster|faster pace|faster pulls|quicker pulls|bigger pulls|pull bigger|"
+        "pull more packs|pull more mobs|pull more at once|chain pull|chain pulls|chain pulling|=faster|=quicker|"
+        "speed up|speed it up|pick up the pace|step it up|pace it up|full send|=zerg|zerg it|=leeroy|leeroy it|"
+        "go leeroy|leeroy mode|leeroy them|leeroy everything|leeroy jenkins|just run in|run straight in|"
+        "charge in|just charge|no need to pull back|no need to pull them back|pulling too slow|pulls too slow|"
+        "too slow pulls|going too slow|youre too slow|ur too slow|you are too slow"));
     g_PartyPaceRules.slower = TextRules::ParseCommandPhrases(sConfigMgr->GetOption<std::string>(
         "OllamaChat.PartyCommands.PaceSlowerWords",
         "slow down|slow it down|slow the pulls|slow your pulls|slow ur pulls|=slow|=slow pls|=slow please|"

@@ -136,13 +136,20 @@ namespace
     };
     std::unordered_map<uint32_t, ReadyAsk> g_readyAsked;
 
-    bool AnswersReadyAsk(Player* player, const std::string& clean)
+    // The tank asked the group whether it is ready, and that is still open
+    // (Party.ReadyWindowSeconds).
+    bool ReadyAskOpen(Player* player)
     {
-        if (g_PartyReadyYesPhrases.empty() || g_PartyReadyWindowSeconds == 0)
+        if (g_PartyReadyWindowSeconds == 0)
             return false;
         auto it = g_readyAsked.find(GroupKey(player));
-        if (it == g_readyAsked.end() ||
-            std::chrono::steady_clock::now() - it->second.at > std::chrono::seconds(g_PartyReadyWindowSeconds))
+        return it != g_readyAsked.end() &&
+               std::chrono::steady_clock::now() - it->second.at <= std::chrono::seconds(g_PartyReadyWindowSeconds);
+    }
+
+    bool AnswersReadyAsk(Player* player, const std::string& clean)
+    {
+        if (g_PartyReadyYesPhrases.empty() || !ReadyAskOpen(player))
             return false;
 
         // "yep Gruk": the names in the group are not part of the answer.
@@ -1283,8 +1290,10 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
 
     // "be more aggressive", "pull faster": the tank goes Leeroy; "slow down",
     // "pull slower": back to its normal pace. With "ready" in it the run
-    // starts as well, and the tank says both; a pause is a pause. A bot tank
-    // only: a player who tanks pulls as they like.
+    // starts as well, and the tank says both -- and so it does when the line
+    // answers the tank's "everyone ready?" ("go leeroy": a yes, and how). A
+    // pause is a pause. A bot tank only: a player who tanks pulls as they
+    // like.
     std::string paceNote;
 #if OLLAMA_CHAT_DC_SKIPS
     if (g_PartyPaceEnable && intent != TextRules::PartyIntent::Pause && OllamaIsBotPlayer(tank))
@@ -1311,6 +1320,8 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
                          player->GetName(), PaceAsked(pace), map->GetMapName(), clean,
                          result == PaceResult::Already ? "it pulls that way already"
                          : pace == TextRules::PullPace::Faster ? "Leeroy now" : "dynamic again");
+            if (intent == TextRules::PartyIntent::None && !running && ReadyAskOpen(player))
+                intent = TextRules::PartyIntent::Start;   // the answer to "everyone ready?"
             const bool alsoGo = (intent == TextRules::PartyIntent::Start && (!running || paused)) ||
                                 (intent == TextRules::PartyIntent::Resume && paused);
             if (!alsoGo)

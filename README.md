@@ -873,7 +873,9 @@ the group first). The tank says ok in its own style ("ok ill be more
 aggressive with my pulls", "sure, normal pace from here"), or that it already
 pulls that way; one pulling everything back to camp (Advanced, set from the
 addon) stays that way when asked to slow down. Asked before the run starts,
-it starts that way, and "ready, pull faster" starts it and says both. A
+it starts that way, and "ready, pull faster" starts it and says both. When
+the tank has just asked whether everyone is ready, "go leeroy" or "be
+aggressive" on its own is a yes: the run starts, Leeroy from the first pack. A
 question ("why so slow?", "are we going too fast?") stays chat, and "wait,
 slow down" is a pause. Every run starts at the normal pace, a wipe too. See
 `OllamaChat.PartyCommands.Pace*`.
