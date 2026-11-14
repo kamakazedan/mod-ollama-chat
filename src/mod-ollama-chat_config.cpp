@@ -3502,13 +3502,16 @@ static void LoadNaturalChatV33Settings()
         "written here.");
     g_GroupQuestsAnswerText = sConfigMgr->GetOption<std::string>("OllamaChat.GroupQuests.AnswerText",
         "{other_name} just asked in General for help with the group quest {quest}. You have it too and want to do "
-        "it: answer them that you are up for it.");
+        "it: answer them that you are up for it. If you name the quest, write it in its square brackets exactly as "
+        "it is written here, never any other way.");
     g_GroupQuestsInviteText = sConfigMgr->GetOption<std::string>("OllamaChat.GroupQuests.InviteText",
         "{other_name} just asked in General whether anyone is doing the group quest {quest}. You are getting a "
-        "party together for it, {have} of you now counting them: tell them to come along.");
+        "party together for it, {have} of you now counting them: tell them to come along. If you name the quest, "
+        "write it in its square brackets exactly as it is written here, never any other way.");
     g_GroupQuestsSoloText = sConfigMgr->GetOption<std::string>("OllamaChat.GroupQuests.SoloText",
         "You have been asking in General for a good while for help with the group quest {quest}, and nobody has "
-        "come. Say you will give it a go on your own then.");
+        "come. Say you will give it a go on your own then. If you name the quest, write it in its square brackets "
+        "exactly as it is written here, never any other way.");
     g_GroupQuestsAnswerDelayMinSeconds = std::min<uint32_t>(120,
         sConfigMgr->GetOption<uint32_t>("OllamaChat.GroupQuests.AnswerDelayMinSeconds", 6));
     g_GroupQuestsAnswerDelayMaxSeconds = std::min<uint32_t>(120,

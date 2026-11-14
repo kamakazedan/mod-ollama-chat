@@ -192,6 +192,15 @@ struct OllamaChatRequest
     // once it is out, that one (this guid) laughs it off and stops.
     uint64_t showOffTold = 0;
 
+    // A line that only makes sense after another one -- an answer after the
+    // ask it answers. A line with `saysKey` is noted once it is out (or once
+    // it is not, failed or dropped); one with `afterKey` waits for the line
+    // with that key: held while that one is still being written (a minute and
+    // a half at most), sent a few seconds after it goes out, and dropped if it
+    // never does -- an answer to nothing anyone saw.
+    uint64_t saysKey  = 0;
+    uint64_t afterKey = 0;
+
     // An unprompted line -- ambient chatter, an ask: Context_NextSeq() when
     // it was asked for. A real player who spoke where it goes after that was
     // not heard by it, so it is not sent: it would talk over them ("this
@@ -272,6 +281,7 @@ struct OllamaDispatchStats
     uint64_t totalDroppedPassed;      // the bot chose not to reply (pass token)
     uint64_t totalDroppedPhrase;      // a stock phrase said lately, or one Wrath never had
     uint64_t totalDroppedOvertaken;   // unprompted lines written before a real player spoke there
+    uint64_t totalDroppedUnasked;     // answers to a line that never went out (OllamaChatRequest::afterKey)
     uint64_t totalRetried;            // owed lines asked for again without a stock phrase
     uint64_t totalFailed;
     std::string lastError;

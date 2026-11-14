@@ -69,6 +69,19 @@ namespace
         return it != g_asked.end() && now - it->second < within;
     }
 
+    // An ask, as the dispatcher knows it: who asked, for which quest, in which
+    // zone's General. The ask carries it as its saysKey, an answer or an
+    // invite as its afterKey: neither goes out before the ask has, in the
+    // same place, nor at all if the ask never does (dropped, or the model not
+    // to be had) -- or a bot answered someone nobody heard ask.
+    uint64_t AskKey(ObjectGuid asker, uint32_t quest, uint32_t zone)
+    {
+        uint64_t h = asker.GetRawValue() * 0x9E3779B97F4A7C15ull;
+        h ^= (uint64_t(quest) << 24) + (uint64_t(zone) << 1) + 0x67715175ull;
+        h ^= h >> 31;
+        return h ? h : 1;
+    }
+
     // mod-playerbots-plus had a bot ask for help with a group quest, answer
     // one, tell one who asked to come along, or go at it alone.
     void Heard(PlayerbotsPlus::BotEvent const& event)
@@ -169,10 +182,14 @@ namespace
         request.writtenAtSeq      = Context_NextSeq();
         if (answer)
         {
-            // After the ask it answers, as someone reads it and types back.
+            // After the ask it answers, as someone reads it and types back --
+            // and only once that ask is out, here.
             uint32_t const low = std::min(g_GroupQuestsAnswerDelayMinSeconds, g_GroupQuestsAnswerDelayMaxSeconds);
             request.extraDelayMs = urand(low, g_GroupQuestsAnswerDelayMaxSeconds) * 1000;
+            request.afterKey     = AskKey(event.other, event.quest, bot->GetZoneId());
         }
+        else if (event.type == BotEventType::GroupQuestAsk)
+            request.saysKey = AskKey(event.bot, event.quest, bot->GetZoneId());
         if (!OllamaDispatch_Submit(std::move(request)))
         {
             ++g_stats.quiet;

@@ -101,6 +101,92 @@ namespace
     std::mutex             g_doneMutex;
     std::deque<Completion> g_done;
 
+    // Lines other lines wait on (OllamaChatRequest::saysKey): when each was
+    // sent to be written, and what became of it. Submitted and delivered on
+    // the world thread; the lock is only so a stray submit elsewhere is safe.
+    struct Awaited
+    {
+        enum class State : uint8_t
+        {
+            Writing,
+            Out,
+            Gone
+        };
+        Clock::time_point sent;
+        Clock::time_point done;
+        State             state = State::Writing;
+    };
+    std::mutex                            g_awaitedMutex;
+    std::unordered_map<uint64_t, Awaited> g_awaited;
+    constexpr auto kAwaitAtMost = std::chrono::seconds(90);   // still being written after this: given up on
+    constexpr auto kAwaitGap    = std::chrono::seconds(3);    // an answer never in the same breath as its ask
+    constexpr auto kAwaitKeep   = std::chrono::minutes(10);
+    std::atomic<uint64_t> g_droppedUnasked{ 0 };
+
+    void AwaitedSent(uint64_t key)
+    {
+        const auto now = Clock::now();
+        std::lock_guard<std::mutex> lock(g_awaitedMutex);
+        for (auto it = g_awaited.begin(); it != g_awaited.end();)
+            it = now - it->second.sent > kAwaitKeep ? g_awaited.erase(it) : std::next(it);
+        g_awaited[key] = Awaited{ now, {}, Awaited::State::Writing };
+    }
+
+    void AwaitedDone(uint64_t key, bool out)
+    {
+        std::lock_guard<std::mutex> lock(g_awaitedMutex);
+        auto it = g_awaited.find(key);
+        if (it == g_awaited.end() || it->second.state != Awaited::State::Writing)
+            return;
+        it->second.state = out ? Awaited::State::Out : Awaited::State::Gone;
+        it->second.done  = Clock::now();
+    }
+
+    // What a line waiting on `key` does now: goes, waits until `until`, or
+    // is dropped -- what it answers never went out.
+    enum class AfterIs : uint8_t
+    {
+        Go,
+        Wait,
+        Drop
+    };
+    AfterIs After(uint64_t key, Clock::time_point now, Clock::time_point& until)
+    {
+        std::lock_guard<std::mutex> lock(g_awaitedMutex);
+        auto it = g_awaited.find(key);
+        if (it == g_awaited.end())
+            return AfterIs::Drop;
+        Awaited const& a = it->second;
+        switch (a.state)
+        {
+            case Awaited::State::Out:
+                if (now >= a.done + kAwaitGap)
+                    return AfterIs::Go;
+                until = a.done + kAwaitGap;
+                return AfterIs::Wait;
+            case Awaited::State::Gone:
+                return AfterIs::Drop;
+            case Awaited::State::Writing:
+            default:
+                if (now - a.sent >= kAwaitAtMost)
+                    return AfterIs::Drop;
+                until = now + std::chrono::seconds(2);
+                return AfterIs::Wait;
+        }
+    }
+
+    // However a delivery ends, a line others wait on is noted out or gone.
+    struct AwaitedOutcome
+    {
+        uint64_t key = 0;
+        bool     out = false;
+        ~AwaitedOutcome()
+        {
+            if (key)
+                AwaitedDone(key, out);
+        }
+    };
+
     std::mutex                      g_scriptMutex;
     std::vector<OllamaScriptResult> g_scripts;
 
@@ -156,7 +242,7 @@ namespace
     // Crowd_ReportWorkerFailure.)
     void ReportFailure(const OllamaChatRequest& request)
     {
-        if (request.openerKey.empty() && request.fallbackText.empty())
+        if (request.openerKey.empty() && request.fallbackText.empty() && !request.saysKey)
             return;
         Completion completion;
         completion.request   = request;
@@ -519,6 +605,9 @@ namespace
     // By value: the line can still be trimmed here before it is spoken.
     void Deliver(Completion c, const OllamaWorldSnapshot& world)
     {
+        // A line others wait on: noted out, or gone, however this ends.
+        AwaitedOutcome awaited{ c.request.saysKey };
+
         // A line that has to go out goes out in its stock words when the model
         // could not be reached.
         if (c.failed && !c.request.fallbackText.empty())
@@ -541,6 +630,32 @@ namespace
         PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
         if (!botAI)
             return;
+
+        // An answer: only after what it answers is out, and never if that
+        // never goes out.
+        if (c.request.afterKey)
+        {
+            Clock::time_point until;
+            switch (After(c.request.afterKey, Clock::now(), until))
+            {
+                case AfterIs::Wait:
+                {
+                    awaited.key = 0;   // not done with: back to wait
+                    c.deliverAt = until;
+                    std::lock_guard<std::mutex> lock(g_doneMutex);
+                    g_done.push_back(std::move(c));
+                    return;
+                }
+                case AfterIs::Drop:
+                    ++g_droppedUnasked;
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat",
+                                 "[Ollama Chat] {}'s answer dropped: what it answers never went out.", bot->GetName());
+                    return;
+                case AfterIs::Go:
+                    break;
+            }
+        }
 
         // "right, lets go" after a rest: moot once somebody said ready while
         // it was being written.
@@ -1088,6 +1203,7 @@ namespace
             Progress_NoteDelivered(c.request.progressKey);
         if (c.request.showOffTold)   // "can you stop that": the show-off laughs it off
             CityLife_NoteToldOff(bot, c.request.showOffTold);
+        awaited.out = true;          // an ask: its answers may follow
         if (c.request.noSelfDing)   // a "gz": the one it is for hears it, and thanks once for the lot
             Congrats_NoteBotCongrats(bot, c.request.congratsName, c.request.source,
                                      channel ? channel->GetName() : c.request.channelName, c.request.channelId,
@@ -1232,6 +1348,12 @@ bool OllamaDispatch_Submit(OllamaChatRequest request)
             bot && bot->IsInWorld() && OllamaInBotOnlyDungeon(bot))
             return false;
 
+    // A line others wait on is on its way from now: noted before the worker
+    // can have it, and gone again if it is not queued after all.
+    const uint64_t says = request.saysKey;
+    if (says)
+        AwaitedSent(says);
+
     Task task;
     task.type    = TaskType::ChatReply;
     task.request = std::move(request);
@@ -1240,7 +1362,11 @@ bool OllamaDispatch_Submit(OllamaChatRequest request)
         std::lock_guard<std::mutex> lock(g_queueMutex);
 
         if (!g_running)
+        {
+            if (says)
+                AwaitedDone(says, false);
             return false;
+        }
 
         if (g_MaxQueueDepth > 0 && g_queue.size() >= g_MaxQueueDepth)
         {
@@ -1249,6 +1375,8 @@ bool OllamaDispatch_Submit(OllamaChatRequest request)
                 LOG_INFO("module.ollamachat",
                          "[Ollama Chat] Queue full ({}); dropping request for {}.",
                          g_queue.size(), task.request.botName);
+            if (says)
+                AwaitedDone(says, false);
             return false;
         }
 
@@ -1506,6 +1634,7 @@ OllamaDispatchStats OllamaDispatch_GetStats()
     stats.totalDroppedPassed    = g_droppedPassed.load();
     stats.totalDroppedPhrase    = g_droppedPhrase.load();
     stats.totalDroppedOvertaken = g_droppedOvertaken.load();
+    stats.totalDroppedUnasked   = g_droppedUnasked.load();
     stats.totalRetried          = g_retried.load();
     stats.totalFailed           = g_totalFailed.load();
 

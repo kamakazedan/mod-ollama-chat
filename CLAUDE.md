@@ -261,9 +261,15 @@ who asks for help, who comes along and who leads. Here only their lines, from
 its `BotEventType::GroupQuest*` events, in the zone's General channel. They
 go out with `triggerBotReplies` off: an answer another bot made up ("I have
 it too!") would not be one of the party plus is getting together. An answer
-or invite is said only after the ask it answers went out to be written, and
-carries `writtenAtSeq` too, so a player speaking drops both: otherwise a held
-ask left its answers replying to nothing.
+or invite goes out only once the ask it answers has, in the same General:
+the ask carries `OllamaChatRequest::saysKey`, the answer the same key as its
+`afterKey` (`AskKey`: who asked, the quest, the zone), and the dispatcher
+holds the answer while the ask is being written and drops it if the ask never
+goes out. Both carry `writtenAtSeq` too, so a player speaking drops both.
+Gating on the ask being sent to be written was not enough: an ask that failed
+or was dropped at delivery left its answer replying to nothing, after
+minutes of quiet. A line that only makes sense after another uses the same
+pair.
 
 ## Prompt content
 

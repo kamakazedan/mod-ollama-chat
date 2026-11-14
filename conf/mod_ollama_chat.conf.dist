@@ -4313,10 +4313,14 @@ OllamaChat.Marks.SapFailed = "You tried to sap {target} for {player_name} and it
 #   out as a link. Nothing is said where no real player is in General to
 #   read it. An ask, or going alone, is a line nobody asked for: none starts
 #   within Context.AmbientHoldSeconds of a real player speaking there. An
-#   answer follows the ask it answers by a few seconds, and only an ask that
-#   went out to be written; going alone is only said after asks someone could
-#   have read. Any of them is dropped if a player spoke while it was written
-#   (an answer with its ask). Who answers is mod-playerbots-plus's, so other
+#   answer (or an invite) follows the ask it answers by a few seconds, only
+#   once that ask has gone out in the same General -- held while the ask is
+#   still being written, and dropped if the ask never goes out (held back,
+#   dropped, the model not to be had), so nobody answers an ask nobody saw;
+#   going alone is only said after asks someone could have read. Any of them
+#   is dropped if a player spoke while it was written (an answer with its
+#   ask). Each names the quest only as its link, never in other words (an
+#   answer once wrote "gathizzogg" for [Wanted: Gath'Ilzogg]). Who answers is mod-playerbots-plus's, so other
 #   bots do not take these up as something to reply to. Without
 #   mod-playerbots-plus (with group quests) there are none.
 #
@@ -4344,9 +4348,9 @@ OllamaChat.GroupQuests.Prompt = "You are {bot_name}, a level {bot_level} {bot_ra
 #        {other_name} (the one asking: Answer, Invite), {zone}. Empty
 #        silences that one.
 OllamaChat.GroupQuests.AskText = "You have the group quest {quest} and want help with it: you need {need_people}. Ask in General whether anyone has it and wants to do it with you, naming the quest in its square brackets exactly as it is written here."
-OllamaChat.GroupQuests.AnswerText = "{other_name} just asked in General for help with the group quest {quest}. You have it too and want to do it: answer them that you are up for it."
-OllamaChat.GroupQuests.InviteText = "{other_name} just asked in General whether anyone is doing the group quest {quest}. You are getting a party together for it, {have} of you now counting them: tell them to come along."
-OllamaChat.GroupQuests.SoloText = "You have been asking in General for a good while for help with the group quest {quest}, and nobody has come. Say you will give it a go on your own then."
+OllamaChat.GroupQuests.AnswerText = "{other_name} just asked in General for help with the group quest {quest}. You have it too and want to do it: answer them that you are up for it. If you name the quest, write it in its square brackets exactly as it is written here, never any other way."
+OllamaChat.GroupQuests.InviteText = "{other_name} just asked in General whether anyone is doing the group quest {quest}. You are getting a party together for it, {have} of you now counting them: tell them to come along. If you name the quest, write it in its square brackets exactly as it is written here, never any other way."
+OllamaChat.GroupQuests.SoloText = "You have been asking in General for a good while for help with the group quest {quest}, and nobody has come. Say you will give it a go on your own then. If you name the quest, write it in its square brackets exactly as it is written here, never any other way."
 
 #    OllamaChat.GroupQuests.AnswerDelayMinSeconds
 #    OllamaChat.GroupQuests.AnswerDelayMaxSeconds

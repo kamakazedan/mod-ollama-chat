@@ -999,10 +999,11 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
     const ContextThreadStats thread = Context_GetThreadStats();
     if (show("party"))
         out("Keeping the thread: {} unprompted lines held back where a real player had just "
-                             "spoken (for {}s), {} dropped as written before one did; {} replies told what a short "
-                             "line came right after",
+                             "spoken (for {}s), {} dropped as written before one did, {} answers dropped as what "
+                             "they answered never went out; {} replies told what a short line came right after",
                              (unsigned long long)OllamaRandomChatter_HeldBack(), g_ContextAmbientHoldSeconds,
                              (unsigned long long)dispatch.totalDroppedOvertaken,
+                             (unsigned long long)dispatch.totalDroppedUnasked,
                              (unsigned long long)thread.leadUps);
     const RaceStats   races  = Race_GetStats();
     const BanterStats banter = Banter_GetStats();
