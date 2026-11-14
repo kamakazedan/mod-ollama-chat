@@ -1454,9 +1454,13 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
                               player, false, msg, contextSeq, 0, addressee.guid);
 
         // Two bots chatting in /say that this is said to stop, so the one it
-        // is for can answer (mod-ollama-chat_mingle).
+        // is for can answer (mod-ollama-chat_mingle); and those hanging out
+        // near them look round at them (mod-playerbots-plus's city life).
         if (sourceLocal == SRC_SAY_LOCAL || sourceLocal == SRC_YELL_LOCAL)
+        {
             Mingle_NoteHumanSay(player, msg, addressee.guid);
+            Hangout_Spoke(player);
+        }
     }
 
     // One pass over the online players, reused by every eligibility test

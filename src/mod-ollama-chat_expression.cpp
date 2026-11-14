@@ -6,6 +6,7 @@
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_dispatch.h"
+#include "mod-ollama-chat_hangout.h"
 
 #include "DBCStores.h"
 #include "Log.h"
@@ -677,7 +678,7 @@ bool IsSafeForFacing(Player* bot)
     return mm && mm->GetMotionSlotType(MOTION_SLOT_CONTROLLED) == NULL_MOTION_TYPE;
 }
 
-void BotPlayTextEmote(Player* bot, uint32_t textEmoteId, ObjectGuid targetGuid)
+void BotPlayTextEmote(Player* bot, uint32_t textEmoteId, ObjectGuid targetGuid, bool stateKept)
 {
     if (!bot || !textEmoteId || !bot->IsInWorld() || !bot->IsAlive())
         return;
@@ -697,6 +698,9 @@ void BotPlayTextEmote(Player* bot, uint32_t textEmoteId, ObjectGuid targetGuid)
     data << targetGuid;
 
     session->HandleTextEmoteOpcode(data);
+    Hangout_Busy(bot, 5);   // mid-gesture: not walked off by city life (mod-playerbots-plus)
+    if (stateKept)
+        return;   // whoever set the state ends it
 
     // Posture emotes. The core broadcast the line and stopped, so do the half
     // it leaves out -- but only from standing, so a bot already eating,

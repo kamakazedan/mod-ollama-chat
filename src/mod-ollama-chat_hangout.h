@@ -1,7 +1,9 @@
 #ifndef MOD_OLLAMA_CHAT_HANGOUT_H
 #define MOD_OLLAMA_CHAT_HANGOUT_H
 
+#include <cstdint>
 #include <string>
+#include <vector>
 
 class Player;
 
@@ -50,5 +52,16 @@ bool Hangout_CanGoDuel(Player* a, Player* b, std::string& where);
 // ...and they go: both walk out there, and fight it out once they are
 // there. False when they cannot after all.
 bool Hangout_GoDuel(Player* a, Player* b);
+
+// City life (mod-playerbots-plus's CityLife.*: the crowd shifting about,
+// looking round, dancing...), told what this module has bots doing: one is
+// talking or emoting for `seconds`, so it is not walked off mid-sentence (0:
+// done); someone said something in /say, so some hanging out near them look
+// round; these are about to talk in /say, so those hanging out walk over to
+// the first to talk face to face. Without mod-playerbots-plus (API 5), none
+// of it happens.
+void Hangout_Busy(Player* bot, uint32_t seconds);
+void Hangout_Spoke(Player* speaker);
+void Hangout_Gather(const std::vector<Player*>& bots, uint32_t seconds);
 
 #endif // MOD_OLLAMA_CHAT_HANGOUT_H

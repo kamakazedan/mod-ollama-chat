@@ -27,6 +27,7 @@
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_groupquests.h"
+#include "mod-ollama-chat_citylife.h"
 #include "mod-ollama-chat_marks.h"
 #include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_needs.h"
@@ -728,6 +729,18 @@ bool OllamaChatConfigCommand::HandleOllamaStatusCommand(ChatHandler* handler, Op
                                  (unsigned long long)groupQuests.heard,
                                  (unsigned long long)groupQuests.said,
                                  (unsigned long long)groupQuests.quiet);
+
+    const CityLifeStats cityLife = CityLife_GetStats();
+    if (show("bots"))
+        handler->PSendSysMessage("City life said in /say: {} - {} rare mounts looked at, {} remarked on, {} not "
+                                 "(a player had just spoken, the other side, pacing or no room); {} dances, {} "
+                                 "with the emote",
+                                 g_CityLifeEnable ? "on" : "off",
+                                 (unsigned long long)cityLife.mounts,
+                                 (unsigned long long)cityLife.said,
+                                 (unsigned long long)cityLife.quiet,
+                                 (unsigned long long)cityLife.dances,
+                                 (unsigned long long)cityLife.emoted);
 
     const BagsStats  bags  = Bags_GetStats();
     const NeedsStats needs = Needs_GetStats();

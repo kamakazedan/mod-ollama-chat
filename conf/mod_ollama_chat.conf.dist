@@ -4224,6 +4224,59 @@ OllamaChat.GroupQuests.AnswerDelayMaxSeconds = 15
 
 ###############################################################################
 #
+#   OLLAMA CHAT - CITY LIFE
+#
+#   mod-playerbots-plus keeps the crowd hanging out in a city busy
+#   (PlayerbotsPlus.CityLife.* in its conf): shifting about, looking round
+#   at whoever speaks, hopping, dancing, errands to the bank, auction house
+#   and mailbox, fishing at the water's edge, flying in and out, and a few
+#   wandering over to look when someone gets on a mount few people about
+#   have. Here the two of those that are said:
+#
+#   - a rare mount: the first of those who came over to look says something
+#     to the rider about it in /say, in its own chat style, told the mount's
+#     real name and how few others online have one. A line nobody asked
+#     for: none starts within Context.AmbientHoldSeconds of a real player
+#     speaking nearby, it is dropped if one spoke while it was written, and
+#     the other side (in a neutral city) is not spoken to, since their /say
+#     arrives as gibberish. The rider, or another who came over, may answer.
+#   - a dance: one who starts dancing, or joins someone dancing, does it
+#     with the text emote ("X bursts into dance.", "X dances with Y."). The
+#     dance and its end are mod-playerbots-plus's.
+#
+#   The other way round, this module tells mod-playerbots-plus when a bot is
+#   talking or emoting, so it is not walked off mid-sentence; when someone
+#   says something in /say, so those about may look round at them; and when
+#   a /say exchange between bots starts, so they walk over and talk face to
+#   face. Without mod-playerbots-plus (with city life) none of this is
+#   there.
+#
+###############################################################################
+
+#    OllamaChat.CityLife.Enable
+#        Whether the crowd's city life is said at all (both below).
+#        Default: 1
+OllamaChat.CityLife.Enable = 1
+
+#    OllamaChat.CityLife.MountPrompt
+#        The prompt the remark about a rare mount is written from. Empty
+#        silences it (they still come over to look). Placeholders:
+#        {bot_name}, {bot_level}, {bot_race}, {bot_class}, {bot_personality},
+#        {rider_name}, {mount} (the mount's name, "Swift Spectral Tiger"),
+#        {rarity} ("nobody else about has one", "only 2 others about have
+#        one": of everyone online), {who} (who came over: "you", "you and
+#        one other person", "you and 2 others"), {zone}.
+#        Default: (below)
+OllamaChat.CityLife.MountPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, standing about in {zone}. Your chat style: {bot_personality} {rider_name} has just got on their mount, the {mount}, and {rarity}, so {who} wandered over to look at it. Say something to them about it in /say -- impressed, jealous, curious where they got it, or a joke about it, whatever suits your style -- and call it the {mount} if you name it. One line, 3 to 14 words, the way a player types it: no quotes, no name in front."
+
+#    OllamaChat.CityLife.DanceEmotes
+#        1: a bot that starts dancing, or joins someone dancing, does it with
+#        the text emote, which says so in chat. 0: it only dances.
+#        Default: 1
+OllamaChat.CityLife.DanceEmotes = 1
+
+###############################################################################
+#
 #   OLLAMA CHAT - WHAT BOTS CARRY, AND TRADING IT
 #
 #   A bot knows what is in its bags: what it could part with and what it

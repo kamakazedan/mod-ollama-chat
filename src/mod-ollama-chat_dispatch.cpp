@@ -457,7 +457,13 @@ namespace
             default:
                 if (g_DisableForSayYell || !AnyoneInRange(bot, g_SayDistance))
                     return false;
-                return botAI->Say(c.text);
+                if (!botAI->Say(c.text))
+                    return false;
+                // Heads turn to whoever speaks, and it does not walk off
+                // mid-sentence (mod-playerbots-plus's city life).
+                Hangout_Spoke(bot);
+                Hangout_Busy(bot, 8);
+                return true;
         }
     }
 

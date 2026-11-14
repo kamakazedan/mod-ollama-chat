@@ -58,6 +58,7 @@ namespace
     constexpr uint32_t kHoldMs        = 1500;   // a held bot's AI waits this long; renewed every tick
     constexpr uint32_t kScriptWaitSec = 60;     // an exchange still unwritten after this is given up
     constexpr uint32_t kLookMs        = 2000;   // how often to look for new ones
+    constexpr uint32_t kGatherSeconds = 240;    // those hanging out stay put this long at most (till it ends)
 
     struct Line
     {
@@ -565,6 +566,8 @@ namespace
         {
             g_busy.erase(e.members[i]);
             g_botRest[e.members[i]] = rest;
+            if (Player* p = Find(e.members[i]))
+                Hangout_Busy(p, 0);   // done talking: free to shift about again
             if (!e.held[i])
                 continue;
             if (Player* p = Find(e.members[i]))
@@ -783,8 +786,14 @@ namespace
         e.waitUntil = now + std::chrono::seconds(kScriptWaitSec);
         ++g_stats.asked;
 
+        // Those hanging out stand together to talk, the one further off
+        // walking over (mod-playerbots-plus's city life), and nobody there
+        // wanders off while they talk.
+        Hangout_Gather(group, kGatherSeconds);
+
         // They stop where they are and turn to each other while it is
-        // written; one walking past stops to talk.
+        // written; one walking past stops to talk. (One walking over turns
+        // once it is there: a turn while walking is not made.)
         for (size_t i = 0; i < group.size(); ++i)
         {
             Player* p = group[i];
@@ -838,6 +847,8 @@ namespace
         const auto rest = now + std::chrono::seconds(g_MingleEmoteBotCooldownSeconds);
         g_nodRest[a->GetGUID().GetRawValue()] = rest;
         g_nodRest[b->GetGUID().GetRawValue()] = rest;
+        Hangout_Busy(a, 6);   // greeting each other: neither steps off mid-wave
+        Hangout_Busy(b, 6);
         ++g_stats.greetings;
     }
 

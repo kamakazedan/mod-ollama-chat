@@ -13,6 +13,7 @@
 #include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_groupquests.h"
+#include "mod-ollama-chat_citylife.h"
 #include "mod-ollama-chat_marks.h"
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_race.h"
@@ -695,6 +696,10 @@ std::string g_GroupQuestsInviteText;
 std::string g_GroupQuestsSoloText;
 uint32_t    g_GroupQuestsAnswerDelayMinSeconds = 6;
 uint32_t    g_GroupQuestsAnswerDelayMaxSeconds = 15;
+
+bool        g_CityLifeEnable                   = true;
+std::string g_CityLifeMountPrompt;
+bool        g_CityLifeDanceEmotes              = true;
 
 std::vector<std::vector<std::string>> g_BagsCancelPhrases;
 std::vector<std::vector<std::string>> g_BagsCancelNotPhrases;
@@ -3418,6 +3423,22 @@ static void LoadNaturalChatV33Settings()
              g_GroupQuestsEnable ? "on" : "off");
 }
 
+static void LoadNaturalChatV34Settings()
+{
+    // --- city life (mod-playerbots-plus), said in /say --------------------------------------
+    g_CityLifeEnable = sConfigMgr->GetOption<bool>("OllamaChat.CityLife.Enable", true);
+    g_CityLifeMountPrompt = sConfigMgr->GetOption<std::string>("OllamaChat.CityLife.MountPrompt",
+        "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, standing about in {zone}. Your chat style: "
+        "{bot_personality} {rider_name} has just got on their mount, the {mount}, and {rarity}, so {who} wandered "
+        "over to look at it. Say something to them about it in /say -- impressed, jealous, curious where they got "
+        "it, or a joke about it, whatever suits your style -- and call it the {mount} if you name it. One line, 3 to "
+        "14 words, the way a player types it: no quotes, no name in front.");
+    g_CityLifeDanceEmotes = sConfigMgr->GetOption<bool>("OllamaChat.CityLife.DanceEmotes", true);
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v34: city life said in /say {} (dances {}).",
+             g_CityLifeEnable ? "on" : "off", g_CityLifeDanceEmotes ? "on" : "off");
+}
+
 static void LoadNaturalChatV30Settings()
 {
     // --- what chat is really like ---------------------------------------------------------
@@ -4392,6 +4413,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV31Settings();
     LoadNaturalChatV32Settings();
     LoadNaturalChatV33Settings();
+    LoadNaturalChatV34Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);
@@ -4847,6 +4869,7 @@ void OllamaChatConfigWorldScript::OnStartup()
     Stuck_Init();
     Marks_Init();
     GroupQuests_Init();
+    CityLife_Init();
     LoadBotPersonalityList();
     LoadBotConversationHistoryFromDB();
     InitializeSentimentTracking();

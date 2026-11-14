@@ -745,6 +745,11 @@ extern std::string g_GroupQuestsSoloText;      // nobody came: it tries alone
 extern uint32_t    g_GroupQuestsAnswerDelayMinSeconds;
 extern uint32_t    g_GroupQuestsAnswerDelayMaxSeconds;
 
+// City life (mod-playerbots-plus), said in /say: a rare mount looked at, a dance
+extern bool        g_CityLifeEnable;
+extern std::string g_CityLifeMountPrompt;     // one who came over to look at a rare mount says so
+extern bool        g_CityLifeDanceEmotes;     // "X bursts into dance.", "X dances with Y."
+
 // Taking a gift back out of the trade window
 extern std::vector<std::vector<std::string>> g_BagsCancelPhrases;
 extern std::vector<std::vector<std::string>> g_BagsCancelNotPhrases;

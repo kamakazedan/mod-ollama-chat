@@ -913,6 +913,14 @@ With both modules in the same build, the bots talk about what it has them do:
   getting the party together telling someone who asks to come along, and
   going it alone when nobody came. Only where a real player is in General to
   read it, and an ask never talks over one (`OllamaChat.GroupQuests.*`).
+- **City life:** the crowd hanging out in a city shifts about, hops, dances,
+  runs errands, fishes and flies in and out (mod-playerbots-plus's
+  `PlayerbotsPlus.CityLife.*`). When someone gets on a mount few people
+  online have, a few wander over for a look and one of them says something
+  about it, the real mount by name. A bot that starts dancing, or joins
+  someone dancing, does it with the emote. Bots talking in /say stay put
+  while they do, look round at whoever speaks near them, and walk over to
+  talk face to face (`OllamaChat.CityLife.*`).
 - **Muted lines:** this module has the bots say "Staying", "Following", hello
   on joining a group, and a quest objective done in their own words. Give
   mod-playerbots-plus the longer mute list from its conf, so playerbots' own

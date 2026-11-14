@@ -105,3 +105,40 @@ bool Hangout_GoDuel(Player* /*a*/, Player* /*b*/)
 }
 
 #endif
+
+// City life: the crowd's own goings-on are mod-playerbots-plus's (CityLife.*
+// there); this only tells it who is talking.
+#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 5
+
+void Hangout_Busy(Player* bot, uint32_t seconds)
+{
+    if (bot)
+        PlayerbotsPlus::CityBusy(bot, seconds);
+}
+
+void Hangout_Spoke(Player* speaker)
+{
+    if (speaker)
+        PlayerbotsPlus::CitySpoke(speaker);
+}
+
+void Hangout_Gather(const std::vector<Player*>& bots, uint32_t seconds)
+{
+    PlayerbotsPlus::CityGather(bots, seconds);
+}
+
+#else
+
+void Hangout_Busy(Player* /*bot*/, uint32_t /*seconds*/)
+{
+}
+
+void Hangout_Spoke(Player* /*speaker*/)
+{
+}
+
+void Hangout_Gather(const std::vector<Player*>& /*bots*/, uint32_t /*seconds*/)
+{
+}
+
+#endif

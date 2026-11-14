@@ -70,7 +70,12 @@ std::string LookupTextEmoteName(uint32_t id);
 // localized SMSG_TEXT_EMOTE broadcast, per-race/gender variant numbering,
 // achievement criteria and CreatureAI::ReceiveEmote all behave exactly as they
 // do for a real player. World thread only.
-void BotPlayTextEmote(Player* bot, uint32_t textEmoteId, ObjectGuid targetGuid);
+//
+// A state the emote leaves on (a dance, a sit) is taken off again after
+// OllamaChat.StateEmoteDurationMs. With `stateKept` it is not: the state is
+// someone else's to end (city life's dances, mod-playerbots-plus), and the
+// emote only says it.
+void BotPlayTextEmote(Player* bot, uint32_t textEmoteId, ObjectGuid targetGuid, bool stateKept = false);
 
 // Queue "turn toward target, then gesture" on the bot's own EventProcessor,
 // which Player::Update ticks on the map thread. World thread only.
