@@ -18,7 +18,8 @@
 // Hangout_Busy, Hangout_Spoke and Hangout_Gather), 6 for city life by
 // temperament and showing off, 7 for what things are worth and how rarely
 // they drop (mod-ollama-chat_tradechat), 8 for where things drop
-// (mod-ollama-chat_drops: knowledge's answers and rare gear).
+// (mod-ollama-chat_drops: knowledge's answers and rare gear), 9 for what each
+// bot looted itself (OllamaLootedByBot): the only things a bot ever sells.
 // --------------------------------------------------------------------------
 
 #if __has_include("PlayerbotsPlus.h")
@@ -30,5 +31,24 @@
 #else
 #define OLLAMA_CHAT_PLAYERBOTS_PLUS 0
 #endif
+
+class Item;
+class Player;
+
+// Did `bot` loot this stack in its bags itself, with nothing but more loot
+// added to it since (mod-playerbots-plus's record)? A bot sells only that:
+// never what playerbots hands it for nothing, nor anything it bought, was
+// given, made or got from a quest. Without mod-playerbots-plus nothing is
+// known to be its loot, so nothing is sold. World thread.
+inline bool OllamaLootedByBot(Player* bot, Item* item)
+{
+#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 9
+    return PlayerbotsPlus::LootedByBot(bot, item);
+#else
+    (void)bot;
+    (void)item;
+    return false;
+#endif
+}
 
 #endif // MOD_OLLAMA_CHAT_PLUS_H

@@ -490,13 +490,15 @@ namespace
         return best;
     }
 
-    // The bot's stacks of a thing in its bags, the ones it could hand over.
+    // The bot's stacks of a thing in its bags that it could sell: ones it
+    // could hand over, and looted itself -- never what playerbots handed it,
+    // nor anything bought, given, made or a quest's.
     std::vector<Item*> StacksOf(Player* bot, uint32_t entry)
     {
         std::vector<Item*> out;
         auto take = [&](Item* item)
         {
-            if (item && item->GetEntry() == entry && CanHandOver(item))
+            if (item && item->GetEntry() == entry && CanHandOver(item) && OllamaLootedByBot(bot, item))
                 out.push_back(item);
         };
         for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
@@ -1321,6 +1323,10 @@ namespace
                     return;
                 const Worth w = WorthOf(p, item->GetCount(), team);
                 if (p->Quality < ITEM_QUALITY_UNCOMMON && w.lot < g_TradeAdMinCopper)
+                    return;
+                // Only what it looted itself: "selling [Adamantite Weightstone]
+                // x20, 3g 30s!" was playerbots' own free stones.
+                if (!OllamaLootedByBot(bot, item))
                     return;
                 options.push_back({ item, p, w });
             };

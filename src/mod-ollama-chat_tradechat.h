@@ -25,6 +25,11 @@ class Player;
 //     quality, far more the rarer it drops, from the world's own loot tables
 //     (and how rare, when it is: "about once in 20,800 kills") -- or,
 //     without it, a multiple of what a vendor pays.
+//   * A bot sells only what it looted itself (mod-playerbots-plus's record,
+//     OllamaLootedByBot): never what playerbots handed it for nothing --
+//     "selling [Adamantite Weightstone] x20, 3g 30s!" was its free stones --
+//     nor anything bought, given, made or a quest's. Without
+//     mod-playerbots-plus nothing is known to be its loot: it only buys.
 //   * Nothing that cannot change hands is dealt in: an offer, a want or a
 //     price check of a thing bound when picked up, a quest's or bound to an
 //     account is left alone, as is anyone selling what they do not carry
@@ -51,8 +56,8 @@ class Player;
 //     Playerbots, which turns down any trade with someone outside the bot's
 //     group, is held off it meanwhile (mod-ollama-chat_favor).
 //   * Now and then a bot in a city with a real player about puts up
-//     something it can spare: "WTS [Pagan Vest] 1g 50s". A whisper or a line
-//     about it is a haggle like any other.
+//     something it looted and can spare: "WTS [Pagan Vest] 1g 50s". A whisper
+//     or a line about it is a haggle like any other.
 //
 // The talk afterwards -- "its a gun", "deal, come trade me", whispered or in
 // Trade -- is the same bot's, told how the haggle stands.

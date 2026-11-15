@@ -78,7 +78,8 @@ std::string Conjure_GiveItems(Player* bot, Player* player, const std::vector<std
                               std::string& when);
 
 // Sell `stack` (that stack, whole) to `player` for exactly `price` -- a deal
-// struck in Trade chat (mod-ollama-chat_tradechat). The way the water goes
+// struck in Trade chat (mod-ollama-chat_tradechat) -- when it is one the bot
+// looted itself (OllamaLootedByBot), and never otherwise. The way the water goes
 // over, except that the bot's side is accepted only once theirs holds exactly
 // `price` and nothing else. It waits up to `waitSeconds` for them to come
 // close enough (0: Conjure.WaitSeconds), then asks them to trade. Empty when

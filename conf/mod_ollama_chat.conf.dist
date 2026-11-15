@@ -4800,6 +4800,12 @@ OllamaChat.Report.File = "OllamaChatReport.log"
 #   - Now and then a bot in a city with a real player about puts up
 #     something it can spare: "WTS [Pagan Vest] 1g 50s" (AdLines). A whisper
 #     or a line about it is a haggle like any other.
+#   - A bot sells only what it looted itself -- from a kill, a chest, a herb
+#     or a vein, skinning, fishing, or won on a roll -- never what playerbots
+#     hands it for nothing (gear, ammo, food, potions, reagents, sharpening
+#     stones and weightstones, oils), nor anything it bought, was given, made
+#     or got from a quest. mod-playerbots-plus keeps each bot's loot, stack by
+#     stack; without it nothing is known to be loot, and bots only buy.
 #   - Nothing that cannot change hands is dealt in. An offer, a want or a
 #     price check of something bound when picked up, a quest's or bound to an
 #     account gets no answer, nor does anyone selling a thing they do not

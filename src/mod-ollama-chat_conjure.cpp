@@ -6,6 +6,7 @@
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_favor.h"
 #include "mod-ollama-chat_governor.h"
+#include "mod-ollama-chat_plus.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
@@ -1271,6 +1272,9 @@ std::string Conjure_SellItem(Player* bot, Player* player, Item* stack, uint32_t 
     when.clear();
     if (!bot || !player || !stack || !price)
         return "there is nothing to sell";
+    // Only what it looted itself, ever (mod-playerbots-plus's record).
+    if (!OllamaLootedByBot(bot, stack))
+        return "you only ever sell what you looted yourself, and that is not";
     if (!Favor_TradesWithStrangers() && !InGroupWith(player, bot))
         return "you only trade with people in your group";
     if (!bot->IsAlive())

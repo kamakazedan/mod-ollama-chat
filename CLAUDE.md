@@ -244,6 +244,15 @@ topic that offers something for sale is `Commerce` in `topics.cpp`, picked
 only for a line going to Trade. A thing given away free carries
 `OllamaChatRequest::noPrice`.
 
+A bot sells only what it looted itself -- the user's rule for every bot,
+wherever it sells: never what playerbots hands it for nothing, nor anything
+bought, given, made or a quest's. Which stacks those are is
+mod-playerbots-plus's record (`OllamaLootedByBot`, API 9; without it nothing
+is loot and nothing is sold): `StacksOf` and the ads take only those, and
+`Conjure_SellItem` turns any other down. "selling [Adamantite Weightstone]
+x20, 3g 30s!" was playerbots' free stones, which `HandedOutFree`'s kinds had
+missed (Consumable/Other). Anything new that sells asks it of the very stack.
+
 What a thing is worth with nothing on the auction house is
 mod-playerbots-plus's market's (`PlayerbotsPlus::ItemWorth`, API 7: by
 quality, far more the rarer it drops, from the world's own loot tables), so a
