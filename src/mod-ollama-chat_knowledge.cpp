@@ -1299,6 +1299,37 @@ std::string Knowledge_PromptFor(Player* bot, Player* speaker, const std::string&
     return out;
 }
 
+bool Knowledge_TownWay(Player* bot, const std::string& here, std::string& place, std::string& way)
+{
+    place.clear();
+    way.clear();
+    if (!g_KnowledgeEnable || !bot)
+        return false;
+    Build();
+    std::string town;
+    Menu const* menu = MenuFor(bot, {}, town);
+    if (!menu)
+        return false;
+    const std::vector<std::string> hereWords = CrowdText::Words(AsciiLower(here));
+    std::vector<Direction const*> fit;
+    for (const Direction& d : menu->dirs)
+        if (!d.classTrainer && !d.text.empty() && !HasAll(hereWords, d.keys))
+            fit.push_back(&d);
+    if (fit.empty())
+        return false;
+    Direction const* d = fit[urand(0, uint32(fit.size() - 1))];
+    way = GuardSays(d->text, nullptr, g_KnowledgeMaxGuardChars);
+    while (!way.empty() && (way.back() == '.' || way.back() == ' '))
+        way.pop_back();   // it goes on after a premise, which the prompt ends with a full stop
+    if (way.empty())
+        return false;
+    place = PlaceName(*d);
+    if (place.compare(0, 4, "the ") != 0)
+        place = "the " + place;
+    ++g_stats.townWays;
+    return true;
+}
+
 std::string Knowledge_DropFacts(ItemTemplate const* proto)
 {
     if (!proto)

@@ -971,8 +971,8 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
     if (show("talk"))
         out("Knowledge: {} - answers put in prompts: {} how to get an item ({} where it drops), {} where a "
                              "place is, {} ask a guard for any trainer, {} a question just before ({} told to get it "
-                             "wrong on purpose); {} guard direction menus, {} items sold by vendors (0 until the "
-                             "first question)",
+                             "wrong on purpose); {} /say exchanges about being lost told a real place and its way; "
+                             "{} guard direction menus, {} items sold by vendors (0 until the first question)",
                              g_KnowledgeEnable ? "on" : "off",
                              (unsigned long long)known.items,
                              (unsigned long long)known.drops,
@@ -980,6 +980,7 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
                              (unsigned long long)known.headings,
                              (unsigned long long)known.followUps,
                              (unsigned long long)known.wrong,
+                             (unsigned long long)known.townWays,
                              known.menus,
                              known.sold);
     const WantsStats wants = Wants_GetStats();

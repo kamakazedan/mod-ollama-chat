@@ -333,7 +333,11 @@ described by its listed goals and its ender, never the quest log's sentence
 ("Kill 15 Blackrock Champions and Guard Howe in Lakeshire will reward you"
 became "kill Guard Howe"), and a remark about a passer-by is handed something
 real to remark on, with what is not there (`OllamaChatRequest::mustNotSay`:
-mount words for someone on foot) dropped at delivery.
+mount words for someone on foot) dropped at delivery. Two bots chatting
+about one of them being lost are handed one of the town's places and what its
+guards say of the way there (`Knowledge_TownWay`, mingle's `[lost]`): asked
+where the reagents were with nothing to go on, the other bot made up an
+answer.
 
 Where a thing drops is real too: `mod-ollama-chat_drops` reads
 mod-playerbots-plus's sums from the loot tables (`DropChance`, API 7;
@@ -348,14 +352,16 @@ creature or a place the tables do not.
 
 What chat itself is like is real too. When the talk is of chat, a reply is
 told how busy General and Trade have really been (`Outlook_ChatFor`, counted
-by `Context_ChannelLines`) and that every channel is in everyone's chat
-window; a /say exchange between bots is told it every time
+by `Context_ChannelLines`) and that everyone reads every channel wherever
+they stand; a /say exchange between bots is told it every time
 (`Mingle.ChatText`), being written all at once. Untold, bots on a realm
 where nobody had typed in Trade all evening called it "basically a
-warzone", and one said "brb gonna go check trade chat". A premise that puts
-someone in a state they are not in is made up the same way: "one of them is
-waiting for a group" was never true of a mingle, since a bot in a queue
-never mingles.
+warzone", and one said "brb gonna go check trade chat". Call them channels,
+never a chat window: told Trade showed in everyone's chat window, a bot sent
+another to "the trade0 window" (the trade window is for swapping things).
+A premise that puts someone in a state they are not in is made up the same
+way: "one of them is waiting for a group" was never true of a mingle, since
+a bot in a queue never mingles.
 
 Every line a bot says is in its own style. The model's lines are, through its
 personality prompt; a typed (canned) line goes through

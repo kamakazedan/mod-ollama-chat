@@ -4137,9 +4137,9 @@ static void LoadNaturalChatV30Settings()
 {
     // --- what chat is really like ---------------------------------------------------------
     g_OutlookChatText = sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.ChatText",
-        "General, and in the cities Trade, show in your own chat window wherever you are, as they do in "
-        "everyone's, so nobody goes anywhere to read them. What they have really been like here: {chat}. Say "
-        "nothing about them that is not so.");
+        "General chat, and in the cities trade chat, are channels you read wherever you are, like everyone "
+        "else, so nobody goes anywhere to read them. What they have really been like here: {chat}. Say nothing "
+        "about them that is not so.");
     g_OutlookChatWords = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Outlook.ChatWords",
         "trade chat|trade channel|in trade|on trade|try trade|check trade|spam trade|trade is|trade was|trades dead|"
         "trade dead|general chat|general channel|in general|check general|general is|general was|generals dead|"
@@ -4155,8 +4155,8 @@ static void LoadNaturalChatV30Settings()
         g_OutlookChatStates.clear();
     }
     g_MingleChatText = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.ChatText",
-        "If chat comes up: General, and in the cities Trade, show in each player's own chat window wherever they "
-        "stand, so nobody goes anywhere to read them, and {chat}.");
+        "If chat comes up: General chat, and in the cities trade chat, are channels every player reads wherever "
+        "they stand, so nobody goes anywhere to read them, and {chat}.");
 
     LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v30: talk of chat told what General and Trade are really "
              "like {} ({} chat words); /say exchanges between bots told it {}.",
@@ -4249,7 +4249,7 @@ static void LoadNaturalChatV24Settings()
         "plainly.");
 
     // Mingle.Premises tags: what each one needs to be there.
-    static const char* const kKnown[] = { "mount", "pet", "loot", "quest", "duel", "horde", "alliance" };
+    static const char* const kKnown[] = { "mount", "pet", "loot", "quest", "duel", "lost", "horde", "alliance" };
     std::string unknown;
     for (std::string premise : g_MinglePremises)
         for (const std::string& tag : TextRules::TakePremiseTags(premise))
@@ -4373,8 +4373,9 @@ static void LoadNaturalChatV16Settings()
         "or class, all in good fun|swapping tips about levelling their classes|[duel] one of them challenges "
         "the other to a duel, and they agree to head {duel_where} and fight it out|one of them asks the other "
         "if they have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: "
-        "the players walking past|levelling their professions|which zone is the worst to quest in|being lost "
-        "in this city|what they are saving their gold for|a funny death one of them had today|one of them is "
+        "the players walking past|levelling their professions|which zone is the worst to quest in|[lost] one "
+        "of them is looking for {lost_place} and asks the other the way, and the other knows it: {lost_way}|"
+        "what they are saving their gold for|a funny death one of them had today|one of them is "
         "about to log off|their guilds, or not having one|an imagine-if one of them dreams up, plainly made "
         "up for a laugh|gnomes|murlocs|[15+] whether to run a dungeon together later|[15+] a dungeon one of "
         "them ran earlier|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] "

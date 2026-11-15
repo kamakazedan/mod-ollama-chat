@@ -8,6 +8,7 @@
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_handler.h"
 #include "mod-ollama-chat_hangout.h"
+#include "mod-ollama-chat_knowledge.h"
 #include "mod-ollama-chat_lately.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_outlook.h"
@@ -312,20 +313,34 @@ namespace
         return g_MingleStrangersText;
     }
 
+    // Where a premise is about a real place: "[duel]" where two go to fight
+    // it out, "[lost]" one of the town's places and what its guards say of
+    // the way there.
+    struct PlaceFacts
+    {
+        std::string duelWhere;
+        std::string lostPlace;
+        std::string lostWay;
+    };
+
     // What there is among them for a premise to need: "[mount]" one of them
     // riding one, "[pet]" a pet or companion out, "[loot]" something got
     // lately, "[quest]" a quest handed in lately, "[duel]" two who could go
     // out to the gates and duel there now (mod-playerbots-plus), and where
-    // that is -- and their side, "[horde]" or "[alliance]" (only one side
-    // mingles together).
-    std::set<std::string> FactsOf(const std::vector<Player*>& group, std::string& duelWhere)
+    // that is, "[lost]" a town whose guards give directions, and one of its
+    // places other than `here` -- and their side, "[horde]" or "[alliance]"
+    // (only one side mingles together).
+    std::set<std::string> FactsOf(const std::vector<Player*>& group, const std::string& here, PlaceFacts& places)
     {
         std::set<std::string> facts;
-        duelWhere.clear();
+        places = {};
         if (!group.empty())
             facts.insert(TextRules::SideTag(group.front()->GetTeamId() == TEAM_ALLIANCE));
-        if (group.size() == 2 && Hangout_CanGoDuel(group[0], group[1], duelWhere) && !duelWhere.empty())
+        if (group.size() == 2 && Hangout_CanGoDuel(group[0], group[1], places.duelWhere) &&
+            !places.duelWhere.empty())
             facts.insert("duel");
+        if (!group.empty() && Knowledge_TownWay(group.front(), here, places.lostPlace, places.lostWay))
+            facts.insert("lost");
         for (Player* p : group)
         {
             const TextRules::Animals a = Pets_Seen(p).animals;
@@ -431,14 +446,25 @@ namespace
             names.push_back(p->GetName());
         }
 
-        std::string duelWhere;
-        std::string premise = PickPremise(level, FactsOf(group, duelWhere), duel);
+        // {at} reads after "standing near each other": "in the Trade District
+        // in Stormwind", "outside the bank in Orgrimmar".
+        const std::string where = Where(group.front());
+
+        PlaceFacts places;
+        std::string premise = PickPremise(level, FactsOf(group, where, places), duel);
         if (premise.empty())
             return {};
-        // Where they will go and fight it out: the real place, "outside the
-        // gates of Stormwind".
-        for (size_t at = premise.find("{duel_where}"); at != std::string::npos; at = premise.find("{duel_where}"))
-            premise.replace(at, 12, duelWhere);
+        // The real places in it: where they will go and fight it out,
+        // "outside the gates of Stormwind"; the one somebody cannot find, and
+        // what the guards say of the way there.
+        auto fill = [&premise](const std::string& slot, const std::string& value)
+        {
+            for (size_t at = premise.find(slot); at != std::string::npos; at = premise.find(slot, at + value.size()))
+                premise.replace(at, slot.size(), value);
+        };
+        fill("{duel_where}", places.duelWhere);
+        fill("{lost_place}", places.lostPlace);
+        fill("{lost_way}", places.lostWay);
 
         // The shape of it, with their own names. An emote is in it only now
         // and then, picked each time: shown one every time, every exchange
@@ -456,9 +482,6 @@ namespace
         const uint32_t lines = std::min(Between(g_MingleMinLines, g_MingleMaxLines),
                                         Between(g_MingleMinLines, g_MingleMaxLines));
 
-        // {at} reads after "standing near each other": "in the Trade District
-        // in Stormwind", "outside the bank in Orgrimmar".
-        const std::string where = Where(group.front());
         const std::string prompt = SafeFormat(g_MinglePromptTemplate,
                                               fmt::arg("count", group.size() >= 3 ? "Three" : "Two"),
                                               fmt::arg("where", where),

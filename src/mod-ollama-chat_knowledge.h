@@ -63,6 +63,17 @@ bool Knowledge_IsQuestion(const std::string& msg);
 
 struct ItemTemplate;
 
+// For a /say exchange between bots about being lost where they stand: one of
+// the places the guards of the town or city `bot` is in give directions to
+// ("the bank", "the leatherworking trainer"; not a class's trainer, nor the
+// place they stand at, `here`: "outside the bank in Orgrimmar"), picked at
+// random, and what the guards say of it ("The Bank of Orgrimmar is in the
+// Valley of Strength. Look for it north of the main entrance to the city").
+// Asked where the reagents were with nothing of the kind, a bot sent the
+// other to "the trade0 window". False: no guards near enough
+// (Knowledge.GuardRange), or Knowledge off.
+bool Knowledge_TownWay(Player* bot, const std::string& here, std::string& place, std::string& way);
+
 // Where a thing drops, as the world's loot tables have it (with
 // mod-playerbots-plus API 8): "It is a world drop: any of 331 kinds of
 // creature around level 58 to 61 can drop it, about once in 18,000 kills of
@@ -82,6 +93,7 @@ struct KnowledgeStats
     uint64_t headings  = 0;   // ...that the guards direct you to each trainer
     uint64_t followUps = 0;   // ...the answer to a question a line or two back
     uint64_t wrong     = 0;   // ...and to get it wrong on purpose
+    uint64_t townWays  = 0;   // /say exchanges about being lost handed a real place and its way (Knowledge_TownWay)
     uint32_t menus     = 0;   // guard direction menus known
     uint32_t sold      = 0;   // items some vendor in the world sells
 };
