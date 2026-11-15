@@ -233,6 +233,17 @@ the market does not take, ambient chatter and conversations leave Trade out,
 and a spare thing given away goes to General. A new kind of line never goes
 to Trade unless it is about a deal.
 
+And a deal is said nowhere else (`Trade.DealsOnlyInTrade`): a bot's line
+anywhere but Trade or a whisper that buys or sells (`TextRules::IsDealOffer`:
+one of `Trade.DealWords`, or of `Trade.PricedDealWords` with a price) is
+dropped at delivery -- one owed to someone gets another go without it --
+unless it is a deal of this module's (`mustPrice`, `okPrices`) or answers a
+real player who brought a deal or a price up. The auction house's "just put
+it up" topic had "anyone want [Moongraze Stag Tenderloin]? 52c" in General: a
+topic that offers something for sale is `Commerce` in `topics.cpp`, picked
+only for a line going to Trade. A thing given away free carries
+`OllamaChatRequest::noPrice`.
+
 What a thing is worth with nothing on the auction house is
 mod-playerbots-plus's market's (`PlayerbotsPlus::ItemWorth`, API 7: by
 quality, far more the rarer it drops, from the world's own loot tables), so a

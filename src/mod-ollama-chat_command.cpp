@@ -802,7 +802,8 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
             "{} price checks, {} nobody wanted or had, {} in things that cannot change hands (or not on the seller, "
             "unbound): left alone; {} said about deals ({} counter-offers, {} rip-offs and "
             "lowballs called out, {} walked away from, {} with a made-up price, said as a stock line); {} deals "
-            "struck, {} walked over to trade, {} traded, {} never were; {} things bots put up; {} haggling now",
+            "struck, {} walked over to trade, {} traded, {} never were; {} things bots put up; {} haggling now; {} "
+            "lines of bots' buying or selling outside Trade not said",
             g_TradeEnable ? "on" : "off", g_TradeEnable && g_TradeOnlyCommerce ? ", buying and selling only" : "",
             (unsigned long long)trade.heard, (unsigned long long)trade.ignored, (unsigned long long)trade.sales,
             (unsigned long long)trade.wants, (unsigned long long)trade.checks, (unsigned long long)trade.nobody,
@@ -810,7 +811,7 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
             (unsigned long long)trade.callouts, (unsigned long long)trade.passed,
             (unsigned long long)trade.fallbacks, (unsigned long long)trade.agreed, (unsigned long long)trade.walked,
             (unsigned long long)trade.done, (unsigned long long)trade.lapsed, (unsigned long long)trade.ads,
-            trade.talking);
+            trade.talking, (unsigned long long)trade.elsewhere);
 
     const CorpseStats corpse = Corpse_GetStats();
     if (show("bots"))

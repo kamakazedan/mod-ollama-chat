@@ -169,6 +169,11 @@ struct OllamaChatRequest
     uint32_t              mustPrice = 0;
     std::vector<uint32_t> okPrices;
 
+    // A line giving something away (mod-ollama-chat_needs): it names no price
+    // at all. One that does is a sale -- "anyone want [Linen Cloth]? 52c" --
+    // and goes out as `fallbackText`, or not at all.
+    bool noPrice = false;
+
     // The tank calling the end of a dungeon-clear run (mod-ollama-chat_partycmd):
     // once it is out, the rest of the group says gg.
     bool doneCall = false;

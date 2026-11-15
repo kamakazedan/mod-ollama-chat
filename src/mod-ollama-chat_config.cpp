@@ -725,6 +725,7 @@ std::unordered_map<std::string, CorpseStyle> g_CorpseStyles;
 
 bool        g_TradeEnable                      = true;
 bool        g_TradeOnlyCommerce                = true;
+bool        g_TradeDealsOnlyInTrade            = true;
 uint32_t    g_TradeMaxSpendPercent             = 50;
 uint32_t    g_TradeMaxJudged                   = 30;
 uint32_t    g_TradeTalkSeconds                 = 180;
@@ -777,6 +778,9 @@ std::vector<std::vector<std::string>> g_TradeBuyWords;
 std::vector<std::vector<std::string>> g_TradeCheckWords;
 std::vector<std::vector<std::string>> g_TradeAskSellerWords;
 std::vector<std::vector<std::string>> g_TradeAcceptWords;
+std::vector<std::vector<std::string>> g_TradeDealWords;
+std::vector<std::vector<std::string>> g_TradePricedDealWords;
+std::string g_TradeElsewhereNote;
 std::vector<std::vector<std::string>> g_TradeRejectWords;
 std::vector<std::vector<std::string>> g_TradeEachWords;
 
@@ -3730,6 +3734,7 @@ static void LoadNaturalChatV37Settings()
     // --- Trade chat: buying and selling, and nothing else (mod-ollama-chat_tradechat) -------
     g_TradeEnable           = sConfigMgr->GetOption<bool>("OllamaChat.Trade.Enable", true);
     g_TradeOnlyCommerce     = sConfigMgr->GetOption<bool>("OllamaChat.Trade.OnlyCommerce", true);
+    g_TradeDealsOnlyInTrade = sConfigMgr->GetOption<bool>("OllamaChat.Trade.DealsOnlyInTrade", true);
     g_TradeMaxSpendPercent  = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.MaxSpendPercent", 50), 100);
     g_TradeMaxJudged        = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.MaxJudged", 30), 1, 200);
     g_TradeTalkSeconds      = std::max<uint32_t>(30, sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.TalkSeconds", 180));
@@ -3809,6 +3814,18 @@ static void LoadNaturalChatV37Settings()
         "no|nah|nope|no thanks|no ty|no thx|pass|too low|too little|lowball|no deal|forget it|nvm|never mind|"
         "not for that|thats too low|lol no|rip off|ripoff|insulting|too much|too high|too steep");
     g_TradeEachWords = phrases("OllamaChat.Trade.EachWords", "each|ea|per|apiece|a piece|per one|a pop");
+
+    // What a bot's own line is buying or selling by, said anywhere but Trade.
+    g_TradeDealWords = phrases("OllamaChat.Trade.DealWords",
+        "wts|wtb|wtt|for sale|obo|or best offer|best offer|make an offer|make me an offer|any offers|pst");
+    g_TradePricedDealWords = phrases("OllamaChat.Trade.PricedDealWords",
+        "selling|buying|anyone want|anybody want|any1 want|anyone wants|anybody wants|who wants|whoever wants|"
+        "anyone need|anybody need|any1 need|who needs|whoever needs|anyone wanna|anybody wanna|any1 wanna|"
+        "anyone interested|anybody interested|if interested|up for grabs|going cheap|yours for|asking|paying|"
+        "will pay|ill pay|whisper me|w me|msg me|hmu");
+    g_TradeElsewhereNote = text("OllamaChat.Trade.ElsewhereNote",
+        "Do not offer anything for sale or ask to buy anything in this line, and name no price: people buy and "
+        "sell in the Trade channel, in the cities.");
 
     // What it is told, and says.
     g_TradePromptTemplate = text("OllamaChat.Trade.PromptTemplate",
@@ -5347,7 +5364,7 @@ void LoadOllamaChatConfig()
     });
 
     g_EnvCommentMarketListed = LoadEnvCommentVector("OllamaChat.EnvCommentMarketListed", {
-        "You just put {item} up on the auction house for {price}. Mention it the way players do in General: that it is up if anyone wants it, or ask what it usually goes for.",
+        "You just put {item} up on the auction house for {price}. Say so the way players do in Trade: that it is on the auction house if anyone wants it.",
         "{item} is up on the auction house now, yours, for {price}. Say so in passing, or wonder whether you priced it right."
     });
 

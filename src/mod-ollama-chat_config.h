@@ -786,6 +786,7 @@ extern std::unordered_map<std::string, CorpseStyle> g_CorpseStyles;   // persona
 // Trade chat: buying and selling, and nothing else (mod-ollama-chat_tradechat). World thread.
 extern bool        g_TradeEnable;
 extern bool        g_TradeOnlyCommerce;          // nothing but deals said in Trade
+extern bool        g_TradeDealsOnlyInTrade;      // and no deal said anywhere else: such a line there is not said
 extern uint32_t    g_TradeMaxSpendPercent;       // of a bot's money, on one thing
 extern uint32_t    g_TradeMaxJudged;             // bots asked about one thing put up
 extern uint32_t    g_TradeTalkSeconds;           // a haggle forgotten after this long quiet
@@ -838,6 +839,9 @@ extern std::vector<std::vector<std::string>> g_TradeBuyWords;
 extern std::vector<std::vector<std::string>> g_TradeCheckWords;
 extern std::vector<std::vector<std::string>> g_TradeAskSellerWords;   // "do you sell": buying, though it says sell
 extern std::vector<std::vector<std::string>> g_TradeAcceptWords;
+extern std::vector<std::vector<std::string>> g_TradeDealWords;         // a bot's line with one is buying or selling
+extern std::vector<std::vector<std::string>> g_TradePricedDealWords;   // ...and with one of these and a price
+extern std::string g_TradeElsewhereNote;   // another go for a line owed to someone, without the deal
 extern std::vector<std::vector<std::string>> g_TradeRejectWords;
 extern std::vector<std::vector<std::string>> g_TradeEachWords;
 

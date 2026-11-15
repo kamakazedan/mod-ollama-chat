@@ -778,6 +778,8 @@ OllamaChat.EnvCommentBagItem = You notice a {item_name} in your bag and consider
 
 # OllamaChat.EnvCommentBagItemSell
 #   Description: A pipe-separated (|) list of template messages for an item the bot might try to sell.
+#   Selling is for Trade: only said by a bot whose line goes to Trade (ChatterUseTradeChannel with
+#   Trade.OnlyCommerce 0), so with Trade.OnlyCommerce never.
 #   Placeholders (named): {item_count} {item_name}
 OllamaChat.EnvCommentBagItemSell = You are trying persuasively to sell {item_count} of this item {item_name} by highlighting its benefits.|You are trying persuasively to sell {item_count} of this item {item_name} by stressing its rarity.|You are trying persuasively to sell {item_count} of this item {item_name} by appealing to need.|You are trying persuasively to sell {item_count} of this item {item_name} by offering a deal.|You are trying persuasively to sell {item_count} of this item {item_name} by explaining its uses.|You are trying persuasively to sell {item_count} of this item {item_name} by comparing it to others.|You are trying persuasively to sell {item_count} of this item {item_name} by creating urgency.|You are trying persuasively to sell {item_count} of this item {item_name} by praising its quality.
 
@@ -4822,6 +4824,30 @@ OllamaChat.Trade.Enable = 1
 #        Default: 1
 OllamaChat.Trade.OnlyCommerce = 1
 
+#    OllamaChat.Trade.DealsOnlyInTrade
+#    OllamaChat.Trade.DealWords
+#    OllamaChat.Trade.PricedDealWords
+#    OllamaChat.Trade.ElsewhereNote
+#        1: bots buy and sell in Trade and nowhere else. A bot's line
+#        anywhere but Trade or a whisper -- General, /say, its party or its
+#        guild -- that offers something for sale or asks to buy one is not
+#        said: one with any of DealWords ("wts", "obo", "pst"), or with any
+#        of PricedDealWords and a price ("anyone want [Moongraze Stag
+#        Tenderloin]? 52c"). What is in [brackets] is never the words nor the
+#        price. Something given away free, a sale that is over ("sold my
+#        [Linen Cloth] for 1g") and a few silver begged are no deal. A deal
+#        made here and carried out (the prices decided here) goes out where
+#        it is made, and so does an answer to someone who brought a deal or a
+#        price up themselves. A line owed to someone gets one more go with
+#        ElsewhereNote added (Response.RetryOwed); any other is dropped.
+#        .ollama status bots counts them. 0: not checked. |-separated words
+#        and phrases; a word ending in * matches any word it starts.
+#        Default: 1, (below)
+OllamaChat.Trade.DealsOnlyInTrade = 1
+OllamaChat.Trade.DealWords = "wts|wtb|wtt|for sale|obo|or best offer|best offer|make an offer|make me an offer|any offers|pst"
+OllamaChat.Trade.PricedDealWords = "selling|buying|anyone want|anybody want|any1 want|anyone wants|anybody wants|who wants|whoever wants|anyone need|anybody need|any1 need|who needs|whoever needs|anyone wanna|anybody wanna|any1 wanna|anyone interested|anybody interested|if interested|up for grabs|going cheap|yours for|asking|paying|will pay|ill pay|whisper me|w me|msg me|hmu"
+OllamaChat.Trade.ElsewhereNote = "Do not offer anything for sale or ask to buy anything in this line, and name no price: people buy and sell in the Trade channel, in the cities."
+
 #    OllamaChat.Trade.MaxSpendPercent
 #        The most of its money a bot spends on one thing. Only a bot that
 #        can spare what it would pay (or the asking price, when that is
@@ -6841,14 +6867,19 @@ OllamaChat.EnvCommentGameTalk = "Something about the game on your mind: {premise
 #        auction house. A bot that just put something up, sold it, got it back
 #        unsold or bought something may bring it up in chat, once, within
 #        TalkMinutes of it: while it is fresh it is one more topic, weighed
-#        against the others by WeightMarket. In the lines: {item} is like
-#        "20 [Linen Cloth]", {price} like "1g 20s", {to} is " to <buyer>" or
-#        nothing, {from} is " from <seller>" or nothing. WeightMarket 0 turns
-#        it off. Without mod-playerbots-plus none of this does anything.
+#        against the others by WeightMarket. Something it put up is still for
+#        sale, and selling is for Trade: EnvCommentMarketListed is only said
+#        by a bot whose line goes to Trade (ChatterUseTradeChannel with
+#        Trade.OnlyCommerce 0), so with Trade.OnlyCommerce never -- it once had
+#        "anyone want [Moongraze Stag Tenderloin]? 52c" in General. In the
+#        lines: {item} is like "20 [Linen Cloth]", {price} like "1g 20s", {to}
+#        is " to <buyer>" or nothing, {from} is " from <seller>" or nothing.
+#        WeightMarket 0 turns it off. Without mod-playerbots-plus none of this
+#        does anything.
 #        Default: 30, 90, (below)
 OllamaChat.Topic.WeightMarket = 30
 OllamaChat.Market.TalkMinutes = 90
-OllamaChat.EnvCommentMarketListed = "You just put {item} up on the auction house for {price}. Mention it the way players do in General: that it is up if anyone wants it, or ask what it usually goes for.|{item} is up on the auction house now, yours, for {price}. Say so in passing, or wonder whether you priced it right."
+OllamaChat.EnvCommentMarketListed = "You just put {item} up on the auction house for {price}. Say so the way players do in Trade: that it is on the auction house if anyone wants it.|{item} is up on the auction house now, yours, for {price}. Say so in passing, or wonder whether you priced it right."
 OllamaChat.EnvCommentMarketSold = "Your {item} just sold on the auction house for {price}{to}. Say something about it in passing: pleased it went, or that you should have asked more.|Someone bought your {item} off the auction house for {price}{to}. Mention it the way a player would."
 OllamaChat.EnvCommentMarketUnsold = "Nobody bought your {item} on the auction house at {price}, and it came back in the mail. Grumble about it, or ask what it is actually worth.|Your {item} came back unsold from the auction house. Say something about the auction house, the way players do."
 OllamaChat.EnvCommentMarketBought = "You just bought {item} off the auction house for {price}{from}. Mention it the way a player would: a bargain, a rip-off, or just what you needed.|You got {item} on the auction house for {price}{from}. Say something about it in passing."

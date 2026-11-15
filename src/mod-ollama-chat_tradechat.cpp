@@ -1733,3 +1733,8 @@ void TradeChat_NoteFallback()
 {
     ++g_stats.fallbacks;
 }
+
+void TradeChat_NoteElsewhere()
+{
+    ++g_stats.elsewhere;
+}

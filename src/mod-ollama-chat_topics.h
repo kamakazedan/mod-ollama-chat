@@ -62,11 +62,15 @@ struct TopicPick
 // someone near the bot, its group, what just happened by it, a creature, an
 // NPC or a thing in sight.
 //
+// `trade`: the line goes to Trade. Only there is anything offered for sale
+// (Commerce: something it just put up on the auction house, something in its
+// bags it would sell): buying and selling is for Trade.
+//
 // `place` is where the line would be heard (`guildPlace`, a guild topic's:
 // its guild chat), as the caller names places: a topic anyone brought up
 // there in the last Topic.PlaceRepeatMinutes is not picked again
 // (Topic.PlaceRepeatExempt aside). Empty: no such check.
-TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local,
+TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local, bool trade,
                       const std::string& place = std::string(), const std::string& guildPlace = std::string());
 
 // Record that a bot used a topic, so it is suppressed for the next few picks

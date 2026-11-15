@@ -12,9 +12,10 @@ class Player;
 //
 // mod-playerbots-plus, when it is in the same build, has random bots selling
 // and buying on the auction house; it says so as it happens. A bot that just
-// sold something, bought something, put something up or got it back unsold
-// may bring it up in General for a while after (Market.TalkMinutes), the way
-// players do -- through the Activity topics (EnvCommentMarket*).
+// sold something, bought something or got it back unsold may bring it up in
+// chat for a while after (Market.TalkMinutes), the way players do -- through
+// the Market topics (EnvCommentMarket*). Something it just put up is still
+// for sale, and selling is for Trade: that is only brought up there.
 //
 // Without mod-playerbots-plus this is all inert. World thread only.
 // --------------------------------------------------------------------------
@@ -31,10 +32,13 @@ struct OllamaMarketNote
 };
 
 // The newest dealing of this bot not talked about yet, within TalkMinutes.
-bool OllamaMarket_Peek(Player* bot, OllamaMarketNote& out);
+// `listings`: something it put up may be the one (a line in Trade); else only
+// what is over -- sold, bought, or back unsold.
+bool OllamaMarket_Peek(Player* bot, OllamaMarketNote& out, bool listings);
 
-// A "market_*" topic went out for this bot: that dealing has been talked about.
-void OllamaMarket_NoteTalked(ObjectGuid botGuid);
+// A "market_*" topic went out for this bot: the newest dealing of that type
+// (OllamaMarketNote::type) not talked about yet has been.
+void OllamaMarket_NoteTalked(ObjectGuid botGuid, uint8_t type);
 
 void OllamaMarket_Update();        // maintenance: forget old dealings
 uint64_t OllamaMarket_Heard();     // dealings heard of since startup

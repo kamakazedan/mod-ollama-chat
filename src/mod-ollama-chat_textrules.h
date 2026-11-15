@@ -831,6 +831,17 @@ namespace TextRules
 
     // A price as people write it: "1g 50s", "35s", "80c"; "0c" for nothing.
     std::string MoneyWords(uint32_t copper);
+
+    // Is `text` someone buying or selling -- an offer, the way one is put in
+    // Trade? One of `always` ("wts", "obo", "pst") anywhere in it, or one of
+    // `priced` ("anyone want", "selling") with a price named: "anyone want
+    // [Moongraze Stag Tenderloin]? 52c". A name in brackets is never the
+    // price nor the words. A thing given away ("anyone want [Linen Cloth]?
+    // free"), a sale that is over ("sold my [Linen Cloth] for 1g") and a few
+    // silver asked for ("anyone spare 50s?") are not. Both lists are
+    // CrowdText phrases.
+    bool IsDealOffer(const std::string& text, const std::vector<std::vector<std::string>>& always,
+                     const std::vector<std::vector<std::string>>& priced);
 }
 
 #endif // MOD_OLLAMA_CHAT_TEXTRULES_H

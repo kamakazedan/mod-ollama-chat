@@ -3948,6 +3948,18 @@ namespace TextRules
         return out.str();
     }
 
+    bool IsDealOffer(const std::string& text, const std::vector<std::vector<std::string>>& always,
+                     const std::vector<std::vector<std::string>>& priced)
+    {
+        const std::string plain = WithoutBracketNames(text);
+        const std::vector<std::string> words = CrowdText::Words(plain);
+        if (words.empty())
+            return false;
+        if (CrowdText::ContainsPhrase(words, always))
+            return true;
+        return CrowdText::ContainsPhrase(words, priced) && ParsePrice(plain) != 0;
+    }
+
     // ---- what a quest asks, plainly ------------------------------------------
 
     std::string PluralName(const std::string& name, uint32_t count)

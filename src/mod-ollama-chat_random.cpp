@@ -737,6 +737,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
                     request.kind        = OllamaRequestKind::RandomChatter;
                     request.triggerBotReplies = true;
                     request.offerEntry  = need.kind == NeedKind::Spare ? need.itemEntry : 0;
+                    request.noPrice     = need.kind == NeedKind::Spare;   // free: no sale
                     request.writtenAtSeq = Context_NextSeq();
                     if (OllamaDispatch_Submit(std::move(request)))
                     {
@@ -835,10 +836,13 @@ void OllamaBotRandomChatter::HandleRandomChatter()
         const bool placed = ChooseDestination(bot, world, false, source, channelName, channelId);
         const bool local =
             placed && (source == SRC_SAY_LOCAL || source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL);
+        // Selling is for Trade: what it put up on the auction house is only
+        // brought up there.
+        const bool trade = placed && source == SRC_GENERAL_LOCAL && channelId == uint32(ChatChannelId::TRADE);
         // Not what anyone just brought up where it would go.
         const std::string guildPlace =
             bot->GetGuild() ? TopicPlace(bot, SRC_GUILD_LOCAL, std::string()) : std::string();
-        TopicPick topic = Topics_Pick(bot, world, local,
+        TopicPick topic = Topics_Pick(bot, world, local, trade,
                                       placed ? TopicPlace(bot, source, channelName) : std::string(), guildPlace);
         if (topic.valid && topic.isGuildTopic)
         {

@@ -90,7 +90,7 @@ bool OllamaMarket_Available()
     return OLLAMA_CHAT_PLAYERBOTS_PLUS != 0;
 }
 
-bool OllamaMarket_Peek(Player* bot, OllamaMarketNote& out)
+bool OllamaMarket_Peek(Player* bot, OllamaMarketNote& out, bool listings)
 {
     if (!bot || !g_MarketTalkMinutes)
         return false;
@@ -104,7 +104,7 @@ bool OllamaMarket_Peek(Player* bot, OllamaMarketNote& out)
         return false;
     for (auto d = it->second.rbegin(); d != it->second.rend(); ++d)
     {
-        if (d->talked || now - d->when > window)
+        if (d->talked || now - d->when > window || (d->note.type == 0 && !listings))
             continue;
         out = d->note;
         return true;
@@ -112,7 +112,7 @@ bool OllamaMarket_Peek(Player* bot, OllamaMarketNote& out)
     return false;
 }
 
-void OllamaMarket_NoteTalked(ObjectGuid botGuid)
+void OllamaMarket_NoteTalked(ObjectGuid botGuid, uint8_t type)
 {
     const auto window = std::chrono::minutes(g_MarketTalkMinutes);
     const auto now = Clock::now();
@@ -123,7 +123,7 @@ void OllamaMarket_NoteTalked(ObjectGuid botGuid)
         return;
     for (auto d = it->second.rbegin(); d != it->second.rend(); ++d)
     {
-        if (d->talked || now - d->when > window)
+        if (d->talked || now - d->when > window || d->note.type != type)
             continue;
         d->talked = true;   // the one OllamaMarket_Peek gave
         return;

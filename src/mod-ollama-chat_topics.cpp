@@ -74,6 +74,7 @@ namespace
         std::string   text;
         bool          isGuildTopic = false;
         bool          here = false;   // about what is right here: /say or the party only (Here)
+        bool          commerce = false;   // offers something for sale: Trade only (Commerce)
         ObjectGuid    mountOf{};      // told someone is mounted up (TopicPick::mountOf)
     };
 
@@ -91,6 +92,19 @@ namespace
             "named_npc",     "vendor",       "questgiver", "gameobject" };
         return keys.contains(key);
     }
+
+    // Offers something for sale: what it just put up on the auction house,
+    // something in its bags it would sell. Said only in Trade, where people
+    // buy and sell -- "anyone want [Moongraze Stag Tenderloin]? 52c" went out
+    // in General, the moment the bot put it up.
+    bool Commerce(const char* key)
+    {
+        static const std::unordered_set<std::string> keys = { "market_listed", "bag_item_sell" };
+        return keys.contains(key);
+    }
+
+    // The auction house topics, by OllamaMarketNote::type.
+    const char* const kMarketKeys[] = { "market_listed", "market_sold", "market_unsold", "market_bought" };
 
     struct WitnessedEvent
     {
@@ -146,7 +160,7 @@ namespace
     {
         if (templates.empty() || formatted.empty() || formatted == "[Format Error]")
             return;
-        out.push_back({ cat, key, std::move(formatted), false, Here(key) });
+        out.push_back({ cat, key, std::move(formatted), false, Here(key), Commerce(key) });
     }
 
     std::string DescribePlayerState(Player* p)
@@ -491,14 +505,14 @@ namespace
     }
 
     // What it just did on the auction house: sold, bought, put up, or got
-    // back unsold (mod-playerbots-plus).
-    void GatherMarket(Player* bot, std::vector<Candidate>& out)
+    // back unsold (mod-playerbots-plus). What it put up is still for sale,
+    // so it is only brought up in Trade (`trade`).
+    void GatherMarket(Player* bot, bool trade, std::vector<Candidate>& out)
     {
         OllamaMarketNote deal;
-        if (!OllamaMarket_Peek(bot, deal))
+        if (!OllamaMarket_Peek(bot, deal, trade))
             return;
 
-        static const char* const keys[] = { "market_listed", "market_sold", "market_unsold", "market_bought" };
         const std::vector<std::string>* pools[] = { &g_EnvCommentMarketListed, &g_EnvCommentMarketSold,
                                                     &g_EnvCommentMarketUnsold, &g_EnvCommentMarketBought };
         if (deal.type > 3 || pools[deal.type]->empty())
@@ -507,7 +521,7 @@ namespace
         const std::vector<std::string>& pool = *pools[deal.type];
         const std::string to   = (deal.type == 1 && !deal.other.empty()) ? " to " + deal.other : std::string();
         const std::string from = (deal.type == 3 && !deal.other.empty()) ? " from " + deal.other : std::string();
-        Add(out, TopicCategory::Market, keys[deal.type], pool,
+        Add(out, TopicCategory::Market, kMarketKeys[deal.type], pool,
             SafeFormat(PickOne(pool),
                        fmt::arg("item", deal.item),
                        fmt::arg("price", deal.price),
@@ -745,7 +759,7 @@ namespace
 
 // --------------------------------------------------------------------------
 
-TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local, const std::string& place,
+TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local, bool trade, const std::string& place,
                       const std::string& guildPlace)
 {
     TopicPick pick;
@@ -771,7 +785,7 @@ TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local,
 
     // Something it just did on the auction house, while it is fresh.
     OllamaMarketNote deal;
-    if (g_TopicWeightMarket > 0 && OllamaMarket_Peek(bot, deal))
+    if (g_TopicWeightMarket > 0 && OllamaMarket_Peek(bot, deal, trade))
         cats.push_back({ TopicCategory::Market, g_TopicWeightMarket });
 
     // Guild topics only apply when there is a guild with someone in it.
@@ -840,13 +854,16 @@ TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local,
             case TopicCategory::Self:     GatherSelf(bot, candidates);          break;
             case TopicCategory::Guild:    GatherGuild(bot, candidates);         break;
             case TopicCategory::Talk:     GatherTalk(bot, candidates);          break;
-            case TopicCategory::Market:   GatherMarket(bot, candidates);        break;
+            case TopicCategory::Market:   GatherMarket(bot, trade, candidates); break;
             default: break;
         }
 
-        // For a channel, nothing that is only for those here.
+        // For a channel, nothing that is only for those here; and nothing
+        // offered for sale but in Trade.
         if (!local)
             std::erase_if(candidates, [](Candidate const& c) { return c.here; });
+        if (!trade)
+            std::erase_if(candidates, [](Candidate const& c) { return c.commerce; });
         // Nor what someone brought up there a moment ago (Topic.PlaceRepeatMinutes):
         // three bots in a row on the time of day in one General is a script.
         std::erase_if(candidates, [&](Candidate const& c)
@@ -882,8 +899,9 @@ void Topics_NoteUsed(ObjectGuid botGuid, const std::string& key, const std::stri
     if (key.empty())
         return;
 
-    if (key.rfind("market_", 0) == 0)
-        OllamaMarket_NoteTalked(botGuid);   // that dealing has had its say
+    for (uint8_t type = 0; type < std::size(kMarketKeys); ++type)
+        if (key == kMarketKeys[type])
+            OllamaMarket_NoteTalked(botGuid, type);   // that dealing has had its say
 
     std::lock_guard<std::mutex> lock(g_mutex);
     if (!place.empty())

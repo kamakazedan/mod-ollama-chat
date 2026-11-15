@@ -104,6 +104,7 @@ struct TradeChatStats
     uint64_t ads       = 0;   // things bots put up for sale
     uint64_t fallbacks = 0;   // the model named another price: a stock line instead, or nothing
     uint64_t bound     = 0;   // deals in something that cannot change hands (or not on the seller, unbound): left alone
+    uint64_t elsewhere = 0;   // bots' lines buying or selling outside Trade (Trade.DealsOnlyInTrade): not said
     uint32_t talking   = 0;   // haggles going on now
 };
 TradeChatStats TradeChat_GetStats();
@@ -111,5 +112,9 @@ TradeChatStats TradeChat_GetStats();
 // The model's line about a deal named a price nobody agreed to, so a stock
 // line went instead (mod-ollama-chat_dispatch).
 void TradeChat_NoteFallback();
+
+// A bot's line bought or sold something outside Trade, so it was not said
+// (mod-ollama-chat_dispatch, Trade.DealsOnlyInTrade).
+void TradeChat_NoteElsewhere();
 
 #endif // MOD_OLLAMA_CHAT_TRADECHAT_H

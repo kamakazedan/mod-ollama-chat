@@ -762,6 +762,9 @@ namespace
             }
             priceWrong = priceWrong || !named;
         }
+        // ...and a thing given away names none at all.
+        if (c.request.noPrice && TextRules::ParsePrice(TextRules::WithoutBracketNames(c.text)) != 0)
+            priceWrong = true;
 
         // A line that has to say something in particular: the model's, if it
         // did say it, else the stock one.
@@ -1064,6 +1067,51 @@ namespace
                              which, c.text);
                 retry(which);
                 return;
+            }
+        }
+
+        // Buying and selling is for Trade (Trade.DealsOnlyInTrade): a line
+        // offering something for sale, or to buy, anywhere else is not said --
+        // "anyone want [Moongraze Stag Tenderloin]? 52c" went out in General.
+        // A deal of this module's (its price decided here, and carried out)
+        // goes out where it is made, and so does an answer to someone who
+        // brought a deal or a price up themselves. A line owed to anyone else
+        // gets another go without it; a line that has to go out, its stock one.
+        if (g_TradeDealsOnlyInTrade && c.request.source != SRC_WHISPER_LOCAL &&
+            !(c.request.source == SRC_GENERAL_LOCAL && c.request.channelId == uint32(ChatChannelId::TRADE)) &&
+            !c.request.mustPrice && c.request.okPrices.empty() &&
+            TextRules::IsDealOffer(c.text, g_TradeDealWords, g_TradePricedDealWords))
+        {
+            bool theirs = false;
+            if (c.request.chainDepth == 0 && !origin.empty())   // a real player's line
+            {
+                const std::string plain = TextRules::WithoutBracketNames(origin);
+                const std::vector<std::string> said = CrowdText::Words(plain);
+                theirs = TextRules::ParsePrice(plain) != 0 || CrowdText::ContainsPhrase(said, g_TradeSellWords) ||
+                         CrowdText::ContainsPhrase(said, g_TradeBuyWords) ||
+                         CrowdText::ContainsPhrase(said, g_TradeCheckWords) ||
+                         TextRules::IsDealOffer(origin, g_TradeDealWords, g_TradePricedDealWords);
+            }
+            if (!theirs)
+            {
+                TradeChat_NoteElsewhere();
+                if (!c.request.fallbackText.empty() && c.text != c.request.fallbackText &&
+                    !TextRules::IsDealOffer(c.request.fallbackText, g_TradeDealWords, g_TradePricedDealWords))
+                {
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} was buying or selling outside Trade "
+                                 "('{}'): '{}' instead.", bot->GetName(), c.text, c.request.fallbackText);
+                    c.text = c.request.fallbackText;
+                }
+                else
+                {
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} was buying or selling outside Trade; "
+                                 "line dropped: '{}'", bot->GetName(), c.text);
+                    if (!retryWith(g_TradeElsewhereNote, "buying or selling outside Trade"))
+                        ++g_droppedPhrase;
+                    return;
+                }
             }
         }
 
