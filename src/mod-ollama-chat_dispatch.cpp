@@ -25,6 +25,7 @@
 #include "mod-ollama-chat_progress.h"
 #include "mod-ollama-chat_response.h"
 #include "mod-ollama-chat_roleplay.h"
+#include "mod-ollama-chat_said.h"
 #include "mod-ollama-chat_sentiment.h"
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_world.h"
@@ -766,10 +767,19 @@ namespace
         if (c.request.noPrice && TextRules::ParsePrice(TextRules::WithoutBracketNames(c.text)) != 0)
             priceWrong = true;
 
+        // A line that may name only what it was given in square brackets: the
+        // quest asked about, not its item.
+        bool namesWrong = false;
+        if (!c.request.onlyNames.empty())
+            for (const TextRules::BracketName& n : TextRules::FindBracketNames(c.text))
+                if (std::find(c.request.onlyNames.begin(), c.request.onlyNames.end(), TextRules::NameKey(n.name)) ==
+                    c.request.onlyNames.end())
+                    namesWrong = true;
+
         // A line that has to say something in particular: the model's, if it
         // did say it, else the stock one.
         if (!c.request.fallbackText.empty() && c.text != c.request.fallbackText &&
-            (Context_IsPassReply(c.text) || CrowdText::Words(c.text).empty() || priceWrong ||
+            (Context_IsPassReply(c.text) || CrowdText::Words(c.text).empty() || priceWrong || namesWrong ||
              (!c.request.mustSay.empty() &&
               !CrowdText::ContainsPhrase(CrowdText::Words(c.text), c.request.mustSay))))
         {
@@ -779,6 +789,14 @@ namespace
             if (priceWrong)
                 TradeChat_NoteFallback();
             c.text = c.request.fallbackText;
+        }
+        else if (namesWrong && c.request.fallbackText.empty())
+        {
+            ++g_droppedPhrase;
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} named something it was not given: '{}' dropped.",
+                         bot->GetName(), c.text);
+            return;
         }
         else if (priceWrong && c.request.fallbackText.empty())
         {
@@ -1246,6 +1264,12 @@ namespace
                 g_petNameGap.erase(gap);
         }
         Links_NoteSent(line);
+        // What it said, and what it went on: asked about it, it knows
+        // (mod-ollama-chat_said).
+        if (!c.request.basis.empty())
+            Said_Note(bot, plain,
+                      Context_ChannelLabel(c.request.source, channel ? channel->GetName() : c.request.channelName),
+                      c.request.basis);
         if (c.request.offerEntry)   // "anyone want [Linen Cloth]?": out, so "me!" claims it
             Bags_NoteOffer(bot, c.request.offerEntry, c.request.scopeKey);
         else                        // "just have some [Ankh] if you want", asked what it has

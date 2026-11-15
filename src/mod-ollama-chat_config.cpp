@@ -525,6 +525,26 @@ TextRules::PaceRules g_PartyPaceRules;
 std::string g_PartyCmdHintFaster;
 std::string g_PartyCmdHintSlower;
 std::string g_PartyCmdHintPaceAlready;
+
+bool        g_SaidEnable          = true;
+uint32_t    g_SaidMinutes         = 20;
+uint32_t    g_SaidMax             = 2;
+uint32_t    g_SaidMaxBasisChars   = 350;
+std::string g_SaidText;
+std::string g_SaidLineText;
+
+bool        g_LinksLfgEnable      = true;
+std::vector<std::vector<std::string>> g_LinksLfgWords;
+std::string g_LinksLfgText;
+uint32_t    g_LinksLfgLevels      = 5;
+std::string g_LinksQuestItemText;
+std::string g_LinksQuestItemOtherText;
+std::string g_LinksWorthText;
+std::vector<std::vector<std::string>> g_LinksWorthWords;
+std::string g_GroupQuestsAskLine;
+std::string g_GroupQuestsAnswerLine;
+std::string g_GroupQuestsInviteLine;
+std::string g_GroupQuestsSoloLine;
 std::vector<std::vector<std::string>> g_PartySkipLaterWords;
 std::string g_PartyCmdHintSkip;
 std::string g_PartyCmdHintSkipNo;
@@ -1622,9 +1642,9 @@ static void LoadNaturalChatV4Settings()
     g_ConversationPremises = ReadChoiceList("OllamaChat.Conversation.Premises",
         "which class is the most overpowered right now|whether death knights ruined everything now that "
         "every other player is one|[70+] the best tank class for heroics|whether ret paladins need a "
-        "nerf|[15+] the worst wipe you ever had in a dungeon|[15+] a ninja looter who rolled need on "
+        "nerf|[15+] a ninja looter who rolled need on "
         "everything in a pug|[75+] Wintergrasp and who keeps winning it|the best profession for making "
-        "gold|[60+] whether epic flying is worth the gold|the funniest hunter pet name you have seen|whether "
+        "gold|[60+] whether epic flying is worth the gold|whether "
         "Arthas was always evil|whether Illidan was right all along|[80] the hardest boss in Naxxramas|[80] "
         "getting into Ulduar runs without much gear|whether achievements are worth chasing|[horde] where "
         "Mankrik's wife could be|[68+] the best place to level from 70 to 80|how expensive the auction house has "
@@ -1632,7 +1652,7 @@ static void LoadNaturalChatV4Settings()
         "fire|what you do on long flight paths|a name for a new alt|fishing: relaxing or the most boring "
         "thing in the game|[77+] the Argent Tournament dailies|whether gnomes or goblins make better "
         "engineers|[10+] whether {other_faction} is winning more battlegrounds lately|[80] a heroic you want "
-        "a group for|[1-19] which starting zone is the best|[15-39] the first dungeon you ever ran|[20-59] "
+        "a group for|[1-19] which starting zone is the best|[20-59] "
         "the most annoying levelling zone|[58-69] how crowded Hellfire Peninsula gets");
     g_ConversationHintTurn = sConfigMgr->GetOption<std::string>("OllamaChat.Conversation.HintTurn",
         "You are chatting in {where} with {others} (see the chat above){about}. Carry it on as yourself with "
@@ -3014,7 +3034,9 @@ static void LoadNaturalChatV25Settings()
         "spell or drop -- must really be in Wrath of the Lich King, called what it is really called. Never "
         "make one up, and never state a fact about one (where it drops, what it does, who can use it, or that "
         "it is not in the game) unless you are sure of it: when you do not know or cannot remember, say so, "
-        "or ask. Made-up fun is fine when it is plainly made up, like imagine if murlocs were ten feet tall.");
+        "or ask. Made-up fun is fine when it is plainly made up, like imagine if murlocs were ten feet tall. "
+        "And say nothing about yourself that you are not told is so: what you did, got, tried for or went "
+        "through is only what you are told here, never a story of your own made up.");
 
     // --- canned lines in each personality's own way ------------------------------------
     g_PersonalityCannedStyles.clear();
@@ -4037,6 +4059,66 @@ static void LoadNaturalChatV40Settings()
              g_PartyPaceEnable ? "on" : "off", g_PartyPaceRules.faster.size(), g_PartyPaceRules.slower.size());
 }
 
+static void LoadNaturalChatV41Settings()
+{
+    auto phrases = [](const char* key, const char* def)
+    {
+        return CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(key, def));
+    };
+    auto text = [](const char* key, const char* def)
+    {
+        return sConfigMgr->GetOption<std::string>(key, def);
+    };
+
+    // --- what a bot said, and what it went on (mod-ollama-chat_said) -----------------------
+    g_SaidEnable        = sConfigMgr->GetOption<bool>("OllamaChat.Said.Enable", true);
+    g_SaidMinutes       = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Said.Minutes", 20), 1, 240);
+    g_SaidMax           = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Said.Max", 2), 10);
+    g_SaidMaxBasisChars = sConfigMgr->GetOption<uint32_t>("OllamaChat.Said.MaxBasisChars", 350);
+    g_SaidText = text("OllamaChat.Said.Text",
+        "What you have said lately, and what you had to go on when you said it: {lines}. If anyone asks about any "
+        "of it, answer from that -- what it is, where it is, how it goes -- and never make up more than it tells "
+        "you: when it does not say, say you are not sure.");
+    g_SaidLineText = text("OllamaChat.Said.LineText", "{ago} in {place} you said '{line}', going on this: {basis}");
+
+    // --- "anyone on [quest]?": looking for a group for it ------------------------------------
+    g_LinksLfgEnable = sConfigMgr->GetOption<bool>("OllamaChat.Links.LfgEnable", true);
+    g_LinksLfgWords = phrases("OllamaChat.Links.LfgWords",
+        "anyone on|anybody on|any1 on|ne1 on|anyone else on|anybody else on|anyone doing|anybody doing|any1 doing|"
+        "anyone else doing|who is on|whos on|who else is on|who is doing|whos doing|anyone for|anybody for|"
+        "anyone up for|anybody up for|anyone want to do|anyone wanna do|anybody want to do|anybody wanna do|"
+        "any1 wanna do|want to group|wanna group|wanna team up|want to team up|group for|grp for|group up for|"
+        "lfg|lfm|lf1m|lf2m|lf3m|lf4m|lf group|looking for group|looking for a group|looking for people|"
+        "need help with|need a hand with|help with|help me with|need any more|need more|still need help|"
+        "still need people|need people for|need a group for|lf more");
+    g_LinksLfgText = text("OllamaChat.Links.LfgText",
+        "{player_name} is asking who else is doing {quest}, to group up for it. You have it too ({progress}), so "
+        "say you are on it and up for doing it together: they can invite you, and you will join.");
+    g_LinksLfgLevels = sConfigMgr->GetOption<uint32_t>("OllamaChat.Links.LfgLevels", 5);
+    g_LinksQuestItemText = text("OllamaChat.Links.QuestItemText",
+        "(it is what your quest {quest} needs -- {progress} -- so talk of it is talk of that quest)");
+    g_LinksQuestItemOtherText = text("OllamaChat.Links.QuestItemOtherText", "(it is what the quest {quest} needs)");
+    g_LinksWorthText = text("OllamaChat.Links.WorthText", "(one goes for about {worth}{vendor})");
+    g_LinksWorthWords = phrases("OllamaChat.Links.WorthWords",
+        "sell|sells|selling|sold|buy|buying|bought|worth|price|prices|priced|cost|costs|cheap|expensive|pricey|"
+        "ah|auction|auction house|gold|silver|copper|vendor|vendors|pc|price check");
+
+    // --- group quests: the quest named, in its own words if the model's do not ----------------
+    g_GroupQuestsAskLine = text("OllamaChat.GroupQuests.AskLine",
+        "anyone up for {quest}? need {need_people}|anyone else on {quest}? could use {need_people}");
+    g_GroupQuestsAnswerLine = text("OllamaChat.GroupQuests.AnswerLine",
+        "{other_name} im on {quest} too, count me in|{other_name} same, need {quest} too, im up for it");
+    g_GroupQuestsInviteLine = text("OllamaChat.GroupQuests.InviteLine",
+        "{other_name} come along, we're doing {quest}|{other_name} join us for {quest}");
+    g_GroupQuestsSoloLine = text("OllamaChat.GroupQuests.SoloLine",
+        "nobody for {quest}? ill try it on my own then|guess im doing {quest} solo");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v41: what a bot said remembered {} ({} lines for {} min); "
+             "\"anyone on [quest]?\" read as looking for group {} ({} phrases).",
+             g_SaidEnable ? "on" : "off", g_SaidMax, g_SaidMinutes, g_LinksLfgEnable ? "on" : "off",
+             g_LinksLfgWords.size());
+}
+
 static void LoadNaturalChatV39Settings()
 {
     // "NAT_HYPE:100|NAT_QUIET:5" -> chat style -> percent.
@@ -4266,7 +4348,8 @@ static void LoadNaturalChatV24Settings()
         "plainly.");
 
     // Mingle.Premises tags: what each one needs to be there.
-    static const char* const kKnown[] = { "mount", "pet", "loot", "quest", "duel", "lost", "horde", "alliance" };
+    static const char* const kKnown[] = { "mount", "pet", "loot", "quest", "duel", "lost", "gear", "prof", "horde",
+                                          "alliance" };
     std::string unknown;
     for (std::string premise : g_MinglePremises)
         for (const std::string& tag : TextRules::TakePremiseTags(premise))
@@ -4386,16 +4469,16 @@ static void LoadNaturalChatV16Settings()
         "saying hello and asking what the other has been up to|[quest] one of them just got back from "
         "questing and moans about it|[quest] one of them asks the other about the quest they just handed "
         "in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's "
-        "pet or companion|one of them admires the other's gear|one of them teases the other about their race "
+        "pet or companion|[gear] one of them admires {gear}|one of them teases the other about their race "
         "or class, all in good fun|swapping tips about levelling their classes|[duel] one of them challenges "
         "the other to a duel, and they agree to head {duel_where} and fight it out|one of them asks the other "
         "if they have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: "
-        "the players walking past|levelling their professions|which zone is the worst to quest in|[lost] one "
+        "the players walking past|[prof] levelling their professions: {professions}|which zone is the worst to quest in|[lost] one "
         "of them is looking for {lost_place} and asks the other the way, and the other knows it: {lost_way}|"
-        "what they are saving their gold for|a funny death one of them had today|one of them is "
+        "what they are saving their gold for|one of them is "
         "about to log off|their guilds, or not having one|an imagine-if one of them dreams up, plainly made "
-        "up for a laugh|gnomes|murlocs|[15+] whether to run a dungeon together later|[15+] a dungeon one of "
-        "them ran earlier|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] "
+        "up for a laugh|gnomes|murlocs|[15+] whether to run a dungeon together later|"
+        "[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] "
         "flying mounts");
     g_MingleEmotes.clear();
     {
@@ -5137,6 +5220,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV38Settings();
     LoadNaturalChatV39Settings();
     LoadNaturalChatV40Settings();
+    LoadNaturalChatV41Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

@@ -5,6 +5,7 @@
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_expression.h"
+#include "mod-ollama-chat_gear.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_handler.h"
 #include "mod-ollama-chat_hangout.h"
@@ -22,6 +23,7 @@
 #include "mod-ollama-chat-utilities.h"
 
 #include "CellImpl.h"
+#include "DBCStores.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "Group.h"
@@ -84,6 +86,7 @@ namespace
         Clock::time_point        nextAt{};
         std::string              lastText;  // the line before: what the next one answers
         bool                     duel = false;   // they talk themselves into a duel: at the end, off they go
+        std::string              premise;   // what got them talking, with its facts: each line goes on it
     };
 
     std::unordered_map<uint64_t, Exchange>          g_exchanges;      // by id
@@ -321,10 +324,38 @@ namespace
         std::string duelWhere;
         std::string lostPlace;
         std::string lostWay;
+        std::string gear;          // "Thimack's [Arcanite Reaper] (purple two-handed axe)"
+        std::string professions;   // "Thimack: mining 150, skinning 120; Grigohm: tailoring 75"
     };
 
-    // What there is among them for a premise to need: "[mount]" one of them
-    // riding one, "[pet]" a pet or companion out, "[loot]" something got
+    // The professions `p` has, with how far along: "mining 150, skinning
+    // 120". Empty when it has none.
+    std::string ProfessionsOf(Player* p)
+    {
+        static const uint32 skills[] = { SKILL_ALCHEMY, SKILL_BLACKSMITHING, SKILL_ENCHANTING, SKILL_ENGINEERING,
+                                         SKILL_HERBALISM, SKILL_INSCRIPTION, SKILL_JEWELCRAFTING,
+                                         SKILL_LEATHERWORKING, SKILL_MINING, SKILL_SKINNING, SKILL_TAILORING,
+                                         SKILL_COOKING, SKILL_FIRST_AID, SKILL_FISHING };
+        std::string out;
+        for (uint32 skill : skills)
+        {
+            if (!p->HasSkill(skill))
+                continue;
+            SkillLineEntry const* line = sSkillLineStore.LookupEntry(skill);
+            if (!line || !line->name[0] || !*line->name[0])
+                continue;
+            std::string name = line->name[0];
+            for (char& c : name)
+                c = char(std::tolower(static_cast<unsigned char>(c)));
+            out += (out.empty() ? "" : ", ") + name + " " + std::to_string(p->GetPureSkillValue(skill));
+        }
+        return out;
+    }
+
+    // What there is among them for a premise to need: "[gear]" something one
+    // of them wears worth a look, "[prof]" a profession among them (and how
+    // far along each is), "[mount]" one of them riding one, "[pet]" a pet or
+    // companion out, "[loot]" something got
     // lately, "[quest]" a quest handed in lately, "[duel]" two who could go
     // out to the gates and duel there now (mod-playerbots-plus), and where
     // that is, "[lost]" a town whose guards give directions, and one of its
@@ -343,6 +374,19 @@ namespace
             facts.insert("lost");
         for (Player* p : group)
         {
+            // Something real to admire, and what they really do: "nice robe"
+            // and "how's your tailoring going" were made up with nothing to go on.
+            if (places.gear.empty())
+                if (const std::string piece = Gear_ShowPiece(p); !piece.empty())
+                {
+                    places.gear = p->GetName() + "'s " + piece;
+                    facts.insert("gear");
+                }
+            const std::string profs = ProfessionsOf(p);
+            places.professions += (places.professions.empty() ? "" : "; ") + p->GetName() + ": " +
+                                  (profs.empty() ? std::string("none") : profs);
+            if (!profs.empty())
+                facts.insert("prof");
             const TextRules::Animals a = Pets_Seen(p).animals;
             if (!a.mount.empty() && !Pets_MountRemarkedLately(p->GetGUID()))   // not handed round again
                 facts.insert("mount");
@@ -436,7 +480,9 @@ namespace
         return " " + text;
     }
 
-    std::string BuildPrompt(const std::vector<Player*>& group, bool& duel)
+    // `about`: what gets them talking, the facts filled in -- what each line
+    // of it goes on (mod-ollama-chat_said).
+    std::string BuildPrompt(const std::vector<Player*>& group, bool& duel, std::string& about)
     {
         uint32_t level = group.front()->GetLevel();
         std::vector<std::string> names;
@@ -465,6 +511,9 @@ namespace
         fill("{duel_where}", places.duelWhere);
         fill("{lost_place}", places.lostPlace);
         fill("{lost_way}", places.lostWay);
+        fill("{gear}", places.gear);
+        fill("{professions}", places.professions);
+        about = premise;
 
         // The shape of it, with their own names. An emote is in it only now
         // and then, picked each time: shown one every time, every exchange
@@ -685,6 +734,9 @@ namespace
         r.gentle            = true;    // nothing rude with it
         r.triggerBotReplies = false;   // the others in earshot leave them to it
         r.mingle            = true;
+        // Asked about it later, it knows what they were on about.
+        if (!e.premise.empty())
+            r.basis = "chatting in /say with " + target->GetName() + " about " + e.premise;
         if (!OllamaDispatch_DeliverNow(std::move(r), l.emoteId, world))
             return false;
 
@@ -785,13 +837,15 @@ namespace
             return false;
 
         bool duel = false;
-        const std::string prompt = BuildPrompt(group, duel);
+        std::string about;
+        const std::string prompt = BuildPrompt(group, duel, about);
         if (prompt.empty())
             return false;
 
         Exchange e;
         e.id       = g_nextId++;
         e.duel     = duel;
+        e.premise  = about;
         e.mapId    = group.front()->GetMapId();
         e.scopeKey = Governor_MakeScopeKey(ChatChannelSourceLocalStr[SRC_SAY_LOCAL], 0, std::string(), 0,
                                            group.front()->GetZoneId());

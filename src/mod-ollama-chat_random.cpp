@@ -33,6 +33,7 @@
 #include "mod-ollama-chat_premises.h"
 #include "mod-ollama-chat_progress.h"
 #include "mod-ollama-chat_raregear.h"
+#include "mod-ollama-chat_said.h"
 #include "mod-ollama-chat_pets.h"
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_gifts.h"
@@ -571,6 +572,7 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
         Gifts_Update();
         Gear_Update();
         Needs_Update();
+        Said_Update();
         Wants_Update();
         Congrats_Update();
         Joined_Maintain();
@@ -738,6 +740,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
                     request.triggerBotReplies = true;
                     request.offerEntry  = need.kind == NeedKind::Spare ? need.itemEntry : 0;
                     request.noPrice     = need.kind == NeedKind::Spare;   // free: no sale
+                    request.basis       = need.ask;   // asked about it, it knows why
                     request.writtenAtSeq = Context_NextSeq();
                     if (OllamaDispatch_Submit(std::move(request)))
                     {
@@ -804,6 +807,9 @@ void OllamaBotRandomChatter::HandleRandomChatter()
                         // It names the thing, or its stock line goes out instead.
                         request.mustSay      = { CrowdText::Words(line.name) };
                         request.fallbackText = line.fallback;
+                        // Where it drops, and how rarely: asked, it knows.
+                        request.basis        = line.premise.empty() ? line.environment
+                                                                    : line.environment + " " + line.premise;
                         sent = OllamaDispatch_Submit(std::move(request));
                     }
                     if (sent)
@@ -961,6 +967,9 @@ void OllamaBotRandomChatter::HandleRandomChatter()
         request.triggerBotReplies = true;
         request.openerKey   = openerKey;
         request.writtenAtSeq = Context_NextSeq();
+        // What it was given to talk about: asked about it, it knows what it
+        // was on about (mod-ollama-chat_said).
+        request.basis       = environment;
 
         if (OllamaDispatch_Submit(std::move(request)))
         {

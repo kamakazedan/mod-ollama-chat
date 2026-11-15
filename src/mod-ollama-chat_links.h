@@ -112,6 +112,29 @@ std::vector<Quest const*> Links_QuestsNamed(Player* speaker, const std::string& 
 // that has nothing to offer about it (Links.QuietWhenTooLow).
 bool Links_AllTooHighFor(Player* bot, const std::vector<Quest const*>& quests);
 
+// A line as it reads, the way StripChatMarkup has it, but each quest link by
+// the quest's own title: quest addons write their level tags into the name a
+// link shows ("anyone on [[30+] Mor'Ladim]?" reads "anyone on [Mor'Ladim]?").
+std::string Links_AsRead(const std::string& line);
+
+// "anyone on [Mor'Ladim]?", "lf1m [The Defias Brotherhood]", "[Mor'Ladim's
+// Skull] need any more to help?": someone looking for others to do a quest
+// with (Links.LfgWords, around what is linked or named). The quests it is
+// about -- a quest's item stands for its quest, `speaker`'s when they have
+// it -- as `speaker` means them. Empty when it is no such line.
+std::vector<Quest const*> Links_LfgQuests(Player* speaker, const std::string& line);
+
+// Could `bot` go along with `asker` on one of `quests`: it has one of them in
+// its log, not done; it is of their side, out of any other group, and not so
+// far above them that their invite is turned down (Links.LfgLevels).
+// `which`: the quest it would go for.
+bool Links_CanJoinFor(Player* bot, Player* asker, const std::vector<Quest const*>& quests,
+                      Quest const** which = nullptr);
+
+// For a reply prompt of `bot` to `asker`'s line: that they are looking for a
+// group for a quest `bot` could go along on (Links.LfgText). Empty otherwise.
+std::string Links_LfgNoteFor(Player* bot, Player* asker, const std::string& line);
+
 void Links_Update();   // forget links not seen for Links.RememberMinutes
 
 struct LinksStats

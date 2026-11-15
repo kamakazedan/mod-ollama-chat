@@ -759,7 +759,7 @@ OllamaChat.ChatExtraInfoTemplate = "Your Info: {bot_race} {bot_gender}, Spec: {b
 #   never a place's guards and townsfolk or a training dummy, whatever the bot's standing with that
 #   place: told "about level 75" of an Orgrimmar Grunt, a bot asked why the grunt was level 75.
 #   Placeholders (named): {creature_name} {creature_level} {level_delta}
-OllamaChat.EnvCommentCreature = You spot a creature named '{creature_name}' and react cautiously.|You spot a creature named '{creature_name}' and assess its threat.|You spot a creature named '{creature_name}' and comment on its behavior.|You spot a creature named '{creature_name}' and consider whether to engage.|You spot a creature named '{creature_name}' and recall what you know about it.|You spot a creature named '{creature_name}' and comment on its appearance.|You spot a creature named '{creature_name}' and decide if it should be avoided.|You spot a creature named '{creature_name}' and speculate on its intentions.
+OllamaChat.EnvCommentCreature = "A {creature_name} is close by.|There is a {creature_name} around here, about level {creature_level}."
 
 # OllamaChat.EnvCommentGameObject
 #   Description: A pipe-separated (|) list of template messages for when a game object is nearby.
@@ -769,7 +769,7 @@ OllamaChat.EnvCommentGameObject = You see {object_name} nearby and comment on it
 # OllamaChat.EnvCommentEquippedItem
 #   Description: A pipe-separated (|) list of template messages referencing a random equipped item.
 #   Placeholders (named): {item_name}
-OllamaChat.EnvCommentEquippedItem = Talk about your equipped item {item_name} and why you chose it.|Talk about your equipped item {item_name} and how it helps you.|Talk about your equipped item {item_name} and its strengths.|Talk about your equipped item {item_name} and any weaknesses.|Talk about your equipped item {item_name} and how it feels to use.|Talk about your equipped item {item_name} and when it is most effective.|Talk about your equipped item {item_name} and compare it to alternatives.|Talk about your equipped item {item_name} and your confidence in it.
+OllamaChat.EnvCommentEquippedItem = "You are wearing {item_name}."
 
 # OllamaChat.EnvCommentBagItem
 #   Description: A pipe-separated (|) list of template messages for an item in the bot's bag.
@@ -816,7 +816,7 @@ OllamaChat.EnvCommentDungeon = You're in a Dungeon instance named '{dungeon_name
 # OllamaChat.EnvCommentUnfinishedQuest
 #   Description: A pipe-separated (|) list of template messages about a random incomplete quest in the bot's log.
 #   Placeholders (named): {quest_name}
-OllamaChat.EnvCommentUnfinishedQuest = Say the name of and talk about your un-finished quest '{quest_name}' and what remains.|Say the name of and talk about your un-finished quest '{quest_name}' and its difficulty.|Say the name of and talk about your un-finished quest '{quest_name}' and why it stalled.|Say the name of and talk about your un-finished quest '{quest_name}' and your next step.|Say the name of and talk about your un-finished quest '{quest_name}' and its rewards.|Say the name of and talk about your un-finished quest '{quest_name}' and the risks.|Say the name of and talk about your un-finished quest '{quest_name}' and your motivation.|Say the name of and talk about your un-finished quest '{quest_name}' and its urgency.
+OllamaChat.EnvCommentUnfinishedQuest = "You still have not finished the quest {quest_name}."
 
 # --------------------------------------------
 # EVENT TEMPLATES
@@ -962,7 +962,7 @@ OllamaChat.GuildChatterMaxBotsPerEvent = 2
 #     Placeholders: {member_name}
 #     Example: "I wonder what {member_name} is up to today."
 #     Default: (empty - no guild member comments)
-OllamaChat.GuildEnvCommentGuildMember = I wonder what {member_name} is up to today.|{member_name} is a solid guild member.|Haven't seen {member_name} around much lately.
+OllamaChat.GuildEnvCommentGuildMember = I wonder what {member_name} is up to today.|{member_name} is a solid guild member.
 
 # OllamaChat.GuildEnvCommentGuildRank
 #     Description: Templates for commenting on guild ranks. Pipe-separated (|) list.
@@ -1004,16 +1004,18 @@ OllamaChat.GuildEnvCommentGuildOnlineMembers = We have {online_count} out of {to
 # --------------------------------------------
 
 # OllamaChat.GuildEnvCommentGuildRaid
-#     Description: Templates for commenting on guild raid activity. Pipe-separated (|) list.
-#     Example: "Looking forward to the next guild raid!"
-#     Default: (empty - no raid comments)
-OllamaChat.GuildEnvCommentGuildRaid = Looking forward to the next guild raid!|Hope we get some good loot in the next raid.|Who's ready for raid night?
+#     Description: Templates for a guild topic about running a dungeon. Pipe-separated (|) list.
+#     Nothing in it has a bot tell of a raid or a run of its own it never had.
+#     Default: (below)
+OllamaChat.GuildEnvCommentGuildRaid = "a dungeon that suits your level: whether anyone in the guild is up for running it."
 
 # OllamaChat.GuildEnvCommentGuildEndgame
-#     Description: Templates for commenting on endgame content. Pipe-separated (|) list.
-#     Example: "Endgame content is tough but fun."
-#     Default: (empty - no endgame comments)
-OllamaChat.GuildEnvCommentGuildEndgame = Endgame content is tough but fun.|We need more people for endgame runs.|Anyone up for some endgame challenges?
+#     Description: Templates for a guild topic about what the bot has been up to. Pipe-separated (|)
+#     list. {lately} is what it has really been doing (the run of kills, the last quest handed in,
+#     the best thing it got, its last ding: Lately.*); with nothing to tell, the topic is not picked,
+#     so "we need more people for endgame runs" is never made up.
+#     Default: (below)
+OllamaChat.GuildEnvCommentGuildEndgame = "what you have been up to lately, as it really was: {lately}."
 
 # OllamaChat.GuildEnvCommentGuildStrategy
 #     Description: Templates for discussing guild strategies. Pipe-separated (|) list.
@@ -2216,7 +2218,14 @@ OllamaChat.Conversation.AllowSay = 1
 #        only one side does or knows -- where Mankrik's wife could be, what is
 #        down the Deeprun Tram. One that has come up anywhere on the realm
 #        waits PremiseCooldownMinutes before it can again.
-OllamaChat.Conversation.Premises = "which class is the most overpowered right now|whether death knights ruined everything now that every other player is one|[70+] the best tank class for heroics|whether ret paladins need a nerf|[15+] the worst wipe you ever had in a dungeon|[15+] a ninja looter who rolled need on everything in a pug|[75+] Wintergrasp and who keeps winning it|the best profession for making gold|[60+] whether epic flying is worth the gold|the funniest hunter pet name you have seen|whether Arthas was always evil|whether Illidan was right all along|[80] the hardest boss in Naxxramas|[80] getting into Ulduar runs without much gear|whether achievements are worth chasing|[horde] where Mankrik's wife could be|[68+] the best place to level from 70 to 80|how expensive the auction house has got|guild drama|[75+] whether the Lich King fight will be any good|[15+] people who stand in fire|what you do on long flight paths|a name for a new alt|fishing: relaxing or the most boring thing in the game|[77+] the Argent Tournament dailies|whether Gnomish or Goblin Engineering is the better pick|[10+] whether {other_faction} is winning more battlegrounds lately|[80] a heroic you want a group for|[1-19] which starting zone is the best|[15-39] the first dungeon you ever ran|[20-59] the most annoying levelling zone|[58-69] how crowded Hellfire Peninsula gets"
+#        Nothing in one has a bot tell of a past of its own it never had --
+#        "the worst wipe you ever had", "how many times you have tried for
+#        {rare_mount}": a level 25 in Duskwood said "still havent seen that
+#        kodo drop yet" of the Great Brewfest Kodo, and asked where it drops,
+#        had nothing to say. Talk of the game itself, or the real thing handed
+#        over, and a level tag where only a level could talk of it. What a
+#        bot went on is kept with what it said (Said.*): asked, it knows.
+OllamaChat.Conversation.Premises = "which class is the most overpowered right now|whether death knights ruined everything now that every other player is one|[70+] the best tank class for heroics|whether ret paladins need a nerf|[15+] a ninja looter who rolled need on everything in a pug|[75+] Wintergrasp and who keeps winning it|the best profession for making gold|[60+] whether epic flying is worth the gold|whether Arthas was always evil|whether Illidan was right all along|[80] the hardest boss in Naxxramas|[80] getting into Ulduar runs without much gear|whether achievements are worth chasing|[horde] where Mankrik's wife could be|[68+] the best place to level from 70 to 80|how expensive the auction house has got|guild drama|[75+] whether the Lich King fight will be any good|[15+] people who stand in fire|what you do on long flight paths|a name for a new alt|fishing: relaxing or the most boring thing in the game|[77+] the Argent Tournament dailies|whether Gnomish or Goblin Engineering is the better pick|[10+] whether {other_faction} is winning more battlegrounds lately|[80] a heroic you want a group for|[1-19] which starting zone is the best|[20-59] the most annoying levelling zone|[58-69] how crowded Hellfire Peninsula gets"
 
 #    OllamaChat.Conversation.PremiseTemplates
 #    OllamaChat.Conversation.PremiseTemplateChance
@@ -2258,7 +2267,7 @@ OllamaChat.Conversation.Premises = "which class is the most overpowered right no
 #                         only one race of its side can)
 #        A pool of the same name is not used for these.
 #        Default: "", 70, 120, 8, no pools
-OllamaChat.Conversation.PremiseTemplates = "a silly would-you-rather question about {creature}|a would-you-rather between {zone} and {zone2}|which of {class} and {class2} has it easier levelling|a hot take about {class}|what {race} are really like, going by the ones you have met|[10+] running down {enemy_race}, who are on the other side|the worst thing about {profession}|whether {profession} is worth levelling at all|[15+] the best and worst bits of {dungeon}{bosses}|a daft question about {creature} that nobody ever asks|what {lore} is really up to these days|whether {lore} is any good as a leader|a rumour about {lore} that you are obviously making up for a laugh|whether {lore} or {lore2} would win in a fight|the most pointless thing about {city}|the best spot in {city} to stand around in|a name for {beast} as a hunter pet|whether {beast} or {beast2} makes the better hunter pet|whether {mount} or {mount2} looks daftest|[20+] whether {mount} is worth the gold|a guess at how many {creature} you have killed in total|whether {creature} are overrated or underrated as enemies|something you would change about {zone} if you could|the quickest way through {zone}|[10+] whether {other_faction} players are any good at {activity}|{activity}: fun or a chore|the most embarrassing way to die to {creature}|what {creature} would say if they could talk|which race on your side makes the best {class}, and which the worst (on your side, only {class_races} can be one)|the best thing to do in {zone} when you are bored|what you would do with a million gold|[30+] the toughest boss in {dungeon}{bosses}|a would-you-rather between {trinket} and {trinket2}|whether {itemset} or {itemset2} looks better|whether {rare} is worth hunting down"
+OllamaChat.Conversation.PremiseTemplates = "a silly would-you-rather question about {creature}|a would-you-rather between {zone} and {zone2}|which of {class} and {class2} has it easier levelling|a hot take about {class}|what {race} are really like, going by the ones you have met|[10+] running down {enemy_race}, who are on the other side|the worst thing about {profession}|whether {profession} is worth levelling at all|[15+] the best and worst bits of {dungeon}{bosses}|[15+] what usually wipes a group in {dungeon}{bosses}|[15-39] whether {dungeon} is a good first dungeon{bosses}|a daft question about {creature} that nobody ever asks|what {lore} is really up to these days|whether {lore} is any good as a leader|a rumour about {lore} that you are obviously making up for a laugh|whether {lore} or {lore2} would win in a fight|the most pointless thing about {city}|the best spot in {city} to stand around in|a name for {beast} as a hunter pet|whether {beast} or {beast2} makes the better hunter pet|whether {mount} or {mount2} looks daftest|[20+] whether {mount} is worth the gold|a guess at how many {creature} you have killed in total|whether {creature} are overrated or underrated as enemies|something you would change about {zone} if you could|the quickest way through {zone}|[10+] whether {other_faction} players are any good at {activity}|{activity}: fun or a chore|the most embarrassing way to die to {creature}|what {creature} would say if they could talk|which race on your side makes the best {class}, and which the worst (on your side, only {class_races} can be one)|the best thing to do in {zone} when you are bored|what you would do with a million gold|[30+] the toughest boss in {dungeon}{bosses}|a would-you-rather between {trinket} and {trinket2}|whether {itemset} or {itemset2} looks better|whether {rare} is worth hunting down"
 OllamaChat.Conversation.PremiseTemplateChance = 70
 OllamaChat.Conversation.PremiseCooldownMinutes = 120
 OllamaChat.Conversation.PremiseValueMemory = 8
@@ -4452,6 +4461,23 @@ OllamaChat.GroupQuests.AnswerText = "{other_name} just asked in General for help
 OllamaChat.GroupQuests.InviteText = "{other_name} just asked in General whether anyone is doing the group quest {quest}. You are getting a party together for it, {have} of you now counting them: tell them to come along. If you name the quest, write it in its square brackets exactly as it is written here, never any other way."
 OllamaChat.GroupQuests.SoloText = "You have been asking in General for a good while for help with the group quest {quest}, and nobody has come. Say you will give it a go on your own then. If you name the quest, write it in its square brackets exactly as it is written here, never any other way."
 
+#    OllamaChat.GroupQuests.AskLine
+#    OllamaChat.GroupQuests.AnswerLine
+#    OllamaChat.GroupQuests.InviteLine
+#    OllamaChat.GroupQuests.SoloLine
+#        Each line names the quest as itself, and nothing else in square
+#        brackets: "anyone want to help with [Mor'Ladim's Skull] quest?" named
+#        its item, from memory, and went out as that item's link. An ask that
+#        does not name the quest, or any line that names something else, goes
+#        out as one of these instead (| separated, one picked), in the bot's
+#        own style. Placeholders as above. Whatever a line went on is kept
+#        with it (Said.*): asked about it, the bot knows what it was asking.
+#        Default: (below)
+OllamaChat.GroupQuests.AskLine = "anyone up for {quest}? need {need_people}|anyone else on {quest}? could use {need_people}"
+OllamaChat.GroupQuests.AnswerLine = "{other_name} im on {quest} too, count me in|{other_name} same, need {quest} too, im up for it"
+OllamaChat.GroupQuests.InviteLine = "{other_name} come along, we're doing {quest}|{other_name} join us for {quest}"
+OllamaChat.GroupQuests.SoloLine = "nobody for {quest}? ill try it on my own then|guess im doing {quest} solo"
+
 #    OllamaChat.GroupQuests.AnswerDelayMinSeconds
 #    OllamaChat.GroupQuests.AnswerDelayMaxSeconds
 #        An answer waits this long (picked between the two, up to 120
@@ -6220,10 +6246,17 @@ OllamaChat.Mingle.PromptTemplate = "{count} World of Warcraft players are standi
 #        say of the way there, so the one who knows it gives the real one.
 #        Left to make it up, one asked where the reagents were, and the other
 #        sent them to "the trade0 window".
+#        [gear]: one of them wears something worth a look -- {gear} in it is
+#        whose and what, "Thimack's [Arcanite Reaper] (purple two-handed
+#        axe)", so a compliment is about the real thing. [prof]: one of them
+#        has a profession -- {professions} is each one's, with how far along
+#        ("Thimack: mining 150, skinning 120; Grigohm: none"). Nothing of
+#        their day is made up: "a funny death one of them had today" and "a
+#        dungeon one of them ran earlier" were never so.
 #        [horde] or [alliance]: only that side's bots (only one side mingles
 #        together). Tags go in front, with a level tag or without.
 #        Default: (below)
-OllamaChat.Mingle.Premises = "saying hello and asking what the other has been up to|[quest] one of them just got back from questing and moans about it|[quest] one of them asks the other about the quest they just handed in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's pet or companion|one of them admires the other's gear|one of them teases the other about their race or class, all in good fun|swapping tips about levelling their classes|[duel] one of them challenges the other to a duel, and they agree to head {duel_where} and fight it out|one of them asks the other if they have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: the players walking past|levelling their professions|which zone is the worst to quest in|[lost] one of them is looking for {lost_place} and asks the other the way, and the other knows it: {lost_way}|what they are saving their gold for|a funny death one of them had today|one of them is about to log off|their guilds, or not having one|an imagine-if one of them dreams up, plainly made up for a laugh|[alliance] gnomes|[horde] tauren|murlocs|[15+] whether to run a dungeon together later|[15+] a dungeon one of them ran earlier|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] flying mounts"
+OllamaChat.Mingle.Premises = "saying hello and asking what the other has been up to|[quest] one of them just got back from questing and moans about it|[quest] one of them asks the other about the quest they just handed in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's pet or companion|[gear] one of them admires {gear}|one of them teases the other about their race or class, all in good fun|swapping tips about levelling their classes|[duel] one of them challenges the other to a duel, and they agree to head {duel_where} and fight it out|one of them asks the other if they have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: the players walking past|[prof] levelling their professions: {professions}|which zone is the worst to quest in|[lost] one of them is looking for {lost_place} and asks the other the way, and the other knows it: {lost_way}|what they are saving their gold for|one of them is about to log off|their guilds, or not having one|an imagine-if one of them dreams up, plainly made up for a laugh|[alliance] gnomes|[horde] tauren|murlocs|[15+] whether to run a dungeon together later|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] flying mounts"
 
 #    OllamaChat.Mingle.DuelChance
 #        Two who could go out to the gates and duel ([duel] in
@@ -6547,11 +6580,40 @@ OllamaChat.Say.SeenText = "{player_name} is standing near you: you can each see 
 #        says so or asks, rather than make an answer up (or tell someone a
 #        thing is not in the game); and made-up fun is fine when it is plainly
 #        made up ("imagine if murlocs were ten feet tall"). Without it, bots
-#        talking about trinkets invented "Trinket of the Hidden Sun". The
-#        keyboard warrior's wrong answers (Knowledge.WrongText) still point at
-#        real things. Empty disables.
-#        Default: "Anything from the game you name -- an item, quest, NPC, creature, boss, dungeon, zone, mount, pet, spell or drop -- must really be in Wrath of the Lich King, called what it is really called. Never make one up, and never state a fact about one (where it drops, what it does, who can use it, or that it is not in the game) unless you are sure of it: when you do not know or cannot remember, say so, or ask. Made-up fun is fine when it is plainly made up, like imagine if murlocs were ten feet tall."
-OllamaChat.Outlook.FactsText = "Anything from the game you name -- an item, quest, NPC, creature, boss, dungeon, zone, mount, pet, spell or drop -- must really be in Wrath of the Lich King, called what it is really called. Never make one up, and never state a fact about one (where it drops, what it does, who can use it, or that it is not in the game) unless you are sure of it: when you do not know or cannot remember, say so, or ask. Made-up fun is fine when it is plainly made up, like imagine if murlocs were ten feet tall."
+#        talking about trinkets invented "Trinket of the Hidden Sun". Nor
+#        does it tell of a past of its own it is not told of -- what it did,
+#        got, tried for or went through. The keyboard warrior's wrong answers
+#        (Knowledge.WrongText) still point at real things. Empty disables.
+#        Default: "Anything from the game you name -- an item, quest, NPC, creature, boss, dungeon, zone, mount, pet, spell or drop -- must really be in Wrath of the Lich King, called what it is really called. Never make one up, and never state a fact about one (where it drops, what it does, who can use it, or that it is not in the game) unless you are sure of it: when you do not know or cannot remember, say so, or ask. Made-up fun is fine when it is plainly made up, like imagine if murlocs were ten feet tall. And say nothing about yourself that you are not told is so: what you did, got, tried for or went through is only what you are told here, never a story of your own made up."
+OllamaChat.Outlook.FactsText = "Anything from the game you name -- an item, quest, NPC, creature, boss, dungeon, zone, mount, pet, spell or drop -- must really be in Wrath of the Lich King, called what it is really called. Never make one up, and never state a fact about one (where it drops, what it does, who can use it, or that it is not in the game) unless you are sure of it: when you do not know or cannot remember, say so, or ask. Made-up fun is fine when it is plainly made up, like imagine if murlocs were ten feet tall. And say nothing about yourself that you are not told is so: what you did, got, tried for or went through is only what you are told here, never a story of your own made up."
+
+#    OllamaChat.Said.Enable
+#    OllamaChat.Said.Minutes
+#    OllamaChat.Said.Max
+#    OllamaChat.Said.MaxBasisChars
+#    OllamaChat.Said.Text
+#    OllamaChat.Said.LineText
+#        What a bot said, and what it had to go on when it said it. A level 25
+#        in Duskwood said "still havent seen that kodo drop yet" -- it had
+#        been handed the Great Brewfest Kodo, from Coren Direbrew in
+#        Blackrock Depths during Brewfest -- and asked "kodo? where is it
+#        supposed to drop?" said "no idea": nothing of it was left. Now every
+#        line a bot says with something behind it -- the topic or premise it
+#        was given, what it asked for, what it remarked on, what happened, the
+#        facts a reply was told (what an item or quest is, where something
+#        is) -- is kept with the line for Minutes, the last Max of them, what
+#        it went on cut to MaxBasisChars; and its replies are told them (Text,
+#        a LineText each), so asked about any of it, it answers from that and
+#        makes nothing more up. Placeholders: Text {lines}; LineText {ago},
+#        {place} ("General", "/say"), {line}, {basis}. .ollama status chat
+#        counts it. 0 turns it off.
+#        Default: 1, 20, 2, 350, (below)
+OllamaChat.Said.Enable = 1
+OllamaChat.Said.Minutes = 20
+OllamaChat.Said.Max = 2
+OllamaChat.Said.MaxBasisChars = 350
+OllamaChat.Said.Text = "What you have said lately, and what you had to go on when you said it: {lines}. If anyone asks about any of it, answer from that -- what it is, where it is, how it goes -- and never make up more than it tells you: when it does not say, say you are not sure."
+OllamaChat.Said.LineText = "{ago} in {place} you said '{line}', going on this: {basis}"
 
 #    OllamaChat.Outlook.SideText
 #    OllamaChat.Outlook.HomeCityText
@@ -6805,6 +6867,58 @@ OllamaChat.Links.ItemTooHighText = "(you are level {bot_level}, too low to use i
 #        and raid chat answer as before, with the level note above.
 #        Default: 1
 OllamaChat.Links.QuietWhenTooLow = 1
+
+#    OllamaChat.Links.QuestItemText
+#    OllamaChat.Links.QuestItemOtherText
+#        A quest's item named or linked is told as that quest's: one the bot
+#        has the quest for (QuestItemText: {quest}, {progress} -- "not done
+#        yet: Mor'Ladim's Skull 0/1", or done and only to hand in), else
+#        anyone's (QuestItemOtherText: {quest}). "[Mor'Ladim's Skull] need
+#        any more to help?" whispered to the bot that had asked for help with
+#        Mor'Ladim was read as asking for one, and got "i do not have any more
+#        to spare" -- a quest's item is never talk of what it has in its bags
+#        (Bags.*). Empty leaves it out.
+#        Default: (below)
+OllamaChat.Links.QuestItemText = "(it is what your quest {quest} needs -- {progress} -- so talk of it is talk of that quest)"
+OllamaChat.Links.QuestItemOtherText = "(it is what the quest {quest} needs)"
+
+#    OllamaChat.Links.WorthText
+#    OllamaChat.Links.WorthWords
+#        When the line is about money -- a price in it, or any of WorthWords
+#        ("worth", "sell", "ah") -- each item it names is told with what one
+#        goes for: what the auction house has it for, else what it is worth
+#        (Trade chat's own sums, mod-playerbots-plus's market's with it), and
+#        what a vendor gives ({worth}, {vendor}). "it sells for way more than
+#        that lol" was said of something nobody had looked up. Empty leaves it
+#        out.
+#        Default: (below)
+OllamaChat.Links.WorthText = "(one goes for about {worth}{vendor})"
+OllamaChat.Links.WorthWords = "sell|sells|selling|sold|buy|buying|bought|worth|price|prices|priced|cost|costs|cheap|expensive|pricey|ah|auction|auction house|gold|silver|copper|vendor|vendors|pc|price check"
+
+#    OllamaChat.Links.LfgEnable
+#    OllamaChat.Links.LfgWords
+#    OllamaChat.Links.LfgText
+#    OllamaChat.Links.LfgLevels
+#        "anyone on [Mor'Ladim]?" is looking for a group for it, not asking
+#        whether anyone is somewhere: three bots that had never heard of it
+#        answered "no idea if anyone is there right now". A real player's
+#        line that names a quest -- linked, in brackets, or by one of its
+#        items -- with any of LfgWords around it ("anyone on", "lf1m", "need
+#        any more") is answered only by bots that could go along: it is in
+#        their quest log, not done; they are of the same side, out of any
+#        other group, and no more than LfgLevels levels above whoever asked
+#        (unless in their guild), past which playerbots turns the invite down
+#        (Playerbots.GroupInvitationPermission 1; 0 here: no limit). They are
+#        told so (LfgText: {player_name}, {quest}, {progress}), and say they
+#        are on it and up for it; invited, they join. Nobody else answers,
+#        unless named. A quest addon's level tag in a quest link ("[[30+]
+#        Mor'Ladim]") is read as the quest's own title, here and in what every
+#        bot reads of the line.
+#        Default: 1, (below), (below), 5
+OllamaChat.Links.LfgEnable = 1
+OllamaChat.Links.LfgWords = "anyone on|anybody on|any1 on|ne1 on|anyone else on|anybody else on|anyone doing|anybody doing|any1 doing|anyone else doing|who is on|whos on|who else is on|who is doing|whos doing|anyone for|anybody for|anyone up for|anybody up for|anyone want to do|anyone wanna do|anybody want to do|anybody wanna do|any1 wanna do|want to group|wanna group|wanna team up|want to team up|group for|grp for|group up for|lfg|lfm|lf1m|lf2m|lf3m|lf4m|lf group|looking for group|looking for a group|looking for people|need help with|need a hand with|help with|help me with|need any more|need more|still need help|still need people|need people for|need a group for|lf more"
+OllamaChat.Links.LfgText = "{player_name} is asking who else is doing {quest}, to group up for it. You have it too ({progress}), so say you are on it and up for doing it together: they can invite you, and you will join."
+OllamaChat.Links.LfgLevels = 5
 
 ###############################################################################
 #

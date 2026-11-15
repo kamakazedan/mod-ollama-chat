@@ -1744,3 +1744,19 @@ void TradeChat_NoteElsewhere()
 {
     ++g_stats.elsewhere;
 }
+
+bool TradeChat_WorthOfOne(ItemTemplate const* p, uint32_t team, std::string& worth, std::string& vendor)
+{
+    worth.clear();
+    vendor.clear();
+    if (!p)
+        return false;
+    const Worth w = WorthOf(p, 1, team == uint32_t(TEAM_ALLIANCE) ? TEAM_ALLIANCE : TEAM_HORDE);
+    if (!w.lot)
+        return false;
+    worth = Money(Shown(w.lot)) + (w.ah ? std::string(" on the auction house")
+                                        : std::string(", with nobody selling one on the auction house"));
+    if (w.vendor)
+        vendor = ", and a vendor gives " + Money(Shown(w.vendor));
+    return true;
+}

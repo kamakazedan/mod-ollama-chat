@@ -2,6 +2,7 @@
 #include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_clock.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_lately.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_pets.h"
 #include "mod-ollama-chat_premises.h"
@@ -749,7 +750,12 @@ namespace
                             fmt::arg("bank_gold", guild->GetTotalBankMoney() / 10000)));
 
         addGuild("guild_raid",      g_GuildEnvCommentGuildRaid,      PickOne(g_GuildEnvCommentGuildRaid));
-        addGuild("guild_endgame",   g_GuildEnvCommentGuildEndgame,   PickOne(g_GuildEnvCommentGuildEndgame));
+        // What it has really been up to ({lately}): with nothing to go on, not
+        // this one -- "we need more people for endgame runs" from a level 12
+        // was made up.
+        if (const std::string lately = Lately_Text(bot); !lately.empty())
+            addGuild("guild_endgame", g_GuildEnvCommentGuildEndgame,
+                     SafeFormat(PickOne(g_GuildEnvCommentGuildEndgame), fmt::arg("lately", lately)));
         addGuild("guild_strategy",  g_GuildEnvCommentGuildStrategy,  PickOne(g_GuildEnvCommentGuildStrategy));
         addGuild("guild_group",     g_GuildEnvCommentGuildGroup,     PickOne(g_GuildEnvCommentGuildGroup));
         addGuild("guild_pvp",       g_GuildEnvCommentGuildPvP,       PickOne(g_GuildEnvCommentGuildPvP));

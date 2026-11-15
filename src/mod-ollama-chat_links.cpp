@@ -3,6 +3,7 @@
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_drops.h"
 #include "mod-ollama-chat_textrules.h"
+#include "mod-ollama-chat_tradechat.h"
 #include "mod-ollama-chat-utilities.h"
 
 #include "Bag.h"
@@ -950,9 +951,90 @@ namespace
         }
     }
 
-    std::string ItemNote(Player* bot, ItemTemplate const* proto)
+    // The quests that need an item (its RequiredItemId), by item: built once,
+    // on first use.
+    std::vector<uint32_t> const& QuestsNeeding(uint32_t entry)
     {
-        return (proto && proto->RequiredLevel > bot->GetLevel()) ? FitNote(g_LinksItemTooHighText, bot) : std::string();
+        static std::unordered_map<uint32_t, std::vector<uint32_t>> index;
+        static bool built = false;
+        if (!built)
+        {
+            built = true;
+            for (auto const& [id, quest] : sObjectMgr->GetQuestTemplates())
+                if (quest)
+                    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
+                        if (quest->RequiredItemId[i] && quest->RequiredItemCount[i])
+                            index[quest->RequiredItemId[i]].push_back(id);
+        }
+        static const std::vector<uint32_t> none;
+        auto it = index.find(entry);
+        return it == index.end() ? none : it->second;
+    }
+
+    // The quest in `bot`'s log that needs `entry`, nullptr when none does.
+    Quest const* OwnQuestNeeding(Player* bot, uint32_t entry)
+    {
+        for (uint32_t id : QuestsNeeding(entry))
+        {
+            const QuestStatus st = bot->GetQuestStatus(id);
+            if (st == QUEST_STATUS_INCOMPLETE || st == QUEST_STATUS_COMPLETE || st == QUEST_STATUS_FAILED)
+                if (Quest const* quest = sObjectMgr->GetQuestTemplate(id))
+                    return quest;
+        }
+        return nullptr;
+    }
+
+    // "not done yet: Mor'Ladim's Skull 0/1", or "done, it only needs handing
+    // in to Sven Yorgen".
+    std::string StateOf(Player* bot, Quest const* quest)
+    {
+        if (bot->GetQuestStatus(quest->GetQuestId()) == QUEST_STATUS_COMPLETE)
+            return "done, it only needs handing in" + EnderOf(quest->GetQuestId());
+        return "not done yet" + ProgressOf(bot, quest);
+    }
+
+    // Is the line about money: a price, or talk of buying, selling or what
+    // things are worth (Links.WorthWords)?
+    bool MoneyTalk(const std::string& line)
+    {
+        const std::string plain = TextRules::WithoutBracketNames(TextRules::StripChatMarkup(line));
+        return TextRules::ParsePrice(plain) != 0 || CrowdText::ContainsPhrase(CrowdText::Words(plain), g_LinksWorthWords);
+    }
+
+    // What `bot` should know of an item named to it: too high a level for it
+    // yet; whose quest it is for -- "need any more to help?" with a quest's
+    // item linked is about the quest, not what it has in its bags; and, with
+    // `money` talk, what one goes for (Trade chat's own sums), so "it sells
+    // for way more than that" is not said of something nobody checked.
+    std::string ItemNote(Player* bot, ItemTemplate const* proto, bool money)
+    {
+        if (!proto)
+            return {};
+        std::string out = proto->RequiredLevel > bot->GetLevel() ? FitNote(g_LinksItemTooHighText, bot) : std::string();
+        if (Quest const* own = OwnQuestNeeding(bot, proto->ItemId))
+        {
+            const std::string note = SafeFormat(g_LinksQuestItemText, fmt::arg("quest", own->GetTitle()),
+                                                fmt::arg("progress", StateOf(bot, own)));
+            if (!note.empty() && note != "[Format Error]")
+                out += " " + note;
+        }
+        else if (std::vector<uint32_t> const& quests = QuestsNeeding(proto->ItemId); !quests.empty())
+        {
+            if (Quest const* quest = sObjectMgr->GetQuestTemplate(quests.front()))
+            {
+                const std::string note = SafeFormat(g_LinksQuestItemOtherText, fmt::arg("quest", quest->GetTitle()));
+                if (!note.empty() && note != "[Format Error]")
+                    out += " " + note;
+            }
+        }
+        std::string worth, vendor;
+        if (money && !g_LinksWorthText.empty() && TradeChat_WorthOfOne(proto, uint32_t(bot->GetTeamId()), worth, vendor))
+        {
+            const std::string note = SafeFormat(g_LinksWorthText, fmt::arg("worth", worth), fmt::arg("vendor", vendor));
+            if (!note.empty() && note != "[Format Error]")
+                out += " " + note;
+        }
+        return out;
     }
 }
 
@@ -997,10 +1079,11 @@ std::string Links_Describe(Player* bot, const std::string& line)
         return {};
 
     std::vector<std::string> parts;
+    const bool money = MoneyTalk(line);
     for (const Named& n : NamedIn(bot, line, g_LinksDescribeMax))
     {
         std::string text = n.quest ? Links_DescribeQuest(n.quest, bot) + QuestNote(bot, n.quest) + HaveNote(bot, n.quest)
-                                   : Links_DescribeItem(n.item) + ItemNote(bot, n.item);
+                                   : Links_DescribeItem(n.item) + ItemNote(bot, n.item, money);
         if (!text.empty())
             parts.push_back(std::move(text));
     }
@@ -1011,6 +1094,94 @@ std::string Links_Describe(Player* bot, const std::string& line)
     for (size_t i = 0; i < parts.size(); ++i)
         things += (i ? "; " : "") + parts[i];
     const std::string out = SafeFormat(g_LinksDescribeText, fmt::arg("things", things));
+    return out == "[Format Error]" ? std::string() : out;
+}
+
+std::string Links_AsRead(const std::string& line)
+{
+    if (line.find("|H") == std::string::npos)
+        return TextRules::StripChatMarkup(line);
+    // A quest link by its own title: quest addons write their level tags into
+    // the name ("[[30+] Mor'Ladim]"), and the tag is no part of the quest.
+    std::string out = line;
+    for (const TextRules::ChatLink& link : TextRules::ExtractChatLinks(line))
+    {
+        if (link.type != "quest" || !link.id || link.markup.empty())
+            continue;
+        Quest const* quest = sObjectMgr->GetQuestTemplate(link.id);
+        const size_t at = quest ? out.find(link.markup) : std::string::npos;
+        if (at != std::string::npos)
+            out.replace(at, link.markup.size(), "[" + quest->GetTitle() + "]");
+    }
+    return TextRules::StripChatMarkup(out);
+}
+
+std::vector<Quest const*> Links_LfgQuests(Player* speaker, const std::string& line)
+{
+    std::vector<Quest const*> out;
+    if (!g_LinksLfgEnable || !speaker || g_LinksLfgWords.empty() || line.find('[') == std::string::npos)
+        return out;
+    // The asking is in the words around what is linked: "anyone on [...]?".
+    const std::string around = TextRules::WithoutBracketNames(TextRules::StripChatMarkup(line));
+    if (!CrowdText::ContainsPhrase(CrowdText::Words(around), g_LinksLfgWords))
+        return out;
+    auto add = [&](Quest const* quest)
+    {
+        if (quest && std::find(out.begin(), out.end(), quest) == out.end())
+            out.push_back(quest);
+    };
+    for (const Named& n : NamedIn(speaker, line, 4))
+    {
+        if (n.quest)
+            add(n.quest);
+        else if (n.item)
+        {
+            // A quest's item: that quest -- theirs when they have it.
+            Quest const* theirs = OwnQuestNeeding(speaker, n.item->ItemId);
+            std::vector<uint32_t> const& needing = QuestsNeeding(n.item->ItemId);
+            add(theirs ? theirs : needing.empty() ? nullptr : sObjectMgr->GetQuestTemplate(needing.front()));
+        }
+    }
+    return out;
+}
+
+bool Links_CanJoinFor(Player* bot, Player* asker, const std::vector<Quest const*>& quests, Quest const** which)
+{
+    if (which)
+        *which = nullptr;
+    if (!bot || !asker || quests.empty() || bot->GetTeamId() != asker->GetTeamId())
+        return false;
+    // In a group already (unless it is theirs): not one to join them.
+    if (Group* group = bot->GetGroup(); group && group != asker->GetGroup())
+        return false;
+    // Too far above them, and not of their guild: playerbots turns their
+    // invite down (Playerbots.GroupInvitationPermission 1).
+    if (g_LinksLfgLevels && bot->GetLevel() > asker->GetLevel() + g_LinksLfgLevels &&
+        (!bot->GetGuildId() || bot->GetGuildId() != asker->GetGuildId()))
+        return false;
+    for (Quest const* quest : quests)
+    {
+        const QuestStatus st = bot->GetQuestStatus(quest->GetQuestId());
+        if (st == QUEST_STATUS_INCOMPLETE || st == QUEST_STATUS_FAILED)
+        {
+            if (which)
+                *which = quest;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string Links_LfgNoteFor(Player* bot, Player* asker, const std::string& line)
+{
+    if (!g_LinksLfgEnable || g_LinksLfgText.empty())
+        return {};
+    Quest const* quest = nullptr;
+    if (!Links_CanJoinFor(bot, asker, Links_LfgQuests(asker, line), &quest) || !quest)
+        return {};
+    const std::string out = SafeFormat(g_LinksLfgText, fmt::arg("player_name", asker->GetName()),
+                                       fmt::arg("quest", quest->GetTitle()),
+                                       fmt::arg("progress", StateOf(bot, quest)));
     return out == "[Format Error]" ? std::string() : out;
 }
 

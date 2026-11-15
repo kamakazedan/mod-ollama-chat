@@ -775,7 +775,21 @@ bool Bags_IsItemTalk(const std::string& msg)
     if (!g_BagsEnable || msg.empty())
         return false;
     if (msg.find("|Hitem:") != std::string::npos)
-        return true;   // an item linked
+    {
+        // An item linked -- unless every one is a quest's own: "[Mor'Ladim's
+        // Skull] need any more to help?" is about the quest the bot asked for
+        // help with, and shown its bags it answered "i do not have any more to
+        // spare".
+        bool questOnly = true;
+        for (const TextRules::ChatLink& link : TextRules::ExtractChatLinks(msg))
+            if (link.type == "item")
+            {
+                ItemTemplate const* p = link.id ? sObjectMgr->GetItemTemplate(link.id) : nullptr;
+                if (!p || p->Class != ITEM_CLASS_QUEST)
+                    questOnly = false;
+            }
+        return !questOnly;
+    }
     // A quest linked and no item: "do you have [Proving Your Worth]?" asks
     // about its quest log, and shown its bags a bot answered "no i need that
     // for the quest".

@@ -122,6 +122,9 @@ namespace
         // Nobody asked for it: a real player who speaks before it is out was
         // not heard by it.
         request.writtenAtSeq      = Context_NextSeq();
+        // What it looked at: asked about it, it knows (mod-ollama-chat_said).
+        request.basis             = rider->GetName() + " riding " + event.what +
+                                    (event.detail.empty() ? std::string() : ", " + event.detail);
         // Once it has walked over and had a look.
         request.extraDelayMs      = urand(1500, 4000);
         if (!OllamaDispatch_Submit(std::move(request)))

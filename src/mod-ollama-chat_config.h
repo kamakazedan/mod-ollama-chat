@@ -526,6 +526,31 @@ extern TextRules::PaceRules g_PartyPaceRules;
 extern std::string g_PartyCmdHintFaster;
 extern std::string g_PartyCmdHintSlower;
 extern std::string g_PartyCmdHintPaceAlready;
+
+// What a bot said lately, and what it went on (mod-ollama-chat_said).
+extern bool        g_SaidEnable;
+extern uint32_t    g_SaidMinutes;
+extern uint32_t    g_SaidMax;
+extern uint32_t    g_SaidMaxBasisChars;
+extern std::string g_SaidText;
+extern std::string g_SaidLineText;
+
+// "anyone on [quest]?" is looking for a group for it (mod-ollama-chat_links).
+extern bool        g_LinksLfgEnable;
+extern std::vector<std::vector<std::string>> g_LinksLfgWords;
+extern std::string g_LinksLfgText;
+extern uint32_t    g_LinksLfgLevels;      // a bot more levels above them is no one they could invite
+// A quest's item named: the quest it is for.
+extern std::string g_LinksQuestItemText;
+extern std::string g_LinksQuestItemOtherText;
+// What a thing named goes for, when the talk is of money.
+extern std::string g_LinksWorthText;
+extern std::vector<std::vector<std::string>> g_LinksWorthWords;
+// Group quests: said in these words when the model's line does not name the quest.
+extern std::string g_GroupQuestsAskLine;
+extern std::string g_GroupQuestsAnswerLine;
+extern std::string g_GroupQuestsInviteLine;
+extern std::string g_GroupQuestsSoloLine;
 extern std::vector<std::vector<std::string>> g_PartySkipLaterWords;   // a skipped one back, but in its turn
 extern std::string g_PartyCmdHintSkip;         // the tank agrees: {skipped} {next} {plan}
 extern std::string g_PartyCmdHintSkipNo;       // ...or cannot: {skipped} {reason}

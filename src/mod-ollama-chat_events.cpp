@@ -483,6 +483,9 @@ void OllamaBotEventChatter::HandleGameEvent(Player* source, const std::string& t
         // EventChatterMaxBotsPerPlayer); bots answering each other's "gz" is
         // how a level-up turned into a thank-you chain.
         request.triggerBotReplies = false;
+        // What it reacted to: asked about it, it knows (mod-ollama-chat_said).
+        request.basis = "what just happened: " + source->GetName() + ", " + type +
+                        (detail.empty() ? std::string() : " (" + detail + ")");
 
         if (!OllamaDispatch_Submit(std::move(request)))
             continue;

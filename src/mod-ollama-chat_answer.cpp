@@ -15,7 +15,9 @@ void OllamaBotAnswer(Player* player, Player* bot, const std::string& msg, ChatCh
     {
         if ((g_DisableRepliesInCombat && bot->IsInCombat()) || !Governor_CanSend(bot->GetGUID(), scopeKey, true))
             return;
-        std::string prompt = GenerateBotPrompt(bot, msg, player, SRC_WHISPER_LOCAL, std::string(), seq, hint);
+        std::string facts;
+        std::string prompt = GenerateBotPrompt(bot, msg, player, SRC_WHISPER_LOCAL, std::string(), seq, hint,
+                                               std::string(), &facts);
         if (prompt.empty())
             return;
 
@@ -28,6 +30,7 @@ void OllamaBotAnswer(Player* player, Player* bot, const std::string& msg, ChatCh
         request.prompt            = std::move(prompt);
         request.botName           = bot->GetName();
         request.originMessage     = msg;
+        request.basis             = std::move(facts);
         request.kind              = (g_RoleplayEnable && g_RoleplayStrictness >= 1)
                                         ? OllamaRequestKind::RoleplayReply
                                         : OllamaRequestKind::ChatReply;

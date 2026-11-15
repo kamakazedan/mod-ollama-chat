@@ -1,11 +1,13 @@
 #include "mod-ollama-chat_groupquests.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
+#include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_handler.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_personality.h"
+#include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_plus.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_world.h"
@@ -36,6 +38,21 @@ namespace
 
 #if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 4
     using PlayerbotsPlus::BotEventType;
+
+    // The stock line for when the model's does not name the quest as itself
+    // ("anyone want to help with [Mor'Ladim's Skull] quest?": its item, from
+    // memory, linked as the item).
+    std::string const* StockFor(BotEventType type)
+    {
+        switch (type)
+        {
+            case BotEventType::GroupQuestAsk:    return &g_GroupQuestsAskLine;
+            case BotEventType::GroupQuestAnswer: return &g_GroupQuestsAnswerLine;
+            case BotEventType::GroupQuestInvite: return &g_GroupQuestsInviteLine;
+            case BotEventType::GroupQuestSolo:   return &g_GroupQuestsSoloLine;
+            default:                             return nullptr;
+        }
+    }
 
     std::string const* SituationFor(BotEventType type)
     {
@@ -180,6 +197,23 @@ namespace
         // is out was not heard by it (and an answer goes with the ask it
         // answers).
         request.writtenAtSeq      = Context_NextSeq();
+        // An ask names the quest as itself, and no line names anything else
+        // in square brackets -- else its stock words go out instead. Asked
+        // about it, it knows what it was on about (mod-ollama-chat_said).
+        if (event.type == BotEventType::GroupQuestAsk)
+            request.mustSay = { CrowdText::Words(quest->GetTitle()) };
+        request.onlyNames = { TextRules::NameKey(quest->GetTitle()) };
+        request.basis     = text;
+        if (std::string const* stock = StockFor(event.type); stock && !stock->empty())
+        {
+            const std::vector<std::string> lines = SplitString(*stock, '|');
+            const std::string line = lines.empty() ? std::string() : lines[urand(0, uint32_t(lines.size() - 1))];
+            const std::string filled = SafeFormat(line, fmt::arg("quest", "[" + quest->GetTitle() + "]"),
+                                                  fmt::arg("need_people", People(std::max<uint32_t>(1, event.need))),
+                                                  fmt::arg("other_name", other));
+            if (!filled.empty() && filled != "[Format Error]")
+                request.fallbackText = Personality_StyleCanned(bot, filled);
+        }
         if (answer)
         {
             // After the ask it answers, as someone reads it and types back --

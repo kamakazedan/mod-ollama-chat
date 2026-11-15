@@ -155,6 +155,7 @@ namespace
         // was paid to.
         request.triggerBotReplies = false;
         request.gentle            = true;   // a stranger: nothing rude goes with it
+        request.basis             = observation;   // what it saw: asked about it, it knows
 
         // Only what it was told of: someone on foot is not told "nice mount"
         // (a compliment with nothing real to go on was one), nor someone

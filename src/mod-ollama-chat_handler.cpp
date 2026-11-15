@@ -72,6 +72,7 @@
 #include "mod-ollama-chat_banter.h"
 #include "mod-ollama-chat_clock.h"
 #include "mod-ollama-chat_tradechat.h"
+#include "mod-ollama-chat_said.h"
 #include <iomanip>
 #include <unordered_set>
 #include "SpellMgr.h"
@@ -1288,7 +1289,8 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         if (partyLine == PartyCmdLine::Instruction)
         {
             Governor_NoteHumanMessage(scopeKey);
-            humanSeq = Context_RecordLine(player, sourceLocal, contextChannel, msg, ContextLineKind::Human);
+            humanSeq = Context_RecordLine(player, sourceLocal, contextChannel, Links_AsRead(msg),
+                                          ContextLineKind::Human);
             handled = PartyCmd_HandleHumanLine(player, msg, sourceLocal, scopeKey, humanSeq);
             // Not handled: nothing to steer after all ("ready" with the run
             // already going), so an ordinary line from here on.
@@ -1441,7 +1443,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
     // it, then work out who it was most likely aimed at.
     const uint64_t contextSeq = senderIsBot ? Context_LatestLineFrom(player, sourceLocal, contextChannel)
                               : humanSeq    ? humanSeq
-                                            : Context_RecordLine(player, sourceLocal, contextChannel, msg,
+                                            : Context_RecordLine(player, sourceLocal, contextChannel, Links_AsRead(msg),
                                                                  ContextLineKind::Human);
 
     const ContextAddressee addressee = (sourceLocal == SRC_WHISPER_LOCAL)
@@ -2154,8 +2156,9 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // A short line from a person is about what it came right after.
         const std::string leadUp = senderIsBot ? std::string()
                                  : Context_LeadUpText(bot, player, sourceLocal, contextChannel, contextSeq);
+        std::string facts;
         std::string prompt = GenerateBotPrompt(bot, msg, player, sourceLocal, contextChannel,
-                                               contextSeq, replyHint, leadUp);
+                                               contextSeq, replyHint, leadUp, &facts);
         if (prompt.empty())
             continue;
         // Nothing here carried out what the line told it to do: no "on it".
@@ -2178,6 +2181,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         request.prompt      = std::move(prompt);
         request.botName     = bot->GetName();
         request.originMessage = msg;
+        request.basis         = std::move(facts);
         request.kind = (g_RoleplayEnable && g_RoleplayStrictness >= 1)
                            ? OllamaRequestKind::RoleplayReply
                            : OllamaRequestKind::ChatReply;
@@ -2376,6 +2380,11 @@ namespace
             (g_LinksQuietWhenTooLow && source != SRC_PARTY_LOCAL && source != SRC_RAID_LOCAL)
                 ? Links_QuestsNamed(speaker, msg)
                 : std::vector<Quest const*>();
+        // "anyone on [Mor'Ladim]?" from someone playing is looking for a group
+        // for it: only those who have it, and could go along, answer. Three
+        // who had never heard of it said "no idea if anyone is there".
+        const std::vector<Quest const*> lfg = OllamaIsRealPlayer(speaker) ? Links_LfgQuests(speaker, msg)
+                                                                          : std::vector<Quest const*>();
         std::vector<Player*> pool;
         pool.reserve(candidates.size());
         for (Player* bot : candidates)
@@ -2392,7 +2401,8 @@ namespace
             // Away from the keyboard in a city (mod-ollama-chat_hangout), or
             // far below every quest the line asks about: quiet, unless the
             // line names it.
-            if ((Hangout_IsAway(bot) || Links_AllTooHighFor(bot, quests)) &&
+            if ((Hangout_IsAway(bot) || Links_AllTooHighFor(bot, quests) ||
+                 (!lfg.empty() && !Links_CanJoinFor(bot, speaker, lfg))) &&
                 OllamaFindBotNameMention(msg, bot->GetName()) == std::string::npos)
                 continue;
             // In the middle of a /say exchange with another bot
@@ -3158,10 +3168,14 @@ bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
         plan.kind != CrowdLineKind::Greeting && OllamaIsRealPlayer(speaker))
         leadUp = Context_LeadUpText(bot, speaker, plan.source, plan.channelName, plan.messageSeq);
 
+    std::string facts;
     std::string prompt = GenerateBotPrompt(bot, message, speaker, plan.source, plan.channelName,
-                                           excludeSeq, hint, leadUp);
+                                           excludeSeq, hint, leadUp, &facts);
     if (prompt.empty())
         return false;
+    // A turn in a conversation goes on its premise, too.
+    if (plan.kind == CrowdLineKind::Conversation && !slot.hint.empty())
+        facts += (facts.empty() ? "" : " ") + slot.hint;
     // An order or a favour is answered with its own instruction (slot.hint),
     // which says what the bot did. Only a plain answer to a line that told it
     // to do something nothing carried out is told not to say "on it".
@@ -3187,6 +3201,7 @@ bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
     request.prompt        = std::move(prompt);
     request.botName       = bot->GetName();
     request.originMessage = message;
+    request.basis         = std::move(facts);
     request.kind = (g_RoleplayEnable && g_RoleplayStrictness >= 1)
                        ? OllamaRequestKind::RoleplayReply
                        : OllamaRequestKind::ChatReply;
@@ -3291,7 +3306,7 @@ static std::string OllamaPersonalityNote(Player* bot, const std::string& persona
 std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player,
                               ChatChannelSourceLocal source, const std::string& channelName,
                               uint64_t contextExcludeSeq, const std::string& replyHint,
-                              const std::string& leadUp)
+                              const std::string& leadUp, std::string* facts)
 {
     if (!bot || !player) {
         return "";
@@ -3309,11 +3324,12 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         return "";
     }
 
-    // What they typed, as it reads on screen: a link becomes its "[Name]".
-    // The model never sees client markup, so it never echoes broken markup.
-    // (The links themselves still say which item or quest they are.)
+    // What they typed, as it reads on screen: a link becomes its "[Name]" --
+    // a quest's by its own title, with no addon's level tag in it. The model
+    // never sees client markup, so it never echoes broken markup. (The links
+    // themselves still say which item or quest they are.)
     const std::string sentMessage = playerMessage;
-    playerMessage = TextRules::StripChatMarkup(playerMessage);
+    playerMessage = Links_AsRead(playerMessage);
 
     AreaTableEntry const* botCurrentArea = botAI->GetCurrentArea();
     AreaTableEntry const* botCurrentZone = botAI->GetCurrentZone();
@@ -3567,6 +3583,13 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     if (!asked.empty())
         prompt += " " + asked;
 
+    // What it said lately of its own accord, and what it said it on: "kodo?
+    // where is it supposed to drop?" gets the real answer, not "no idea"
+    // (mod-ollama-chat_said).
+    const std::string said = Said_PromptFor(bot);
+    if (!said.empty())
+        prompt += " " + said;
+
     // Asked what it is up to, or about one of its quests: what it is really
     // doing, so "you going for yowler?" is not met with "nah just chilling".
     if (spokenTo)
@@ -3582,6 +3605,12 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     if (!named.empty())
         prompt += " " + named;
 
+    // "anyone on [Mor'Ladim]?" is looking for a group for it: one that has it
+    // too says so (the rest were left out of answering it).
+    const std::string lfg = OllamaIsRealPlayer(player) ? Links_LfgNoteFor(bot, player, sentMessage) : std::string();
+    if (!lfg.empty())
+        prompt += " " + lfg;
+
     // Asked where something is or how to get it -- or answering someone who
     // just was: the answer as the game has it, not the model's memory of WoW
     // (mod-ollama-chat_knowledge).
@@ -3595,6 +3624,16 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     const std::string wants = Wants_PromptFor(bot, player, sentMessage);
     if (!wants.empty())
         prompt += " " + wants;
+
+    // What the answer goes on, kept with it once it is out: asked about it
+    // again, it still knows (mod-ollama-chat_said).
+    if (facts)
+    {
+        facts->clear();
+        for (const std::string* part : { &named, &lfg, &known, &wants })
+            if (!part->empty())
+                *facts += (facts->empty() ? "" : " ") + *part;
+    }
 
     // Talk of days or times: what day and what time it really is.
     const std::string clock = Clock_PromptFor(sentMessage);
@@ -3750,6 +3789,7 @@ void OllamaChatMaintenance::OnPlayerLogout(Player* player)
     Memory_ForgetBot(guid);
     OllamaRandomChatter_ForgetBot(guid);
     Topics_ForgetBot(guid);
+    Said_Forget(guid);
     Context_ForgetPlayer(guid.GetRawValue());
     Conversation_ForgetPlayer(guid.GetRawValue());
     Mingle_ForgetPlayer(guid.GetRawValue());

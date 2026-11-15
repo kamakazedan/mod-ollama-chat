@@ -50,6 +50,7 @@
 #include "mod-ollama-chat_tradechat.h"
 #include "mod-ollama-chat_raregear.h"
 #include "mod-ollama-chat_drops.h"
+#include "mod-ollama-chat_said.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
 #include <thread>
@@ -644,6 +645,12 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
         out("Blocked: {} cooldown, {} rate, {} repetition, {} chain-depth, {} no-audience",
                              gov.blockedCooldown, gov.blockedRate, gov.blockedRepetition,
                              gov.blockedChainDepth, gov.blockedNoAudience);
+
+    const SaidStats said = Said_GetStats();
+    if (show("chat"))
+        out("What bots said, kept with what they went on: {} - {} lines kept, {} replies told them, {} bots "
+            "with some now", g_SaidEnable ? "on" : "off", (unsigned long long)said.noted,
+            (unsigned long long)said.told, said.bots);
 
     const CrowdStats crowd = Crowd_GetStats();
     if (show("chat"))

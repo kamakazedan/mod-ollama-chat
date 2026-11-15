@@ -169,6 +169,19 @@ struct OllamaChatRequest
     uint32_t              mustPrice = 0;
     std::vector<uint32_t> okPrices;
 
+    // What the line was said on -- the topic or premise it was given, what
+    // it asked for, what it remarked on, the facts a reply was told -- kept
+    // with the line once it is out (mod-ollama-chat_said), so asked about
+    // it, the bot knows what it was talking about. Empty: nothing kept.
+    std::string basis;
+
+    // The only things the line may name in square brackets, by
+    // TextRules::NameKey: a group quest's ask names its quest, and
+    // "[Mor'Ladim's Skull]" -- its item, from the model's memory -- is not
+    // it. A line naming anything else goes out as `fallbackText`, or not at
+    // all. Empty: anything.
+    std::vector<std::string> onlyNames;
+
     // A line giving something away (mod-ollama-chat_needs): it names no price
     // at all. One that does is a sale -- "anyone want [Linen Cloth]? 52c" --
     // and goes out as `fallbackText`, or not at all.

@@ -383,6 +383,42 @@ A premise that puts someone in a state they are not in is made up the same
 way: "one of them is waiting for a group" was never true of a mingle, since
 a bot in a queue never mingles.
 
+Nor is anything made up of the bot itself. A premise, template or topic never
+has a bot tell of a past it never had -- "how many times you have tried for
+{rare_mount}" had a level 25 in Duskwood say "still havent seen that kodo
+drop yet" of a level 80 Brewfest boss's mount -- only of the game, or of what
+is so of it, handed over: what it has been doing (`Lately_Text`, the guild
+topic's `{lately}`, skipped with nothing to tell), what it wears (mingle's
+`[gear]`, `{gear}`: `Gear_ShowPiece`), its professions (`[prof]`,
+`{professions}`). A pool value only some levels could talk of carries a level
+tag. `Outlook.FactsText` says so to every bot.
+
+And whatever it does say, it can back up (`mod-ollama-chat_said`): a line
+with anything behind it carries `OllamaChatRequest::basis` -- the topic or
+premise it was given, what it asked for, what it remarked on, the facts a
+reply was told (`GenerateBotPrompt`'s `facts`: what the things named are,
+what the game says of where they are) -- kept with the line once it is out,
+and the bot's replies are told its last few (`Said_PromptFor`). Asked
+"kodo? where is it supposed to drop?", the kodo bot said "no idea": it had
+nothing of what it had been given left. A new kind of line sets `basis`.
+
+A quest's item is its quest's: told to a bot, it says whose quest it is for
+and how far along the bot is (`Links.QuestItemText`), and it is never talk of
+what the bot has in its bags (`Bags_IsItemTalk`). "anyone on [quest]?" is a
+call for group (`Links_LfgQuests`: `Links.LfgWords` around a quest, or its
+item): only the bots that could go along answer (`Links_CanJoinFor`: it in
+their log, not done; their side; out of another group; within
+`Links.LfgLevels` of the asker, past which playerbots turns the invite down),
+told so (`Links_LfgNoteFor`). A quest link reads by its own title
+(`Links_AsRead`): quest addons write a level tag into it, "[[30+]
+Mor'Ladim]". A line about a quest names the quest, not what it needs: a
+group quest's lines carry `OllamaChatRequest::onlyNames` (and an ask
+`mustSay`), so "[Mor'Ladim's Skull]" -- the item, from the model's memory,
+linked as the item -- goes out as the stock line instead. When the talk is of
+money, an item named is told with what one goes for (`Links.WorthText`, Trade
+chat's own sums): "it sells for way more than that lol" was said of something
+nobody had looked up.
+
 Every line a bot says is in its own style. The model's lines are, through its
 personality prompt; a typed (canned) line goes through
 `Personality_StyleCanned(bot, line)` (`OllamaChat.Personality.CannedStyles`),

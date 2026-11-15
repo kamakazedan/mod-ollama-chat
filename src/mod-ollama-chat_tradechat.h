@@ -118,6 +118,13 @@ TradeChatStats TradeChat_GetStats();
 // line went instead (mod-ollama-chat_dispatch).
 void TradeChat_NoteFallback();
 
+// What one of `p` goes for, by the same sums as Trade's haggles: `worth`
+// ("39s on the auction house", "1g 20s, with nobody selling one on the
+// auction house") and `vendor` (", and a vendor gives 10s", or nothing). For
+// `team`'s auction house. False when it is worth nothing to anyone.
+struct ItemTemplate;
+bool TradeChat_WorthOfOne(ItemTemplate const* p, uint32_t team, std::string& worth, std::string& vendor);
+
 // A bot's line bought or sold something outside Trade, so it was not said
 // (mod-ollama-chat_dispatch, Trade.DealsOnlyInTrade).
 void TradeChat_NoteElsewhere();
