@@ -370,6 +370,12 @@ showing off a really rare thing it wears in General, or asking after one it
 could wear) never happens; a premise or a line about a drop never names a
 creature or a place the tables do not.
 
+What happened right by them is real too: a kill worth it (a named one, a
+boss, an elite) by a group with someone playing in it goes into the group's
+transcript (`mod-ollama-chat_corpse`'s `Tell`, `Corpse.KillEventText`), so
+the next line knows it is down -- "good luck with the elite" went to the
+player who had just killed it with the bot's help.
+
 What chat itself is like is real too. When the talk is of chat, a reply is
 told how busy General and Trade have really been (`Outlook_ChatFor`, counted
 by `Context_ChannelLines`) and that everyone reads every channel wherever
@@ -382,6 +388,14 @@ another to "the trade0 window" (the trade window is for swapping things).
 A premise that puts someone in a state they are not in is made up the same
 way: "one of them is waiting for a group" was never true of a mingle, since
 a bot in a queue never mingles.
+
+So is how the realm runs. A line about lag, a crash or a disconnect
+(`Lag.Words`) goes out only while the realm really lags -- the world's own
+ticks over the last few minutes (`mod-ollama-chat_lag`, `Lag_Tick` from the
+world tick) -- or answering a line that brought it up, and a reply where the
+talk is of it is told how the realm really is (`Lag_PromptFor`). "anyone else
+noticed the lag here?" went out in guild chat on a realm ticking at 16 ms,
+and made it look bad to everyone reading.
 
 Nor is anything made up of the bot itself. A premise, template or topic never
 has a bot tell of a past it never had -- "how many times you have tried for
@@ -409,15 +423,26 @@ call for group (`Links_LfgQuests`: `Links.LfgWords` around a quest, or its
 item): only the bots that could go along answer (`Links_CanJoinFor`: it in
 their log, not done; their side; out of another group; within
 `Links.LfgLevels` of the asker, past which playerbots turns the invite down),
-told so (`Links_LfgNoteFor`). A quest link reads by its own title
-(`Links_AsRead`): quest addons write a level tag into it, "[[30+]
-Mor'Ladim]". A line about a quest names the quest, not what it needs: a
-group quest's lines carry `OllamaChatRequest::onlyNames` (and an ask
-`mustSay`), so "[Mor'Ladim's Skull]" -- the item, from the model's memory,
-linked as the item -- goes out as the stock line instead. When the talk is of
-money, an item named is told with what one goes for (`Links.WorthText`, Trade
-chat's own sums): "it sells for way more than that lol" was said of something
-nobody had looked up.
+told so (`Links_LfgNoteFor`). The call holds for what its caller says after it
+in the same place (`Links_LfgQuestsFor`, `Links.LfgMinutes`: "I need level 32+
+please" is the same call, and a level asked for leaves out those below it),
+and an answer to it triggers no bot replies: read as lines about nothing in
+particular, the follow-ups had General chatting one over. A quest link reads
+by its own title (`Links_AsRead`): quest addons write a level tag into it,
+"[[30+] Mor'Ladim]". Questie's own references reach the server as plain text
+-- "[[32] Morbent Fel (55)]", what its tracker and quest log put in chat --
+and are read by their id (`TextRules::FindQuestRefs`, through `NamedIn` and
+`Links_AsRead`): read as text they named no quest, and a level 24 offered to
+help with a level 30 elite. Anything new that reads quests out of a line goes
+through those two, never the raw text. Named by someone in the bot's own
+group, a quest is told with where they are with it (`Links.QuestTheirsText`)
+and never as too high for the bot to help with: it is there with them. A line
+about a quest names the quest, not what it needs: a group quest's lines carry
+`OllamaChatRequest::onlyNames` (and an ask `mustSay`), so "[Mor'Ladim's
+Skull]" -- the item, from the model's memory, linked as the item -- goes out
+as the stock line instead. When the talk is of money, an item named is told
+with what one goes for (`Links.WorthText`, Trade chat's own sums): "it sells
+for way more than that lol" was said of something nobody had looked up.
 
 Every line a bot says is in its own style. The model's lines are, through its
 personality prompt; a typed (canned) line goes through

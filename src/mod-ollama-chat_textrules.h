@@ -658,6 +658,28 @@ namespace TextRules
     };
     std::vector<BracketName> FindBracketNames(const std::string& text);
 
+    // Questie's own quest references: what its tracker and its quest log hook
+    // put in chat on a shift-click -- "[Mor'Ladim (228)]", or with the level
+    // it shows, "[[30+] Mor'Ladim (228)]". To the server they are plain text
+    // (Questie makes them links again on the screens of those who have it), so
+    // "LFG [[32] Morbent Fel (55)]" named no quest at all until these were
+    // read. `begin`/`end` cover the whole reference, `name` is the title as
+    // written (level tag and id aside), `id` the quest's.
+    struct QuestRef
+    {
+        size_t      begin = 0;
+        size_t      end   = 0;   // one past the last ']'
+        std::string name;
+        uint32_t    id    = 0;
+    };
+    std::vector<QuestRef> FindQuestRefs(const std::string& text);
+
+    // The least level someone asks for, in their own words: "32+", "level
+    // 32", "lvl32", "32 or higher", "32 and up". 0 when they name none. A
+    // number in a name or a Questie reference is not read, nor a count
+    // ("lf2m", "need 2 more", "2+"), nor a price ("20g").
+    uint32_t LevelAsked(const std::string& text);
+
     // Lowercase, inner runs of spaces folded: the key names are matched on.
     std::string NameKey(const std::string& name);
 

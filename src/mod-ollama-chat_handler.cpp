@@ -73,6 +73,7 @@
 #include "mod-ollama-chat_clock.h"
 #include "mod-ollama-chat_tradechat.h"
 #include "mod-ollama-chat_said.h"
+#include "mod-ollama-chat_lag.h"
 #include <iomanip>
 #include <unordered_set>
 #include "SpellMgr.h"
@@ -2185,7 +2186,10 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         request.kind = (g_RoleplayEnable && g_RoleplayStrictness >= 1)
                            ? OllamaRequestKind::RoleplayReply
                            : OllamaRequestKind::ChatReply;
-        request.triggerBotReplies = (sourceLocal != SRC_WHISPER_LOCAL);
+        // An answer to someone's call for a group is between the two of
+        // them: no crowd chatting it over.
+        request.triggerBotReplies = (sourceLocal != SRC_WHISPER_LOCAL) &&
+            (senderIsBot || Links_LfgQuestsFor(player, msg, Links_LfgPlace(sourceLocal, contextChannel)).empty());
         request.recordHistory     = !senderIsBot;
         request.updateSentiment   = !senderIsBot && g_EnableSentimentTracking;
         request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
@@ -2371,7 +2375,8 @@ namespace
 
     // Bots that could answer this line at all.
     std::vector<Player*> CrowdPool(Player* speaker, ChatChannelSourceLocal source,
-                                   const std::vector<Player*>& candidates, const std::string& msg)
+                                   const std::vector<Player*>& candidates, const std::string& msg,
+                                   const std::string& channelName)
     {
         // Said in public about a quest: the bots far too low for it have
         // nothing to offer, and say nothing, the way people do. The quests
@@ -2383,8 +2388,11 @@ namespace
         // "anyone on [Mor'Ladim]?" from someone playing is looking for a group
         // for it: only those who have it, and could go along, answer. Three
         // who had never heard of it said "no idea if anyone is there".
-        const std::vector<Quest const*> lfg = OllamaIsRealPlayer(speaker) ? Links_LfgQuests(speaker, msg)
-                                                                          : std::vector<Quest const*>();
+        // What they say after it in the same place ("I need level 32+
+        // please") is the same call (Links_LfgQuestsFor).
+        const std::vector<Quest const*> lfg =
+            OllamaIsRealPlayer(speaker) ? Links_LfgQuestsFor(speaker, msg, Links_LfgPlace(source, channelName))
+                                        : std::vector<Quest const*>();
         std::vector<Player*> pool;
         pool.reserve(candidates.size());
         for (Player* bot : candidates)
@@ -2615,7 +2623,8 @@ static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
                                   const ContextAddressee& addressee,
                                   const std::vector<Player*>& candidates)
 {
-    const std::vector<Player*> pool = CrowdPool(player, source, candidates, msg);
+    const std::vector<Player*> pool =
+        CrowdPool(player, source, candidates, msg, channel ? channel->GetName() : std::string());
     if (pool.empty())
         return;
 
@@ -2938,7 +2947,8 @@ static void HandleCrowdBotLine(Player* bot, const std::string& msg,
     if (Crowd_Find(key) || Conversation_IsActiveNear(key, bot))
         return;
 
-    const std::vector<Player*> pool = CrowdPool(bot, source, candidates, msg);
+    const std::vector<Player*> pool =
+        CrowdPool(bot, source, candidates, msg, channel ? channel->GetName() : std::string());
     if (pool.empty())
         return;
 
@@ -3205,7 +3215,12 @@ bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
     request.kind = (g_RoleplayEnable && g_RoleplayStrictness >= 1)
                        ? OllamaRequestKind::RoleplayReply
                        : OllamaRequestKind::ChatReply;
-    request.triggerBotReplies = true;
+    // An answer to someone's call for a group is between the two of them:
+    // "is that a group for me?" -- "just join them and hope for the best" --
+    // "you're just being picky because you're lazy" was the crowd chatting
+    // one over.
+    request.triggerBotReplies =
+        !toPerson || Links_LfgQuestsFor(speaker, message, Links_LfgPlace(plan.source, plan.channelName)).empty();
     request.recordHistory     = toPerson;
     // One sentiment read per line, by the bot it was aimed at -- not one per
     // voice in the crowd, each of which would be its own LLM call.
@@ -3470,6 +3485,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     prompt += Outlook_ForBot(bot);
     prompt += Links_PromptHint();
 
+    std::string lagState;
     // Talk of chat -- "just check trade", "general is dead" -- gets what General
     // and Trade have really been like, and that they are in everyone's chat
     // window wherever they stand: "trade chat is basically a warzone" was said
@@ -3483,6 +3499,11 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         const std::string chat = Outlook_ChatFor(bot, said);
         if (!chat.empty())
             prompt += " " + chat;
+        // ...and talk of lag, how the realm is really running
+        // (mod-ollama-chat_lag): "anyone lagging?" gets a true answer.
+        lagState = Lag_PromptFor(said);
+        if (!lagState.empty())
+            prompt += " " + lagState;
     }
 
     // Let the model gesture. The tag is parsed back out and stripped before
@@ -3601,13 +3622,15 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
 
     // What the items and quests in the line are: a pair of boots is not a
     // creature to fight, and a delivery quest is no call for a healer.
-    const std::string named = Links_Describe(bot, sentMessage);
+    const std::string named = Links_Describe(bot, sentMessage, player);
     if (!named.empty())
         prompt += " " + named;
 
     // "anyone on [Mor'Ladim]?" is looking for a group for it: one that has it
     // too says so (the rest were left out of answering it).
-    const std::string lfg = OllamaIsRealPlayer(player) ? Links_LfgNoteFor(bot, player, sentMessage) : std::string();
+    const std::string lfg = OllamaIsRealPlayer(player)
+                                ? Links_LfgNoteFor(bot, player, sentMessage, Links_LfgPlace(source, channelName))
+                                : std::string();
     if (!lfg.empty())
         prompt += " " + lfg;
 
@@ -3630,7 +3653,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     if (facts)
     {
         facts->clear();
-        for (const std::string* part : { &named, &lfg, &known, &wants })
+        for (const std::string* part : { &named, &lfg, &known, &wants, static_cast<const std::string*>(&lagState) })
             if (!part->empty())
                 *facts += (facts->empty() ? "" : " ") + *part;
     }

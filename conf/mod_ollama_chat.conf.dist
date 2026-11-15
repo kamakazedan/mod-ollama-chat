@@ -1037,9 +1037,12 @@ OllamaChat.GuildEnvCommentGuildPvP = Who's up for some PvP tonight?|PvP with the
 
 # OllamaChat.GuildEnvCommentGuildCommunity
 #     Description: Templates for community/social comments. Pipe-separated (|) list.
-#     Example: "Guild community is the best part of the game."
+#     Something real to say: "something low-key, like people type in guild
+#     chat after being quiet for a while", with "ask if anyone else has
+#     noticed it", gave "anyone else noticed the lag here?" on a realm with
+#     none (Lag.* keeps lag talk to when there is lag).
 #     Default: (empty - no community comments)
-OllamaChat.GuildEnvCommentGuildCommunity = Guild community is the best part of the game.|Love hanging out with everyone here.|Our guild socials are always a blast.
+OllamaChat.GuildEnvCommentGuildCommunity = "a quick hello to the guild, or asking who is about."
 
 # --------------------------------------------
 # GUILD EVENT TYPES
@@ -2685,6 +2688,25 @@ OllamaChat.Corpse.DelayMaxMs = 4000
 #        to whoever they follow), then lets it go.
 #        Default: 20
 OllamaChat.Corpse.Range = 20
+
+#    OllamaChat.Corpse.EasyEmotes
+#        Emotes that say the kill was nothing ("yawns sleepily at X"): from a
+#        style's list only when it was -- the body grey to the bot doing it.
+#        Kihdon, 24, yawned at Mor'Ladim, a level 35 elite. Empty: any of a
+#        style's emotes, whatever was killed.
+#        Default: "yawn|bored|shrug"
+OllamaChat.Corpse.EasyEmotes = "yawn|bored|shrug"
+
+#    OllamaChat.Corpse.KillEventText
+#        A kill worth it (as above: a named one or a boss, or an elite not
+#        grey to whoever killed it), by a group with a real player in it, goes
+#        into that group's chat transcript -- emote or no emote -- so what the
+#        group says next knows it is down: "good luck with the elite" went to
+#        the player who had just killed Mor'Ladim with the bot's help.
+#        {killer}, {victim}, {what} ("a level 35 named elite", "a level 37
+#        rare", "a boss"). Empty: not told.
+#        Default: "{killer} and their group killed {victim}, {what}"
+OllamaChat.Corpse.KillEventText = "{killer} and their group killed {victim}, {what}"
 
 #    OllamaChat.Corpse.Style.Default
 #    OllamaChat.Corpse.Style.<KEY>
@@ -6668,6 +6690,56 @@ OllamaChat.Outlook.ChatText = "General chat, and in the cities trade chat, are c
 OllamaChat.Outlook.ChatWords = "trade chat|trade channel|in trade|on trade|try trade|check trade|spam trade|trade is|trade was|trades dead|trade dead|general chat|general channel|in general|check general|general is|general was|generals dead|general dead|lfg|chat|chats|channel|channels|spam|spamming|spammy|spammers"
 OllamaChat.Outlook.ChatStates = "nobody has typed anything in {channel} for {window}|{channel} has had only a line or two in {window}|{channel} has had a bit of chat in {window}|{channel} has been busy in {window}"
 
+#    OllamaChat.Lag.Enable
+#    OllamaChat.Lag.Minutes
+#    OllamaChat.Lag.MeanMs
+#    OllamaChat.Lag.SpikeMs
+#    OllamaChat.Lag.Spikes
+#    OllamaChat.Lag.Words
+#    OllamaChat.Lag.SmoothText
+#    OllamaChat.Lag.LaggingText
+#    OllamaChat.Lag.AmbientText
+#    OllamaChat.Lag.AmbientChance
+#    OllamaChat.Lag.AmbientMinutes
+#    OllamaChat.Lag.Note
+#        Lag, talked of only when the realm really lags. "anyone else noticed
+#        the lag here?" and "yeah it is proper chunky here" went out in guild
+#        chat while the world ticked at a 16 ms median: the model reached for
+#        the oldest complaint there is, and everyone reading it took the realm
+#        for a laggy one. The world's own ticks say how it is (the update time
+#        diff .server info shows): over the last Minutes, the realm lags when
+#        a moment of play sat in a tick of MeanMs or more on average (each
+#        tick weighted by how long it took, so a run of slow ones among
+#        thousands of quick ones counts for the time it took), or when Spikes
+#        ticks took SpikeMs or longer -- hitches everyone felt.
+#
+#        A line with one of Words in it (| separated; a word ending in *
+#        matches any word starting with the rest, so lagg* is laggy, lagging
+#        and lagged but never lager) goes out only while the realm lags, or
+#        answering a line that talked of it itself ("lag?" -- "none here").
+#        Otherwise it is not said: one owed to someone is asked again with
+#        Note, one that has to go out goes in its stock words. A reply where
+#        the talk is of lag is told how the realm really is -- SmoothText or
+#        LaggingText ({minutes}: Minutes) -- so "anyone lagging?" gets a true
+#        answer, and "it's my connection" is the only lag there is. While it
+#        lags, an ambient line is now and then told so (AmbientText, at
+#        AmbientChance percent, no more than one in AmbientMinutes across the
+#        realm): a bot that grumbles about lag then has lag to grumble at.
+#        .ollama status chat says how the realm runs and what was held back.
+#        Default: 1, 5, 250, 1500, 3, (below), (below), (below), (below), 15, 3, (below)
+OllamaChat.Lag.Enable = 1
+OllamaChat.Lag.Minutes = 5
+OllamaChat.Lag.MeanMs = 250
+OllamaChat.Lag.SpikeMs = 1500
+OllamaChat.Lag.Spikes = 3
+OllamaChat.Lag.Words = "lag|lags|lagg*|lagspike*|lagfest*|rubberband*|rubber band*|desync*|latency|high ping|my ping|ping is|bad ping|ping spike*|fps|frame rate|framerate|stutter*|choppy|slideshow|chunky here|proper chunky|bit chunky|so chunky|really chunky|is chunky|its chunky|getting chunky|feels chunky|crash|crashed|crashing|server crash*|realm crash*|server died|server down|server is down|servers down|realm down|realm is down|disconnect*|dcd|dced|got dc|server slow|server is slow|servers slow|server struggling|server is struggling|server hiccup*|server froze|server freez*|spell delay|input delay"
+OllamaChat.Lag.SmoothText = "If it comes up: the realm itself has run smoothly these last {minutes} minutes -- nobody on it has had any lag -- so never say it lags, or that you are lagging; if someone says they are, that is their own connection."
+OllamaChat.Lag.LaggingText = "If it comes up: the realm really has been lagging these last few minutes, and everyone on it can feel it."
+OllamaChat.Lag.AmbientText = "The realm really has been lagging these last few minutes, and everyone on it can feel it: you could grumble about that."
+OllamaChat.Lag.AmbientChance = 15
+OllamaChat.Lag.AmbientMinutes = 3
+OllamaChat.Lag.Note = "Say nothing about lag, crashes or disconnects: the realm is running smoothly and nobody on it is lagging."
+
 #    OllamaChat.Sides.Cries.Horde
 #    OllamaChat.Sides.Cries.Alliance
 #    OllamaChat.Sides.OwnCryText
@@ -6913,12 +6985,42 @@ OllamaChat.Links.WorthWords = "sell|sells|selling|sold|buy|buying|bought|worth|p
 #        are on it and up for it; invited, they join. Nobody else answers,
 #        unless named. A quest addon's level tag in a quest link ("[[30+]
 #        Mor'Ladim]") is read as the quest's own title, here and in what every
-#        bot reads of the line.
+#        bot reads of the line; and so is Questie's own way of naming one,
+#        which reaches the server as plain text, the quest's id in it: "LFG
+#        [[32] Morbent Fel (55)]", what its tracker and quest log put in chat
+#        on a shift-click (it makes a link of it again only on the screens of
+#        those who have Questie). Read as text, it named no quest at all, and a
+#        level 24 offered to help with a level 30 elite.
 #        Default: 1, (below), (below), 5
 OllamaChat.Links.LfgEnable = 1
 OllamaChat.Links.LfgWords = "anyone on|anybody on|any1 on|ne1 on|anyone else on|anybody else on|anyone doing|anybody doing|any1 doing|anyone else doing|who is on|whos on|who else is on|who is doing|whos doing|anyone for|anybody for|anyone up for|anybody up for|anyone want to do|anyone wanna do|anybody want to do|anybody wanna do|any1 wanna do|want to group|wanna group|wanna team up|want to team up|group for|grp for|group up for|lfg|lfm|lf1m|lf2m|lf3m|lf4m|lf group|looking for group|looking for a group|looking for people|need help with|need a hand with|help with|help me with|need any more|need more|still need help|still need people|need people for|need a group for|lf more"
 OllamaChat.Links.LfgText = "{player_name} is asking who else is doing {quest}, to group up for it. You have it too ({progress}), so say you are on it and up for doing it together: they can invite you, and you will join."
 OllamaChat.Links.LfgLevels = 5
+
+#    OllamaChat.Links.LfgMinutes
+#        A call for a group holds for this long after its caller's last word on
+#        it: what they say after it in the same channel, naming nothing else --
+#        "I need level 32+ please", "the quest is level 32+" -- is the same
+#        call, answered by the same few. Read as lines about nothing in
+#        particular, the follow-ups had the whole channel chatting it over
+#        ("is that a group for me?", "you're just being picky because you're
+#        lazy"). A level they ask for, in the call or after it ("32+", "level
+#        32", "lvl 30 or higher"), leaves out every bot below it. An answer to
+#        the call is between the two of them: no other bot chimes in on it.
+#        0: a line is a call only when it names the quest itself.
+#        Default: 5
+OllamaChat.Links.LfgMinutes = 5
+
+#    OllamaChat.Links.QuestTheirsText
+#        A quest named by someone in the bot's own group -- "Mor'Ladim's
+#        Skull: 1/1 for [Mor'Ladim]!", Questie's progress line -- is told
+#        with where they are with it ({player_name}, {progress}: "done, it
+#        only needs handing in to Sven Yorgen"), and never as one too high
+#        for the bot to help with: it is there with them. Kihdon, 24, told it
+#        was far too low for that quest, said "too high level for me to help"
+#        right after helping kill him. Empty leaves where they are out.
+#        Default: "(where {player_name} is with it: {progress})"
+OllamaChat.Links.QuestTheirsText = "(where {player_name} is with it: {progress})"
 
 ###############################################################################
 #

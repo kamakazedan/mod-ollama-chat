@@ -90,7 +90,11 @@ std::string Links_QuestObjective(Quest const* quest, Player* reader, size_t maxL
 // Links.DescribeMax of them, in Links.DescribeText, each with how it sits
 // against `bot`'s level (a quest far above it, an item it cannot use yet, a
 // quest that would be easy). Empty when it names none.
-std::string Links_Describe(Player* bot, const std::string& line);
+//
+// `speaker`, who said it: in the bot's group, a quest of theirs is told with
+// where they are with it (Links.QuestTheirsText), and never as too high for
+// the bot to help with -- it is there with them.
+std::string Links_Describe(Player* bot, const std::string& line, Player* speaker = nullptr);
 
 // How a quest sits against `bot`'s level: too high when it is more than
 // Links.QuestLevelsAbove levels above the bot or the bot cannot take it yet;
@@ -114,7 +118,9 @@ bool Links_AllTooHighFor(Player* bot, const std::vector<Quest const*>& quests);
 
 // A line as it reads, the way StripChatMarkup has it, but each quest link by
 // the quest's own title: quest addons write their level tags into the name a
-// link shows ("anyone on [[30+] Mor'Ladim]?" reads "anyone on [Mor'Ladim]?").
+// link shows ("anyone on [[30+] Mor'Ladim]?" reads "anyone on [Mor'Ladim]?"),
+// and Questie's plain-text references too ("LFG [[32] Morbent Fel (55)]"
+// reads "LFG [Morbent Fel]").
 std::string Links_AsRead(const std::string& line);
 
 // "anyone on [Mor'Ladim]?", "lf1m [The Defias Brotherhood]", "[Mor'Ladim's
@@ -124,16 +130,30 @@ std::string Links_AsRead(const std::string& line);
 // it -- as `speaker` means them. Empty when it is no such line.
 std::vector<Quest const*> Links_LfgQuests(Player* speaker, const std::string& line);
 
+// Where a call for a group was made, for Links_LfgQuestsFor: the chat source
+// and the channel's name.
+std::string Links_LfgPlace(uint32_t source, const std::string& channelName);
+
+// Links_LfgQuests, remembered: a real player's call for a group holds for
+// Links.LfgMinutes after their last word on it, so what they say after it in
+// the same place, naming nothing else -- "I need level 32+ please", "the
+// quest is level 32+" -- is the same call, answered by the same few. A level
+// they ask for, in the call or after it (TextRules::LevelAsked), leaves out
+// those below it (Links_CanJoinFor). World thread.
+std::vector<Quest const*> Links_LfgQuestsFor(Player* speaker, const std::string& line, const std::string& place);
+
 // Could `bot` go along with `asker` on one of `quests`: it has one of them in
-// its log, not done; it is of their side, out of any other group, and not so
-// far above them that their invite is turned down (Links.LfgLevels).
+// its log, not done; it is of their side, out of any other group, not so
+// far above them that their invite is turned down (Links.LfgLevels), and not
+// below a level they asked for.
 // `which`: the quest it would go for.
 bool Links_CanJoinFor(Player* bot, Player* asker, const std::vector<Quest const*>& quests,
                       Quest const** which = nullptr);
 
-// For a reply prompt of `bot` to `asker`'s line: that they are looking for a
-// group for a quest `bot` could go along on (Links.LfgText). Empty otherwise.
-std::string Links_LfgNoteFor(Player* bot, Player* asker, const std::string& line);
+// For a reply prompt of `bot` to `asker`'s line, said at `place`
+// (Links_LfgPlace): that they are looking for a group for a quest `bot` could
+// go along on (Links.LfgText). Empty otherwise.
+std::string Links_LfgNoteFor(Player* bot, Player* asker, const std::string& line, const std::string& place);
 
 void Links_Update();   // forget links not seen for Links.RememberMinutes
 

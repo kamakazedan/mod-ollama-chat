@@ -590,6 +590,12 @@ see it is not what people say. A reply in /say is told so (`Say.SeenText`):
 a bot gives its level only when asked, and hardly ever asks yours. Bots
 chatting in /say among themselves are told the same (`Mingle.PromptTemplate`).
 
+**How the realm runs.** Bots talk of lag, crashes and disconnects only while
+the realm really lags, judged from the world's own update times over the last
+few minutes (`OllamaChat.Lag.*`); asked "anyone lagging?" on a smooth realm,
+they say it is fine, and while it does lag, one now and then grumbles about
+it. `.ollama status chat` shows how the realm runs.
+
 **What chat is like.** On a realm where nobody had typed in Trade all
 evening, bots in Stormwind called it "basically a warzone", and one said
 "brb gonna go check trade chat", as if it were somewhere to go. When the talk
@@ -684,6 +690,17 @@ posted lately if there is one, else a quest in the bot's log or an item it
 carries, else the item and quest tables (nearest the bot's level, and its
 faction for quests). Unknown names just lose their brackets. See
 `OllamaChat.Links.*`.
+
+Questie's own quest references are read too. Shift-clicking a quest in its
+tracker or quest log puts plain text in chat, "[[32] Morbent Fel (55)]", which
+Questie turns back into a link only on the screens of those who have it; bots
+now read it as that quest by its id, so an LFG call with one is answered by
+the bots that could go along and nobody else. What the caller says after it in
+the same channel ("I need level 32+ please") is the same call
+(`Links.LfgMinutes`), a level asked for leaves out everyone below it, and no
+other bot chimes in on an answer. A quest named by someone in a bot's own
+group comes with where they are with it, and never as one too high for the
+bot to help with: it is there with them (`Links.QuestTheirsText`).
 
 ## Stock Phrases
 
@@ -1149,7 +1166,11 @@ a log line.
   the roleplayer salutes it or mourns it, the quiet one maybe nods. When you
   land the killing blow, one of your group's bots near the body may do it
   instead. No model call; only with a real player near enough to see; once in
-  a few minutes per bot at most. See `OllamaChat.Corpse.*`.
+  a few minutes per bot at most. A yawn or a shrug only when the kill was easy
+  for that bot (`Corpse.EasyEmotes`). And the kill itself goes into the
+  group's chat history when someone playing is in it ("Kami and their group
+  killed Mor'Ladim, a level 35 named elite"), so the next thing the group says
+  knows it is down (`Corpse.KillEventText`). See `OllamaChat.Corpse.*`.
 
 ## Think Mode
 

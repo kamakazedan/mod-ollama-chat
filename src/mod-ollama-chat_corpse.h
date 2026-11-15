@@ -25,9 +25,18 @@ class Player;
 // it did goes into the transcript of those about ("Lianon gave
 // Gath'Ilzogg's body a /spit"), so a bot asked about it knows.
 //
+// A yawn, a "bored" or a shrug (Corpse.EasyEmotes) says it was nothing: one
+// of those only where it was -- grey to the bot doing it.
+//
+// And a kill like that, by a group with someone playing in it, goes into the
+// group's chat transcript (Corpse.KillEventText: "Kami and their group
+// killed Mor'Ladim, a level 35 named elite"), emote or no emote: what the
+// group says next knows it is down. An elite grey to the killer is not told
+// of; a named one or a boss always is.
+//
 // Corpse_NoteKill runs in the kill hooks, on the map thread: it reads the
 // killer and the creature it killed, and notes the kill under a mutex.
-// Corpse_Update, on the world tick, decides and plays.
+// Corpse_Update, on the world tick, decides, tells and plays.
 // --------------------------------------------------------------------------
 
 void Corpse_NoteKill(Player* killer, Creature* victim);
@@ -43,6 +52,7 @@ struct CorpseStats
     uint64_t named  = 0;   // of the kills: named (a rare, or one of a kind)
     uint64_t elites = 0;   //               elites out in the world
     uint64_t bosses = 0;   //               bosses
+    uint64_t told   = 0;   // kills a group with someone playing in it was told of
 };
 CorpseStats Corpse_GetStats();
 

@@ -3176,6 +3176,104 @@ namespace TextRules
         return out;
     }
 
+    std::vector<QuestRef> FindQuestRefs(const std::string& text)
+    {
+        std::vector<QuestRef> out;
+        auto digit = [](char c) { return c >= '0' && c <= '9'; };
+        for (size_t at = 0; (at = text.find('[', at)) != std::string::npos; ++at)
+        {
+            size_t pos = at + 1;
+            // "[[30+] ...": the level Questie shows, in brackets of its own.
+            if (pos < text.size() && text[pos] == '[')
+            {
+                const size_t tagEnd = text.find(']', pos + 1);
+                if (tagEnd == std::string::npos || tagEnd == pos + 1 || tagEnd - pos - 1 > 8 ||
+                    text.find('[', pos + 1) < tagEnd)
+                    continue;
+                pos = tagEnd + 1;
+                while (pos < text.size() && text[pos] == ' ')
+                    ++pos;
+            }
+            // "... (228)]": the quest's id, last.
+            const size_t close = text.find(")]", pos);
+            if (close == std::string::npos || text.find('[', pos) < close)
+                continue;
+            const size_t open = text.rfind('(', close);
+            if (open == std::string::npos || open < pos + 2 || text[open - 1] != ' ' || close == open + 1 ||
+                close - open - 1 > 7 || !std::all_of(text.begin() + open + 1, text.begin() + close, digit))
+                continue;
+            const std::string name = Trim(text.substr(pos, open - 1 - pos));
+            const bool letter = std::any_of(name.begin(), name.end(), [](char c)
+            {
+                const unsigned char u = static_cast<unsigned char>(c);
+                return u >= 0x80 || std::isalpha(u);
+            });
+            if (!letter || name.size() > 80 || name.find(']') != std::string::npos)
+                continue;
+            uint64_t id = 0;
+            for (size_t d = open + 1; d < close; ++d)
+                id = id * 10 + uint64_t(text[d] - '0');
+            if (id == 0 || id > 0xFFFFFFFFull)
+                continue;
+            out.push_back({ at, close + 2, name, uint32_t(id) });
+            at = close + 1;   // the loop steps past the ']'
+        }
+        return out;
+    }
+
+    uint32_t LevelAsked(const std::string& text)
+    {
+        std::string s = WithoutBracketNames(StripChatMarkup(text));
+        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+        auto isDigit = [](char c) { return c >= '0' && c <= '9'; };
+        auto isAlpha = [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; };
+        uint32_t best = 0;
+        for (size_t i = 0; i < s.size();)
+        {
+            if (!isDigit(s[i]))
+            {
+                ++i;
+                continue;
+            }
+            size_t j = i;
+            while (j < s.size() && isDigit(s[j]))
+                ++j;
+            const size_t digits = j - i;
+            const uint32_t n = digits <= 2 ? uint32_t(std::stoul(s.substr(i, digits))) : 0;
+            // "level 32", "lvl32", "lvl. 32": a level word right before it.
+            bool levelWord = false;
+            {
+                size_t k = i;
+                while (k > 0 && (s[k - 1] == ' ' || s[k - 1] == '.'))
+                    --k;
+                for (const char* w : { "level", "levels", "lvl", "lvls", "lv" })
+                {
+                    const size_t len = std::strlen(w);
+                    if (k >= len && s.compare(k - len, len, w) == 0 && (k == len || !isAlpha(s[k - len - 1])))
+                        levelWord = true;
+                }
+            }
+            // Standing alone: not "lf2m", "x20", "20g".
+            const bool leftAlone  = levelWord || i == 0 || !std::isalnum(static_cast<unsigned char>(s[i - 1]));
+            const bool rightAlone = j >= s.size() || !isAlpha(s[j]);
+            bool asked = levelWord;
+            if (!asked && n >= 5)
+            {
+                if (j < s.size() && s[j] == '+')
+                    asked = true;   // "32+"
+                else
+                    for (const char* w : { " or higher", " or above", " or over", " and up", " and above",
+                                           " and over", " plus" })
+                        if (s.compare(j, std::strlen(w), w) == 0)
+                            asked = true;
+            }
+            if (asked && leftAlone && rightAlone && n >= 1 && n <= 80)
+                best = std::max(best, n);
+            i = j;
+        }
+        return best;
+    }
+
     std::vector<BracketName> FindBracketNames(const std::string& text)
     {
         std::vector<BracketName> out;
@@ -3779,16 +3877,25 @@ namespace TextRules
 
     std::string WithoutBracketNames(const std::string& text)
     {
-        const std::vector<BracketName> names = FindBracketNames(text);
-        if (names.empty())
+        // Questie's "[[30+] Mor'Ladim (228)]" too: a name, level and id all.
+        std::vector<std::pair<size_t, size_t>> spans;
+        for (const QuestRef& r : FindQuestRefs(text))
+            spans.emplace_back(r.begin, r.end);
+        for (const BracketName& n : FindBracketNames(text))
+            spans.emplace_back(n.begin, n.end);
+        if (spans.empty())
             return text;
+        std::sort(spans.begin(), spans.end());
         std::string out;
         size_t at = 0;
-        for (const BracketName& n : names)
+        for (const auto& [begin, end] : spans)
         {
-            out.append(text, at, n.begin - at);
+            if (end <= at)
+                continue;   // inside one already taken out
+            if (begin > at)
+                out.append(text, at, begin - at);
             out += ' ';
-            at = n.end;
+            at = end;
         }
         out.append(text, at, std::string::npos);
         return out;

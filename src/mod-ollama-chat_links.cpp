@@ -793,6 +793,15 @@ namespace
         Quest const*        quest = nullptr;
     };
 
+    // Questie's plain-text reference (TextRules::FindQuestRefs): its quest,
+    // when there is one by that id with that title -- "[Hogger (176)]" is not
+    // quest 176 unless quest 176 is called Hogger.
+    Quest const* QuestOfRef(const TextRules::QuestRef& ref)
+    {
+        Quest const* quest = sObjectMgr->GetQuestTemplate(ref.id);
+        return quest && TextRules::NameKey(quest->GetTitle()) == TextRules::NameKey(ref.name) ? quest : nullptr;
+    }
+
     std::vector<Named> NamedIn(Player* bot, const std::string& line, size_t max)
     {
         std::vector<Named> out;
@@ -815,7 +824,15 @@ namespace
                 add(key, nullptr, sObjectMgr->GetQuestTemplate(link.id));
         }
 
-        const std::string plain = TextRules::StripChatMarkup(line);
+        // Questie's "[[30+] Mor'Ladim (228)]": a quest by its id, though it
+        // reached the server as text.
+        for (const TextRules::QuestRef& ref : TextRules::FindQuestRefs(TextRules::StripChatMarkup(line)))
+            if (Quest const* quest = QuestOfRef(ref))
+                add(TextRules::NameKey(quest->GetTitle()), nullptr, quest);
+
+        // Names in brackets, as the line reads: Questie's references by their
+        // titles, so the one just added is not looked for again.
+        const std::string plain = Links_AsRead(line);
         const time_t now = time(nullptr);
         for (const TextRules::BracketName& n : TextRules::FindBracketNames(plain))
         {
@@ -993,6 +1010,22 @@ namespace
         return "not done yet" + ProgressOf(bot, quest);
     }
 
+    // Where `speaker` -- in the bot's group -- is with a quest of theirs they
+    // named (Links.QuestTheirsText): "Mor'Ladim's Skull: 1/1 for
+    // [Mor'Ladim]!" is a quest done, not one still ahead. Empty when it is
+    // not in their log.
+    std::string TheirsNote(Player* speaker, Quest const* quest)
+    {
+        if (!speaker || !quest || g_LinksQuestTheirsText.empty())
+            return {};
+        const QuestStatus st = speaker->GetQuestStatus(quest->GetQuestId());
+        if (st != QUEST_STATUS_INCOMPLETE && st != QUEST_STATUS_COMPLETE && st != QUEST_STATUS_FAILED)
+            return {};
+        const std::string note = SafeFormat(g_LinksQuestTheirsText, fmt::arg("player_name", speaker->GetName()),
+                                            fmt::arg("progress", StateOf(speaker, quest)));
+        return (note.empty() || note == "[Format Error]") ? std::string() : " " + note;
+    }
+
     // Is the line about money: a price, or talk of buying, selling or what
     // things are worth (Links.WorthWords)?
     bool MoneyTalk(const std::string& line)
@@ -1073,17 +1106,32 @@ bool Links_AllTooHighFor(Player* bot, const std::vector<Quest const*>& quests)
     return true;
 }
 
-std::string Links_Describe(Player* bot, const std::string& line)
+std::string Links_Describe(Player* bot, const std::string& line, Player* speaker)
 {
     if (!g_LinksDescribeEnable || !bot || line.empty() || g_LinksDescribeText.empty() || g_LinksDescribeMax == 0)
         return {};
 
+    // In a group with whoever named it, the bot is with them for it: "too
+    // low to help" is not for it -- Kihdon, 24, said "too high level for me to
+    // help" to the line saying Mor'Ladim was dead, after helping kill him --
+    // and where they are with their own quest is in front of it.
+    const bool together = speaker && speaker != bot && bot->GetGroup() && bot->GetGroup() == speaker->GetGroup();
     std::vector<std::string> parts;
     const bool money = MoneyTalk(line);
     for (const Named& n : NamedIn(bot, line, g_LinksDescribeMax))
     {
-        std::string text = n.quest ? Links_DescribeQuest(n.quest, bot) + QuestNote(bot, n.quest) + HaveNote(bot, n.quest)
-                                   : Links_DescribeItem(n.item) + ItemNote(bot, n.item, money);
+        std::string text;
+        if (n.quest)
+        {
+            text = Links_DescribeQuest(n.quest, bot);
+            if (!together || Links_QuestFitFor(bot, n.quest) != QuestFit::TooHigh)
+                text += QuestNote(bot, n.quest);
+            if (together)
+                text += TheirsNote(speaker, n.quest);
+            text += HaveNote(bot, n.quest);
+        }
+        else
+            text = Links_DescribeItem(n.item) + ItemNote(bot, n.item, money);
         if (!text.empty())
             parts.push_back(std::move(text));
     }
@@ -1099,21 +1147,99 @@ std::string Links_Describe(Player* bot, const std::string& line)
 
 std::string Links_AsRead(const std::string& line)
 {
-    if (line.find("|H") == std::string::npos)
-        return TextRules::StripChatMarkup(line);
     // A quest link by its own title: quest addons write their level tags into
     // the name ("[[30+] Mor'Ladim]"), and the tag is no part of the quest.
     std::string out = line;
-    for (const TextRules::ChatLink& link : TextRules::ExtractChatLinks(line))
+    if (line.find("|H") != std::string::npos)
+        for (const TextRules::ChatLink& link : TextRules::ExtractChatLinks(line))
+        {
+            if (link.type != "quest" || !link.id || link.markup.empty())
+                continue;
+            Quest const* quest = sObjectMgr->GetQuestTemplate(link.id);
+            const size_t at = quest ? out.find(link.markup) : std::string::npos;
+            if (at != std::string::npos)
+                out.replace(at, link.markup.size(), "[" + quest->GetTitle() + "]");
+        }
+    out = TextRules::StripChatMarkup(out);
+    // ...and Questie's own references ("[[32] Morbent Fel (55)]", what its
+    // tracker puts in chat) the same way: the id is no part of what is said.
+    if (out.find(")]") == std::string::npos)
+        return out;
+    const std::vector<TextRules::QuestRef> refs = TextRules::FindQuestRefs(out);
+    for (auto ref = refs.rbegin(); ref != refs.rend(); ++ref)
+        if (Quest const* quest = QuestOfRef(*ref))
+            out.replace(ref->begin, ref->end - ref->begin, "[" + quest->GetTitle() + "]");
+    return out;
+}
+
+namespace
+{
+    // A real player's call for a group, and what they say after it in the
+    // same place: "LFG [Morbent Fel]", then "I need level 32+ please", then
+    // "the quest is level 32+". The follow-ups name no quest, and were
+    // answered as if they were about nothing in particular: "is that a group
+    // for me?", "you're just being picky because you're lazy".
+    struct LfgCall
     {
-        if (link.type != "quest" || !link.id || link.markup.empty())
-            continue;
-        Quest const* quest = sObjectMgr->GetQuestTemplate(link.id);
-        const size_t at = quest ? out.find(link.markup) : std::string::npos;
-        if (at != std::string::npos)
-            out.replace(at, link.markup.size(), "[" + quest->GetTitle() + "]");
+        std::vector<uint32_t> quests;
+        std::string           place;
+        uint32_t              minLevel = 0;   // the level they asked for: "32+"
+        time_t                until    = 0;
+    };
+    std::unordered_map<uint64_t, LfgCall> g_lfgCalls;   // by the asker
+
+    LfgCall const* CallOf(Player* asker)
+    {
+        if (!asker)
+            return nullptr;
+        auto it = g_lfgCalls.find(asker->GetGUID().GetRawValue());
+        return it == g_lfgCalls.end() || it->second.until < time(nullptr) ? nullptr : &it->second;
     }
-    return TextRules::StripChatMarkup(out);
+}
+
+std::string Links_LfgPlace(uint32_t source, const std::string& channelName)
+{
+    return std::to_string(source) + ":" + channelName;
+}
+
+std::vector<Quest const*> Links_LfgQuestsFor(Player* speaker, const std::string& line, const std::string& place)
+{
+    std::vector<Quest const*> quests = Links_LfgQuests(speaker, line);
+    if (!speaker || !g_LinksLfgEnable || g_LinksLfgMinutes == 0)
+        return quests;
+    const time_t now = time(nullptr);
+    const uint32_t level = TextRules::LevelAsked(line);
+    const uint64_t key = speaker->GetGUID().GetRawValue();
+    if (!quests.empty())
+    {
+        std::vector<uint32_t> ids;
+        for (Quest const* quest : quests)
+            ids.push_back(quest->GetQuestId());
+        LfgCall& call = g_lfgCalls[key];
+        if (call.quests != ids || call.place != place || call.until < now)
+            call.minLevel = 0;   // a new call: no level asked for yet
+        call.quests = std::move(ids);
+        call.place  = place;
+        if (level)
+            call.minLevel = level;
+        call.until = now + time_t(g_LinksLfgMinutes) * 60;
+        return quests;
+    }
+    // A follow-up: in the same place, before the call has gone cold, and
+    // naming nothing else -- a line about another quest or an item is about
+    // that.
+    auto it = g_lfgCalls.find(key);
+    if (it == g_lfgCalls.end() || it->second.until < now || it->second.place != place ||
+        line.find('[') != std::string::npos)
+        return quests;
+    LfgCall& call = it->second;
+    if (level)
+        call.minLevel = level;
+    call.until = now + time_t(g_LinksLfgMinutes) * 60;   // still at it
+    for (uint32_t id : call.quests)
+        if (Quest const* quest = sObjectMgr->GetQuestTemplate(id))
+            quests.push_back(quest);
+    return quests;
 }
 
 std::vector<Quest const*> Links_LfgQuests(Player* speaker, const std::string& line)
@@ -1159,6 +1285,9 @@ bool Links_CanJoinFor(Player* bot, Player* asker, const std::vector<Quest const*
     if (g_LinksLfgLevels && bot->GetLevel() > asker->GetLevel() + g_LinksLfgLevels &&
         (!bot->GetGuildId() || bot->GetGuildId() != asker->GetGuildId()))
         return false;
+    // Below the level they asked for ("I need level 32+ please").
+    if (LfgCall const* call = CallOf(asker); call && call->minLevel && bot->GetLevel() < call->minLevel)
+        return false;
     for (Quest const* quest : quests)
     {
         const QuestStatus st = bot->GetQuestStatus(quest->GetQuestId());
@@ -1172,12 +1301,12 @@ bool Links_CanJoinFor(Player* bot, Player* asker, const std::vector<Quest const*
     return false;
 }
 
-std::string Links_LfgNoteFor(Player* bot, Player* asker, const std::string& line)
+std::string Links_LfgNoteFor(Player* bot, Player* asker, const std::string& line, const std::string& place)
 {
     if (!g_LinksLfgEnable || g_LinksLfgText.empty())
         return {};
     Quest const* quest = nullptr;
-    if (!Links_CanJoinFor(bot, asker, Links_LfgQuests(asker, line), &quest) || !quest)
+    if (!Links_CanJoinFor(bot, asker, Links_LfgQuestsFor(asker, line, place), &quest) || !quest)
         return {};
     const std::string out = SafeFormat(g_LinksLfgText, fmt::arg("player_name", asker->GetName()),
                                        fmt::arg("quest", quest->GetTitle()),
@@ -1197,6 +1326,8 @@ void Links_Update()
     const time_t recent = now - static_cast<time_t>(g_LinksRepeatSeconds);
     for (auto it = g_recentLinks.begin(); it != g_recentLinks.end(); )
         it = (it->second < recent) ? g_recentLinks.erase(it) : std::next(it);
+    for (auto it = g_lfgCalls.begin(); it != g_lfgCalls.end(); )
+        it = (it->second.until < now) ? g_lfgCalls.erase(it) : std::next(it);
 }
 
 LinksStats Links_GetStats()

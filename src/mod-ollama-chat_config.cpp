@@ -545,6 +545,23 @@ std::string g_GroupQuestsAskLine;
 std::string g_GroupQuestsAnswerLine;
 std::string g_GroupQuestsInviteLine;
 std::string g_GroupQuestsSoloLine;
+
+bool        g_LagEnable             = true;
+uint32_t    g_LagMinutes            = 5;
+uint32_t    g_LagMeanMs             = 250;
+uint32_t    g_LagSpikeMs            = 1500;
+uint32_t    g_LagSpikes             = 3;
+std::vector<std::vector<std::string>> g_LagWords;
+std::string g_LagSmoothText;
+std::string g_LagLaggingText;
+std::string g_LagAmbientText;
+uint32_t    g_LagAmbientChance      = 15;
+uint32_t    g_LagAmbientMinutes     = 3;
+std::string g_LagNote;
+uint32_t    g_LinksLfgMinutes       = 5;
+std::string g_LinksQuestTheirsText;
+std::string g_CorpseKillEventText;
+std::vector<uint32_t> g_CorpseEasyEmotes;
 std::vector<std::vector<std::string>> g_PartySkipLaterWords;
 std::string g_PartyCmdHintSkip;
 std::string g_PartyCmdHintSkipNo;
@@ -4119,6 +4136,62 @@ static void LoadNaturalChatV41Settings()
              g_LinksLfgWords.size());
 }
 
+static void LoadNaturalChatV42Settings()
+{
+    auto phrases = [](const char* key, const char* def)
+    {
+        return CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(key, def));
+    };
+    auto text = [](const char* key, const char* def)
+    {
+        return sConfigMgr->GetOption<std::string>(key, def);
+    };
+
+    // --- lag, only when there is lag (mod-ollama-chat_lag) ---------------------------------
+    g_LagEnable  = sConfigMgr->GetOption<bool>("OllamaChat.Lag.Enable", true);
+    g_LagMinutes = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Lag.Minutes", 5), 1, 60);
+    g_LagMeanMs  = sConfigMgr->GetOption<uint32_t>("OllamaChat.Lag.MeanMs", 250);
+    g_LagSpikeMs = sConfigMgr->GetOption<uint32_t>("OllamaChat.Lag.SpikeMs", 1500);
+    g_LagSpikes  = sConfigMgr->GetOption<uint32_t>("OllamaChat.Lag.Spikes", 3);
+    g_LagWords   = phrases("OllamaChat.Lag.Words",
+        "lag|lags|lagg*|lagspike*|lagfest*|rubberband*|rubber band*|desync*|latency|high ping|my ping|ping is|"
+        "bad ping|ping spike*|fps|frame rate|framerate|stutter*|choppy|slideshow|chunky here|proper chunky|"
+        "bit chunky|so chunky|really chunky|is chunky|its chunky|getting chunky|feels chunky|crash|crashed|"
+        "crashing|server crash*|realm crash*|server died|server down|server is down|servers down|realm down|"
+        "realm is down|disconnect*|dcd|dced|got dc|server slow|server is slow|servers slow|server struggling|"
+        "server is struggling|server hiccup*|server froze|server freez*|spell delay|input delay");
+    g_LagSmoothText = text("OllamaChat.Lag.SmoothText",
+        "If it comes up: the realm itself has run smoothly these last {minutes} minutes -- nobody on it has had "
+        "any lag -- so never say it lags, or that you are lagging; if someone says they are, that is their own "
+        "connection.");
+    g_LagLaggingText = text("OllamaChat.Lag.LaggingText",
+        "If it comes up: the realm really has been lagging these last few minutes, and everyone on it can feel it.");
+    g_LagAmbientText = text("OllamaChat.Lag.AmbientText",
+        "The realm really has been lagging these last few minutes, and everyone on it can feel it: you could "
+        "grumble about that.");
+    g_LagAmbientChance  = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Lag.AmbientChance", 15), 100);
+    g_LagAmbientMinutes = sConfigMgr->GetOption<uint32_t>("OllamaChat.Lag.AmbientMinutes", 3);
+    g_LagNote = text("OllamaChat.Lag.Note",
+        "Say nothing about lag, crashes or disconnects: the realm is running smoothly and nobody on it is lagging.");
+
+    // --- a call for a group, and what its caller says after it (mod-ollama-chat_links) -------
+    g_LinksLfgMinutes      = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Links.LfgMinutes", 5), 60);
+    g_LinksQuestTheirsText = text("OllamaChat.Links.QuestTheirsText", "(where {player_name} is with it: {progress})");
+
+    // --- a kill worth it: the group knows, and a yawn only at an easy one (corpse) -----------
+    g_CorpseKillEventText = text("OllamaChat.Corpse.KillEventText", "{killer} and their group killed {victim}, {what}");
+    std::string unknown;
+    g_CorpseEasyEmotes = ReadEmoteList(text("OllamaChat.Corpse.EasyEmotes", "yawn|bored|shrug"), &unknown);
+    if (!unknown.empty())
+        LOG_WARN("module.ollamachat", "[Ollama Chat] Unknown emote names in OllamaChat.Corpse.EasyEmotes: {}", unknown);
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v42: lag talked of only when the realm lags {} (a {} ms "
+             "tick on average or {} hitches of {} ms in {} min, {} phrases); a call for a group holds {} min; the "
+             "group knows of a kill worth it {}.",
+             g_LagEnable ? "on" : "off", g_LagMeanMs, g_LagSpikes, g_LagSpikeMs, g_LagMinutes, g_LagWords.size(),
+             g_LinksLfgMinutes, g_CorpseKillEventText.empty() ? "off" : "on");
+}
+
 static void LoadNaturalChatV39Settings()
 {
     // "NAT_HYPE:100|NAT_QUIET:5" -> chat style -> percent.
@@ -5221,6 +5294,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV39Settings();
     LoadNaturalChatV40Settings();
     LoadNaturalChatV41Settings();
+    LoadNaturalChatV42Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

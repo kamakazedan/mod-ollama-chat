@@ -47,6 +47,7 @@
 #include "mod-ollama-chat_plus.h"
 #include "mod-ollama-chat_report.h"
 #include "mod-ollama-chat_corpse.h"
+#include "mod-ollama-chat_lag.h"
 #include "mod-ollama-chat_tradechat.h"
 #include "mod-ollama-chat_raregear.h"
 #include "mod-ollama-chat_drops.h"
@@ -646,6 +647,15 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
                              gov.blockedCooldown, gov.blockedRate, gov.blockedRepetition,
                              gov.blockedChainDepth, gov.blockedNoAudience);
 
+    const LagStats lag = Lag_GetStats();
+    if (show("chat"))
+        out("Lag, only when the realm lags: {} - the realm {} (a tick of {} ms on average, {} hitches, over the last "
+            "{} s); lagged {} times since start; {} lines about lag not said, {} replies told it runs smoothly, {} told "
+            "it lags",
+            g_LagEnable ? "on" : "off", lag.lagging ? "is lagging" : "runs smoothly", lag.meanMs, lag.spikes,
+            lag.windowSecs, (unsigned long long)lag.spells, (unsigned long long)lag.keptIn,
+            (unsigned long long)lag.toldSmooth, (unsigned long long)lag.toldLagging);
+
     const SaidStats said = Said_GetStats();
     if (show("chat"))
         out("What bots said, kept with what they went on: {} - {} lines kept, {} replies told them, {} bots "
@@ -830,6 +840,9 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
             (unsigned long long)corpse.elites, (unsigned long long)corpse.bosses,
             (unsigned long long)corpse.rolled, (unsigned long long)corpse.emoted,
             (unsigned long long)corpse.unseen, (unsigned long long)corpse.lapsed);
+    if (show("party"))
+        out("Kills worth it, told to the group they were made by: {} - {} told",
+            g_CorpseKillEventText.empty() ? "off" : "on", (unsigned long long)corpse.told);
 
     const BagsStats  bags  = Bags_GetStats();
     const NeedsStats needs = Needs_GetStats();

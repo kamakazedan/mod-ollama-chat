@@ -34,6 +34,7 @@
 #include "mod-ollama-chat_progress.h"
 #include "mod-ollama-chat_raregear.h"
 #include "mod-ollama-chat_said.h"
+#include "mod-ollama-chat_lag.h"
 #include "mod-ollama-chat_pets.h"
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_gifts.h"
@@ -318,6 +319,11 @@ namespace
         prompt += Links_PromptHint();
         prompt += Expression_BuildGesturePrompt(bot);
 
+        // While the realm really lags, now and then a line knows it
+        // (mod-ollama-chat_lag): a grumble about lag is then a true one.
+        if (const std::string lagging = Lag_AmbientText(); !lagging.empty())
+            prompt += " " + lagging;
+
         // Mid-run, the run is what is on its mind: what it is doing, and to
         // keep to that (no "did you hear about the druid that got kicked?"),
         // and it is one of the group doing it (no "good luck with the run").
@@ -485,6 +491,9 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 {
     // The full report, on the clock: switched off, it says so.
     OllamaReport_Update(diff);
+
+    // How long the world's ticks take: whether the realm lags (mod-ollama-chat_lag).
+    Lag_Tick(diff);
 
     if (!g_Enable)
         return;

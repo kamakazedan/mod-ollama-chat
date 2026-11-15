@@ -45,6 +45,10 @@ namespace
         uint32_t          entry      = 0;
         Worth             worth      = Worth::None;
         bool              oneOfAKind = false;   // named if it is the only spawn of its kind: the tick counts
+        bool              grey       = false;   // grey to whoever killed it
+        uint32_t          rank       = 0;       // CREATURE_ELITE_*
+        uint8_t           level      = 0;
+        std::string       name;
         Clock::time_point when{};
     };
     std::mutex         g_noteMutex;
@@ -145,6 +149,57 @@ namespace
         return g_CorpseStyleDefault;
     }
 
+    // Named if it is the only one of its kind in the world.
+    Worth WorthOf(Noted const& n)
+    {
+        return n.oneOfAKind && SpawnsOf(n.entry) == 1 ? Worth::Named : n.worth;
+    }
+
+    // "a level 35 named elite", "a level 37 rare", "a boss".
+    std::string WhatText(Noted const& n, Worth worth)
+    {
+        const bool elite = n.rank == CREATURE_ELITE_ELITE || n.rank == CREATURE_ELITE_RAREELITE;
+        const std::string level = "a level " + std::to_string(n.level) + " ";
+        switch (worth)
+        {
+            case Worth::Boss:
+                return "a boss";
+            case Worth::Named:
+                if (n.rank == CREATURE_ELITE_RARE || n.rank == CREATURE_ELITE_RAREELITE)
+                    return level + (elite ? "rare elite" : "rare");
+                return level + (elite ? "named elite" : "named enemy");
+            case Worth::Elite:
+                return level + "elite";
+            default:
+                return {};
+        }
+    }
+
+    // A kill worth it, by a group with someone playing in it: into the
+    // group's own chat (and to those standing by), so whatever they say next
+    // knows it is down. "good luck with the elite" went to the player who had
+    // just killed Mor'Ladim with the bot's help. An elite grey to whoever
+    // killed it is not worth the telling; a named one or a boss always is.
+    void Tell(Noted const& n)
+    {
+        if (!g_ContextEnable || g_CorpseKillEventText.empty())
+            return;
+        const Worth worth = WorthOf(n);
+        if (worth == Worth::None || (worth == Worth::Elite && n.grey))
+            return;
+        Player* killer = ObjectAccessor::FindConnectedPlayer(n.killer);
+        if (!killer || !killer->IsInWorld() || !killer->GetGroup() || !OllamaGroupHasRealPlayer(killer))
+            return;
+        const std::string note = SafeFormat(g_CorpseKillEventText, fmt::arg("killer", killer->GetName()),
+                                            fmt::arg("victim", n.name), fmt::arg("what", WhatText(n, worth)));
+        if (note.empty() || note == "[Format Error]")
+            return;
+        Context_RecordEvent(killer, note, false);
+        ++g_stats.told;
+        if (g_DebugEnabled)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] The group knows: {}", note);
+    }
+
     uint32_t ChanceFor(Worth worth)
     {
         switch (worth)
@@ -185,11 +240,9 @@ namespace
     // their style does anything this time.
     void Consider(Noted const& n, const Clock::time_point now, Lookers& lookers)
     {
-        Worth worth = n.worth;
-        if (n.oneOfAKind && SpawnsOf(n.entry) == 1)
-            worth = Worth::Named;   // an elite with one spawn too: a named one
-        if (worth == Worth::None)
-            return;
+        const Worth worth = WorthOf(n);   // an elite with one spawn too: a named one
+        if (worth == Worth::None || n.grey)
+            return;   // nothing grey to whoever killed it
 
         Player* killer = ObjectAccessor::FindConnectedPlayer(n.killer);
         if (!killer || !killer->IsInWorld())
@@ -209,7 +262,15 @@ namespace
             return;
 
         CorpseStyle const& style = StyleOf(bot);
-        if (style.emotes.empty())
+        // A yawn at the body says it was nothing: only where it was (grey to
+        // the bot). Kihdon, 24, yawned at Mor'Ladim, a level 35 elite.
+        std::vector<uint32_t> emotes = style.emotes;
+        if (!g_CorpseEasyEmotes.empty() && n.level > Acore::XP::GetGrayLevel(bot->GetLevel()))
+            emotes.erase(std::remove_if(emotes.begin(), emotes.end(), [](uint32_t e)
+            {
+                return std::find(g_CorpseEasyEmotes.begin(), g_CorpseEasyEmotes.end(), e) != g_CorpseEasyEmotes.end();
+            }), emotes.end());
+        if (emotes.empty())
             return;
         const uint32_t chance = std::min<uint32_t>(100, ChanceFor(worth) * style.percent / 100);
         ++g_stats.rolled;
@@ -221,7 +282,7 @@ namespace
         Due d;
         d.bot   = bot->GetGUID();
         d.body  = body->GetGUID();
-        d.emote = style.emotes[urand(0, static_cast<uint32>(style.emotes.size() - 1))];
+        d.emote = emotes[urand(0, static_cast<uint32>(emotes.size() - 1))];
         d.worth = worth;
         d.at    = now + std::chrono::milliseconds(urand(g_CorpseDelayMinMs, std::max(g_CorpseDelayMinMs, g_CorpseDelayMaxMs)));
         d.until = d.at + kWait;
@@ -287,7 +348,9 @@ namespace
 
 void Corpse_NoteKill(Player* killer, Creature* victim)
 {
-    if (!g_Enable || !g_CorpseEnable || !g_EnableBotEmotes || !killer || !victim)
+    const bool emotes = g_CorpseEnable && g_EnableBotEmotes;
+    const bool tell   = g_ContextEnable && !g_CorpseKillEventText.empty();
+    if (!g_Enable || (!emotes && !tell) || !killer || !victim)
         return;
     CreatureTemplate const* t = victim->GetCreatureTemplate();
     if (!t || victim->IsPet() || victim->IsTotem() || victim->GetOwnerGUID().IsPlayer())
@@ -298,11 +361,10 @@ void Corpse_NoteKill(Player* killer, Creature* victim)
     Map* map = victim->GetMap();
     if (!map || map->IsBattlegroundOrArena())
         return;
-    // A fight worth it: nothing grey to whoever killed it.
-    if (victim->GetLevel() <= Acore::XP::GetGrayLevel(killer->GetLevel()))
-        return;
-
     Noted n;
+    // A fight worth an emote: nothing grey to whoever killed it (Tell still
+    // tells of a named one).
+    n.grey = victim->GetLevel() <= Acore::XP::GetGrayLevel(killer->GetLevel());
     if (victim->IsDungeonBoss() || victim->isWorldBoss() || t->rank == CREATURE_ELITE_WORLDBOSS)
         n.worth = Worth::Boss;
     else if (t->rank == CREATURE_ELITE_RARE || t->rank == CREATURE_ELITE_RAREELITE)
@@ -320,6 +382,9 @@ void Corpse_NoteKill(Player* killer, Creature* victim)
     n.killer = killer->GetGUID();
     n.victim = victim->GetGUID();
     n.entry  = victim->GetEntry();
+    n.rank   = t->rank;
+    n.level  = uint8_t(std::min<uint32_t>(victim->GetLevel(), 255));
+    n.name   = victim->GetName();
     n.when   = Clock::now();
 
     std::lock_guard<std::mutex> lock(g_noteMutex);
@@ -337,18 +402,22 @@ void Corpse_Update()
     if (notes.empty() && g_due.empty())
         return;
 
-    const auto now = Clock::now();
-    const bool on  = g_Enable && g_CorpseEnable && g_EnableBotEmotes;
-    if (!on)
-    {
+    const auto now    = Clock::now();
+    const bool emotes = g_Enable && g_CorpseEnable && g_EnableBotEmotes;
+    if (!emotes)
         g_due.clear();
-        return;
-    }
 
     Lookers lookers;
     for (Noted const& n : notes)
         if (now - n.when <= kNoteStale)
-            Consider(n, now, lookers);
+        {
+            if (g_Enable)
+                Tell(n);
+            if (emotes)
+                Consider(n, now, lookers);
+        }
+    if (!emotes)
+        return;
 
     if (!g_due.empty())
     {

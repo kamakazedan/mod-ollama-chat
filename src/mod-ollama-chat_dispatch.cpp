@@ -16,6 +16,7 @@
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_joined.h"
+#include "mod-ollama-chat_lag.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_mute.h"
@@ -1127,6 +1128,36 @@ namespace
                         LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} was buying or selling outside Trade; "
                                  "line dropped: '{}'", bot->GetName(), c.text);
                     if (!retryWith(g_TradeElsewhereNote, "buying or selling outside Trade"))
+                        ++g_droppedPhrase;
+                    return;
+                }
+            }
+        }
+
+        // Lag, a crash, a disconnect: only while the realm really lags
+        // (mod-ollama-chat_lag), or answering a line that brought it up.
+        // "anyone else noticed the lag here?" went out in guild chat on a
+        // realm ticking at a 16 ms median. A line owed to someone gets
+        // another go without it; one that has to go out, its stock words.
+        {
+            std::string which;
+            if (!Lag_MayGoOut(c.text, origin, which))
+            {
+                std::string stock;
+                if (!c.request.fallbackText.empty() && c.text != c.request.fallbackText &&
+                    !Lag_TalksOf(c.request.fallbackText, stock))
+                {
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} talked of lag ('{}') on a realm with "
+                                 "none: '{}' instead.", bot->GetName(), which, c.request.fallbackText);
+                    c.text = c.request.fallbackText;
+                }
+                else
+                {
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} talked of lag ('{}') on a realm with "
+                                 "none; line dropped: '{}'", bot->GetName(), which, c.text);
+                    if (!retryWith(g_LagNote, which))
                         ++g_droppedPhrase;
                     return;
                 }

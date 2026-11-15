@@ -551,6 +551,28 @@ extern std::string g_GroupQuestsAskLine;
 extern std::string g_GroupQuestsAnswerLine;
 extern std::string g_GroupQuestsInviteLine;
 extern std::string g_GroupQuestsSoloLine;
+
+// Lag: talked of only when the realm really lags (mod-ollama-chat_lag).
+extern bool        g_LagEnable;
+extern uint32_t    g_LagMinutes;          // the window the world's ticks are judged over
+extern uint32_t    g_LagMeanMs;           // a moment of play sat in a tick this long, on average: lag
+extern uint32_t    g_LagSpikeMs;          // a tick this long is a hitch...
+extern uint32_t    g_LagSpikes;           // ...and this many in the window is lag
+extern std::vector<std::vector<std::string>> g_LagWords;
+extern std::string g_LagSmoothText;       // a reply where the talk is of lag, the realm smooth
+extern std::string g_LagLaggingText;      // ...the realm lagging
+extern std::string g_LagAmbientText;      // an ambient line, now and then, while it lags
+extern uint32_t    g_LagAmbientChance;    // percent
+extern uint32_t    g_LagAmbientMinutes;   // no more than one in this long
+extern std::string g_LagNote;             // a line owed to someone, asked again without it
+// A call for a group holds for its follow-ups (mod-ollama-chat_links).
+extern uint32_t    g_LinksLfgMinutes;
+// A quest named by someone in the bot's group: where they are with it.
+extern std::string g_LinksQuestTheirsText;
+// A kill worth it, by a group with someone playing in it: the group knows
+// (mod-ollama-chat_corpse).
+extern std::string g_CorpseKillEventText;
+extern std::vector<uint32_t> g_CorpseEasyEmotes;   // only at a body the kill was easy for the bot
 extern std::vector<std::vector<std::string>> g_PartySkipLaterWords;   // a skipped one back, but in its turn
 extern std::string g_PartyCmdHintSkip;         // the tank agrees: {skipped} {next} {plan}
 extern std::string g_PartyCmdHintSkipNo;       // ...or cannot: {skipped} {reason}
