@@ -783,6 +783,8 @@ std::string g_TradePromptTemplate;
 std::string g_TradeChannelText;
 std::string g_TradeWhisperText;
 std::string g_TradeSaidText;
+bool        g_TradeAnswerInGeneral = true;
+std::string g_TradeGeneralText;
 std::string g_TradeWhereNear;
 std::string g_TradeWhereWalk;
 std::string g_TradeWhereFar;
@@ -3051,10 +3053,10 @@ static void LoadNaturalChatV25Settings()
         "spell or drop -- must really be in Wrath of the Lich King, called what it is really called. Never "
         "make one up, and never state a fact about one (where it drops, what it does, who can use it, or that "
         "it is not in the game) unless you are sure of it: when you do not know or cannot remember, say so, "
-        "or ask. No rumours, theories or tall tales about anyone or anything in the game either, not even as "
-        "a joke: what you say of the game is what is really so. "
-        "And say nothing about yourself that you are not told is so: what you did, got, tried for or went "
-        "through is only what you are told here, never a story of your own made up.");
+        "or ask. Made-up fun is fine when it is plainly made up, like imagine if murlocs were ten feet tall, "
+        "and best when it twists something really true of the game; asked whether it is true, say it was a "
+        "joke. And say nothing about yourself that you are not told is so: what you did, got, tried for or "
+        "went through is only what you are told here, never a story of your own made up.");
 
     // --- canned lines in each personality's own way ------------------------------------
     g_PersonalityCannedStyles.clear();
@@ -3878,9 +3880,16 @@ static void LoadNaturalChatV37Settings()
         "g, s and c are gold, silver and copper. Never chat about anything else here, and say no price but the ones "
         "given here.");
     g_TradeWhisperText = text("OllamaChat.Trade.WhisperText",
-        "You are whispering {player_name} about a deal from Trade chat. Say no price but the ones given here.");
+        "You are whispering {player_name} about a deal from {channel}. Say no price but the ones given here.");
     g_TradeSaidText = text("OllamaChat.Trade.SaidText",
-        "You are in the middle of a deal with {player_name} over {item} from Trade chat: {state}. Keep to it.");
+        "You are in the middle of a deal with {player_name} over {item} from {channel}: {state}. Keep to it.");
+    // A deal someone brought up in General: the market's too, answered there.
+    g_TradeAnswerInGeneral = sConfigMgr->GetOption<bool>("OllamaChat.Trade.AnswerInGeneral", true);
+    g_TradeGeneralText = text("OllamaChat.Trade.GeneralText",
+        "This is {channel}, not trade chat, but {player_name} brought a deal up here, so it is answered here. "
+        "{player_name} is the one buying or selling, as told below, and you are the other side of it: never "
+        "offer them their own thing. WTS is want to sell, WTB want to buy, PC a price check, OBO or best offer, "
+        "and g, s and c are gold, silver and copper. Keep to the deal, and say no price but the ones given here.");
     g_TradeWhereNear = text("OllamaChat.Trade.WhereNear", "You are right by them, so you'll open the trade.");
     g_TradeWhereWalk = text("OllamaChat.Trade.WhereWalk", "You are walking over to them now to trade.");
     g_TradeWhereFar  = text("OllamaChat.Trade.WhereFar",
@@ -3910,7 +3919,7 @@ static void LoadNaturalChatV37Settings()
         "{player_name} wants {price} for {item}, and that's taking the mickey: it's worth about {worth}. Call them "
         "out on it, your way, in a few words{then}.");
     g_TradeHintCallout = text("OllamaChat.Trade.HintCallout",
-        "{player_name} is selling {item} in Trade for {price}, and that's taking the mickey: it's worth about "
+        "{player_name} is selling {item} in {channel} for {price}, and that's taking the mickey: it's worth about "
         "{worth}. Call them out on it, your way, in a few words. You're not buying it.");
     g_TradeHintPriceCheck = text("OllamaChat.Trade.HintPriceCheck",
         "{player_name} is asking what {item} goes for. Tell them what it's worth, in a few words.");
@@ -4422,7 +4431,7 @@ static void LoadNaturalChatV24Settings()
         "plainly.");
 
     // Mingle.Premises tags: what each one needs to be there.
-    static const char* const kKnown[] = { "mount", "pet", "loot", "quest", "duel", "lost", "gear", "prof", "horde",
+    static const char* const kKnown[] = { "mount", "pet", "loot", "quest", "duel", "lost", "gear", "prof", "people", "horde",
                                           "alliance" };
     std::string unknown;
     for (std::string premise : g_MinglePremises)
@@ -4537,7 +4546,8 @@ static void LoadNaturalChatV16Settings()
         "narration, no actions in asterisks, no quotation marks, and nothing made up from the game -- no "
         "item, quest, NPC, creature, place, mount or pet that is not really in it, and nobody riding a mount "
         "or with a pet out but as told above (a hunter's pet, a warlock's demon or a companion pet is no "
-        "mount). A famous line from a film or show is fine now "
+        "mount); plainly made-up fun is fine as an imagine-if, best spun out of something really true of the "
+        "game. A famous line from a film or show is fine now "
         "and then, but never say what it is from.");
     g_MinglePremises = ReadPipeList("OllamaChat.Mingle.Premises",
         "saying hello and asking what the other has been up to|[quest] one of them just got back from "
@@ -4546,12 +4556,14 @@ static void LoadNaturalChatV16Settings()
         "pet or companion|[gear] one of them admires {gear}|one of them teases the other about their race or "
         "class, all in good fun|swapping tips about levelling their classes|[duel] one of them challenges the "
         "other to a duel, and they agree to head {duel_where} and fight it out|one of them asks the other if "
-        "they have a few silver to spare|[loot] one of them shows off something they got lately|[prof] "
-        "levelling their professions: {professions}|which zone is the worst to quest in|[lost] one of them is "
-        "looking for {lost_place} and asks the other the way, and the other knows it: {lost_way}|what they "
-        "are saving their gold for|their guilds, or not having one|[alliance] gnomes|[horde] "
-        "tauren|murlocs|[15+] whether to run a dungeon together later|[40+] the epic mount they are saving "
-        "for|[68+] flying mounts");
+        "they have a few silver to spare|[loot] one of them shows off something they got lately|[people] "
+        "people-watching: {passersby}|[prof] levelling their professions: {professions}|which zone is the "
+        "worst to quest in|[lost] one of them is looking for {lost_place} and asks the other the way, and the "
+        "other knows it: {lost_way}|what they are saving their gold for|one of them is about to log off|their "
+        "guilds, or not having one|an imagine-if one of them dreams up for a laugh, spun out of something "
+        "really around them, and the other runs with it|[alliance] gnomes|[horde] tauren|murlocs|[15+] "
+        "whether to run a dungeon together later|[20+] getting their first mount|[40+] the epic mount they "
+        "are saving for|[68+] flying mounts");
     g_MingleEmotes.clear();
     {
         std::string unknown;

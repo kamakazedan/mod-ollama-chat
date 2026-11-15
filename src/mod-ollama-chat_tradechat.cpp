@@ -87,8 +87,10 @@ namespace
         bool              over   = false;     // it walked away
         bool              remark = false;     // only a remark (a call-out, a price check): no haggle of its own
         bool              whisper = false;    // the haggle has gone to whispers
-        std::string       tradeChannel;       // Trade's name, for its lines there
-        std::string       tradeScope;         // Trade's governor scope
+        std::string       tradeChannel;       // the channel it is made in (Trade, or General), for its lines there
+        std::string       tradeScope;         // ...its governor scope
+        uint32_t          channelId = uint32_t(ChatChannelId::TRADE);
+        std::string       channelLabel = "Trade chat";   // what the bot is told it types into
         std::string       whisperScope;
         Clock::time_point last{};
         Clock::time_point until{};
@@ -597,7 +599,8 @@ namespace
             fmt::arg("count", t.count > 1 ? fmt::format("{} of them", t.count) : std::string("one")),
             fmt::arg("where", where),
             fmt::arg("then", then),
-            fmt::arg("state", state));
+            fmt::arg("state", state),
+            fmt::arg("channel", t.channelLabel));
         return out == "[Format Error]" ? std::string() : out;
     }
 
@@ -621,9 +624,15 @@ namespace
         if (!ai || !ai->GetChatHelper() || hint.empty() || g_TradePromptTemplate.empty())
             return;
 
-        const std::string tradeText = t.whisper
-            ? SafeFormat(g_TradeWhisperText, fmt::arg("player_name", player->GetName()))
-            : g_TradeChannelText;
+        // Where it is said: Trade, General -- where they brought the deal up
+        // (Trade.AnswerInGeneral) -- or a whisper about either.
+        const std::string tradeText =
+            t.whisper ? SafeFormat(g_TradeWhisperText, fmt::arg("player_name", player->GetName()),
+                                   fmt::arg("channel", t.channelLabel))
+            : t.channelId == uint32_t(ChatChannelId::TRADE)
+                ? g_TradeChannelText
+                : SafeFormat(g_TradeGeneralText, fmt::arg("player_name", player->GetName()),
+                             fmt::arg("channel", t.channelLabel));
         const std::string itemText = Facts(p) + ". " + WorthText({ t.worth, t.ah, t.vendor }, p);
         std::string prompt = SafeFormat(g_TradePromptTemplate,
             fmt::arg("bot_name", bot->GetName()),
@@ -631,7 +640,7 @@ namespace
             fmt::arg("bot_race", ai->GetChatHelper()->FormatRace(bot->getRace())),
             fmt::arg("bot_class", ai->GetChatHelper()->FormatClass(bot->getClass())),
             fmt::arg("bot_personality", GetPersonalityPromptAddition(GetBotPersonality(bot))),
-            fmt::arg("channel", t.whisper ? std::string("a whisper to ") + player->GetName() : std::string("Trade chat")),
+            fmt::arg("channel", t.whisper ? std::string("a whisper to ") + player->GetName() : t.channelLabel),
             fmt::arg("trade", tradeText == "[Format Error]" ? std::string() : tradeText),
             fmt::arg("item", itemText),
             fmt::arg("hint", hint));
@@ -670,7 +679,7 @@ namespace
         request.targetGuid        = player->GetGUID().GetRawValue();
         request.source            = t.whisper ? SRC_WHISPER_LOCAL : SRC_GENERAL_LOCAL;
         request.channelName       = t.whisper ? std::string() : t.tradeChannel;
-        request.channelId         = t.whisper ? 0 : uint32_t(ChatChannelId::TRADE);
+        request.channelId         = t.whisper ? 0 : t.channelId;
         request.scopeKey          = t.whisper ? t.whisperScope : t.tradeScope;
         request.chainDepth        = 0;
         request.prompt            = std::move(prompt);
@@ -1060,6 +1069,9 @@ namespace
         t.vendor       = w.vendor;
         t.tradeChannel = channel->GetName();
         t.tradeScope   = TradeScope(player, channel);
+        t.channelId    = channel->GetChannelId();
+        t.channelLabel = TradeChat_IsTrade(channel) ? std::string("Trade chat")
+                                                     : Context_ChannelLabel(SRC_GENERAL_LOCAL, channel->GetName());
         t.last         = Clock::now();
         t.until        = t.last + std::chrono::seconds(g_TradeTalkSeconds);
         return t;
@@ -1459,126 +1471,164 @@ bool TradeChat_OnlyCommerce()
     return g_TradeEnable && g_TradeOnlyCommerce;
 }
 
-bool TradeChat_HandleHumanLine(Player* player, const std::string& msg, Channel* channel, const std::string& scopeKey)
+namespace
 {
-    if (!g_TradeEnable || !player || !channel || msg.empty())
-        return false;
-    ++g_stats.heard;
-    const bool only = TradeChat_OnlyCommerce();
-
-    // In the transcript, like any line, before anyone answers it -- here when
-    // nothing else will see it.
-    bool recorded = false;
-    auto record = [&]()
+    // A real player's line in Trade, or (`general`) one in General that may be
+    // a deal: the same market answers both, in the channel it was said in.
+    // In General nothing but a deal is the market's: every other line is left
+    // to the rest of the handler, and a bot's own listing (put up in Trade)
+    // is not looked for.
+    bool HandleLine(Player* player, const std::string& msg, Channel* channel, const std::string& scopeKey,
+                    bool general)
     {
-        if (recorded)
-            return;
-        recorded = true;
-        Governor_NoteHumanMessage(scopeKey);
-        Context_RecordLine(player, SRC_GENERAL_LOCAL, channel->GetName(), msg, ContextLineKind::Human);
-    };
-    // Not a deal: in Trade for buying and selling only, nobody answers it;
-    // otherwise it is ordinary chat, for the rest of the handler.
-    auto notMine = [&]()
-    {
-        if (!only)
+        if (!g_TradeEnable || !player || !channel || msg.empty())
             return false;
-        record();
-        ++g_stats.ignored;
-        return true;
-    };
+        if (!general)
+            ++g_stats.heard;
+        const bool only = !general && TradeChat_OnlyCommerce();
 
-    if (!Favor_TradesWithStrangers())
-        return notMine();   // bots trade with nobody outside their group: no market
-
-    const Line line = Read(msg);
-    int32_t suffix = 0;
-    const uint32_t entry = LinkedItem(msg, suffix);
-    const uint64_t self = player->GetGUID().GetRawValue();
-
-    // A haggle going on, and this is about it: no other thing linked.
-    if (Talk* t = LatestTalk(self))
-        if (!t->whisper && (!entry || entry == t->entry) && Clock::now() < t->until && !(t->over && entry))
+        // In the transcript, like any line, before anyone answers it -- here when
+        // nothing else will see it.
+        bool recorded = false;
+        auto record = [&]()
         {
-            Player* bot = Find(t->bot);
-            ItemTemplate const* p = sObjectMgr->GetItemTemplate(t->entry);
-            if (bot && p && bot->IsInWorld())
+            if (recorded)
+                return;
+            recorded = true;
+            Governor_NoteHumanMessage(scopeKey);
+            Context_RecordLine(player, SRC_GENERAL_LOCAL, channel->GetName(), msg, ContextLineKind::Human);
+        };
+        // Not a deal: in Trade for buying and selling only, nobody answers it;
+        // otherwise it is ordinary chat, for the rest of the handler.
+        auto notMine = [&]()
+        {
+            if (!only)
+                return false;
+            record();
+            ++g_stats.ignored;
+            return true;
+        };
+
+        if (!Favor_TradesWithStrangers())
+            return notMine();   // bots trade with nobody outside their group: no market
+
+        const Line line = Read(msg);
+        int32_t suffix = 0;
+        const uint32_t entry = LinkedItem(msg, suffix);
+        const uint64_t self = player->GetGUID().GetRawValue();
+
+        // A haggle going on, here, and this is about it: no other thing linked.
+        if (Talk* t = LatestTalk(self))
+            if (!t->whisper && t->tradeChannel == channel->GetName() && (!entry || entry == t->entry) &&
+                Clock::now() < t->until && !(t->over && entry))
             {
-                if (t->remark)
+                Player* bot = Find(t->bot);
+                ItemTemplate const* p = sObjectMgr->GetItemTemplate(t->entry);
+                if (bot && p && bot->IsInWorld())
                 {
-                    // Only a remark was made (on their price, or what it goes
-                    // for): a new price is the thing offered again, for
-                    // anyone -- wanted, when they say so, else for sale.
-                    // Anything else is not to anyone.
-                    if (!line.price)
-                        return notMine();
+                    if (t->remark)
+                    {
+                        // Only a remark was made (on their price, or what it goes
+                        // for): a new price is the thing offered again, for
+                        // anyone -- wanted, when they say so, else for sale.
+                        // Anything else is not to anyone.
+                        if (!line.price)
+                            return notMine();
+                        record();
+                        const uint32_t said = CountIn(line.words, p);
+                        const uint32_t count = said > 1 ? said : t->count;
+                        const int32_t sfx = t->suffix;
+                        const uint64_t price = LotPrice(line.words, line.price, count);
+                        t->until = Clock::now();
+                        if (line.buys && !line.sells)
+                            TheyBuy(player, channel, p, count, price);
+                        else
+                            TheySell(player, channel, p, sfx, count, price);
+                        return true;
+                    }
+                    if (t->over && !line.price && !line.accept)
+                        return notMine();   // it has said its last word; this is not to it
                     record();
-                    const uint32_t said = CountIn(line.words, p);
-                    const uint32_t count = said > 1 ? said : t->count;
-                    const int32_t sfx = t->suffix;
-                    const uint64_t price = LotPrice(line.words, line.price, count);
-                    t->until = Clock::now();
-                    if (line.buys && !line.sells)
-                        TheyBuy(player, channel, p, count, price);
-                    else
-                        TheySell(player, channel, p, sfx, count, price);
+                    if (general)
+                        ++g_stats.general;
+                    if (t->over)
+                    {
+                        // Back with a price after it passed: a fresh haggle.
+                        t->over = false;
+                        t->buyer.counters = t->seller.counters = 0;
+                    }
+                    FollowUp(*t, bot, player, p, line);
                     return true;
                 }
-                if (t->over && !line.price && !line.accept)
-                    return notMine();   // it has said its last word; this is not to it
-                record();
-                if (t->over)
-                {
-                    // Back with a price after it passed: a fresh haggle.
-                    t->over = false;
-                    t->buyer.counters = t->seller.counters = 0;
-                }
-                FollowUp(*t, bot, player, p, line);
-                return true;
             }
+
+        ItemTemplate const* p = entry ? sObjectMgr->GetItemTemplate(entry) : nullptr;
+        const bool check = line.check, buys = line.buys, sells = line.sells;
+
+        // In General, only a plain deal is the market's: "WTS", "WTB", a price,
+        // a price check. "anyone want [it]?" with no price there is most often
+        // a thing given away, for whoever says "me" (mod-ollama-chat_gifts).
+        if (general && !check &&
+            !TextRules::IsDealOffer(TextRules::StripChatMarkup(msg), g_TradeDealWords, g_TradePricedDealWords))
+            return notMine();
+
+        // A deal in a thing nobody can trade -- bound when picked up, a quest's,
+        // bound to an account: there is none to be had, and nobody answers it.
+        if (p && !CanChangeHands(p) && (buys || check || sells || line.accept || line.price))
+        {
+            record();
+            ++g_stats.bound;
+            return true;
         }
 
-    ItemTemplate const* p = entry ? sObjectMgr->GetItemTemplate(entry) : nullptr;
-    const bool check = line.check, buys = line.buys, sells = line.sells;
+        // Answering something a bot put up -- linking it, or right after it went
+        // up: wanting it, taking it, asking about it, or a price for it. Not
+        // selling one of their own: "still selling [it]?" from someone with none
+        // to sell is asking.
+        if (!general && (buys || check || sells || line.accept || line.price))
+            if (Listing* l = LatestListing(uint32_t(player->GetTeamId()), entry))
+                if (!sells || (entry && !CanCarry(player, entry, 1)))
+                {
+                    record();
+                    if (AnswerListing(player, *l, channel, line, false, std::string()))
+                        return true;
+                }
 
-    // A deal in a thing nobody can trade -- bound when picked up, a quest's,
-    // bound to an account: there is none to be had, and nobody answers it.
-    if (p && !CanChangeHands(p) && (buys || check || sells || line.accept || line.price))
-    {
+        // Something linked, bought, sold or priced: the market's. Anything else
+        // (services, chat) is not.
+        if (!p || (!check && !buys && !sells && !line.price))
+            return recorded || notMine();
         record();
-        ++g_stats.bound;
+        if (general)
+        {
+            ++g_stats.heard;
+            ++g_stats.general;
+        }
+        const uint32_t count = CountIn(line.words, p);
+        const uint64_t price = LotPrice(line.words, line.price, count);
+        // "worth" and "value" turn up in a sale too ("WTS [it] 5g, worth 8"):
+        // only a line that neither buys nor sells is asking what it goes for.
+        if (check && !buys && !sells)
+            PriceCheck(player, channel, p, count);
+        else if (buys && !sells)
+            TheyBuy(player, channel, p, count, price);
+        else
+            TheySell(player, channel, p, suffix, count, price);
         return true;
     }
+}
 
-    // Answering something a bot put up -- linking it, or right after it went
-    // up: wanting it, taking it, asking about it, or a price for it. Not
-    // selling one of their own: "still selling [it]?" from someone with none
-    // to sell is asking.
-    if (buys || check || sells || line.accept || line.price)
-        if (Listing* l = LatestListing(uint32_t(player->GetTeamId()), entry))
-            if (!sells || (entry && !CanCarry(player, entry, 1)))
-            {
-                record();
-                if (AnswerListing(player, *l, channel, line, false, std::string()))
-                    return true;
-            }
+bool TradeChat_HandleHumanLine(Player* player, const std::string& msg, Channel* channel, const std::string& scopeKey)
+{
+    return HandleLine(player, msg, channel, scopeKey, false);
+}
 
-    // Something linked, bought, sold or priced: the market's. Anything else
-    // (services, chat) is not.
-    if (!p || (!check && !buys && !sells && !line.price))
-        return recorded || notMine();
-    record();
-    const uint32_t count = CountIn(line.words, p);
-    const uint64_t price = LotPrice(line.words, line.price, count);
-    // "worth" and "value" turn up in a sale too ("WTS [it] 5g, worth 8"):
-    // only a line that neither buys nor sells is asking what it goes for.
-    if (check && !buys && !sells)
-        PriceCheck(player, channel, p, count);
-    else if (buys && !sells)
-        TheyBuy(player, channel, p, count, price);
-    else
-        TheySell(player, channel, p, suffix, count, price);
-    return true;
+bool TradeChat_HandleGeneralLine(Player* player, const std::string& msg, Channel* channel,
+                                 const std::string& scopeKey)
+{
+    if (!g_TradeAnswerInGeneral || !channel || channel->GetChannelId() != uint32_t(ChatChannelId::GENERAL))
+        return false;
+    return HandleLine(player, msg, channel, scopeKey, true);
 }
 
 bool TradeChat_HandleWhisper(Player* player, Player* bot, const std::string& msg, const std::string& scopeKey)

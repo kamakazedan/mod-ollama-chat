@@ -364,7 +364,10 @@ namespace
     // party, and only for what a group can use -- a quest, a spare thing; a
     // bot there never begs in General. Otherwise General -- Trade for a spare
     // thing in a city, the LFG channel for a quest when the bot is in it --
-    // or /say with someone in earshot.
+    // or /say with someone in earshot. Never help with a quest in /say: that
+    // is a call for a group, and people make one where the zone reads it
+    // ("anyone want to help with [Wanted: Annihilator Servo!]?" went out in
+    // /say).
     bool ChooseNeedDestination(Player* bot, const OllamaWorldSnapshot& world, const BotNeed& need, bool hub,
                                ChatChannelSourceLocal& outSource, std::string& outChannelName,
                                uint32_t& outChannelId)
@@ -411,7 +414,7 @@ namespace
                 return true;
         }
 
-        if (!g_DisableForSayYell && world.RealPlayerWithin(bot, g_SayDistance) &&
+        if (need.kind != NeedKind::Quest && !g_DisableForSayYell && world.RealPlayerWithin(bot, g_SayDistance) &&
             !HeldBack(bot, SRC_SAY_LOCAL, std::string()))
         {
             outSource = SRC_SAY_LOCAL;

@@ -118,6 +118,11 @@ party), gear only of people near enough to look at (`Gear_PromptFor`), and
 the snapshot's sights and people only for a reply said face to face. A new
 kind of line about something here does the same.
 
+A call for help with a quest is made where the zone reads it -- General, the
+LFG channel, or the party with someone playing in it -- never /say
+(`ChooseNeedDestination`): "anyone want to help with [Wanted: Annihilator
+Servo!]?" in /say read as nobody's business but whoever stood there.
+
 A remark made to someone about something of theirs is theirs to answer
 (presence: `triggerBotReplies` off). Bots in earshot hear "nice cloak", not
 whose: told of their own gear and the speaker's, two took it for their own
@@ -238,11 +243,15 @@ anywhere but Trade or a whisper that buys or sells (`TextRules::IsDealOffer`:
 one of `Trade.DealWords`, or of `Trade.PricedDealWords` with a price) is
 dropped at delivery -- one owed to someone gets another go without it --
 unless it is a deal of this module's (`mustPrice`, `okPrices`) or answers a
-real player who brought a deal or a price up. A real player's own sale or
-ask to buy, posted anywhere but Trade, gets no crowd (`CrowdPool`'s
-`dealElsewhere`; a bot named in it still answers): left to it, General
-haggled with prices the model made up, "give me 3g and it's yours". The auction house's "just put
-it up" topic had "anyone want [Moongraze Stag Tenderloin]? 52c" in General: a
+real player who brought a deal or a price up. A real player's own deal in
+General -- something linked put up for sale, wanted or priced -- is the
+market's too (`TradeChat_HandleGeneralLine`, `Trade.AnswerInGeneral`):
+answered there by the same rules, told it is the other side of their deal, and
+the haggle stays with that bot. One with nothing linked, or in /say, a party
+or a guild, gets no crowd (`CrowdPool`'s `dealElsewhere`). Left to the crowd,
+General haggled with prices the model made up, took a gun for a pet, and
+offered the player their own gun back for 3g. The auction house's "just put it
+up" topic had "anyone want [Moongraze Stag Tenderloin]? 52c" in General: a
 topic that offers something for sale is `Commerce` in `topics.cpp`, picked
 only for a line going to Trade. A thing given away free carries
 `OllamaChatRequest::noPrice`.
@@ -410,13 +419,18 @@ topic's `{lately}`, skipped with nothing to tell), what it wears (mingle's
 `{professions}`). A pool value only some levels could talk of carries a level
 tag. `Outlook.FactsText` says so to every bot.
 
-Nor is anything made up for a laugh. No premise asks for a rumour, a theory,
-a tall tale or an imagine-if, nor for a past, a direction or a price nobody
-handed over, and `Outlook.FactsText` says so: "heard onyxia is actually a
-druid" went round /say from "a rumour about {lore} that you are obviously
-making up for a laugh", and General talked of farming the Spectral Tiger, a
-trading card game mount nobody on this realm can get. A pool value is
-something a player here could really see, do or get.
+Made-up fun is wanted, plainly as fun: a daft rumour about a lore figure, a
+conspiracy theory about an NPC, an imagine-if (the user's call -- they were
+taken out once and had to go back). It lands when it twists something true,
+so those premises say to spin it out of something really true of them, and
+the pools hand over what is: a `Pool.lore` or `Pool.npc` value carries a
+true line in brackets ("Onyxia (the black dragon ... who passed herself off
+as Lady Katrana Prestor at Stormwind's court)"). Told only "a rumour about
+Onyxia", bots had her "actually a druid" hiding her paws in a volcano. Asked
+whether it is true, a bot owns up to a joke (`Outlook.FactsText`). What is
+not fun is a made-up fact passed off as true: a pool value is something a
+player here could really see, do or get -- the Spectral Tiger, a trading card
+game mount nobody on this realm can get, was talked of as one to farm.
 
 And whatever it does say, it can back up (`mod-ollama-chat_said`): a line
 with anything behind it carries `OllamaChatRequest::basis` -- the topic or

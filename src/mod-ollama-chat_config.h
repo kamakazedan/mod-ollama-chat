@@ -854,6 +854,8 @@ extern std::string g_TradePromptTemplate;
 extern std::string g_TradeChannelText;
 extern std::string g_TradeWhisperText;
 extern std::string g_TradeSaidText;
+extern bool        g_TradeAnswerInGeneral;   // a real player's deal in General: the market answers it there
+extern std::string g_TradeGeneralText;       // ...and the bot is told where it is and what is going on
 extern std::string g_TradeWhereNear;
 extern std::string g_TradeWhereWalk;
 extern std::string g_TradeWhereFar;

@@ -326,7 +326,11 @@ namespace
         std::string lostWay;
         std::string gear;          // "Thimack's [Arcanite Reaper] (purple two-handed axe)"
         std::string professions;   // "Thimack: mining 150, skinning 120; Grigohm: tailoring 75"
+        std::string passersby;     // who is about: "Lianon, an orc warrior, riding their mount, ..."
     };
+
+    // People-watching is of the people really about, this near.
+    constexpr float kPassersbyYards = 30.0f;
 
     // The professions `p` has, with how far along: "mining 150, skinning
     // 120". Empty when it has none.
@@ -359,8 +363,9 @@ namespace
     // lately, "[quest]" a quest handed in lately, "[duel]" two who could go
     // out to the gates and duel there now (mod-playerbots-plus), and where
     // that is, "[lost]" a town whose guards give directions, and one of its
-    // places other than `here` -- and their side, "[horde]" or "[alliance]"
-    // (only one side mingles together).
+    // places other than `here`, "[people]" others about to watch (up to
+    // three, within 30 yards: {passersby}) -- and their side, "[horde]" or
+    // "[alliance]" (only one side mingles together).
     std::set<std::string> FactsOf(const std::vector<Player*>& group, const std::string& here, PlaceFacts& places)
     {
         std::set<std::string> facts;
@@ -397,6 +402,29 @@ namespace
                 facts.insert("loot");
             if (named.quest)
                 facts.insert("quest");
+        }
+        // "[people]": who is really about to watch -- "people-watching: the
+        // players walking past" had them make up who was walking past.
+        if (!group.empty() && group.front()->GetMap())
+        {
+            Player* first = group.front();
+            std::vector<std::string> seen;
+            for (auto const& ref : first->GetMap()->GetPlayers())
+            {
+                Player* p = ref.GetSource();
+                if (!p || !p->IsInWorld() || !p->IsAlive() || p->IsGameMaster() ||
+                    std::find(group.begin(), group.end(), p) != group.end() ||
+                    first->GetDistance(p) > kPassersbyYards)
+                    continue;
+                if (const std::string who = Presence_Describe(p, first); !who.empty())
+                    seen.push_back(who);
+                if (seen.size() >= 3)
+                    break;
+            }
+            for (const std::string& who : seen)
+                places.passersby += (places.passersby.empty() ? "" : "; ") + who;
+            if (!seen.empty())
+                facts.insert("people");
         }
         return facts;
     }
@@ -513,6 +541,7 @@ namespace
         fill("{lost_way}", places.lostWay);
         fill("{gear}", places.gear);
         fill("{professions}", places.professions);
+        fill("{passersby}", places.passersby);
         about = premise;
 
         // The shape of it, with their own names. An emote is in it only now

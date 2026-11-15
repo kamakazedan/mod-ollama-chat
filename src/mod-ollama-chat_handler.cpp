@@ -1249,6 +1249,13 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         if (TradeChat_OnlyCommerce())
             return;
     }
+    // ...and so is someone's deal brought up in General ("WTS [Lil Timmy's
+    // Peashooter] 4g"): the market answers it there, the bot it is most use
+    // to with prices of its own, and the haggle goes on with that one.
+    // Left to the crowd, General haggled with made-up prices, asked what
+    // kind of pet the gun was, and offered the player their own gun for 3g.
+    else if (channel && !senderIsBot && TradeChat_HandleGeneralLine(player, msg, channel, scopeKey))
+        return;
 
     // --- party instructions -----------------------------------------------
     // "ready", "mb", "wait": in a dungeon with a dungeon-clear tank these
@@ -2378,13 +2385,12 @@ namespace
                                    const std::vector<Player*>& candidates, const std::string& msg,
                                    const std::string& channelName, uint32_t channelId)
     {
-        // Someone selling or buying anywhere but Trade ("WTS [Lil Timmy's
-        // Peashooter] 4g" in General) is left alone, the way most people leave
-        // a sale in the wrong channel: buying and selling is Trade's
-        // (Trade.DealsOnlyInTrade), where the market answers it with prices of
-        // its own. Left to the crowd, General haggled with prices the model
-        // made up -- "give me 3g and it's yours", "3g is still way too much for
-        // that junk" -- and asked what kind of pet a gun was. A bot named in it
+        // Someone selling or buying anywhere but Trade gets no crowd haggling
+        // over it with prices the model makes up -- "give me 3g and it's
+        // yours", "3g is still way too much for that junk", a gun taken for a
+        // pet. A deal with something linked in General is the market's
+        // (TradeChat_HandleGeneralLine, before this); one with nothing linked,
+        // or in /say, a party or a guild, is left alone. A bot named in it
         // still answers.
         const bool dealElsewhere =
             g_TradeDealsOnlyInTrade && OllamaIsRealPlayer(speaker) && source != SRC_WHISPER_LOCAL &&

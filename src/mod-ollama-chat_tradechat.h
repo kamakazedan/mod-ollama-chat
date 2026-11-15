@@ -62,6 +62,10 @@ class Player;
 // The talk afterwards -- "its a gun", "deal, come trade me", whispered or in
 // Trade -- is the same bot's, told how the haggle stands.
 //
+// A real player's deal posted in General instead is the market's too
+// (Trade.AnswerInGeneral): answered there, by the same rules, and nothing
+// else answers it.
+//
 // World thread only.
 // --------------------------------------------------------------------------
 
@@ -77,6 +81,16 @@ bool TradeChat_OnlyCommerce();
 // buying and selling only. False: ordinary chat, for the rest of the handler.
 bool TradeChat_HandleHumanLine(Player* player, const std::string& msg, Channel* channel,
                                const std::string& scopeKey);
+
+// A real player's line in General (Trade.AnswerInGeneral): when it is a deal
+// -- something linked put up for sale, wanted or priced, or the next word of a
+// haggle that started there -- the market answers it there, as in Trade, and
+// it is true: nothing else answers it. "WTS [Lil Timmy's Peashooter] 4g" in
+// General had the crowd haggle with prices the model made up, one asking what
+// kind of pet the gun was and one offering to sell the player their own gun
+// for 3g. False for anything else, for the rest of the handler.
+bool TradeChat_HandleGeneralLine(Player* player, const std::string& msg, Channel* channel,
+                                 const std::string& scopeKey);
 
 // A real player's whisper to a bot. True when it is about a deal or a haggle
 // with that bot -- one it has up for sale, or one it is in the middle of --
@@ -110,6 +124,7 @@ struct TradeChatStats
     uint64_t fallbacks = 0;   // the model named another price: a stock line instead, or nothing
     uint64_t bound     = 0;   // deals in something that cannot change hands (or not on the seller, unbound): left alone
     uint64_t elsewhere = 0;   // bots' lines buying or selling outside Trade (Trade.DealsOnlyInTrade): not said
+    uint64_t general   = 0;   // real players' deals in General, answered there (Trade.AnswerInGeneral)
     uint32_t talking   = 0;   // haggles going on now
 };
 TradeChatStats TradeChat_GetStats();

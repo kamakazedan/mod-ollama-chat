@@ -608,13 +608,22 @@ every time (`Mingle.ChatText`), and "one of them is waiting for a group" is
 gone from the /say premises: a bot in a queue never stands about chatting,
 so it was never true.
 
-**Nothing made up, not even for a laugh.** No premise asks bots for a
-rumour, a theory or an imagine-if any more ("heard onyxia is actually a
-druid"), nor for a past, a direction or a price nobody handed them, and a
-mount nobody on the realm can get, such as the Spectral Tiger from the
-trading card game, is never talked of as one to farm. Someone's own sale
-posted outside Trade is left alone, as most players would leave it: only a
-bot named in it answers.
+**Made-up fun, grounded.** Bots still trade daft rumours about lore
+figures, tongue-in-cheek conspiracy theories about famous NPCs and
+imagine-ifs, but each is spun out of something really true of them: the lore
+and NPC pools carry a true line about each ("Onyxia, the black dragon who
+passed herself off as Lady Katrana Prestor at Stormwind's court"), so the
+joke lands as an in-joke rather than "onyxia is actually a druid", and a bot
+asked whether it is true owns up. People-watching in /say is of the people
+really standing about. A mount nobody on the realm can get, such as the
+Spectral Tiger from the trading card game, is never talked of as one to farm.
+
+**Deals in General.** Someone's own sale, want or price check posted in
+General with the thing linked is answered there the way Trade answers it: by
+the bot it is most use to, with real prices and a real deal, and the haggle
+goes on with that bot (`OllamaChat.Trade.AnswerInGeneral`). No crowd haggles
+over it with made-up prices. And a bot asks for help with a quest in General,
+the LFG channel or its party, never /say.
 
 **Nothing made up.** Asked about trinkets, a model will happily invent
 "Trinket of the Hidden Sun", and "which race makes the best shaman" got

@@ -1002,7 +1002,7 @@ namespace
     }
 
     // "not done yet: Mor'Ladim's Skull 0/1", or "done, it only needs handing
-    // in to Sven Yorgen".
+    // in to Commander Althea Ebonlocke".
     std::string StateOf(Player* bot, Quest const* quest)
     {
         if (bot->GetQuestStatus(quest->GetQuestId()) == QUEST_STATUS_COMPLETE)
