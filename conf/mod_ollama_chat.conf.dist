@@ -2529,9 +2529,11 @@ OllamaChat.Presence.ExGroupMinutes = 15
 #    OllamaChat.Presence.SkipEmotes
 #        Emotes a bot never makes at a passing stranger, whatever its style
 #        (another of its style's emotes instead), nor along with what it says
-#        to one. Emote names as in EMOTE STYLES, separated by |.
+#        to one: nothing rude, and nothing that passes judgement on them (a
+#        facepalm, an eye roll, a slow clap). Emote names as in EMOTE STYLES,
+#        separated by |.
 #        Default: (below)
-OllamaChat.Presence.SkipEmotes = "rude|spit|threaten|insult|mock|taunt|chicken|rasp|fart|burp|belch|scoff|shakefist|crack|gloat|bored|yawn|glare|scowl|snarl|growl|pinch|slap"
+OllamaChat.Presence.SkipEmotes = "rude|spit|threaten|insult|mock|taunt|chicken|rasp|fart|burp|belch|scoff|shakefist|crack|gloat|bored|yawn|glare|scowl|snarl|growl|pinch|slap|facepalm|eyeroll|golfclap"
 
 #    OllamaChat.Presence.PromptTemplate
 #        Placeholders: {bot_name} {bot_level} {bot_race} {bot_class}
@@ -2544,6 +2546,16 @@ OllamaChat.Presence.SkipEmotes = "rude|spit|threaten|insult|mock|taunt|chicken|r
 #        someone on foot, or of a pet to someone with none out
 #        (Pets.MountWords, Pets.Words), is not said.
 OllamaChat.Presence.PromptTemplate = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} You are walking past {player_name}: {observation}. Say one short thing to them about something in that, the way a passing player might in /say: a compliment, a joke, a tease or a quick question, 2 to 10 words, and never about anything it does not mention. Do not start with their name, and do not describe what you are doing."
+
+#    OllamaChat.Presence.GestureText
+#        Added to the remark's prompt: the gesture it has just made, so what
+#        it says goes with it (picked on their own, a facepalm and then "nice
+#        cloak" read as a sneer). Placeholders: {emote} (its name, as in EMOTE
+#        STYLES) and {at} ("them", or "their pet"). Empty: not said.
+#        Only the one it was said to answers a remark: bots in earshot hear
+#        "nice cloak", not whose, and took it for their own.
+#        Default: (below)
+OllamaChat.Presence.GestureText = "You have just made the /{emote} emote at {at}, so say something that goes with it."
 
 ###############################################################################
 #

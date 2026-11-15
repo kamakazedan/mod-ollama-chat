@@ -375,6 +375,7 @@ extern uint32_t    g_PresenceChance;
 extern uint32_t    g_PresenceSayChance;
 extern bool        g_PresenceCityOnly;
 extern std::string g_PresencePromptTemplate;
+extern std::string g_PresenceGestureText;
 
 // Cities and other social hubs
 extern bool        g_CityEnable;

@@ -91,7 +91,8 @@ namespace
         }
     }
 
-    void SubmitRemark(Player* bot, Player* subject, const std::string& observation)
+    // `emote`: the gesture it has just made at them (`atPet`: at their pet).
+    void SubmitRemark(Player* bot, Player* subject, const std::string& observation, uint32_t emote, bool atPet)
     {
         if (g_DisableForSayYell || g_PresencePromptTemplate.empty())
             return;
@@ -125,7 +126,17 @@ namespace
         if (prompt.empty() || prompt == "[Format Error]")
             return;
 
-        // The gesture has just been made; the line comes without another.
+        // The gesture has just been made, and the line goes with it: picked
+        // apart, a facepalm at someone and then "nice cloak" read as a sneer.
+        // It comes without another.
+        if (emote && !g_PresenceGestureText.empty())
+        {
+            const std::string gesture = SafeFormat(g_PresenceGestureText,
+                                                   fmt::arg("emote", LookupTextEmoteName(emote)),
+                                                   fmt::arg("at", atPet ? "their pet" : "them"));
+            if (!gesture.empty() && gesture != "[Format Error]")
+                prompt += " " + gesture;
+        }
         prompt += Roleplay_BuildVoicePrompt(bot);
         prompt += Outlook_ForBot(bot);   // includes what a passer-by can actually see
 
@@ -138,7 +149,11 @@ namespace
         request.prompt            = std::move(prompt);
         request.botName           = bot->GetName();
         request.kind              = OllamaRequestKind::RandomChatter;
-        request.triggerBotReplies = true;
+        // Theirs to answer, nobody else's: a bot in earshot hears only "nice
+        // cloak", not whose -- told of its own gear and the speaker's, two of
+        // them took it for theirs and talked it down in front of the one it
+        // was paid to.
+        request.triggerBotReplies = false;
         request.gentle            = true;   // a stranger: nothing rude goes with it
 
         // Only what it was told of: someone on foot is not told "nice mount"
@@ -346,7 +361,7 @@ void Presence_Update(uint32_t diff)
                      LookupTextEmoteName(emote));
 
         if (g_PresenceSayChance > 0 && urand(0, 99) < g_PresenceSayChance)
-            SubmitRemark(bot, real, observation);
+            SubmitRemark(bot, real, observation, emote, target == petGuid);
     }
 }
 

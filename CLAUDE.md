@@ -118,6 +118,12 @@ party), gear only of people near enough to look at (`Gear_PromptFor`), and
 the snapshot's sights and people only for a reply said face to face. A new
 kind of line about something here does the same.
 
+A remark made to someone about something of theirs is theirs to answer
+(presence: `triggerBotReplies` off). Bots in earshot hear "nice cloak", not
+whose: told of their own gear and the speaker's, two took it for their own
+and ran it down in front of the player it was paid to. The gesture that goes
+with a remark is in its prompt (`Presence.GestureText`), so the two agree.
+
 ## Script registration facts (verified against this fork)
 
 - `PlayerScript(name)` with **no hook list enables every hook**. See

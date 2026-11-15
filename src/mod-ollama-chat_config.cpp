@@ -408,6 +408,7 @@ uint32_t    g_PresenceChance               = 60;
 uint32_t    g_PresenceSayChance            = 35;
 bool        g_PresenceCityOnly             = false;
 std::string g_PresencePromptTemplate;
+std::string g_PresenceGestureText;
 
 bool        g_CityEnable                   = true;
 std::unordered_set<uint32_t> g_CityExtraIds;
@@ -1568,6 +1569,8 @@ static void LoadNaturalChatV4Settings()
         "the way a passing player might in /say: a compliment, a joke, a tease or a quick question, 2 to 10 words, "
         "and never about anything it does not mention. Do not start with their name, and do not describe what you "
         "are doing.");
+    g_PresenceGestureText         = sConfigMgr->GetOption<std::string>("OllamaChat.Presence.GestureText",
+        "You have just made the /{emote} emote at {at}, so say something that goes with it.");
 
     // --- cities -----------------------------------------------------------
     g_CityEnable                  = sConfigMgr->GetOption<bool>("OllamaChat.City.Enable", true);
@@ -2457,7 +2460,7 @@ static void LoadNaturalChatV10Settings()
         std::string unknown;
         for (const std::string& name : ReadPipeList("OllamaChat.Presence.SkipEmotes",
                  "rude|spit|threaten|insult|mock|taunt|chicken|rasp|fart|burp|belch|scoff|shakefist|crack|gloat|"
-                 "bored|yawn|glare|scowl|snarl|growl|pinch|slap"))
+                 "bored|yawn|glare|scowl|snarl|growl|pinch|slap|facepalm|eyeroll|golfclap"))
         {
             if (const uint32_t id = LookupTextEmoteId(name))
                 g_PresenceSkipEmotes.insert(id);
