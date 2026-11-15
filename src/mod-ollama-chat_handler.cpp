@@ -2376,8 +2376,20 @@ namespace
     // Bots that could answer this line at all.
     std::vector<Player*> CrowdPool(Player* speaker, ChatChannelSourceLocal source,
                                    const std::vector<Player*>& candidates, const std::string& msg,
-                                   const std::string& channelName)
+                                   const std::string& channelName, uint32_t channelId)
     {
+        // Someone selling or buying anywhere but Trade ("WTS [Lil Timmy's
+        // Peashooter] 4g" in General) is left alone, the way most people leave
+        // a sale in the wrong channel: buying and selling is Trade's
+        // (Trade.DealsOnlyInTrade), where the market answers it with prices of
+        // its own. Left to the crowd, General haggled with prices the model
+        // made up -- "give me 3g and it's yours", "3g is still way too much for
+        // that junk" -- and asked what kind of pet a gun was. A bot named in it
+        // still answers.
+        const bool dealElsewhere =
+            g_TradeDealsOnlyInTrade && OllamaIsRealPlayer(speaker) && source != SRC_WHISPER_LOCAL &&
+            !(source == SRC_GENERAL_LOCAL && channelId == uint32(ChatChannelId::TRADE)) &&
+            TextRules::IsDealOffer(TextRules::StripChatMarkup(msg), g_TradeDealWords, g_TradePricedDealWords);
         // Said in public about a quest: the bots far too low for it have
         // nothing to offer, and say nothing, the way people do. The quests
         // are worked out once, as the speaker means them.
@@ -2409,7 +2421,7 @@ namespace
             // Away from the keyboard in a city (mod-ollama-chat_hangout), or
             // far below every quest the line asks about: quiet, unless the
             // line names it.
-            if ((Hangout_IsAway(bot) || Links_AllTooHighFor(bot, quests) ||
+            if ((Hangout_IsAway(bot) || Links_AllTooHighFor(bot, quests) || dealElsewhere ||
                  (!lfg.empty() && !Links_CanJoinFor(bot, speaker, lfg))) &&
                 OllamaFindBotNameMention(msg, bot->GetName()) == std::string::npos)
                 continue;
@@ -2623,8 +2635,9 @@ static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
                                   const ContextAddressee& addressee,
                                   const std::vector<Player*>& candidates)
 {
-    const std::vector<Player*> pool =
-        CrowdPool(player, source, candidates, msg, channel ? channel->GetName() : std::string());
+    const std::vector<Player*> pool = CrowdPool(player, source, candidates, msg,
+                                                channel ? channel->GetName() : std::string(),
+                                                channel ? channel->GetChannelId() : 0);
     if (pool.empty())
         return;
 
@@ -2947,8 +2960,9 @@ static void HandleCrowdBotLine(Player* bot, const std::string& msg,
     if (Crowd_Find(key) || Conversation_IsActiveNear(key, bot))
         return;
 
-    const std::vector<Player*> pool =
-        CrowdPool(bot, source, candidates, msg, channel ? channel->GetName() : std::string());
+    const std::vector<Player*> pool = CrowdPool(bot, source, candidates, msg,
+                                                channel ? channel->GetName() : std::string(),
+                                                channel ? channel->GetChannelId() : 0);
     if (pool.empty())
         return;
 

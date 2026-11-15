@@ -238,7 +238,10 @@ anywhere but Trade or a whisper that buys or sells (`TextRules::IsDealOffer`:
 one of `Trade.DealWords`, or of `Trade.PricedDealWords` with a price) is
 dropped at delivery -- one owed to someone gets another go without it --
 unless it is a deal of this module's (`mustPrice`, `okPrices`) or answers a
-real player who brought a deal or a price up. The auction house's "just put
+real player who brought a deal or a price up. A real player's own sale or
+ask to buy, posted anywhere but Trade, gets no crowd (`CrowdPool`'s
+`dealElsewhere`; a bot named in it still answers): left to it, General
+haggled with prices the model made up, "give me 3g and it's yours". The auction house's "just put
 it up" topic had "anyone want [Moongraze Stag Tenderloin]? 52c" in General: a
 topic that offers something for sale is `Commerce` in `topics.cpp`, picked
 only for a line going to Trade. A thing given away free carries
@@ -406,6 +409,14 @@ topic's `{lately}`, skipped with nothing to tell), what it wears (mingle's
 `[gear]`, `{gear}`: `Gear_ShowPiece`), its professions (`[prof]`,
 `{professions}`). A pool value only some levels could talk of carries a level
 tag. `Outlook.FactsText` says so to every bot.
+
+Nor is anything made up for a laugh. No premise asks for a rumour, a theory,
+a tall tale or an imagine-if, nor for a past, a direction or a price nobody
+handed over, and `Outlook.FactsText` says so: "heard onyxia is actually a
+druid" went round /say from "a rumour about {lore} that you are obviously
+making up for a laugh", and General talked of farming the Spectral Tiger, a
+trading card game mount nobody on this realm can get. A pool value is
+something a player here could really see, do or get.
 
 And whatever it does say, it can back up (`mod-ollama-chat_said`): a line
 with anything behind it carries `OllamaChatRequest::basis` -- the topic or

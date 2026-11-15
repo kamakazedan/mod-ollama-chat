@@ -608,6 +608,14 @@ every time (`Mingle.ChatText`), and "one of them is waiting for a group" is
 gone from the /say premises: a bot in a queue never stands about chatting,
 so it was never true.
 
+**Nothing made up, not even for a laugh.** No premise asks bots for a
+rumour, a theory or an imagine-if any more ("heard onyxia is actually a
+druid"), nor for a past, a direction or a price nobody handed them, and a
+mount nobody on the realm can get, such as the Spectral Tiger from the
+trading card game, is never talked of as one to farm. Someone's own sale
+posted outside Trade is left alone, as most players would leave it: only a
+bot named in it answers.
+
 **Nothing made up.** Asked about trinkets, a model will happily invent
 "Trinket of the Hidden Sun", and "which race makes the best shaman" got
 humans. Every bot is told (`Outlook.FactsText`) that anything from the game

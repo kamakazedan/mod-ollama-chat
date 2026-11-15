@@ -3051,7 +3051,8 @@ static void LoadNaturalChatV25Settings()
         "spell or drop -- must really be in Wrath of the Lich King, called what it is really called. Never "
         "make one up, and never state a fact about one (where it drops, what it does, who can use it, or that "
         "it is not in the game) unless you are sure of it: when you do not know or cannot remember, say so, "
-        "or ask. Made-up fun is fine when it is plainly made up, like imagine if murlocs were ten feet tall. "
+        "or ask. No rumours, theories or tall tales about anyone or anything in the game either, not even as "
+        "a joke: what you say of the game is what is really so. "
         "And say nothing about yourself that you are not told is so: what you did, got, tried for or went "
         "through is only what you are told here, never a story of your own made up.");
 
@@ -4536,23 +4537,21 @@ static void LoadNaturalChatV16Settings()
         "narration, no actions in asterisks, no quotation marks, and nothing made up from the game -- no "
         "item, quest, NPC, creature, place, mount or pet that is not really in it, and nobody riding a mount "
         "or with a pet out but as told above (a hunter's pet, a warlock's demon or a companion pet is no "
-        "mount); plainly made-up fun is fine as an imagine-if. A famous line from a film or show is fine now "
+        "mount). A famous line from a film or show is fine now "
         "and then, but never say what it is from.");
     g_MinglePremises = ReadPipeList("OllamaChat.Mingle.Premises",
         "saying hello and asking what the other has been up to|[quest] one of them just got back from "
         "questing and moans about it|[quest] one of them asks the other about the quest they just handed "
         "in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's "
-        "pet or companion|[gear] one of them admires {gear}|one of them teases the other about their race "
-        "or class, all in good fun|swapping tips about levelling their classes|[duel] one of them challenges "
-        "the other to a duel, and they agree to head {duel_where} and fight it out|one of them asks the other "
-        "if they have a few silver to spare|[loot] one of them shows off something they got lately|people-watching: "
-        "the players walking past|[prof] levelling their professions: {professions}|which zone is the worst to quest in|[lost] one "
-        "of them is looking for {lost_place} and asks the other the way, and the other knows it: {lost_way}|"
-        "what they are saving their gold for|one of them is "
-        "about to log off|their guilds, or not having one|an imagine-if one of them dreams up, plainly made "
-        "up for a laugh|gnomes|murlocs|[15+] whether to run a dungeon together later|"
-        "[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] "
-        "flying mounts");
+        "pet or companion|[gear] one of them admires {gear}|one of them teases the other about their race or "
+        "class, all in good fun|swapping tips about levelling their classes|[duel] one of them challenges the "
+        "other to a duel, and they agree to head {duel_where} and fight it out|one of them asks the other if "
+        "they have a few silver to spare|[loot] one of them shows off something they got lately|[prof] "
+        "levelling their professions: {professions}|which zone is the worst to quest in|[lost] one of them is "
+        "looking for {lost_place} and asks the other the way, and the other knows it: {lost_way}|what they "
+        "are saving their gold for|their guilds, or not having one|[alliance] gnomes|[horde] "
+        "tauren|murlocs|[15+] whether to run a dungeon together later|[40+] the epic mount they are saving "
+        "for|[68+] flying mounts");
     g_MingleEmotes.clear();
     {
         std::string unknown;
