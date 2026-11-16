@@ -21,6 +21,7 @@
 #include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_conjure.h"
 #include "mod-ollama-chat_buffs.h"
+#include "mod-ollama-chat_citysay.h"
 #include "mod-ollama-chat_equip.h"
 #include "mod-ollama-chat_events.h"
 #include "mod-ollama-chat_congrats.h"
@@ -163,8 +164,15 @@ namespace
         };
         std::vector<Option> options;
 
-        if (!g_DisableForSayYell && world.RealPlayerWithin(bot, g_SayDistance) &&
-            !HeldBack(bot, SRC_SAY_LOCAL, std::string()))
+        // In a city, /say is not where people talk: General is
+        // (mod-ollama-chat_citysay). There /say is no option beside the
+        // channels: it takes City.SayShare in a hundred of the lines, and only
+        // while nobody in earshot has heard a bot start something in /say for
+        // City.SayGapSeconds.
+        const bool city = OllamaInCity(bot);
+        const bool sayOpen = !g_DisableForSayYell && world.RealPlayerWithin(bot, g_SayDistance) &&
+                             (!city || CitySay_Free(bot)) && !HeldBack(bot, SRC_SAY_LOCAL, std::string());
+        if (sayOpen && !city)
             options.push_back({ SRC_SAY_LOCAL, std::string(), 0 });
 
         // RealPlayerInZoneAndFaction is only a cheap pre-filter here. Being in
@@ -212,6 +220,12 @@ namespace
             addChannel(ChatChannelId::TRADE,             g_ChatterUseTradeChannel && !TradeChat_OnlyCommerce());
             addChannel(ChatChannelId::LOOKING_FOR_GROUP, g_ChatterUseLfgChannel);
             addChannel(ChatChannelId::GUILD_RECRUITMENT, g_ChatterUseGuildRecruitmentChannel);
+        }
+
+        if (sayOpen && city && (options.empty() || urand(1, 100) <= g_CitySayShare))
+        {
+            outSource = SRC_SAY_LOCAL;
+            return true;
         }
 
         if (options.empty())
@@ -362,12 +376,19 @@ namespace
 
     // Where an ask goes (mod-ollama-chat_needs). In a real player's group: the
     // party, and only for what a group can use -- a quest, a spare thing; a
-    // bot there never begs in General. Otherwise General -- Trade for a spare
-    // thing in a city, the LFG channel for a quest when the bot is in it --
-    // or /say with someone in earshot. Never help with a quest in /say: that
-    // is a call for a group, and people make one where the zone reads it
-    // ("anyone want to help with [Wanted: Annihilator Servo!]?" went out in
-    // /say).
+    // bot there never begs in General. Asking the way: of someone right there
+    // in /say, the way people do. A group or elite quest: in /say too, of
+    // someone right there it would suit -- a quest of the zone they stand in
+    // (in a city, only one in that city) and someone in earshot of a level
+    // for it (Needs_QuestSuitsSomeoneNear): "anyone want to help with
+    // [Wanted: Annihilator Servo!]?", a level 70's quest in Netherstorm, went
+    // out in /say in Stormwind next to a level 20. Otherwise where the zone
+    // reads it: General -- Trade for a spare thing in a city, the LFG channel
+    // for a quest when the bot is in it -- or, for a spare thing or a few
+    // silver, /say with someone in earshot. Nobody real is asked anything in
+    // /say more than once in Needs.SayAskMinutes, and in a city nothing is
+    // started there while someone in earshot has heard a bot start something
+    // lately (mod-ollama-chat_citysay).
     bool ChooseNeedDestination(Player* bot, const OllamaWorldSnapshot& world, const BotNeed& need, bool hub,
                                ChatChannelSourceLocal& outSource, std::string& outChannelName,
                                uint32_t& outChannelId)
@@ -380,6 +401,16 @@ namespace
             if (!need.party || g_DisableForParty || HeldBack(bot, SRC_PARTY_LOCAL, std::string()))
                 return false;
             outSource = SRC_PARTY_LOCAL;
+            return true;
+        }
+
+        const bool sayOpen = !g_DisableForSayYell && world.RealPlayerWithin(bot, g_SayDistance) &&
+                             Needs_SayAskFree(bot) && CitySay_Free(bot) &&
+                             !HeldBack(bot, SRC_SAY_LOCAL, std::string());
+        if (sayOpen && (need.kind == NeedKind::Errand ||
+                        (need.kind == NeedKind::Quest && Needs_QuestSuitsSomeoneNear(bot, need))))
+        {
+            outSource = SRC_SAY_LOCAL;
             return true;
         }
 
@@ -414,8 +445,7 @@ namespace
                 return true;
         }
 
-        if (need.kind != NeedKind::Quest && !g_DisableForSayYell && world.RealPlayerWithin(bot, g_SayDistance) &&
-            !HeldBack(bot, SRC_SAY_LOCAL, std::string()))
+        if (sayOpen && (need.kind == NeedKind::Spare || need.kind == NeedKind::Short))
         {
             outSource = SRC_SAY_LOCAL;
             return true;
@@ -754,9 +784,14 @@ void OllamaBotRandomChatter::HandleRandomChatter()
                     request.noPrice     = need.kind == NeedKind::Spare;   // free: no sale
                     request.basis       = need.ask;   // asked about it, it knows why
                     request.writtenAtSeq = Context_NextSeq();
-                    if (OllamaDispatch_Submit(std::move(request)))
+                    // In a city's /say, those in earshot are hearing one now
+                    // (checked when the place was picked).
+                    const bool claimed = needSource != SRC_SAY_LOCAL || CitySay_Claim(bot);
+                    if (claimed && OllamaDispatch_Submit(std::move(request)))
                     {
                         Needs_NoteAsked(bot, need);
+                        if (needSource == SRC_SAY_LOCAL)
+                            Needs_NoteSayAsk(bot);   // of those right there: not again for a while
                         if (g_DebugEnabled)
                             LOG_INFO("module.ollamachat", "[Ollama Chat] {} asks ({}) in {}: {}", bot->GetName(),
                                      need.key, ChatChannelSourceLocalStr[needSource], need.ask);
@@ -860,8 +895,13 @@ void OllamaBotRandomChatter::HandleRandomChatter()
         // Not what anyone just brought up where it would go.
         const std::string guildPlace =
             bot->GetGuild() ? TopicPlace(bot, SRC_GUILD_LOCAL, std::string()) : std::string();
+        // Out loud to nobody in particular, where people are not sitting about
+        // chatting -- out in the world, or a city's streets: only what is
+        // right here (an inn is the other way: anything goes there).
+        const bool hereOnly = placed && source == SRC_SAY_LOCAL && (!hub || OllamaInCity(bot));
         TopicPick topic = Topics_Pick(bot, world, local, trade,
-                                      placed ? TopicPlace(bot, source, channelName) : std::string(), guildPlace);
+                                      placed ? TopicPlace(bot, source, channelName) : std::string(), guildPlace,
+                                      hereOnly);
         if (topic.valid && topic.isGuildTopic)
         {
             // A guild topic goes to the guild (one is only picked with
@@ -910,6 +950,7 @@ void OllamaBotRandomChatter::HandleRandomChatter()
         uint64_t openerTarget = 0;
         std::string openerKey;
         if (hub && (!g_ConversationPremises.empty() || !g_PremiseTemplates.empty()) && g_CityConversationStartChance > 0 &&
+            !(source == SRC_SAY_LOCAL && OllamaInCity(bot)) &&   // a city's talk is in General
             Conversation_PlaceAllowed(source, channelId) &&
             urand(0, 99) < g_CityConversationStartChance)
         {
@@ -982,6 +1023,16 @@ void OllamaBotRandomChatter::HandleRandomChatter()
         // What it was given to talk about: asked about it, it knows what it
         // was on about (mod-ollama-chat_said).
         request.basis       = environment;
+
+        // In a city's /say, those in earshot are hearing one now (checked
+        // when the place was picked: nothing else has spoken since).
+        if (source == SRC_SAY_LOCAL && !CitySay_Claim(bot))
+        {
+            if (opener)
+                Conversation_OpenerLost(openerKey, rawGuid);
+            reschedule();
+            continue;
+        }
 
         if (OllamaDispatch_Submit(std::move(request)))
         {

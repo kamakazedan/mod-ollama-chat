@@ -119,9 +119,37 @@ the snapshot's sights and people only for a reply said face to face. A new
 kind of line about something here does the same.
 
 A call for help with a quest is made where the zone reads it -- General, the
-LFG channel, or the party with someone playing in it -- never /say
-(`ChooseNeedDestination`): "anyone want to help with [Wanted: Annihilator
-Servo!]?" in /say read as nobody's business but whoever stood there.
+LFG channel, or the party with someone playing in it -- and in /say only of
+someone right there it would suit (`ChooseNeedDestination`,
+`Needs_QuestSuitsSomeoneNear`): a group or elite quest of the zone they stand
+in -- in a city, only one in that city -- and a real player in earshot of a
+level for it and near enough the bot's to group with it. "anyone want to help
+with [Wanted: Annihilator Servo!]?", a level 70's quest in Netherstorm, went
+out in /say in Stormwind next to a level 20. Asking the way goes to /say first,
+of whoever is there. Nobody real is asked anything in /say more than once in
+`Needs.SayAskMinutes`.
+
+In a city, General is where people talk; /say is for what is said to someone
+(`mod-ollama-chat_citysay`). A real player there hears a bot start something
+nobody asked for in /say at most once in `City.SayGapSeconds`, the clock
+starting again with each such line they hear (the dispatcher notes it at
+delivery, `CitySay_Heard`), and only `City.SayShare` in a hundred of the
+ambient lines near them go to /say. A new kind of unprompted /say line calls
+`CitySay_Claim` just before it is submitted, and does without it when that
+says no; an answer owed to a real player is never held, nor is a gesture.
+Chat bubbles popping up all round a player standing in Stormwind was the
+complaint.
+
+A line said out loud to nobody in particular, where people are not sitting
+about chatting -- /say out in the world or in a city's streets; an inn is the
+other way -- is only about what is right here (`Topics_Pick`'s `hereOnly`):
+someone near, what just happened by it, a creature, a body, an NPC or a thing
+in sight, a danger, the place, or a quest of the zone it stands in. A stranger
+questing by a player had said "anyone know a good gold farm?" out loud. Bots
+make a conversation of a /say line between themselves only in an inn or a
+town: two strangers out questing do not stand and chat for ten lines, and a
+city's talk is in General. A quest a bot in a city talks of is one to go back
+out for (`Topic.CityQuestText`), not one it is at.
 
 A remark made to someone about something of theirs is theirs to answer
 (presence: `triggerBotReplies` off). Bots in earshot hear "nice cloak", not
@@ -229,6 +257,13 @@ knows nothing of mod-dungeon-clear.
   ever talked of when `Hangout_CanGoDuel` says they could go (API 3), and
   `Hangout_GoDuel` at the end of the exchange hands them over: the walk out
   to the gates and the duel are mod-playerbots-plus's.
+- So is a group quest two bots talk each other into (mingle's `[groupquest]`
+  premise, and out of towns the only thing two out questing get talking
+  about, `Mingle.QuestAsks`): talked of only when `OllamaGroupQuestFor` names
+  one (API 10: both hold it, up to it, by each other and free), and
+  `OllamaGroupQuestTogether` at the end of the exchange makes them a party
+  for it, the one who asked leading. Talked of and then not done is the
+  made-up commitment this rules out.
 
 ## Trade chat is buying and selling, and the numbers are the module's
 

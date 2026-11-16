@@ -2205,7 +2205,12 @@ OllamaChat.Conversation.ObserveChance = 30
 #    OllamaChat.Conversation.AllowTrade
 #    OllamaChat.Conversation.AllowSay
 #        Where conversations may run besides General. With Trade.OnlyCommerce
-#        (TRADE CHAT), never in Trade, whatever AllowTrade says.
+#        (TRADE CHAT), never in Trade, whatever AllowTrade says. In /say, bots
+#        start one between themselves only in an inn or a town, where people
+#        sit about chatting: a city's talk is in General (City.SayGapSeconds),
+#        and two strangers out questing do not stand and chat for ten lines.
+#        A real player who speaks in /say anywhere may still have one grow out
+#        of what they said.
 #        Default: 1, 1
 OllamaChat.Conversation.AllowTrade = 1
 OllamaChat.Conversation.AllowSay = 1
@@ -2362,6 +2367,26 @@ OllamaChat.City.BotLineReplyBonus = 20
 #        this in a city.
 #        Default: 2
 OllamaChat.City.ConversationBoost = 2
+
+#    OllamaChat.City.SayGapSeconds
+#    OllamaChat.City.SayShare
+#        In a city, General is where people talk; /say is for what is said to
+#        someone. Bots chatting away in /say had chat bubbles popping up all
+#        round a player standing about in Stormwind. So in a city, a real
+#        player hears a bot start something nobody asked for in /say -- an
+#        ambient line, an ask, a remark to someone walking past, a line of
+#        city life, a /say exchange between bots -- at most once in
+#        SayGapSeconds, the clock starting again with every such line they
+#        hear (0: no limit). And of the ambient lines said near them there,
+#        only SayShare in a hundred go to /say rather than General (0: none,
+#        while General is open). Those few are about what is right there
+#        (someone near, an NPC, a thing in sight: Topic.*), never open a
+#        conversation, and get no BotLineReplyBonus. An answer owed to a real
+#        player who spoke is never held back, nor is a gesture: emotes are as
+#        they were.
+#        Default: 300, 15
+OllamaChat.City.SayGapSeconds = 300
+OllamaChat.City.SayShare = 15
 
 ###############################################################################
 #
@@ -6174,7 +6199,11 @@ OllamaChat.Mingle.Enable = 1
 
 #    OllamaChat.Mingle.CitiesOnly
 #        Only near a real player in a capital or a hub town (CITIES). 0: near
-#        a real player anywhere outside instances.
+#        a real player anywhere outside instances. Out of those, with this on,
+#        two bots out questing still get talking about one thing, with
+#        QuestAsks: doing a group quest together. In a city, an exchange only
+#        starts while nobody in earshot has heard a bot start something in
+#        /say lately (City.SayGapSeconds).
 #        Default: 1
 OllamaChat.Mingle.CitiesOnly = 1
 
@@ -6304,12 +6333,18 @@ OllamaChat.Mingle.PromptTemplate = "{count} World of Warcraft players are standi
 #        others are about to watch -- {passersby} is up to three of them
 #        within 30 yards, as anyone could see them ("Lianon, an orc warrior,
 #        riding their mount, a Swift Brown Wolf"), so people-watching is of
-#        who is really there. Nothing of their day is made up: "a funny death one of them had today" and "a
-#        dungeon one of them ran earlier" were never so.
+#        who is really there. [groupquest]: the two of them could go and do a
+#        group or elite quest of the zone together now (QuestAsks) --
+#        {gq_asker} asks {gq_other} about {gq_quest} ("[Mor'Ladim]"), and
+#        {gq_facts} is what it really is ("'Mor'Ladim' is an elite quest in
+#        Duskwood for level 30, where you have to: ..."); once the last line
+#        is said they go and do it. Nothing of their day is made up: "a funny
+#        death one of them had today" and "a dungeon one of them ran earlier"
+#        were never so.
 #        [horde] or [alliance]: only that side's bots (only one side mingles
 #        together). Tags go in front, with a level tag or without.
 #        Default: (below)
-OllamaChat.Mingle.Premises = "saying hello and asking what the other has been up to|[quest] one of them just got back from questing and moans about it|[quest] one of them asks the other about the quest they just handed in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's pet or companion|[gear] one of them admires {gear}|one of them teases the other about their race or class, all in good fun|swapping tips about levelling their classes|[duel] one of them challenges the other to a duel, and they agree to head {duel_where} and fight it out|one of them asks the other if they have a few silver to spare|[loot] one of them shows off something they got lately|[people] people-watching: {passersby}|[prof] levelling their professions: {professions}|which zone is the worst to quest in|[lost] one of them is looking for {lost_place} and asks the other the way, and the other knows it: {lost_way}|what they are saving their gold for|one of them is about to log off|their guilds, or not having one|an imagine-if one of them dreams up for a laugh, spun out of something really around them, and the other runs with it|[alliance] gnomes|[horde] tauren|murlocs|[15+] whether to run a dungeon together later|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] flying mounts"
+OllamaChat.Mingle.Premises = "saying hello and asking what the other has been up to|[quest] one of them just got back from questing and moans about it|[quest] one of them asks the other about the quest they just handed in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's pet or companion|[gear] one of them admires {gear}|one of them teases the other about their race or class, all in good fun|swapping tips about levelling their classes|[duel] one of them challenges the other to a duel, and they agree to head {duel_where} and fight it out|[groupquest] {gq_asker} asks {gq_other} if they want to do {gq_quest} together while they are both here, and {gq_other} is up for it, as they both have it -- so they agree to go and do it there and then. {gq_facts}|one of them asks the other if they have a few silver to spare|[loot] one of them shows off something they got lately|[people] people-watching: {passersby}|[prof] levelling their professions: {professions}|which zone is the worst to quest in|[lost] one of them is looking for {lost_place} and asks the other the way, and the other knows it: {lost_way}|what they are saving their gold for|one of them is about to log off|their guilds, or not having one|an imagine-if one of them dreams up for a laugh, spun out of something really around them, and the other runs with it|[alliance] gnomes|[horde] tauren|murlocs|[15+] whether to run a dungeon together later|[20+] getting their first mount|[40+] the epic mount they are saving for|[68+] flying mounts"
 
 #    OllamaChat.Mingle.DuelChance
 #        Two who could go out to the gates and duel ([duel] in
@@ -6318,6 +6353,26 @@ OllamaChat.Mingle.Premises = "saying hello and asking what the other has been up
 #        they do, they walk out there at the end and fight it out.
 #        Default: 25
 OllamaChat.Mingle.DuelChance = 25
+
+#    OllamaChat.Mingle.QuestAsks
+#    OllamaChat.Mingle.GroupQuestChance
+#        Two bots near a real player who could go and do a group or elite
+#        quest together now ([groupquest] in Mingle.Premises) -- both holding
+#        one of the zone they stand in, not done, not grey, up to it (an
+#        elite one at its level), by each other, free, out of a group
+#        (mod-playerbots-plus's group quests, API 10) -- may talk it over in
+#        /say: one asks the other, who is up for it, and once the last line
+#        is said they go and do it together, the one who asked leading,
+#        with no ask in General. Out of cities and towns (with CitiesOnly),
+#        QuestAsks lets two out questing do that, and only that, near a real
+#        player, at the same pace as the rest (GapMinSeconds..GapMaxSeconds).
+#        In a city or town, where the rest are had, two who could talk of it
+#        GroupQuestChance of the time (percent); otherwise it is one premise
+#        among the rest. In a city, only a quest of that city. Without
+#        mod-playerbots-plus, never.
+#        Default: 1, 50
+OllamaChat.Mingle.QuestAsks = 1
+OllamaChat.Mingle.GroupQuestChance = 50
 
 #    OllamaChat.Mingle.SideText
 #    OllamaChat.Mingle.HomeCityText
@@ -6437,10 +6492,21 @@ OllamaChat.Mingle.Emote.Greetings = "wave|nod|bow|smile|hello|salute|wink|cheer|
 #     short    a low-level bot with hardly any money, asking for a few silver.
 #
 #   A bot in a real player's group asks there, and only about a quest or a
-#   spare thing; otherwise in General (Trade for spare things in a city, the
-#   LFG channel for quests when it is in it), or /say with someone in earshot
-#   -- but never help with a quest in /say: that is a call for a group, made
-#   where the zone reads it.
+#   spare thing. Otherwise it asks the way of someone right there in /say,
+#   the way people do, when a real player is in earshot. A group or elite
+#   quest it asks in /say too, but only of someone it would suit: a quest of
+#   the zone they stand in -- in a city, only one in that city -- and a real
+#   player in earshot of a level for it (able to take it, not grey to them,
+#   at most three levels under it, a race it is for) and near enough its own
+#   level to group with it (Links.LfgLevels). "anyone want to help with
+#   [Wanted: Annihilator Servo!]?", a level 70's quest in Netherstorm, went
+#   out in /say in Stormwind next to a level 20. The rest goes where the
+#   zone reads it: General (Trade for spare things in a city, the LFG
+#   channel for quests when it is in it), or, for a spare thing or a few
+#   silver, /say with someone in earshot. Nobody real is asked anything in
+#   /say more than once in SayAskMinutes, and in a city nothing is started
+#   there while someone in earshot heard a bot start something lately
+#   (City.SayGapSeconds).
 #   For RememberMinutes afterwards, every reply prompt of that bot carries why
 #   it asked (ReasonText), so "why do you need hogger?" gets the real answer.
 #
@@ -6469,6 +6535,14 @@ OllamaChat.Needs.ZoneCooldownSeconds = 300
 #        How long it remembers why it asked.
 #        Default: 15
 OllamaChat.Needs.RememberMinutes = 15
+
+#    OllamaChat.Needs.SayAskMinutes
+#        A real player is asked something in /say -- the way, a group for a
+#        quest, a spare thing, a few silver -- at most once in this many
+#        minutes, so standing about is not a stream of "where's the bank?".
+#        Asked lately, the ask goes to General instead. 0: no limit.
+#        Default: 15
+OllamaChat.Needs.SayAskMinutes = 15
 
 #    OllamaChat.Needs.WeightQuest
 #    OllamaChat.Needs.WeightErrand
@@ -7160,6 +7234,22 @@ OllamaChat.Topic.MemoryCount = 4
 #        Default: 10, game_talk
 OllamaChat.Topic.PlaceRepeatMinutes = 10
 OllamaChat.Topic.PlaceRepeatExempt = "game_talk"
+
+#    OllamaChat.Topic.CityQuestText
+#        An ambient line said out loud to nobody in particular, where people
+#        are not sitting about chatting -- /say out in the world, or in a
+#        city's streets (an inn is the other way) -- is only about what is
+#        right here: someone near, what just happened by it, a creature, a
+#        body, an NPC or a thing in sight, a danger, the place itself, or a
+#        quest of the zone it stands in. A stranger questing next to a player
+#        had said "anyone know a good gold farm?" and "my linen just sold"
+#        out loud. And a quest a bot standing in a city talks of is one it
+#        still has to go back out and do, not one it is at: "2 more defias to
+#        go" from someone in Stormwind is about a fight they are not in. This
+#        text is added to a quest topic there ({city}: the city). Empty leaves
+#        it out.
+#        Default: "You are in {city} for now, not out doing it: if you bring it up, it is something you still have to go back out and do."
+OllamaChat.Topic.CityQuestText = "You are in {city} for now, not out doing it: if you bring it up, it is something you still have to go back out and do."
 
 #    OllamaChat.Topic.EventMemorySize
 #        How many witnessed events each bot remembers -- "Kaelan killed a Fjord

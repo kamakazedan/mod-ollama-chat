@@ -13,6 +13,7 @@
 #include "Bag.h"
 #include "CellImpl.h"
 #include "Containers.h"
+#include "DBCStores.h"
 #include "Creature.h"
 #include "GameObject.h"
 #include "GameTime.h"
@@ -530,7 +531,8 @@ namespace
                        fmt::arg("from", from)));
     }
 
-    void GatherActivity(Player* bot, std::vector<Candidate>& out)
+    // `hereOnly`: only a quest of the zone it stands in (Topics_Pick).
+    void GatherActivity(Player* bot, std::vector<Candidate>& out, bool hereOnly)
     {
         // What they are actually trying to do right now. Inside a dungeon,
         // only what is for this dungeon: nobody in the Stockade asks who
@@ -546,7 +548,8 @@ namespace
             Quest const* quest = sObjectMgr->GetQuestTemplate(qs.first);
             if (!quest)
                 continue;
-            if (instance && (quest->GetZoneOrSort() <= 0 || uint32(quest->GetZoneOrSort()) != bot->GetZoneId()))
+            if ((instance || hereOnly) &&
+                (quest->GetZoneOrSort() <= 0 || uint32(quest->GetZoneOrSort()) != bot->GetZoneId()))
                 continue;
 
             // What the quest log says it wants, not a guess from its title.
@@ -570,6 +573,7 @@ namespace
         if (!active.empty())
         {
             const auto& q = active[PickIndex(active.size())];
+            const size_t before = out.size();
 
             if (!g_EnvCommentQuestObjective.empty())
                 Add(out, TopicCategory::Activity, "quest_objective", g_EnvCommentQuestObjective,
@@ -582,6 +586,20 @@ namespace
                 Add(out, TopicCategory::Activity, "unfinished_quest", g_EnvCommentUnfinishedQuest,
                     SafeFormat(PickOne(g_EnvCommentUnfinishedQuest),
                                fmt::arg("quest_name", q.first)));
+
+            // Standing in a city, it is not out at it: "2 more defias to go"
+            // from someone in Stormwind is about a fight they are not in.
+            if (OllamaInCity(bot) && !g_TopicCityQuestText.empty())
+            {
+                AreaTableEntry const* zone = sAreaTableStore.LookupEntry(bot->GetZoneId());
+                const std::string note = SafeFormat(g_TopicCityQuestText,
+                                                    fmt::arg("city", zone && zone->area_name[0]
+                                                                         ? std::string(zone->area_name[0])
+                                                                         : std::string("the city")));
+                if (!note.empty() && note != "[Format Error]")
+                    for (size_t i = before; i < out.size(); ++i)
+                        out[i].text += " " + note;
+            }
         }
 
         // Where the bot could go questing next -- not from inside a dungeon.
@@ -766,7 +784,7 @@ namespace
 // --------------------------------------------------------------------------
 
 TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local, bool trade, const std::string& place,
-                      const std::string& guildPlace)
+                      const std::string& guildPlace, bool hereOnly)
 {
     TopicPick pick;
     if (!bot || !bot->IsInWorld())
@@ -856,7 +874,7 @@ TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local,
         {
             case TopicCategory::People:   GatherPeople(bot, world, candidates); break;
             case TopicCategory::World:    GatherWorld(bot, candidates);         break;
-            case TopicCategory::Activity: GatherActivity(bot, candidates);      break;
+            case TopicCategory::Activity: GatherActivity(bot, candidates, hereOnly); break;
             case TopicCategory::Self:     GatherSelf(bot, candidates);          break;
             case TopicCategory::Guild:    GatherGuild(bot, candidates);         break;
             case TopicCategory::Talk:     GatherTalk(bot, candidates);          break;
@@ -870,6 +888,14 @@ TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local,
             std::erase_if(candidates, [](Candidate const& c) { return c.here; });
         if (!trade)
             std::erase_if(candidates, [](Candidate const& c) { return c.commerce; });
+        // Out loud to nobody in particular, outside an inn: only what is right
+        // here -- what those near can see or are at too.
+        if (hereOnly)
+            std::erase_if(candidates, [](Candidate const& c)
+                          {
+                              return !c.here && c.key != "danger" && c.key != "landmark" &&
+                                     c.key != "quest_objective" && c.key != "unfinished_quest";
+                          });
         // Nor what someone brought up there a moment ago (Topic.PlaceRepeatMinutes):
         // three bots in a row on the time of day in one General is a script.
         std::erase_if(candidates, [&](Candidate const& c)

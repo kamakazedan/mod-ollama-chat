@@ -49,6 +49,8 @@ struct BotNeed
     std::string reason;           // for its replies afterwards: why it asked
     uint32_t    itemEntry = 0;    // spare: what it offers
     bool        party = false;    // fits party chat too (a quest, a spare thing)
+    uint32_t    questId = 0;      // quest: which
+    bool        dungeon = false;  // quest: one for a dungeon run, never asked of anyone in /say
 };
 
 // One thing this bot could ask for or offer right now. False when there is
@@ -58,6 +60,21 @@ bool Needs_Pick(Player* bot, bool hub, BotNeed& out);
 
 // The ask is going out: remember why, and hold off the next one.
 void Needs_NoteAsked(Player* bot, const BotNeed& need);
+
+// A group or elite quest (`need`) that could be asked of someone right there
+// in /say: a quest of the zone `bot` stands in -- in a city, only one in that
+// city -- with a real player in earshot, on its side, of a level for it (able
+// to take it, not grey to them, at most three levels under it, a race it is
+// for) and near enough the bot's own level to group with it (Links.LfgLevels).
+// "anyone want to help with [Wanted: Annihilator Servo!]?" -- a level 70's
+// quest in Netherstorm -- went out in /say in Stormwind, next to a level 20.
+bool Needs_QuestSuitsSomeoneNear(Player* bot, const BotNeed& need);
+
+// Whether the real players in earshot of `bot` may be asked something in
+// /say now -- the way, a group for a quest, a few silver: none has been for
+// Needs.SayAskMinutes. ...and, the ask going out there, they now have been.
+bool Needs_SayAskFree(Player* bot);
+void Needs_NoteSayAsk(Player* bot);
 
 // For a reply prompt: why it asked what it asked lately
 // (OllamaChat.Needs.ReasonText), or empty.
@@ -79,6 +96,7 @@ struct NeedsStats
     uint64_t picked = 0;   // tries that found something to ask
     uint64_t none   = 0;   // tries that found nothing
     uint64_t plans  = 0;   // replies told what it is really doing
+    uint64_t inSay  = 0;   // asks made in /say, of someone right there
 };
 NeedsStats Needs_GetStats();
 

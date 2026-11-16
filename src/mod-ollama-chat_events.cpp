@@ -1,5 +1,6 @@
 #include "mod-ollama-chat_events.h"
 #include "mod-ollama-chat_bags.h"
+#include "mod-ollama-chat_citysay.h"
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_lately.h"
 #include "mod-ollama-chat_congrats.h"
@@ -487,6 +488,10 @@ void OllamaBotEventChatter::HandleGameEvent(Player* source, const std::string& t
         request.basis = "what just happened: " + source->GetName() + ", " + type +
                         (detail.empty() ? std::string() : " (" + detail + ")");
 
+        // In a city's /say, anything but a "gz" only while nobody in earshot
+        // has heard a bot start something there lately (mod-ollama-chat_citysay).
+        if (source_ == SRC_SAY_LOCAL && !congrats && !CitySay_Claim(bot))
+            continue;
         if (!OllamaDispatch_Submit(std::move(request)))
             continue;
 

@@ -39,6 +39,19 @@ class Player;
 // player is in earshot any more, or when a real player speaks to one of them
 // in /say -- who is then answered as usual.
 //
+// In a city, /say is not where people talk (mod-ollama-chat_citysay): an
+// exchange there starts only when nobody in earshot of it has heard a bot
+// start something in /say for City.SayGapSeconds.
+//
+// Out of cities and towns (with Mingle.CitiesOnly), two bots out questing
+// near a real player get talking only when they could go and do a group or
+// elite quest of the zone together now -- both holding it and up to it, by
+// each other and free (mod-playerbots-plus's group quests, API 10) --
+// and then only about that (Mingle.QuestAsks): one asks the other, who is up
+// for it, and once the last line is said they go and do it, the one who asked
+// leading. In a town, where the rest are had, that is the talk
+// Mingle.GroupQuestChance of the time. In a city, only a quest in that city.
+//
 // And every Mingle.Emote.MinSeconds..MaxSeconds near a real player, two bots
 // standing close may just greet each other without a word (Mingle.Emote.*):
 // a wave, a nod, a bow, and often one back.
@@ -70,6 +83,8 @@ struct MingleStats
     uint64_t emotes     = 0;   // emotes at each other in them
     uint64_t greetings  = 0;   // greetings between bots without a word
     uint64_t duels      = 0;   // pairs that talked themselves into a duel and went out to the gates
+    uint64_t groupQuests = 0;  // pairs out questing that talked each other into a group quest, and went
+    uint64_t cityHeld   = 0;   // not started in a city: someone in earshot had heard a bot start something lately
     uint32_t running    = 0;
 };
 MingleStats Mingle_GetStats();

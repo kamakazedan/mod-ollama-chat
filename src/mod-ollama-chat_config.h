@@ -385,6 +385,9 @@ extern uint32_t    g_CityChatterMultiplier;
 extern uint32_t    g_CityConversationStartChance;
 extern uint32_t    g_CityBotLineReplyBonus;
 extern uint32_t    g_CityConversationBoost;
+extern uint32_t    g_CitySayGapSeconds;   // a real player in a city hears a bot start something in /say at most this often
+extern uint32_t    g_CitySayShare;        // ...and an ambient line near them goes to /say this share of the time
+extern std::string g_TopicCityQuestText;  // a quest topic, standing in a city: one to go back out for ({city})
 
 // Conversations (mod-ollama-chat_conversation)
 extern bool        g_ConversationEnable;
@@ -680,6 +683,7 @@ extern uint32_t    g_NeedsBotCooldownMinutes;
 extern uint32_t    g_NeedsRepeatMinutes;          // the same thing again
 extern uint32_t    g_NeedsZoneCooldownSeconds;    // the same kind of ask in one zone
 extern uint32_t    g_NeedsRememberMinutes;
+extern uint32_t    g_NeedsSayAskMinutes;          // a real player is asked something in /say at most this often
 extern uint32_t    g_NeedsWeight[4];              // quest, errand, spare, short
 extern uint32_t    g_NeedsShortMaxLevel;
 extern uint32_t    g_NeedsShortCopperPerLevel;
@@ -1211,6 +1215,8 @@ extern uint32_t    g_WantsFollowSeconds;        // ...and for this long after, f
 extern std::string g_WantsText;                 // {speaker} {kind} {level} {class} {facts} {self}
 extern std::string g_WantsFollowText;           // ...for a line a moment after
 extern uint32_t    g_MingleDuelChance;          // two who could go and duel: how often that is the talk
+extern bool        g_MingleQuestAsks;           // out of towns, two who could do a group quest together talk it over
+extern uint32_t    g_MingleGroupQuestChance;    // ...and where the rest are had, how often that is the talk
 extern std::string g_OutlookSideText;           // which side a bot plays, and its own cities: {side} {cities}
 extern std::string g_OutlookHomeCityText;       // ...standing in one of them, that it is home: {city} {side}
 extern std::vector<std::string> g_OutlookCitiesHorde;      // the Horde's own cities, by name

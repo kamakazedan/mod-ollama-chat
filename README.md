@@ -517,8 +517,9 @@ in, the last level it reached. Ask a bot "what you up to?" and it answers with
 what it actually did ("just been grinding murlocs in westfall") instead of
 making something up (`OllamaChat.Lately.*`).
 
-**Bots chatting among themselves.** In a city, now and then two or three bots
-near you have a little chat in /say. There's one every 5 to 30 minutes at
+**Bots chatting among themselves.** In a city or a town, now and then two or
+three bots near you have a little chat in /say (in a city, only while nobody
+near you has heard a bot start something in /say lately). There's one every 5 to 30 minutes at
 random, at most one near you at a time, with an emote or none
 (`OllamaChat.Mingle.*`). Each line follows on from the one before: a greeting
 gets a greeting or a "whats up?" back, an answer is what that bot has really
@@ -622,8 +623,29 @@ Spectral Tiger from the trading card game, is never talked of as one to farm.
 General with the thing linked is answered there the way Trade answers it: by
 the bot it is most use to, with real prices and a real deal, and the haggle
 goes on with that bot (`OllamaChat.Trade.AnswerInGeneral`). No crowd haggles
-over it with made-up prices. And a bot asks for help with a quest in General,
-the LFG channel or its party, never /say.
+over it with made-up prices.
+
+**/say is for what is said to someone.** In a city, General is where people
+talk: you hear a bot start something in /say near you at most once every five
+minutes, and only a few of the ambient lines near you go to /say rather than
+General (`OllamaChat.City.SayGapSeconds`, `City.SayShare`). Answers to you, and
+emotes, are as they were. Out in the world, or in a city's streets, a line said
+out loud to nobody in particular is only about what is right there -- someone
+near, a creature, an NPC, the place, a quest of the zone -- and bots only stand
+and chat with each other in /say in an inn or a town. A quest talked of in a
+city is one to go back out for. Asking the way goes to /say first, of whoever
+is there; a group or elite quest is asked in /say only of someone it would
+suit -- a quest of the zone you are in (in a city, only one in that city) and
+you of a level for it -- and otherwise in General, the LFG channel or the
+party. Nobody is asked anything in /say more than once every 15 minutes
+(`OllamaChat.Needs.SayAskMinutes`).
+
+**Two out questing team up.** Two bots near you out in the world who both
+have a group or elite quest of the zone, and could do it together now, may
+talk it over in /say -- one asks, the other is up for it -- and then really
+go and do it together, the one who asked leading (`OllamaChat.Mingle.QuestAsks`,
+with mod-playerbots-plus's group quests). In a town that is one of the things
+two bots standing about may talk of (`Mingle.GroupQuestChance`).
 
 **Nothing made up.** Asked about trinkets, a model will happily invent
 "Trinket of the Hidden Sun", and "which race makes the best shaman" got

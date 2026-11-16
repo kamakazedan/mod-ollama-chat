@@ -70,8 +70,18 @@ struct TopicPick
 // its guild chat), as the caller names places: a topic anyone brought up
 // there in the last Topic.PlaceRepeatMinutes is not picked again
 // (Topic.PlaceRepeatExempt aside). Empty: no such check.
+//
+// `hereOnly`: a line said out loud to nobody in particular, where people are
+// not sitting about chatting -- /say out in the world, or in a city's streets
+// (an inn is the other way). It is only about what is right here: someone
+// near, what just happened by it, a creature, a body, an NPC or a thing in
+// sight, a danger, the place itself, or a quest of the zone it stands in. A
+// stranger questing by a player had said "anyone know a good gold farm?" and
+// "my linen just sold" out loud. In a city, a quest is talked of as one to go
+// back out for (Topic.CityQuestText), not as one it is at.
 TopicPick Topics_Pick(Player* bot, const OllamaWorldSnapshot& world, bool local, bool trade,
-                      const std::string& place = std::string(), const std::string& guildPlace = std::string());
+                      const std::string& place = std::string(), const std::string& guildPlace = std::string(),
+                      bool hereOnly = false);
 
 // Record that a bot used a topic, so it is suppressed for the next few picks
 // -- its own, and, with `place`, anyone's there.

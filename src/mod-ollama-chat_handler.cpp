@@ -2984,9 +2984,11 @@ static void HandleCrowdBotLine(Player* bot, const std::string& msg,
             aimed = FindInPool(pool, addressee.guid);
     }
 
-    // Cities and inns talk more: a line there is likelier to get an answer.
-    const bool hub = (source == SRC_GENERAL_LOCAL || source == SRC_SAY_LOCAL || source == SRC_YELL_LOCAL) &&
-                     OllamaIsSocialHub(bot);
+    // Cities and inns talk more: a line there is likelier to get an answer --
+    // but not in a city's /say, which is not where people talk there
+    // (mod-ollama-chat_citysay).
+    const bool sayHere = source == SRC_SAY_LOCAL || source == SRC_YELL_LOCAL;
+    const bool hub = (source == SRC_GENERAL_LOCAL || (sayHere && !OllamaInCity(bot))) && OllamaIsSocialHub(bot);
     uint32_t base = BotLineReplyChanceFor(source);
     if (hub)
         base = std::min<uint32_t>(100, base + g_CityBotLineReplyBonus);

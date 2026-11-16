@@ -19,7 +19,9 @@
 // temperament and showing off, 7 for what things are worth and how rarely
 // they drop (mod-ollama-chat_tradechat), 8 for where things drop
 // (mod-ollama-chat_drops: knowledge's answers and rare gear), 9 for what each
-// bot looted itself (OllamaLootedByBot): the only things a bot ever sells.
+// bot looted itself (OllamaLootedByBot): the only things a bot ever sells, 10
+// for group quests two bots talk each other into (OllamaGroupQuestFor, in
+// mod-ollama-chat_mingle).
 // --------------------------------------------------------------------------
 
 #if __has_include("PlayerbotsPlus.h")
@@ -31,6 +33,8 @@
 #else
 #define OLLAMA_CHAT_PLAYERBOTS_PLUS 0
 #endif
+
+#include <cstdint>
 
 class Item;
 class Player;
@@ -47,6 +51,36 @@ inline bool OllamaLootedByBot(Player* bot, Item* item)
 #else
     (void)bot;
     (void)item;
+    return false;
+#endif
+}
+
+// A group or elite quest of the zone `a` and `b` stand in that they could go
+// and do together now (mod-playerbots-plus's group quests: both holding it,
+// up to it, by each other and free), the one nearest their level. 0 for none,
+// and always 0 without it. World thread.
+inline uint32_t OllamaGroupQuestFor(Player* a, Player* b)
+{
+#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 10
+    return PlayerbotsPlus::GroupQuestFor(a, b);
+#else
+    (void)a;
+    (void)b;
+    return 0;
+#endif
+}
+
+// ...and, having talked each other into it, they go and do it: a party for
+// it there and then, `a` leading. False when they cannot after all. World
+// thread.
+inline bool OllamaGroupQuestTogether(Player* a, Player* b, uint32_t quest)
+{
+#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 10
+    return PlayerbotsPlus::GroupQuestTogether(a, b, quest);
+#else
+    (void)a;
+    (void)b;
+    (void)quest;
     return false;
 #endif
 }

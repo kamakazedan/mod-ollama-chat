@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_presence.h"
+#include "mod-ollama-chat_citysay.h"
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_mingle.h"
 #include "mod-ollama-chat_config.h"
@@ -167,6 +168,12 @@ namespace
             request.mustNotSay = g_PetsMountWords;
         if (seen.animals.petKind.empty() && seen.animals.companion.empty())
             request.mustNotSay.insert(request.mustNotSay.end(), g_PetsWords.begin(), g_PetsWords.end());
+
+        // In a city, /say is not where people talk (mod-ollama-chat_citysay):
+        // the gesture goes, and words with it only while nobody in earshot
+        // has heard a bot start something there lately.
+        if (!CitySay_Claim(bot))
+            return;
 
         if (OllamaDispatch_Submit(std::move(request)))
         {

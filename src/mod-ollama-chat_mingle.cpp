@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_mingle.h"
+#include "mod-ollama-chat_citysay.h"
 #include "mod-ollama-chat_clock.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
@@ -15,6 +16,7 @@
 #include "mod-ollama-chat_outlook.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_pets.h"
+#include "mod-ollama-chat_plus.h"
 #include "mod-ollama-chat_presence.h"
 #include "mod-ollama-chat_race.h"
 #include "mod-ollama-chat_roleplay.h"
@@ -36,6 +38,7 @@
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "Player.h"
+#include "QuestDef.h"
 
 #include "PlayerbotAI.h"
 #include "PlayerbotMgr.h"
@@ -86,6 +89,7 @@ namespace
         Clock::time_point        nextAt{};
         std::string              lastText;  // the line before: what the next one answers
         bool                     duel = false;   // they talk themselves into a duel: at the end, off they go
+        uint32_t                 groupQuest = 0;   // ...into a group quest: at the end, off they go and do it
         std::string              premise;   // what got them talking, with its facts: each line goes on it
     };
 
@@ -327,6 +331,8 @@ namespace
         std::string gear;          // "Thimack's [Arcanite Reaper] (purple two-handed axe)"
         std::string professions;   // "Thimack: mining 150, skinning 120; Grigohm: tailoring 75"
         std::string passersby;     // who is about: "Lianon, an orc warrior, riding their mount, ..."
+        uint32_t    groupQuest = 0;   // "[groupquest]": the one they could go and do together
+        std::string gqAsker, gqOther, gqQuest, gqFacts;   // ...who asks whom, "[Mor'Ladim]", what it is
     };
 
     // People-watching is of the people really about, this near.
@@ -364,8 +370,10 @@ namespace
     // out to the gates and duel there now (mod-playerbots-plus), and where
     // that is, "[lost]" a town whose guards give directions, and one of its
     // places other than `here`, "[people]" others about to watch (up to
-    // three, within 30 yards: {passersby}) -- and their side, "[horde]" or
-    // "[alliance]" (only one side mingles together).
+    // three, within 30 yards: {passersby}), "[groupquest]" two who could go
+    // and do a group or elite quest of the zone they stand in together now
+    // (mod-playerbots-plus) -- and their side, "[horde]" or "[alliance]"
+    // (only one side mingles together).
     std::set<std::string> FactsOf(const std::vector<Player*>& group, const std::string& here, PlaceFacts& places)
     {
         std::set<std::string> facts;
@@ -375,6 +383,21 @@ namespace
         if (group.size() == 2 && Hangout_CanGoDuel(group[0], group[1], places.duelWhere) &&
             !places.duelWhere.empty())
             facts.insert("duel");
+        // The quest as itself -- what it is, where, for what level, what it
+        // asks and who takes it back -- so neither makes up what it is about.
+        if (group.size() == 2)
+            if (const uint32_t quest = OllamaGroupQuestFor(group[0], group[1]))
+                if (Quest const* q = sObjectMgr->GetQuestTemplate(quest))
+                {
+                    places.groupQuest = quest;
+                    places.gqAsker    = group[0]->GetName();
+                    places.gqOther    = group[1]->GetName();
+                    places.gqQuest    = "[" + q->GetTitle() + "]";
+                    places.gqFacts    = Links_DescribeQuest(q, group[0]);
+                    while (!places.gqFacts.empty() && (places.gqFacts.back() == '.' || places.gqFacts.back() == ' '))
+                        places.gqFacts.pop_back();   // the prompt puts the full stop after a premise
+                    facts.insert("groupquest");
+                }
         if (!group.empty() && Knowledge_TownWay(group.front(), here, places.lostPlace, places.lostWay))
             facts.insert("lost");
         for (Player* p : group)
@@ -431,13 +454,19 @@ namespace
 
     // One that fits the lowest level among them and what they have, not one
     // heard lately. Two who could go and duel talk about that
-    // Mingle.DuelChance of the time. `duel`: the one picked is the duel's.
-    std::string PickPremise(uint32_t level, const std::set<std::string>& facts, bool& duel)
+    // Mingle.DuelChance of the time, two who could go and do a group quest
+    // together Mingle.GroupQuestChance of the time -- and out questing
+    // (`questOnly`), of nothing else. `duel`, `groupQuest`: the one picked is
+    // the duel's, the group quest's.
+    std::string PickPremise(uint32_t level, const std::set<std::string>& facts, bool questOnly, bool& duel,
+                            bool& groupQuest)
     {
-        duel = false;
+        duel = groupQuest = false;
         const bool duelFirst = facts.contains("duel") && Between(1, 100) <= g_MingleDuelChance;
-        std::vector<std::string> fit, any, duels;
-        std::set<std::string> isDuel;
+        const bool questFirst =
+            facts.contains("groupquest") && (questOnly || Between(1, 100) <= g_MingleGroupQuestChance);
+        std::vector<std::string> fit, any, duels, quests;
+        std::set<std::string> isDuel, isQuest;
         for (std::string p : g_MinglePremises)
         {
             bool there = true;
@@ -446,6 +475,14 @@ namespace
                 there = there && facts.contains(tag);
             if (!there || !TextRules::PremiseFits(p, level))
                 continue;
+            const bool forQuest = std::find(tags.begin(), tags.end(), "groupquest") != tags.end();
+            if (questOnly && !forQuest)
+                continue;
+            if (forQuest)
+            {
+                isQuest.insert(p);
+                quests.push_back(p);
+            }
             if (std::find(tags.begin(), tags.end(), "duel") != tags.end())
             {
                 isDuel.insert(p);
@@ -455,11 +492,14 @@ namespace
             if (std::find(g_recentPremises.begin(), g_recentPremises.end(), p) == g_recentPremises.end())
                 fit.push_back(p);
         }
-        const std::vector<std::string>& from = (duelFirst && !duels.empty()) ? duels : (fit.empty() ? any : fit);
+        const std::vector<std::string>& from = (questFirst && !quests.empty()) ? quests
+                                             : (duelFirst && !duels.empty())   ? duels
+                                             : (fit.empty() ? any : fit);
         if (from.empty())
             return {};
         const std::string pick = from[Between(0, uint32_t(from.size() - 1))];
         duel = isDuel.contains(pick);
+        groupQuest = isQuest.contains(pick);
         g_recentPremises.push_back(pick);
         while (g_recentPremises.size() > std::min<size_t>(8, g_MinglePremises.size() / 2 + 1))
             g_recentPremises.pop_front();
@@ -509,9 +549,12 @@ namespace
     }
 
     // `about`: what gets them talking, the facts filled in -- what each line
-    // of it goes on (mod-ollama-chat_said).
-    std::string BuildPrompt(const std::vector<Player*>& group, bool& duel, std::string& about)
+    // of it goes on (mod-ollama-chat_said). `groupQuest`: the quest they talk
+    // each other into doing together, when that is it; 0 otherwise.
+    std::string BuildPrompt(const std::vector<Player*>& group, bool questOnly, bool& duel, uint32_t& groupQuest,
+                            std::string& about)
     {
+        groupQuest = 0;
         uint32_t level = group.front()->GetLevel();
         std::vector<std::string> names;
         for (Player* p : group)
@@ -525,9 +568,12 @@ namespace
         const std::string where = Where(group.front());
 
         PlaceFacts places;
-        std::string premise = PickPremise(level, FactsOf(group, where, places), duel);
+        bool forQuest = false;
+        std::string premise = PickPremise(level, FactsOf(group, where, places), questOnly, duel, forQuest);
         if (premise.empty())
             return {};
+        if (forQuest)
+            groupQuest = places.groupQuest;
         // The real places in it: where they will go and fight it out,
         // "outside the gates of Stormwind"; the one somebody cannot find, and
         // what the guards say of the way there.
@@ -542,6 +588,10 @@ namespace
         fill("{gear}", places.gear);
         fill("{professions}", places.professions);
         fill("{passersby}", places.passersby);
+        fill("{gq_asker}", places.gqAsker);
+        fill("{gq_other}", places.gqOther);
+        fill("{gq_quest}", places.gqQuest);
+        fill("{gq_facts}", places.gqFacts);
         about = premise;
 
         // The shape of it, with their own names. An emote is in it only now
@@ -687,6 +737,19 @@ namespace
             if (g_DebugEnabled)
                 LOG_INFO("module.ollamachat", "[Ollama Chat] Mingle {}: {} and {} {}.", e.id, e.names[0], e.names[1],
                          off ? "head out to duel" : "talked of a duel, but cannot go just now");
+        }
+        // Talked each other into a group quest, and said all of it: off they
+        // go and do it together, the one who asked leading (mod-playerbots-plus).
+        if (natural && e.groupQuest && e.members.size() == 2)
+        {
+            Player* a = Find(e.members[0]);
+            Player* b = Find(e.members[1]);
+            const bool off = a && b && OllamaGroupQuestTogether(a, b, e.groupQuest);
+            if (off)
+                ++g_stats.groupQuests;
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Mingle {}: {} and {} {} quest {}.", e.id, e.names[0],
+                         e.names[1], off ? "go and do" : "talked of, but cannot go and do just now,", e.groupQuest);
         }
         if (!e.waiting)
             ++(natural ? g_stats.finished : g_stats.cut);
@@ -851,9 +914,33 @@ namespace
                                                                                  : TypingMs(e.lines.front().text));
     }
 
+    // Out questing: two of `pool` standing by each other who could go and do
+    // a group quest of the zone together now (mod-playerbots-plus) -- the one
+    // that would ask first. Empty when no two could.
+    std::vector<Player*> PickQuestPair(std::vector<Player*> pool)
+    {
+        if (pool.size() < 2)
+            return {};
+        std::shuffle(pool.begin(), pool.end(), Rng());
+        // A little further apart than a chat in town: out questing, two at
+        // the same camp stand a few yards off.
+        const float range = g_MinglePairRange + 6.0f;
+        for (size_t i = 0; i < pool.size() && i < 8; ++i)
+            for (size_t j = 0; j < pool.size() && j < 8; ++j)
+            {
+                Player* a = pool[i];
+                Player* b = pool[j];
+                if (a != b && a->GetMapId() == b->GetMapId() && a->GetExactDist(b) <= range &&
+                    OllamaGroupQuestFor(a, b))
+                    return { a, b };
+            }
+        return {};
+    }
+
     // Two or three bots by `real` get talking, if there are two to talk.
-    // False when there are not.
-    bool Start(Player* real, Clock::time_point now)
+    // False when there are not. `questOnly`: out questing, where only two
+    // who could go and do a group quest together get talking, of that.
+    bool Start(Player* real, Clock::time_point now, bool questOnly)
     {
         std::vector<Player*> pool;
         for (Player* p : BotsNear(real, g_MingleHearRange))
@@ -861,20 +948,32 @@ namespace
                 Governor_BotIsFresh(p->GetGUID()))
                 pool.push_back(p);
 
-        const std::vector<Player*> group = PickGroup(pool, g_MinglePairRange, true);
+        const std::vector<Player*> group = questOnly ? PickQuestPair(pool) : PickGroup(pool, g_MinglePairRange, true);
         if (group.size() < 2)
             return false;
 
+        // In a city, /say is not where people talk (mod-ollama-chat_citysay):
+        // only when nobody in earshot has heard a bot start something there
+        // lately.
+        for (Player* p : group)
+            if (!CitySay_Free(p))
+            {
+                ++g_stats.cityHeld;
+                return false;
+            }
+
         bool duel = false;
+        uint32_t groupQuest = 0;
         std::string about;
-        const std::string prompt = BuildPrompt(group, duel, about);
-        if (prompt.empty())
+        const std::string prompt = BuildPrompt(group, questOnly, duel, groupQuest, about);
+        if (prompt.empty() || (questOnly && !groupQuest))
             return false;
 
         Exchange e;
-        e.id       = g_nextId++;
-        e.duel     = duel;
-        e.premise  = about;
+        e.id         = g_nextId++;
+        e.duel       = duel;
+        e.groupQuest = groupQuest;
+        e.premise    = about;
         e.mapId    = group.front()->GetMapId();
         e.scopeKey = Governor_MakeScopeKey(ChatChannelSourceLocalStr[SRC_SAY_LOCAL], 0, std::string(), 0,
                                            group.front()->GetZoneId());
@@ -887,6 +986,8 @@ namespace
 
         if (!OllamaDispatch_SubmitScript(e.id, prompt, g_MingleNumPredict))
             return false;
+        for (Player* p : group)
+            CitySay_Claim(p);   // in a city: those in earshot are hearing one now
 
         e.waiting   = true;
         e.waitUntil = now + std::chrono::seconds(kScriptWaitSec);
@@ -1002,13 +1103,17 @@ namespace
                 continue;
             if (Map* map = real->GetMap(); !map || map->Instanceable())
                 continue;
-            if (g_MingleCitiesOnly && !OllamaIsSocialHub(real))
+            // Out of cities and towns (Mingle.CitiesOnly), the only thing two
+            // bots out questing get talking about is doing a group quest
+            // together, when they could (Mingle.QuestAsks).
+            const bool questOnly = g_MingleCitiesOnly && !OllamaIsSocialHub(real);
+            if (questOnly && !g_MingleQuestAsks)
                 continue;
             const uint64_t key = real->GetGUID().GetRawValue();
 
             // The first of each a while after someone turns up, then at
             // random intervals of MinSeconds..MaxSeconds (GapMin..GapMax).
-            if (g_MingleEmoteEnable &&
+            if (!questOnly && g_MingleEmoteEnable &&
                 Due(g_playerNextNod, key, now, std::min<uint32_t>(60, g_MingleEmoteMinSeconds), g_MingleEmoteMinSeconds))
             {
                 g_playerNextNod[key] = now + std::chrono::seconds(Between(g_MingleEmoteMinSeconds, g_MingleEmoteMaxSeconds));
@@ -1033,7 +1138,7 @@ namespace
                 g_playerNext[key] = now + gap;
                 continue;
             }
-            g_playerNext[key] = now + (Start(real, now) ? gap : retry);
+            g_playerNext[key] = now + (Start(real, now, questOnly) ? gap : retry);
         }
     }
 

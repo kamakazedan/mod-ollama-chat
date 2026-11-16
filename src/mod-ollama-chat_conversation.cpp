@@ -689,6 +689,12 @@ void Conversation_OnBotLineCrowd(Player* bot, const std::string& msg, uint64_t s
     const uint32_t channelId = channel ? channel->GetChannelId() : 0;
     if (!Conversation_PlaceAllowed(source, channelId) || !Conversation_CanOpen(key))
         return;
+    // Two bots make a conversation of a line in /say only where people sit
+    // about chatting -- an inn, a town: a city's talk is in General
+    // (mod-ollama-chat_citysay), and two strangers out questing do not stand
+    // and chat for ten lines.
+    if (source == SRC_SAY_LOCAL && (OllamaInCity(bot) || !OllamaIsSocialHub(bot)))
+        return;
 
     uint32_t chance = g_ConversationFromBotLineChance;
     if (inHub)

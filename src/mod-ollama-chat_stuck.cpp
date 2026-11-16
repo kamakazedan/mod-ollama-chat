@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_stuck.h"
+#include "mod-ollama-chat_citysay.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_governor.h"
@@ -121,7 +122,9 @@ namespace
         request.kind              = OllamaRequestKind::EventChatter;
         request.triggerBotReplies = true;
         request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
-        if (OllamaDispatch_Submit(std::move(request)))
+        // In a city's /say, only while nobody in earshot has heard a bot start
+        // something there lately (mod-ollama-chat_citysay).
+        if ((source != SRC_SAY_LOCAL || CitySay_Claim(bot)) && OllamaDispatch_Submit(std::move(request)))
             ++g_stats.remarks;
     }
 

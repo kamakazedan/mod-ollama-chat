@@ -260,6 +260,8 @@ uint32_t    g_WantsFollowSeconds   = 120;
 std::string g_WantsText;
 std::string g_WantsFollowText;
 uint32_t    g_MingleDuelChance     = 25;
+bool        g_MingleQuestAsks      = true;
+uint32_t    g_MingleGroupQuestChance = 50;
 std::string g_OutlookSideText;
 std::string g_OutlookHomeCityText;
 std::vector<std::string> g_OutlookCitiesHorde;
@@ -417,6 +419,9 @@ uint32_t    g_CityChatterMultiplier        = 3;
 uint32_t    g_CityConversationStartChance  = 35;
 uint32_t    g_CityBotLineReplyBonus        = 20;
 uint32_t    g_CityConversationBoost        = 2;
+uint32_t    g_CitySayGapSeconds            = 300;
+uint32_t    g_CitySayShare                 = 15;
+std::string g_TopicCityQuestText;
 
 bool        g_ConversationEnable           = true;
 uint32_t    g_ConversationMinMinutes       = 2;
@@ -639,6 +644,7 @@ uint32_t    g_NeedsBotCooldownMinutes      = 20;
 uint32_t    g_NeedsRepeatMinutes           = 60;
 uint32_t    g_NeedsZoneCooldownSeconds     = 300;
 uint32_t    g_NeedsRememberMinutes         = 15;
+uint32_t    g_NeedsSayAskMinutes           = 15;
 uint32_t    g_NeedsWeight[4]               = { 40, 25, 25, 10 };
 uint32_t    g_NeedsShortMaxLevel           = 15;
 uint32_t    g_NeedsShortCopperPerLevel     = 1200;
@@ -4202,6 +4208,32 @@ static void LoadNaturalChatV42Settings()
              g_LinksLfgMinutes, g_CorpseKillEventText.empty() ? "off" : "on");
 }
 
+static void LoadNaturalChatV43Settings()
+{
+    // --- in a city, /say is not where people talk (mod-ollama-chat_citysay) -----------------
+    g_CitySayGapSeconds = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.City.SayGapSeconds", 300), 3600);
+    g_CitySayShare      = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.City.SayShare", 15), 100);
+
+    // --- a quest talked of in a city is one to go back out for (mod-ollama-chat_topics) -----
+    g_TopicCityQuestText = sConfigMgr->GetOption<std::string>("OllamaChat.Topic.CityQuestText",
+        "You are in {city} for now, not out doing it: if you bring it up, it is something you still have to go "
+        "back out and do.");
+
+    // --- an ask in /say, of someone right there (mod-ollama-chat_needs) ----------------------
+    g_NeedsSayAskMinutes = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Needs.SayAskMinutes", 15), 240);
+
+    // --- two out questing talking each other into a group quest (mod-ollama-chat_mingle) -----
+    g_MingleQuestAsks        = sConfigMgr->GetOption<bool>("OllamaChat.Mingle.QuestAsks", true);
+    g_MingleGroupQuestChance = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Mingle.GroupQuestChance", 50), 100);
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v43: in a city a bot starts something in /say near someone "
+             "at most every {} s, {}% of the ambient lines there going to /say; an ask in /say of the same person "
+             "at most every {} min; two out questing talk each other into a group quest {} ({}% of the time where "
+             "the rest are had).",
+             g_CitySayGapSeconds, g_CitySayShare, g_NeedsSayAskMinutes, g_MingleQuestAsks ? "on" : "off",
+             g_MingleGroupQuestChance);
+}
+
 static void LoadNaturalChatV39Settings()
 {
     // "NAT_HYPE:100|NAT_QUIET:5" -> chat style -> percent.
@@ -4555,7 +4587,10 @@ static void LoadNaturalChatV16Settings()
         "in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's "
         "pet or companion|[gear] one of them admires {gear}|one of them teases the other about their race or "
         "class, all in good fun|swapping tips about levelling their classes|[duel] one of them challenges the "
-        "other to a duel, and they agree to head {duel_where} and fight it out|one of them asks the other if "
+        "other to a duel, and they agree to head {duel_where} and fight it out|[groupquest] {gq_asker} asks "
+        "{gq_other} if they want to do {gq_quest} together while they are both here, and {gq_other} is up for "
+        "it, as they both have it -- so they agree to go and do it there and then. {gq_facts}|one of them asks "
+        "the other if "
         "they have a few silver to spare|[loot] one of them shows off something they got lately|[people] "
         "people-watching: {passersby}|[prof] levelling their professions: {professions}|which zone is the "
         "worst to quest in|[lost] one of them is looking for {lost_place} and asks the other the way, and the "
@@ -5306,6 +5341,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV40Settings();
     LoadNaturalChatV41Settings();
     LoadNaturalChatV42Settings();
+    LoadNaturalChatV43Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

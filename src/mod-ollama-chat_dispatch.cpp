@@ -3,6 +3,7 @@
 #include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_citylife.h"
+#include "mod-ollama-chat_citysay.h"
 #include "mod-ollama-chat_congrats.h"
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_config.h"
@@ -577,6 +578,12 @@ namespace
                 // mid-sentence (mod-playerbots-plus's city life).
                 Hangout_Spoke(bot);
                 Hangout_Busy(bot, 8);
+                // In a city, a line not owed to a real player who spoke (one
+                // answering them has chainDepth 0 and what they said): those
+                // in earshot heard one, and the quiet there starts again
+                // (mod-ollama-chat_citysay).
+                if (!(c.request.chainDepth == 0 && !c.request.originMessage.empty()))
+                    CitySay_Heard(bot);
                 return true;
         }
     }

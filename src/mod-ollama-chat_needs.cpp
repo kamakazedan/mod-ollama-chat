@@ -5,8 +5,13 @@
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_crowd.h"
 #include "mod-ollama-chat_links.h"
+#include "mod-ollama-chat_world.h"
 
 #include "Bag.h"
+#include "CellImpl.h"
+#include "Formulas.h"
+#include "GridNotifiers.h"
+#include "GridNotifiersImpl.h"
 #include "GameObjectData.h"
 #include "Group.h"
 #include "DBCStores.h"
@@ -24,6 +29,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <list>
 #include <unordered_map>
 #include <vector>
 
@@ -40,7 +46,46 @@ namespace
     };
     std::unordered_map<uint64_t, NeedsBotState> g_bots;
     std::unordered_map<uint64_t, Clock::time_point> g_zones;   // zone * 8 + kind -> last ask there
+    std::unordered_map<uint64_t, Clock::time_point> g_sayAsked;   // real player -> last asked something in /say
     NeedsStats g_stats;
+
+    // A quest is something to do at its level: playerbots' own questing
+    // takes none more than this many levels above a bot
+    // (QUEST_MAX_LEVELS_ABOVE_BOT), and nor would anyone be asked to.
+    constexpr int32 kQuestLevelsAbove = 3;
+
+    // The real players who would hear `bot` in /say.
+    std::vector<Player*> RealInEarshot(Player* bot)
+    {
+        std::vector<Player*> out;
+        if (!bot || !bot->IsInWorld() || g_SayDistance <= 0.0f)
+            return out;
+        std::list<Player*> found;
+        Acore::AnyPlayerInObjectRangeCheck check(bot, g_SayDistance, true, true);
+        Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(bot, found, check);
+        Cell::VisitObjects(bot, searcher, g_SayDistance);
+        for (Player* p : found)
+            if (p && p != bot && p->IsInWorld() && OllamaIsRealPlayer(p))
+                out.push_back(p);
+        return out;
+    }
+
+    // `p` could go and do `quest` with `bot`: of a level for it, a race it is
+    // for, and near enough the bot's level that it would take their invite.
+    bool QuestFits(Player* bot, Player* p, Quest const* quest)
+    {
+        if (!p->IsAlive() || p->GetTeamId() != bot->GetTeamId() || p->IsGameMaster())
+            return false;
+        const uint32 level = p->GetLevel();
+        const int32 questLevel = p->GetQuestLevel(quest);
+        if (level < quest->GetMinLevel() || questLevel > int32(level) + kQuestLevelsAbove ||
+            questLevel <= int32(Acore::XP::GetGrayLevel(uint8(level))))
+            return false;
+        if (quest->GetAllowableRaces() && !(quest->GetAllowableRaces() & p->getRaceMask()))
+            return false;
+        return !g_LinksLfgLevels || bot->GetLevel() <= level + g_LinksLfgLevels ||
+               (bot->GetGuildId() && bot->GetGuildId() == p->GetGuildId());
+    }
 
     std::string Fmt(const std::string& templ, auto&&... args)
     {
@@ -162,9 +207,11 @@ namespace
                                        ? fmt::format("a group quest for {} players", quest->GetSuggestedPlayers())
                                        : std::string("an elite quest");
             BotNeed n;
-            n.kind  = NeedKind::Quest;
-            n.key   = key;
-            n.party = true;
+            n.kind    = NeedKind::Quest;
+            n.key     = key;
+            n.party   = true;
+            n.questId = questId;
+            n.dungeon = dungeon;
             const std::string& askTempl = dungeon ? g_NeedsAskDungeon : g_NeedsAskQuest;
             const std::string targetText = target.empty() ? std::string()
                                                           : fmt::format(" (you have to kill {})", target);
@@ -395,6 +442,43 @@ void Needs_NoteAsked(Player* bot, const BotNeed& need)
     ++g_stats.asked[static_cast<size_t>(need.kind)];
 }
 
+bool Needs_QuestSuitsSomeoneNear(Player* bot, const BotNeed& need)
+{
+    if (!bot || need.kind != NeedKind::Quest || !need.questId || need.dungeon)
+        return false;
+    Quest const* quest = sObjectMgr->GetQuestTemplate(need.questId);
+    if (!quest || quest->GetZoneOrSort() <= 0 || uint32(quest->GetZoneOrSort()) != bot->GetZoneId())
+        return false;   // not one of here: in a city, only one in that city
+    for (Player* p : RealInEarshot(bot))
+        if (QuestFits(bot, p, quest))
+            return true;
+    return false;
+}
+
+bool Needs_SayAskFree(Player* bot)
+{
+    if (!g_NeedsSayAskMinutes)
+        return true;
+    const auto now = Clock::now();
+    for (Player* p : RealInEarshot(bot))
+    {
+        auto it = g_sayAsked.find(p->GetGUID().GetRawValue());
+        if (it != g_sayAsked.end() && now - it->second < std::chrono::minutes(g_NeedsSayAskMinutes))
+            return false;
+    }
+    return true;
+}
+
+void Needs_NoteSayAsk(Player* bot)
+{
+    ++g_stats.inSay;
+    if (!g_NeedsSayAskMinutes)
+        return;
+    const auto now = Clock::now();
+    for (Player* p : RealInEarshot(bot))
+        g_sayAsked[p->GetGUID().GetRawValue()] = now;
+}
+
 std::string Needs_PromptFor(Player* bot)
 {
     if (!g_NeedsEnable || !bot || g_NeedsReasonText.empty())
@@ -540,6 +624,8 @@ void Needs_Update()
     }
     for (auto it = g_zones.begin(); it != g_zones.end();)
         it = (now - it->second > std::chrono::seconds(g_NeedsZoneCooldownSeconds)) ? g_zones.erase(it) : std::next(it);
+    for (auto it = g_sayAsked.begin(); it != g_sayAsked.end();)
+        it = (now - it->second > std::chrono::minutes(g_NeedsSayAskMinutes)) ? g_sayAsked.erase(it) : std::next(it);
 }
 
 NeedsStats Needs_GetStats()

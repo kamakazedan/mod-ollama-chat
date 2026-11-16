@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_citylife.h"
+#include "mod-ollama-chat_citysay.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_context.h"
 #include "mod-ollama-chat_dispatch.h"
@@ -127,7 +128,9 @@ namespace
                                     (event.detail.empty() ? std::string() : ", " + event.detail);
         // Once it has walked over and had a look.
         request.extraDelayMs      = urand(1500, 4000);
-        if (!OllamaDispatch_Submit(std::move(request)))
+        // A city's /say is not where people talk (mod-ollama-chat_citysay):
+        // only while nobody in earshot has heard a bot start something lately.
+        if (!CitySay_Claim(bot) || !OllamaDispatch_Submit(std::move(request)))
         {
             ++g_stats.quiet;
             return;
@@ -271,7 +274,7 @@ namespace
         request.showOffTold       = show->GetGUID().GetRawValue();
         if (event.verb == "hop")   // on foot: "nice mount" is about nothing there
             request.mustNotSay = g_PetsMountWords;
-        if (!OllamaDispatch_Submit(std::move(request)))
+        if (!CitySay_Claim(teller) || !OllamaDispatch_Submit(std::move(request)))
             return;
         ++g_stats.toldOff;
         if (g_DebugEnabled)

@@ -28,6 +28,7 @@
 #include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_groupquests.h"
 #include "mod-ollama-chat_citylife.h"
+#include "mod-ollama-chat_citysay.h"
 #include "mod-ollama-chat_marks.h"
 #include "mod-ollama-chat_bags.h"
 #include "mod-ollama-chat_needs.h"
@@ -698,6 +699,14 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
                              (unsigned long long)presence.emotes,
                              (unsigned long long)presence.petEmotes,
                              (unsigned long long)presence.remarks);
+    const CitySayStats citySay = CitySay_GetStats();
+    if (show("city"))
+        out("/say in a city: one thing nobody asked for near someone at most every {} s ({}% of the ambient lines "
+                             "there) - {} started, {} held back, {} such lines heard",
+                             g_CitySayGapSeconds, g_CitySayShare,
+                             (unsigned long long)citySay.started,
+                             (unsigned long long)citySay.held,
+                             (unsigned long long)citySay.heard);
 
     const PartyCmdStats party = PartyCmd_GetStats();
     if (show("party"))
@@ -884,12 +893,14 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
                              (unsigned long long)cheers.nobody);
     if (show("talk"))
         out("Asks with a reason: {} ({}%) - {} quest groups, {} errands, {} spare things, {} for a "
-                             "few silver; {} tries found nothing; {} replies told what it is really doing",
+                             "few silver ({} of them in /say, of someone right there); {} tries found nothing; {} "
+                             "replies told what it is really doing",
                              g_NeedsEnable ? "on" : "off", g_NeedsChance,
                              (unsigned long long)needs.asked[size_t(NeedKind::Quest)],
                              (unsigned long long)needs.asked[size_t(NeedKind::Errand)],
                              (unsigned long long)needs.asked[size_t(NeedKind::Spare)],
                              (unsigned long long)needs.asked[size_t(NeedKind::Short)],
+                             (unsigned long long)needs.inSay,
                              (unsigned long long)needs.none,
                              (unsigned long long)needs.plans);
 
@@ -1061,7 +1072,8 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
     if (show("city"))
         out("Mingling: {} - {} running, {} asked for, {} written ({} unusable), {} ran to the end, "
                              "{} cut short, {} lines, {} emotes at each other; {} greetings between bots; {} pairs "
-                             "talked themselves into a duel and went out to the gates",
+                             "talked themselves into a duel and went out to the gates, {} out questing into a group "
+                             "quest and went to do it; {} not started in a city, someone near having heard one lately",
                              g_MingleEnable ? "on" : "off", mingle.running,
                              (unsigned long long)mingle.asked,
                              (unsigned long long)mingle.written,
@@ -1071,7 +1083,9 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
                              (unsigned long long)mingle.lines,
                              (unsigned long long)mingle.emotes,
                              (unsigned long long)mingle.greetings,
-                             (unsigned long long)mingle.duels);
+                             (unsigned long long)mingle.duels,
+                             (unsigned long long)mingle.groupQuests,
+                             (unsigned long long)mingle.cityHeld);
     const RareGearStats rare = RareGear_GetStats();
     if (show("city"))
         out("Rare gear in city General: {} - {} shown off, {} asked where to find one, {} of them opening a "
