@@ -1005,9 +1005,15 @@ OllamaChat.GuildEnvCommentGuildOnlineMembers = We have {online_count} out of {to
 
 # OllamaChat.GuildEnvCommentGuildRaid
 #     Description: Templates for a guild topic about running a dungeon. Pipe-separated (|) list.
-#     Nothing in it has a bot tell of a raid or a run of its own it never had.
+#     {dungeon} is a real one the dungeon finder suggests for about the bot's level, with what is
+#     so of it: "Drak'Tharon Keep, a dungeon in Grizzly Hills for levels 74 to 76 (its bosses:
+#     ...)" -- the zone its way in is in, the levels the dungeon finder lists it for, its bosses
+#     (left out for one wing of several, such as a Scarlet Monastery wing). With none that suits
+#     the bot's level, the topic is not picked. Told only "a dungeon that suits your level", a bot
+#     asked its guild to run "The Whispering Taverns", "a dungeon in the northern wastes", which
+#     does not exist. Nothing in it has a bot tell of a raid or a run of its own it never had.
 #     Default: (below)
-OllamaChat.GuildEnvCommentGuildRaid = "a dungeon that suits your level: whether anyone in the guild is up for running it."
+OllamaChat.GuildEnvCommentGuildRaid = "{dungeon}: whether anyone in the guild is up for running it."
 
 # OllamaChat.GuildEnvCommentGuildEndgame
 #     Description: Templates for a guild topic about what the bot has been up to. Pipe-separated (|)

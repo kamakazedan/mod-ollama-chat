@@ -6,7 +6,7 @@
 #include <vector>
 
 // --------------------------------------------------------------------------
-// Real names from the game's own data, for conversation premises.
+// Real names from the game's own data, for conversation premises and topics.
 //
 // "a would-you-rather about trinkets" got "Trinket of the Hidden Sun or
 // Trinket of the Hidden Moon?": two trinkets that do not exist. "which race
@@ -38,5 +38,14 @@ bool Facts_SaneName(const std::string& name);
 // for "shamans" on the Horde's (`alliance` false). Empty when unknown, and
 // when only one of that side's races can be it: there is nothing to compare.
 std::string Facts_ClassRaces(const std::string& cls, bool alliance);
+
+// A dungeon the dungeon finder suggests for about `level`, with what is so
+// of it: "Drak'Tharon Keep, a dungeon in Grizzly Hills for levels 74 to 76
+// (its bosses: ...)" -- the zone its way in is in, the levels the dungeon
+// finder lists it for, its bosses (not for one wing of several, whose map's
+// bosses are every wing's). Empty when none suits the level. Told only "a
+// dungeon that suits your level", a bot asked its guild to run "The
+// Whispering Taverns", "a dungeon in the northern wastes".
+std::string Facts_Dungeon(uint32_t level);
 
 #endif // MOD_OLLAMA_CHAT_FACTS_H

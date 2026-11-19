@@ -391,7 +391,15 @@ specific -- an item, quest, creature, boss, place -- hands the model the real
 thing (`mod-ollama-chat_facts.cpp`'s `{trinket}`, `{itemset}`, `{rare}`,
 `{bosses}`, `{class_races}`, or a conversation pool) rather than a category to
 invent from: "a would-you-rather about trinkets" got "Trinket of the Hidden
-Sun". `Outlook.FactsText` tells every bot to say it can't remember rather than
+Sun". A guild asked to run a dungeon is handed one the dungeon finder
+suggests for the bot's level (the guild topic's `{dungeon}`, `Facts_Dungeon`:
+the zone its way in is in, its levels, its bosses): told "a dungeon that
+suits your level", a bot asked its guild to run "The Whispering Taverns", "a
+dungeon in the northern wastes". A pool value names the real thing with
+what it really is, where a model would fill the gap: a `Pool.battleground`
+value says how the battleground is played (told only "Warsong Gulch", a bot
+asked why nobody just kites the mobs there; there are none, only players).
+`Outlook.FactsText` tells every bot to say it can't remember rather than
 make an answer up; made-up fun is only fine as a plain imagine-if. The facts
 pools are built from the server's own data on the world thread, on first use.
 The same goes for replies: "need a wand" gets the bosses that really drop one

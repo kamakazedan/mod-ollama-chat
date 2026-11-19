@@ -3,6 +3,7 @@
 
 #include "DBCStores.h"
 #include "ItemTemplate.h"
+#include "MapMgr.h"
 #include "ObjectMgr.h"
 #include "Player.h"
 #include "SharedDefines.h"
@@ -175,6 +176,72 @@ namespace
         }
         return list;
     }
+
+    // The dungeon finder's normal dungeons, with the levels it suggests each
+    // for. Where its way in is and its bosses are looked up the first time
+    // one is picked.
+    struct LevelDungeon
+    {
+        std::string name;              // as the dungeon finder lists it
+        uint32      map      = 0;
+        uint32      minLevel = 0;      // the least it lets in
+        uint32      lo = 0, hi = 0;    // the levels it suggests it for
+        bool        wing     = false;  // one of several on its map
+        bool        looked   = false;
+        std::string zone, bosses;
+    };
+
+    std::vector<LevelDungeon>& LevelDungeons()
+    {
+        static std::vector<LevelDungeon> list;
+        static bool built = false;
+        if (!built)
+        {
+            built = true;
+            std::unordered_map<uint32, uint32> perMap;
+            for (uint32 i = 0; i < sLFGDungeonStore.GetNumRows(); ++i)
+            {
+                LFGDungeonEntry const* d = sLFGDungeonStore.LookupEntry(i);
+                // TypeID 1: a dungeon (2 a raid, 6 a random one); Difficulty 0:
+                // normal, not heroic; flag 0x4: a holiday boss, there only for
+                // its event.
+                if (!d || d->TypeID != 1 || d->Difficulty != 0 || (d->Flags & 0x4) || !d->Name[0] ||
+                    !Sane(d->Name[0]))
+                    continue;
+                LevelDungeon dungeon;
+                dungeon.name     = d->Name[0];
+                dungeon.map      = d->MapID;
+                dungeon.minLevel = d->MinLevel;
+                dungeon.lo       = d->TargetLevelMin ? d->TargetLevelMin : d->MinLevel;
+                dungeon.hi       = std::max(dungeon.lo, d->TargetLevelMax ? d->TargetLevelMax : d->MaxLevel);
+                ++perMap[d->MapID];
+                list.push_back(std::move(dungeon));
+            }
+            for (LevelDungeon& dungeon : list)
+                dungeon.wing = perMap[dungeon.map] > 1;
+        }
+        return list;
+    }
+
+    // The zone the way into `map` is in: where an area trigger that takes
+    // people into it stands, out in the world. Empty when there is none.
+    std::string EntranceZone(uint32 map)
+    {
+        for (const auto& [trigger, tele] : sObjectMgr->GetAllAreaTriggerTeleports())
+        {
+            if (tele.target_mapId != map)
+                continue;
+            AreaTrigger const* at = sObjectMgr->GetAreaTrigger(trigger);
+            MapEntry const* outside = at ? sMapStore.LookupEntry(at->map) : nullptr;
+            if (!outside || outside->Instanceable())
+                continue;
+            const uint32 zoneId = sMapMgr->GetZoneId(PHASEMASK_NORMAL, at->map, at->x, at->y, at->z);
+            AreaTableEntry const* zone = zoneId ? sAreaTableStore.LookupEntry(zoneId) : nullptr;
+            if (zone && zone->area_name[0] && *zone->area_name[0])
+                return zone->area_name[0];
+        }
+        return {};
+    }
 }
 
 std::string Facts_Trinket(uint32_t level, const std::vector<std::string>& taken)
@@ -273,4 +340,32 @@ std::string Facts_ClassRaces(const std::string& cls, bool alliance)
     for (size_t i = 0; i < races.size(); ++i)
         out += (i ? (i + 1 == races.size() ? " and " : ", ") : "") + races[i];
     return out;
+}
+
+std::string Facts_Dungeon(uint32_t level)
+{
+    std::vector<LevelDungeon*> fits;
+    for (LevelDungeon& d : LevelDungeons())
+        if (d.minLevel <= level && level + 2 >= d.lo && level <= d.hi + 2)
+            fits.push_back(&d);
+    if (fits.empty())
+        return {};
+    LevelDungeon& d = *fits[std::uniform_int_distribution<size_t>(0, fits.size() - 1)(Rng())];
+    if (!d.looked)
+    {
+        d.looked = true;
+        d.zone   = EntranceZone(d.map);
+        if (!d.wing)
+        {
+            d.bosses = Facts_Bosses(d.name);
+            if (d.bosses == " ")
+                d.bosses.clear();
+        }
+    }
+    std::string out = d.name + ", a dungeon";
+    if (!d.zone.empty())
+        out += " in " + d.zone;
+    out += d.lo == d.hi ? " for level " + std::to_string(d.lo)
+                        : " for levels " + std::to_string(d.lo) + " to " + std::to_string(d.hi);
+    return out + d.bosses;
 }

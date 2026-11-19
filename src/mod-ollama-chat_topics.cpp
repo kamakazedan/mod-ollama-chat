@@ -2,6 +2,7 @@
 #include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_clock.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_facts.h"
 #include "mod-ollama-chat_lately.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_pets.h"
@@ -767,7 +768,15 @@ namespace
                  SafeFormat(PickOne(g_GuildEnvCommentGuildBank),
                             fmt::arg("bank_gold", guild->GetTotalBankMoney() / 10000)));
 
-        addGuild("guild_raid",      g_GuildEnvCommentGuildRaid,      PickOne(g_GuildEnvCommentGuildRaid));
+        // A real dungeon for its level ({dungeon}: the dungeon finder's, where
+        // its way in is, its bosses), or not this one: told only "a dungeon
+        // that suits your level", a bot asked the guild to run "The Whispering
+        // Taverns", and when asked, called it "a dungeon in the northern wastes".
+        const std::string run = PickOne(g_GuildEnvCommentGuildRaid);
+        if (run.find("{dungeon}") == std::string::npos)
+            addGuild("guild_raid", g_GuildEnvCommentGuildRaid, run);
+        else if (const std::string dungeon = Facts_Dungeon(bot->GetLevel()); !dungeon.empty())
+            addGuild("guild_raid", g_GuildEnvCommentGuildRaid, SafeFormat(run, fmt::arg("dungeon", dungeon)));
         // What it has really been up to ({lately}): with nothing to go on, not
         // this one -- "we need more people for endgame runs" from a level 12
         // was made up.
