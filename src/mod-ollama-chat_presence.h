@@ -30,7 +30,11 @@ class Player;
 // (mod-ollama-chat_pets). `observer` formats race and class names, and in a
 // city (OllamaInCity) the level is left out: "Kamidan, a Human Hunter, ...".
 // *outPetGuid gets the subject's pet or companion when one is close to them.
-std::string Presence_Describe(Player* subject, Player* observer, ObjectGuid* outPetGuid = nullptr);
+// Without `withMount`, a rider is only "passing by": two bots chatting are
+// not handed a passer-by's mount, or one talks it up and the other answers
+// for it (mod-ollama-chat_mounts).
+std::string Presence_Describe(Player* subject, Player* observer, ObjectGuid* outPetGuid = nullptr,
+                              bool withMount = true);
 
 void Presence_Update(uint32_t diff);           // world tick; forgets logged-out characters by itself
 void Presence_Reset();

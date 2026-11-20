@@ -1,6 +1,7 @@
 #include "mod-ollama-chat_pets.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_crowd.h"
+#include "mod-ollama-chat_mounts.h"
 #include "mod-ollama-chat-utilities.h"
 
 #include "Creature.h"
@@ -110,6 +111,11 @@ bool Pets_MountRemarkedLately(ObjectGuid rider)
            std::chrono::steady_clock::now() - it->second < std::chrono::minutes(g_PetsMountRemarkMinutes);
 }
 
+std::string Pets_MountOf(Player* who)
+{
+    return who && who->IsMounted() ? MountOf(who) : std::string();
+}
+
 PetsSeen Pets_Seen(Player* who, float range)
 {
     PetsSeen seen;
@@ -155,11 +161,13 @@ std::string Pets_StateTextFor(Player* bot, const std::string& message)
     const TextRules::Animals& a = seen.animals;
     const std::vector<std::string> words = CrowdText::Words(message);
 
-    // Talk of mounts: "nice mount" to one on foot gets that it is on foot.
+    // Talk of mounts: "nice mount" to one on foot gets that it is on foot --
+    // and so does "nice mare", or any of the game's mounts by name
+    // (mod-ollama-chat_mounts).
     std::vector<std::vector<std::string>> mountTalk = g_PetsMountWords;
     if (!a.mount.empty())
         AddWords(mountTalk, a.mount);
-    const bool aboutMount = CrowdText::ContainsPhrase(words, mountTalk);
+    const bool aboutMount = CrowdText::ContainsPhrase(words, mountTalk) || Mounts_TalksOf(message);
 
     bool aboutPets = false;
     if (!a.petKind.empty() || !a.companion.empty())

@@ -184,7 +184,7 @@ namespace
     }
 }
 
-std::string Presence_Describe(Player* subject, Player* observer, ObjectGuid* outPetGuid)
+std::string Presence_Describe(Player* subject, Player* observer, ObjectGuid* outPetGuid, bool withMount)
 {
     if (outPetGuid)
         *outPetGuid = ObjectGuid::Empty;
@@ -202,9 +202,10 @@ std::string Presence_Describe(Player* subject, Player* observer, ObjectGuid* out
     // their hunter pet, a wolf called Howler", "with their companion pet, a
     // Mechanical Squirrel, following them" (mod-ollama-chat_pets). The mount
     // comes first, as what they are doing -- unless a bot was just handed it
-    // to remark on (Pets.MountRemarkMinutes): then they are only riding by.
+    // to remark on (Pets.MountRemarkMinutes), or it is not for this prompt:
+    // then they are only passing by.
     PetsSeen seen = Pets_Seen(subject);
-    if (!seen.animals.mount.empty() && Pets_MountRemarkedLately(subject->GetGUID()))
+    if (!seen.animals.mount.empty() && (!withMount || Pets_MountRemarkedLately(subject->GetGUID())))
     {
         seen.animals.mount.clear();
         text += ", passing by";

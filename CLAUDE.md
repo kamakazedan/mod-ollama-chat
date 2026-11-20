@@ -396,6 +396,25 @@ mentions one: build the words with `Pets_Seen` and `TextRules::AnimalPhrases`
 called Howler"). "with their Wolf Howler" beside talk of a mount had a bot
 take a hunter's wolf for a mount.
 
+A mount is talked of as it is ridden when the line goes out, not when its
+prompt was built: people get on and off all the time, and a line comes back
+seconds later -- a minute, with a queue. `Mounts_CheckLine`, in the
+dispatcher's delivery, checks every bot line in /say, /yell, a party or a raid,
+whatever made it: a remark on a mount -- one of the game's by name, or a kind
+or "mount" with a remark word ("nice horse", "your mount") -- goes out only
+while someone in the bot's sight rides one that fits (`Mounts.Kinds`: a mare
+and a Charger are horses); and once a remark on someone's mount is out, it is
+theirs to answer for `Mounts.AnswerSeconds` -- a crowd answering it is only
+its rider (`Mounts_RemarkedOn`), anyone else's answer is dropped, and
+nobody else nearby starts a line nobody asked for. "nice chestnut mare that
+is" went out after the player it was about had got off their mare, and a
+paladin on a Charger answered it "she's a beauty, i suppose". Talk of mounts
+in general (a premise about them, a person's own question) is left alone. A
+new kind of line gets this for free; never rely on a check made when the
+prompt is built alone. Two bots chatting are told of passers-by without their
+mounts (`Presence_Describe`'s `withMount`): one talked a passer-by's mount up
+and the other answered for it.
+
 Nothing from the game is made up. A prompt or premise that needs something
 specific -- an item, quest, creature, boss, place -- hands the model the real
 thing (`mod-ollama-chat_facts.cpp`'s `{trinket}`, `{itemset}`, `{rare}`,

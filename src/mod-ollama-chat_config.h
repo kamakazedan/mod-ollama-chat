@@ -557,6 +557,17 @@ extern std::string g_GroupQuestsAnswerLine;
 extern std::string g_GroupQuestsInviteLine;
 extern std::string g_GroupQuestsSoloLine;
 
+// Mounts as they are when a line goes out (mod-ollama-chat_mounts).
+extern bool        g_MountsEnable;
+extern float       g_MountsSightYards;      // how far off a bot sees a mount it talks of
+extern uint32_t    g_MountsAnswerSeconds;   // a remark on someone's mount: theirs to answer this long
+extern std::vector<std::vector<std::string>> g_MountsWords;          // "mount|ride": a remark on one says these...
+extern std::unordered_map<std::string, std::string> g_MountsKinds;   // ...or a kind: "mare" -> "horse"
+extern std::vector<std::string> g_MountsPetKinds;                    // kinds a hunter's pet can be too: "wolf"
+extern std::vector<std::vector<std::string>> g_MountsRemarkWords;    // "nice|that|look": said of one in sight
+extern std::vector<std::vector<std::string>> g_MountsNotRemarks;     // "mount up": not about one in sight
+extern std::string g_MountsNotThereNote;    // a line owed to someone, asked again without the mount
+
 // Lag: talked of only when the realm really lags (mod-ollama-chat_lag).
 extern bool        g_LagEnable;
 extern uint32_t    g_LagMinutes;          // the window the world's ticks are judged over

@@ -2491,13 +2491,121 @@ OllamaChat.Pets.MountWords = "mount|mounts|mounted|ride|rides|riding|horse|horse
 #    OllamaChat.Pets.MountRemarkMinutes
 #        Once a bot is handed someone's mount to remark on -- a passer-by
 #        (Presence), someone near it mounted up (the nearby_player topic), a
-#        rare mount a few came over to look at (city life) -- nobody else is
-#        told of that mount for this many minutes, and a passer-by's line
-#        naming it is not said: "nice mount" from everyone who walks by is one
-#        line said over and over. A /say exchange between bots leaves it out
-#        too. 0: no such wait.
+#        rare mount a few came over to look at (city life) -- or a remark on
+#        someone's mount goes out, however it was made (Mounts, below), nobody
+#        else is told of that mount for this many minutes, and a passer-by's
+#        line naming it is not said: "nice mount" from everyone who walks by
+#        is one line said over and over. A /say exchange between bots leaves
+#        it out too. 0: no such wait.
 #        Default: 10
 OllamaChat.Pets.MountRemarkMinutes = 10
+
+###############################################################################
+#
+#   OLLAMA CHAT - MOUNTS AS THEY ARE RIDDEN
+#
+#   "nice chestnut mare that is" went out in /say about a player who had got
+#   off their Chestnut Mare a moment before, and a paladin on a Charger said
+#   "she's a beauty, i suppose". A bot is handed someone's mount when its
+#   prompt is built, and the line comes back seconds later -- a minute, with a
+#   queue -- while people get on and off their mounts all the time; and a
+#   remark on someone's mount was anyone's to answer.
+#
+#   So every bot line in /say, /yell, a party or a raid is checked as it goes
+#   out, whatever made it -- a passer-by's remark, two bots chatting, ambient
+#   chatter, a crowd, a conversation, city life:
+#
+#   * a remark on a mount -- one named ("chestnut mare", any of the game's
+#     mounts by name), or a kind or "mount" with a remark word ("nice horse",
+#     "your mount", "look at that kodo") -- goes out only while someone
+#     within SightYards of the bot, in its sight, is riding one that fits: one
+#     by that name, one of that kind, or any for "nice mount"; said to "you",
+#     the one it is said to; its own, when it says "my" ("my charger is
+#     slow"). A line owed to someone who spoke to the bot gets another go
+#     without it (NotThereNote); any other is not said, and a /say exchange
+#     between bots ends there.
+#     Talk of mounts in general is left alone: "i need a horse", "saving for
+#     my epic mount", a premise or topic about mounts, a person's own question
+#     about them.
+#   * once a remark on someone's mount is out, for AnswerSeconds only its
+#     rider answers it -- a crowd answering it is only them, and anyone
+#     else's answer is not said -- and nobody else nearby starts something
+#     nobody asked for, or picks it up from the chat and answers it for them.
+#     One on a real player's mount gets no bot's answer at all.
+#
+#   Two bots chatting in /say are told of the people about without their
+#   mounts ("passing by"): one talked a passer-by's mount up and the other
+#   answered for it.
+#
+#   .ollama status chat counts it.
+#
+###############################################################################
+
+#    OllamaChat.Mounts.Enable
+#        Check talk of mounts against the mounts really being ridden, as above.
+#        Default: 1
+OllamaChat.Mounts.Enable = 1
+
+#    OllamaChat.Mounts.SightYards
+#        How far off a bot sees a mount it talks of: someone riding further
+#        away, or out of its sight, is not there to remark on. 5 to 100.
+#        Default: 30
+OllamaChat.Mounts.SightYards = 30
+
+#    OllamaChat.Mounts.AnswerSeconds
+#        For this long after a remark on someone's mount goes out, only its
+#        rider answers it, and nobody else nearby -- in earshot in /say, the
+#        same party or raid -- starts a line nobody asked for. 0: a remark is
+#        anyone's to answer (the first check above still holds). At most 600.
+#        Default: 60
+OllamaChat.Mounts.AnswerSeconds = 60
+
+#    OllamaChat.Mounts.Words
+#        Words for a mount of any kind, that make a remark on one with a remark
+#        word ("nice mount", "your ride"). Phrases separated by |, whole words.
+#        Default: "mount|mounts|ride"
+OllamaChat.Mounts.Words = "mount|mounts|ride"
+
+#    OllamaChat.Mounts.Kinds
+#        Kinds of mount and the words for each: "kind: word word | kind: ...".
+#        A remark on a kind fits one riding a mount of that kind -- a mare,
+#        a charger and a horse are all horses -- told by the last word of its
+#        name that is one of these ("Swift Brown Horse", "Chestnut Mare",
+#        "Charger": horse). It also tells a person's "ur mare is lovely" whose
+#        it is, face to face (Context.FaceToFace).
+#        Default: (below)
+OllamaChat.Mounts.Kinds = "horse: horse horses mare mares stallion stallions steed steeds charger chargers warhorse warhorses palomino palominos pinto pintos pony ponies deathcharger deathchargers felsteed felsteeds dreadsteed dreadsteeds warsteed warsteeds | kodo: kodo kodos | ram: ram rams | mechanostrider: mechanostrider mechanostriders | hawkstrider: hawkstrider hawkstriders | elekk: elekk elekks | talbuk: talbuk talbuks | cat: nightsaber nightsabers frostsaber frostsabers saber sabers tiger tigers panther panthers cat cats | wolf: wolf wolves | raptor: raptor raptors | bear: bear bears warbear warbears | turtle: turtle turtles | gryphon: gryphon gryphons griffon griffons | wyvern: wyvern wyverns | drake: drake drakes protodrake protodrakes | dragonhawk: dragonhawk dragonhawks | ray: ray rays | mammoth: mammoth mammoths | hippogryph: hippogryph hippogryphs | zhevra: zhevra zhevras | chopper: chopper choppers"
+
+#    OllamaChat.Mounts.PetKinds
+#        Kinds (of Kinds) a hunter's pet or a companion can be too: a remark
+#        naming only these ("cute cat", "nice wolf") with nobody in sight on
+#        one is still said while someone in sight has a pet or a companion
+#        out -- it is about that. Separated by |.
+#        Default: "cat|wolf|raptor|bear|turtle|dragonhawk|ray"
+OllamaChat.Mounts.PetKinds = "cat|wolf|raptor|bear|turtle|dragonhawk|ray"
+
+#    OllamaChat.Mounts.RemarkWords
+#        Words that make talk of a kind of mount, or of "mount", a remark on
+#        one in sight: "nice horse", "look at that kodo". Second person ("you",
+#        "your", "ur") always does, and is about the one it is said to.
+#        Phrases separated by |, whole words; a * at the end of a word matches
+#        any word starting with the rest.
+#        Default: (below)
+OllamaChat.Mounts.RemarkWords = "nice|cool|sweet|love|lovely|loving|beautiful|beauty|gorgeous|pretty|awesome|amazing|sick|fancy|wow|whoa|woah|neat|shiny|cute|majestic|jealous|envy|envious|look|looks|that|thats|this|these|those|whered|ooh|oooh"
+
+#    OllamaChat.Mounts.NotRemarks
+#        A line with one of these in it is not about a mount in sight, so is
+#        not checked: getting on, getting off, riding somewhere, riding skill.
+#        Phrases separated by |, whole words, * as above.
+#        Default: (below)
+OllamaChat.Mounts.NotRemarks = "mount up|mounting up|get mounted|dismount*|ride over|ride to|ride back|ride out|ride with|ride there|riding skill|riding trainer*|learn to ride|learn riding|mount speed|no mount|without a mount"
+
+#    OllamaChat.Mounts.NotThereNote
+#        Added to the prompt of a line owed to someone (they spoke to the bot)
+#        that remarked on a mount nobody in sight was riding, for its one more
+#        go. {mount}: what it talked of ("a chestnut mare", "a horse").
+#        Default: "Nobody you can see is riding {mount} right now, so say nothing about one."
+OllamaChat.Mounts.NotThereNote = "Nobody you can see is riding {mount} right now, so say nothing about one."
 
 ###############################################################################
 #

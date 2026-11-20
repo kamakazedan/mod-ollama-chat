@@ -20,6 +20,7 @@
 #include "mod-ollama-chat_lag.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_memory.h"
+#include "mod-ollama-chat_mounts.h"
 #include "mod-ollama-chat_mute.h"
 #include "mod-ollama-chat_partycmd.h"
 #include "mod-ollama-chat_personality.h"
@@ -1173,6 +1174,46 @@ namespace
             }
         }
 
+        // A mount talked of is one being ridden in sight, now, and a remark on
+        // someone's mount is theirs to answer (mod-ollama-chat_mounts): "nice
+        // chestnut mare that is" went out after the one it was about had got
+        // off it, and a paladin on a Charger answered it. Checked here, as the
+        // line goes out, whatever made it: a mount is read when a prompt is
+        // built, and people get on and off them all the time.
+        const MountLineVerdict mounts = Mounts_CheckLine(bot, c.request, c.text, origin);
+        if (mounts.check != MountLineCheck::Ok)
+        {
+            const char* why = mounts.check == MountLineCheck::NotThere  ? "talked of a mount nobody in sight is riding"
+                            : mounts.check == MountLineCheck::NotTheirs ? "answered for a mount that is not its own"
+                                                                        : "would talk over a remark on someone's mount";
+            // One that has to go out goes out in its stock words.
+            if (mounts.check == MountLineCheck::NotThere && !c.request.fallbackText.empty() &&
+                c.text != c.request.fallbackText)
+            {
+                if (g_DebugEnabled)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} {} ({}): '{}' instead.", bot->GetName(), why,
+                             mounts.what, c.request.fallbackText);
+                c.text = c.request.fallbackText;
+            }
+            else
+            {
+                // One owed to someone gets another go without it.
+                const std::string note = (mounts.check != MountLineCheck::NotThere || g_MountsNotThereNote.empty())
+                                             ? std::string()
+                                             : SafeFormat(g_MountsNotThereNote, fmt::arg("mount", mounts.what));
+                if (retryWith(note, mounts.what))
+                {
+                    Mounts_NoteRetried();
+                    return;
+                }
+                ++g_droppedPhrase;
+                if (g_DebugEnabled)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} {}{}; line dropped: '{}'", bot->GetName(), why,
+                             mounts.what.empty() ? std::string() : " (" + mounts.what + ")", c.text);
+                return;
+            }
+        }
+
         // The same phrase from bot after bot, all over the realm: an ambient
         // line goes, one owed to someone gets another go.
         if (!c.request.noEcho)
@@ -1344,6 +1385,10 @@ namespace
         const uint64_t seq = Context_RecordLine(bot, c.request.source,
                                                 channel ? channel->GetName() : c.request.channelName,
                                                 plain, ContextLineKind::Bot);
+
+        // A remark on someone's mount: theirs to answer, before anyone hears
+        // it below (mod-ollama-chat_mounts).
+        Mounts_NoteDelivered(bot, c.request, plain, mounts);
 
         // A gossip in the group may whisper a real player about it, now and then.
         if (c.request.source == SRC_PARTY_LOCAL || c.request.source == SRC_RAID_LOCAL)

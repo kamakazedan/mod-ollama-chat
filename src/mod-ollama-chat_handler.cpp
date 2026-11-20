@@ -45,6 +45,7 @@
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_mingle.h"
+#include "mod-ollama-chat_mounts.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat_random.h"
 #include "mod-ollama-chat_context.h"
@@ -246,6 +247,10 @@ namespace
             for (std::string_view tail : { "horse", "steed", "saber", "strider", "charger", "drake" })
                 if (kind.size() > tail.size() && kind.ends_with(tail))
                     kinds.insert(std::string(tail));
+            // ...and its kind as talk names it: a Chestnut Mare and a Charger
+            // are horses (Mounts.Kinds).
+            if (const std::string family = Mounts_KindOf(seen.animals.mount); !family.empty())
+                kinds.insert(family);
         }
         for (const std::string* part : { &seen.animals.petFamily, &seen.animals.petKind,
                                          &seen.animals.petName, &seen.animals.companion })
@@ -324,10 +329,15 @@ static ContextAddressee OllamaFaceToFaceAddressee(Player* player, ChatChannelSou
     if (target && std::find(bots.begin(), bots.end(), target) == bots.end())
         target = nullptr;
 
-    // A kind of animal one of them has: the line is about theirs.
+    // A kind of animal one of them has: the line is about theirs. A mare is
+    // a horse ("ur mare is lovely" to one on a Swift Brown Horse).
     std::set<std::string> said;
     for (const std::string& w : words)
+    {
         said.insert(AnimalWord(w));
+        if (const std::string family = Mounts_KindOfWord(w); !family.empty())
+            said.insert(family);
+    }
     std::vector<Player*> owners;
     for (Player* bot : bots)
     {
@@ -3134,9 +3144,18 @@ static void HandleCrowdBotLine(Player* bot, const std::string& msg,
     if (Crowd_Find(key) || Conversation_IsActiveNear(key, bot))
         return;
 
-    const std::vector<Player*> pool = CrowdPool(bot, source, candidates, msg,
-                                                channel ? channel->GetName() : std::string(),
-                                                channel ? channel->GetChannelId() : 0);
+    std::vector<Player*> pool = CrowdPool(bot, source, candidates, msg,
+                                          channel ? channel->GetName() : std::string(),
+                                          channel ? channel->GetChannelId() : 0);
+
+    // A remark on someone's mount is theirs to answer, and nobody else's
+    // (mod-ollama-chat_mounts): "nice chestnut mare that is" was answered
+    // "she's a beauty, i suppose" by a paladin on a Charger. One on a
+    // person's mount gets no bot's answer at all.
+    const std::vector<ObjectGuid> riders = Mounts_RemarkedOn(bot, msg);
+    if (!riders.empty())
+        std::erase_if(pool, [&riders](Player* p)
+                      { return std::find(riders.begin(), riders.end(), p->GetGUID()) == riders.end(); });
     if (pool.empty())
         return;
 
@@ -3146,7 +3165,9 @@ static void HandleCrowdBotLine(Player* bot, const std::string& msg,
     Player* aimed = nullptr;
     {
         const std::vector<Player*> named = NamedBots(msg, pool, 1);
-        if (!named.empty())
+        if (!riders.empty())
+            aimed = pool.front();   // it was said to them
+        else if (!named.empty())
             aimed = named.front();
         else if (addressee.guid && addressee.isBot)
             aimed = FindInPool(pool, addressee.guid);

@@ -554,6 +554,15 @@ std::string g_GroupQuestsAnswerLine;
 std::string g_GroupQuestsInviteLine;
 std::string g_GroupQuestsSoloLine;
 
+bool        g_MountsEnable          = true;
+float       g_MountsSightYards      = 30.0f;
+uint32_t    g_MountsAnswerSeconds   = 60;
+std::vector<std::vector<std::string>> g_MountsWords;
+std::unordered_map<std::string, std::string> g_MountsKinds;
+std::vector<std::string> g_MountsPetKinds;
+std::vector<std::vector<std::string>> g_MountsRemarkWords;
+std::vector<std::vector<std::string>> g_MountsNotRemarks;
+std::string g_MountsNotThereNote;
 bool        g_LagEnable             = true;
 uint32_t    g_LagMinutes            = 5;
 uint32_t    g_LagMeanMs             = 250;
@@ -4237,6 +4246,70 @@ static void LoadNaturalChatV43Settings()
              g_MingleGroupQuestChance);
 }
 
+static void LoadNaturalChatV44Settings()
+{
+    // --- mounts as they are when a line goes out (mod-ollama-chat_mounts) ---------------------
+    g_MountsEnable        = sConfigMgr->GetOption<bool>("OllamaChat.Mounts.Enable", true);
+    g_MountsSightYards    = std::clamp(sConfigMgr->GetOption<float>("OllamaChat.Mounts.SightYards", 30.0f), 5.0f, 100.0f);
+    g_MountsAnswerSeconds = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Mounts.AnswerSeconds", 60), 600);
+    g_MountsWords = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Mounts.Words",
+        "mount|mounts|ride"));
+
+    // "horse: horse horses mare | kodo: kodo kodos" -> word -> kind.
+    g_MountsKinds.clear();
+    {
+        const std::string raw = sConfigMgr->GetOption<std::string>("OllamaChat.Mounts.Kinds",
+            "horse: horse horses mare mares stallion stallions steed steeds charger chargers warhorse warhorses "
+            "palomino palominos pinto pintos pony ponies deathcharger deathchargers felsteed felsteeds dreadsteed "
+            "dreadsteeds warsteed warsteeds | kodo: kodo kodos | ram: ram rams | mechanostrider: mechanostrider "
+            "mechanostriders | hawkstrider: hawkstrider hawkstriders | elekk: elekk elekks | talbuk: talbuk "
+            "talbuks | cat: nightsaber nightsabers frostsaber frostsabers saber sabers tiger tigers panther "
+            "panthers cat cats | wolf: wolf wolves | raptor: raptor raptors | bear: bear bears warbear warbears | "
+            "turtle: turtle turtles | gryphon: gryphon gryphons griffon griffons | wyvern: wyvern wyverns | drake: "
+            "drake drakes protodrake protodrakes | dragonhawk: dragonhawk dragonhawks | ray: ray rays | mammoth: "
+            "mammoth mammoths | hippogryph: hippogryph hippogryphs | zhevra: zhevra zhevras | chopper: chopper "
+            "choppers");
+        size_t start = 0;
+        while (start <= raw.size())
+        {
+            size_t bar = raw.find('|', start);
+            if (bar == std::string::npos)
+                bar = raw.size();
+            const std::string entry = raw.substr(start, bar - start);
+            start = bar + 1;
+            const size_t colon = entry.find(':');
+            if (colon == std::string::npos)
+                continue;
+            const std::vector<std::string> kind = CrowdText::Words(entry.substr(0, colon));
+            if (kind.size() != 1)
+                continue;
+            for (const std::string& word : CrowdText::Words(entry.substr(colon + 1)))
+                g_MountsKinds[word] = kind.front();
+        }
+    }
+    g_MountsPetKinds.clear();
+    for (const std::string& kind : ReadPipeList("OllamaChat.Mounts.PetKinds", "cat|wolf|raptor|bear|turtle|dragonhawk|ray"))
+        for (const std::string& word : CrowdText::Words(kind))
+            g_MountsPetKinds.push_back(word);
+
+    g_MountsRemarkWords = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Mounts.RemarkWords",
+        "nice|cool|sweet|love|lovely|loving|beautiful|beauty|gorgeous|pretty|awesome|amazing|sick|fancy|wow|whoa|"
+        "woah|neat|shiny|cute|majestic|jealous|envy|envious|look|looks|that|thats|this|these|those|whered|ooh|oooh"));
+    g_MountsNotRemarks = CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>("OllamaChat.Mounts.NotRemarks",
+        "mount up|mounting up|get mounted|dismount*|ride over|ride to|ride back|ride out|ride with|ride there|"
+        "riding skill|riding trainer*|learn to ride|learn riding|mount speed|no mount|without a mount"));
+    g_MountsNotThereNote = sConfigMgr->GetOption<std::string>("OllamaChat.Mounts.NotThereNote",
+        "Nobody you can see is riding {mount} right now, so say nothing about one.");
+
+    std::set<std::string> kinds;
+    for (auto const& [word, kind] : g_MountsKinds)
+        kinds.insert(kind);
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v44: mounts talked of only as they are ridden {} (within {} "
+             "yards, {} kinds of mount by {} words), a remark on someone's mount theirs to answer for {} s.",
+             g_MountsEnable ? "on" : "off", g_MountsSightYards, kinds.size(), g_MountsKinds.size(),
+             g_MountsAnswerSeconds);
+}
+
 static void LoadNaturalChatV39Settings()
 {
     // "NAT_HYPE:100|NAT_QUIET:5" -> chat style -> percent.
@@ -5352,6 +5425,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV41Settings();
     LoadNaturalChatV42Settings();
     LoadNaturalChatV43Settings();
+    LoadNaturalChatV44Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

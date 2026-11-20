@@ -39,6 +39,10 @@ struct PetsSeen
 // What `who` is riding and has with them, within `range` of them.
 PetsSeen Pets_Seen(Player* who, float range = 20.0f);
 
+// The mount `who` is riding, as people call it ("Swift Brown Horse"; "Mount"
+// when the game does not say); empty on foot.
+std::string Pets_MountOf(Player* who);
+
 std::string Pets_StateTextFor(Player* bot, const std::string& message);
 
 // Someone's mount, put in front of a bot to remark on. For

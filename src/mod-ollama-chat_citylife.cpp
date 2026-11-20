@@ -117,7 +117,7 @@ namespace
         request.prompt            = std::move(prompt);
         request.botName           = bot->GetName();
         request.kind              = OllamaRequestKind::EventChatter;
-        request.triggerBotReplies = true;   // the rider, or another who came over, may answer
+        request.triggerBotReplies = true;   // the rider may answer: nobody else (mod-ollama-chat_mounts)
         request.gentle            = true;   // a stranger, as often as not: nothing rude goes with it
         request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
         // Nobody asked for it: a real player who speaks before it is out was

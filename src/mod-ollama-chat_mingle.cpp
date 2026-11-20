@@ -439,7 +439,10 @@ namespace
                     std::find(group.begin(), group.end(), p) != group.end() ||
                     first->GetDistance(p) > kPassersbyYards)
                     continue;
-                if (const std::string who = Presence_Describe(p, first); !who.empty())
+                // Without their mount: talked up by one of the pair, the other
+                // answered for it -- "nice chestnut mare that is", "she's a
+                // beauty, i suppose", of a passer-by's (mod-ollama-chat_mounts).
+                if (const std::string who = Presence_Describe(p, first, nullptr, false); !who.empty())
                     seen.push_back(who);
                 if (seen.size() >= 3)
                     break;

@@ -43,6 +43,7 @@
 #include "mod-ollama-chat_knowledge.h"
 #include "mod-ollama-chat_wants.h"
 #include "mod-ollama-chat_mingle.h"
+#include "mod-ollama-chat_mounts.h"
 #include "mod-ollama-chat_rolls.h"
 #include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_plus.h"
@@ -656,6 +657,15 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
             g_LagEnable ? "on" : "off", lag.lagging ? "is lagging" : "runs smoothly", lag.meanMs, lag.spikes,
             lag.windowSecs, (unsigned long long)lag.spells, (unsigned long long)lag.keptIn,
             (unsigned long long)lag.toldSmooth, (unsigned long long)lag.toldLagging);
+
+    const MountStats mounts = Mounts_GetStats();
+    if (show("chat"))
+        out("Mounts, only as they are ridden: {} - {} remarks on a mount nobody in sight was riding not said ({} "
+            "asked again), {} answers for someone else's mount not said, {} lines held back after a remark on "
+            "someone's mount; {} remarks out; {} of the game's mounts known by name",
+            g_MountsEnable ? "on" : "off", (unsigned long long)mounts.notThere, (unsigned long long)mounts.retried,
+            (unsigned long long)mounts.notTheirs, (unsigned long long)mounts.held, (unsigned long long)mounts.remarks,
+            mounts.names);
 
     const SaidStats said = Said_GetStats();
     if (show("chat"))
