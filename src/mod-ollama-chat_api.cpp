@@ -618,7 +618,8 @@ OllamaHttpHeaders OllamaBuildRequestHeaders(const OllamaEndpointSettings& cfg)
     return headers;
 }
 
-OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, uint32_t numPredict)
+OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, uint32_t numPredict,
+                            float temperature)
 {
     OllamaApiResult result;
 
@@ -631,6 +632,8 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
     OllamaEndpointSettings cfg = OllamaConfig_Snapshot();
     if (numPredict > 0)
         cfg.numPredict = numPredict;
+    if (temperature >= 0.0f)
+        cfg.temperature = temperature;
 
     // One place decides what the "think" field should be: policy for this
     // request kind, plus everything learned about this model so far.

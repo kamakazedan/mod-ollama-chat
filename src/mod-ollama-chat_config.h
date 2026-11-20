@@ -1199,6 +1199,7 @@ extern uint32_t    g_MingleMaxEmotes;
 extern uint32_t    g_MingleBotCooldownSeconds;
 extern uint32_t    g_MingleQueueLimit;          // not started with more requests than this waiting
 extern uint32_t    g_MingleNumPredict;          // tokens for one whole exchange
+extern float       g_MingleTemperature;         // the one it is written at; negative: OllamaChat.Temperature
 extern uint32_t    g_MingleReadMinMs;           // the pause to read a line before typing the next
 extern uint32_t    g_MingleReadMaxMs;
 extern std::string g_MinglePromptTemplate;

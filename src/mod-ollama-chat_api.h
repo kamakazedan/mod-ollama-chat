@@ -90,8 +90,11 @@ OllamaHttpHeaders OllamaBuildRequestHeaders(const OllamaEndpointSettings& cfg);
 // Blocking. Call from a worker thread, never from the world thread.
 // `numPredict`: a token limit for this one request instead of
 // OllamaChat.NumPredict -- a whole /say exchange is longer than one line
-// (mod-ollama-chat_mingle). 0 for the usual one.
-OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, uint32_t numPredict = 0);
+// (mod-ollama-chat_mingle). 0 for the usual one. `temperature`: the one for
+// this request instead of OllamaChat.Temperature -- an exchange written all at
+// once holds together better cooler. Negative for the usual one.
+OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, uint32_t numPredict = 0,
+                            float temperature = -1.0f);
 
 // Legacy shim: returns the text, or empty on any failure.
 std::string QueryOllamaAPI(const std::string& prompt);

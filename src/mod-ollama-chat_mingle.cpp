@@ -984,7 +984,7 @@ namespace
             e.held.push_back(!HangingOut(p));
         }
 
-        if (!OllamaDispatch_SubmitScript(e.id, prompt, g_MingleNumPredict))
+        if (!OllamaDispatch_SubmitScript(e.id, prompt, g_MingleNumPredict, g_MingleTemperature))
             return false;
         for (Player* p : group)
             CitySay_Claim(p);   // in a city: those in earshot are hearing one now

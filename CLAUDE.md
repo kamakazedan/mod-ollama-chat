@@ -530,7 +530,11 @@ chat above it, so one bot calling people "sugar" had half of General ending
 every line with it. Pet names are their style's (`Response.PetNameStyles`,
 once in a few lines) and taken out of everyone else's at delivery, and a
 conversation winds down after a handful of lines (`Conversation.MaxLines`)
-before it turns into one long running joke.
+before it turns into one long running joke. A /say exchange between bots is
+written all at once, cooler than a one-line reply (`Mingle.Temperature`), and
+told each line has to make sense right after the one before: written at a
+reply's temperature, a duel challenge was answered "oh hello there", and a
+warrior's trainer was "in the sewers".
 
 Every bot knows its side. `Outlook_ForBot` says which side it plays and its
 own side's cities, and, standing in one of them, that it is safe and the

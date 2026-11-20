@@ -242,6 +242,7 @@ uint32_t    g_MingleMaxEmotes           = 3;
 uint32_t    g_MingleBotCooldownSeconds  = 600;
 uint32_t    g_MingleQueueLimit          = 4;
 uint32_t    g_MingleNumPredict          = 320;
+float       g_MingleTemperature         = 0.7f;
 uint32_t    g_MingleReadMinMs           = 1200;
 uint32_t    g_MingleReadMaxMs           = 3500;
 std::string g_MinglePromptTemplate;
@@ -4558,6 +4559,7 @@ static void LoadNaturalChatV16Settings()
     g_MingleBotCooldownSeconds = number("OllamaChat.Mingle.BotCooldownSeconds", 600, 0, 86400);
     g_MingleQueueLimit     = number("OllamaChat.Mingle.QueueLimit", 4, 0, 1000);
     g_MingleNumPredict     = number("OllamaChat.Mingle.NumPredict", 320, 64, 4096);
+    g_MingleTemperature    = std::min(2.0f, sConfigMgr->GetOption<float>("OllamaChat.Mingle.Temperature", 0.7f));
     g_MingleReadMinMs      = number("OllamaChat.Mingle.ReadMinMs", 1200, 0, 60000);
     g_MingleReadMaxMs      = std::max(g_MingleReadMinMs, number("OllamaChat.Mingle.ReadMaxMs", 3500, 0, 60000));
     g_MinglePromptTemplate = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.PromptTemplate",
@@ -4566,7 +4568,9 @@ static void LoadNaturalChatV16Settings()
         "one message per line, each line starting with the speaker's name and a colon, like "
         "this:{example}About {lines} lines in all, mostly taking turns. It reads like a real chat: every "
         "line follows on from the one before it, answering what was just asked, reacting to what was just "
-        "said, or asking something back, and nobody answers a question nobody asked. A greeting gets a "
+        "said, or asking something back, and nobody answers a question nobody asked. Each line has to make "
+        "sense said right after the one before it: an it, that or there means something already named in the "
+        "chat, and nobody says the opposite of what they said a moment ago. A greeting gets a "
         "greeting back, or a question. When one of them says what they have been doing, it is what they have "
         "been doing lately as told above, put the way a player would in a few words, what and where; with "
         "nothing told, they have not been up to much. They can see each other's level and class just by "
@@ -4578,7 +4582,8 @@ static void LoadNaturalChatV16Settings()
         "at the other one, written as a slash command ({emotes}), at most {max_emotes} in all. It ends the "
         "way a chat between players does: a laugh, a goodbye, someone heading off, or simply done. No "
         "narration, no actions in asterisks, no quotation marks, and nothing made up from the game -- no "
-        "item, quest, NPC, creature, place, mount or pet that is not really in it, and nobody riding a mount "
+        "item, quest, NPC, creature, place, mount or pet that is not really in it, nobody saying where "
+        "something is or the way there unless it is told above, and nobody riding a mount "
         "or with a pet out but as told above (a hunter's pet, a warlock's demon or a companion pet is no "
         "mount); plainly made-up fun is fine as an imagine-if, best spun out of something really true of the "
         "game. A famous line from a film or show is fine now "
@@ -4589,7 +4594,8 @@ static void LoadNaturalChatV16Settings()
         "in|[mount] one of them admires the mount the other is riding|[pet] one of them admires the other's "
         "pet or companion|[gear] one of them admires {gear}|one of them teases the other about their race or "
         "class, all in good fun|swapping tips about levelling their classes|[duel] one of them challenges the "
-        "other to a duel, and they agree to head {duel_where} and fight it out|[groupquest] {gq_asker} asks "
+        "other to a duel, the other takes it up, they trash-talk a little about who will win, and they "
+        "agree to head {duel_where} and fight it out|[groupquest] {gq_asker} asks "
         "{gq_other} if they want to do {gq_quest} together while they are both here, and {gq_other} is up for "
         "it, as they both have it -- so they agree to go and do it there and then. {gq_facts}|one of them asks "
         "the other if "

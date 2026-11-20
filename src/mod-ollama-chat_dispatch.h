@@ -244,9 +244,11 @@ bool OllamaDispatch_DeliverNow(OllamaChatRequest request, uint32_t emoteId, cons
 
 // A whole /say exchange between bots, written by one generation
 // (mod-ollama-chat_mingle). The worker returns the model's text untouched --
-// several lines -- with up to `numPredict` tokens. False when the queue is
-// too full for it. The prompt is built on the world thread, like any other.
-bool OllamaDispatch_SubmitScript(uint64_t scriptId, std::string prompt, uint32_t numPredict);
+// several lines -- with up to `numPredict` tokens, at `temperature` (negative:
+// OllamaChat.Temperature). False when the queue is too full for it. The
+// prompt is built on the world thread, like any other.
+bool OllamaDispatch_SubmitScript(uint64_t scriptId, std::string prompt, uint32_t numPredict,
+                                 float temperature = -1.0f);
 
 struct OllamaScriptResult
 {

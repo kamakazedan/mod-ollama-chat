@@ -83,6 +83,7 @@ namespace
         uint64_t    scriptId         = 0;
         std::string scriptPrompt;
         uint32_t    scriptNumPredict = 0;
+        float       scriptTemperature = -1.0f;
     };
 
     struct Completion
@@ -359,7 +360,8 @@ namespace
     {
         OllamaScriptResult result;
         result.scriptId = task.scriptId;
-        OllamaApiResult api = QueryOllama(task.scriptPrompt, OllamaRequestKind::RandomChatter, task.scriptNumPredict);
+        OllamaApiResult api = QueryOllama(task.scriptPrompt, OllamaRequestKind::RandomChatter, task.scriptNumPredict,
+                                          task.scriptTemperature);
         if (api.ok && !api.text.empty())
         {
             result.ok   = true;
@@ -1713,16 +1715,17 @@ void OllamaDispatch_SubmitRelationship(uint64_t botGuid, uint64_t otherGuid,
         g_queueCv.notify_one();
 }
 
-bool OllamaDispatch_SubmitScript(uint64_t scriptId, std::string prompt, uint32_t numPredict)
+bool OllamaDispatch_SubmitScript(uint64_t scriptId, std::string prompt, uint32_t numPredict, float temperature)
 {
     if (scriptId == 0 || prompt.empty())
         return false;
 
     Task task;
-    task.type             = TaskType::Script;
-    task.scriptId         = scriptId;
-    task.scriptPrompt     = std::move(prompt);
-    task.scriptNumPredict = numPredict;
+    task.type              = TaskType::Script;
+    task.scriptId          = scriptId;
+    task.scriptPrompt      = std::move(prompt);
+    task.scriptNumPredict  = numPredict;
+    task.scriptTemperature = temperature;
 
     // Nobody is owed one: with the queue half full it is not asked for at
     // all, as for memories.
