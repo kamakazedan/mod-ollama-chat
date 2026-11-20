@@ -781,6 +781,11 @@ ContextAddressee Context_LikelyAddressee(Player* speaker, ChatChannelSourceLocal
             continue;
         }
 
+        // Someone else doing something at a third person ("Anne smiles at
+        // Usawe") is not what this person is answering.
+        if (line->kind == ContextLineKind::Event && line->targetGuid && line->targetGuid != speakerGuid)
+            continue;
+
         result.guid  = line->speakerGuid;
         result.isBot = line->speakerIsBot;
         result.name  = line->speakerName;

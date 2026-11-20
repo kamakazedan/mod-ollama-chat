@@ -157,6 +157,16 @@ whose: told of their own gear and the speaker's, two took it for their own
 and ran it down in front of the player it was paid to. The gesture that goes
 with a remark is in its prompt (`Presence.GestureText`), so the two agree.
 
+The same goes for a person's remark: face to face, a /say line that names
+nobody and is not to everyone goes to the one it is plainly for
+(`OllamaFaceToFaceAddressee`, `Context.FaceToFace`) -- the bot they are
+talking with when it answers it, else the one whose mount or pet it is about,
+else the one they have targeted, else whom it answers, else the one right
+beside them -- and something of theirs is theirs: nobody chimes in
+(`ContextAddressee::theirs`). Left to the crowd, "ur wolf is cool af", said
+with an orc on a wolf targeted right beside them, went to an undead on a
+horse behind him: "thanks! i love it too".
+
 ## Script registration facts (verified against this fork)
 
 - `PlayerScript(name)` with **no hook list enables every hook**. See

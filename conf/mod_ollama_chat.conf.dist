@@ -1791,6 +1791,28 @@ OllamaChat.Context.LeadUpMaxWords = 8
 #        Default: 25
 OllamaChat.Context.BystanderChancePct = 25
 
+#    OllamaChat.Context.FaceToFace
+#        Who a person's /say or /yell line is to, when it names nobody and is
+#        not said to everyone ("anyone", "guys", Crowd.OpenCallPhrases): the
+#        bot they are talking with, when the line answers it; else the one
+#        whose mount, pet or companion it is about ("ur wolf is cool af", with
+#        one bot in earshot on a wolf), or the one they have targeted when it
+#        has one too; else the one they have targeted; else whom the line
+#        answers; else the one right beside them (BesideYards). Something of
+#        theirs is theirs to answer: nobody else chimes in on it. Left to the
+#        crowd, "ur wolf is cool af", said with an orc on a wolf targeted right
+#        beside them, went to an undead on a horse behind him, who said
+#        "thanks! i love it too".
+#        Default: 1
+OllamaChat.Context.FaceToFace = 1
+
+#    OllamaChat.Context.BesideYards
+#        With FaceToFace, a line that is to nobody else goes to the bot right
+#        beside the speaker: within this many yards, with no other bot within
+#        twice the distance (and at least 3 yards further). 0 turns it off.
+#        Default: 8
+OllamaChat.Context.BesideYards = 8
+
 #    OllamaChat.Context.BotAddressedChance
 #        Chance (before chain decay) that a bot answers another bot whose
 #        line was a reply to it.

@@ -316,6 +316,8 @@ uint32_t    g_ContextMaxLines                 = 10;
 uint32_t    g_ContextMaxAgeSeconds            = 300;
 uint32_t    g_ContextReplyWindowSeconds       = 60;
 uint32_t    g_ContextBystanderChancePct       = 25;
+bool        g_ContextFaceToFace               = true;
+float       g_ContextBesideYards              = 8.0f;
 uint32_t    g_ContextBotAddressedChance       = 40;
 bool        g_ContextBotReplyPerMessage       = true;
 uint32_t    g_ContextBotLineReplyChance_Say     = 50;
@@ -5181,6 +5183,8 @@ void LoadOllamaChatConfig()
     g_ContextMaxAgeSeconds            = sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.MaxAgeSeconds", 300);
     g_ContextReplyWindowSeconds       = sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.ReplyWindowSeconds", 60);
     g_ContextBystanderChancePct       = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.BystanderChancePct", 25));
+    g_ContextFaceToFace               = sConfigMgr->GetOption<bool>("OllamaChat.Context.FaceToFace", true);
+    g_ContextBesideYards              = std::max(0.0f, sConfigMgr->GetOption<float>("OllamaChat.Context.BesideYards", 8.0f));
     g_ContextBotAddressedChance       = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.BotAddressedChance", 40));
     g_ContextBotReplyPerMessage       = sConfigMgr->GetOption<bool>("OllamaChat.Context.BotReplyPerMessage", true);
     g_ContextBotLineReplyChance_Say     = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Context.BotLineReplyChance.Say", 50));

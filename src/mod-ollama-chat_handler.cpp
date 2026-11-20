@@ -25,6 +25,9 @@
 #include <cctype>
 #include <chrono>
 #include <ctime>
+#include <limits>
+#include <set>
+#include <string_view>
 #include "DatabaseEnv.h"
 #include "mod-ollama-chat_handler.h"
 #include "mod-ollama-chat_api.h"
@@ -204,6 +207,165 @@ static bool OllamaIsDirectAddress(Player* bot, Player* speaker, ChatChannelSourc
         return false;
 
     return group->GetMembersCount() <= g_DirectAddressGroupSize;
+}
+
+namespace
+{
+    // A word as a kind of animal is said: lower case, one of it ("Wolves",
+    // "horses" -> "wolf", "horse").
+    std::string AnimalWord(const std::string& word)
+    {
+        std::string w;
+        for (char c : word)
+            if (std::isalpha(static_cast<unsigned char>(c)))
+                w += char(std::tolower(static_cast<unsigned char>(c)));
+        if (w.size() > 4 && w.ends_with("ves"))
+            w = w.substr(0, w.size() - 3) + "f";
+        else if (w.size() > 3 && w.back() == 's' && !w.ends_with("ss"))
+            w.pop_back();
+        return w;
+    }
+
+    // The kinds of animal someone has with them, as a line about one would
+    // name it: what their mount is ("Swift Brown Wolf": a wolf; a "Red
+    // Skeletal Warhorse" is a horse too), their pet's family, kind and name,
+    // their companion's kind. Never "mount" or "pet": those are anyone's.
+    std::set<std::string> AnimalKindsOf(Player* who)
+    {
+        std::set<std::string> kinds;
+        const PetsSeen seen = Pets_Seen(who);
+        auto kindOf = [](const std::string& name)
+        {
+            const size_t space = name.find_last_of(' ');
+            return AnimalWord(space == std::string::npos ? name : name.substr(space + 1));
+        };
+        if (!seen.animals.mount.empty())
+        {
+            const std::string kind = kindOf(seen.animals.mount);
+            kinds.insert(kind);
+            for (std::string_view tail : { "horse", "steed", "saber", "strider", "charger", "drake" })
+                if (kind.size() > tail.size() && kind.ends_with(tail))
+                    kinds.insert(std::string(tail));
+        }
+        for (const std::string* part : { &seen.animals.petFamily, &seen.animals.petKind,
+                                         &seen.animals.petName, &seen.animals.companion })
+            if (!part->empty())
+                kinds.insert(kindOf(*part));
+        for (const char* anyone : { "", "mount", "pet", "companion", "minion" })
+            kinds.erase(anyone);
+        return kinds;
+    }
+}
+
+// Who a person's /say or /yell line is to, face to face, when it names
+// nobody and is not said to everyone (Context.FaceToFace):
+//   * the bot they are talking with, when the line answers it;
+//   * else the one whose mount or pet it is about -- "ur wolf is cool af",
+//     with one bot in earshot on a wolf -- or the one they have targeted,
+//     when it has one too;
+//   * else the one they have targeted;
+//   * else whom the transcript says the line answers;
+//   * else the one right beside them, nobody else as close
+//     (Context.BesideYards).
+// Left to the crowd, "ur wolf is cool af", said with an orc on a wolf
+// targeted right beside them, went to an undead on a horse behind him, who
+// said "thanks! i love it too".
+static ContextAddressee OllamaFaceToFaceAddressee(Player* player, ChatChannelSourceLocal source,
+                                                  const std::string& msg, const std::string& scopeKey,
+                                                  const ContextAddressee& transcript)
+{
+    if (!g_ContextFaceToFace || !player || (source != SRC_SAY_LOCAL && source != SRC_YELL_LOCAL))
+        return transcript;
+
+    const std::vector<std::string> words = CrowdText::Words(Context_CleanText(msg));
+    if (CrowdText::ContainsPhrase(words, g_CrowdOpenCallPhrases))
+        return transcript;   // said to everyone
+
+    const float range = source == SRC_YELL_LOCAL ? g_YellDistance : g_SayDistance;
+    std::list<Player*> found;
+    Acore::AnyPlayerInObjectRangeCheck check(player, range, false, true);
+    Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(player, found, check);
+    Cell::VisitObjects(player, searcher, range);
+
+    std::vector<Player*> bots;
+    for (Player* p : found)
+    {
+        if (!p || p == player || !p->IsInWorld() || !p->IsAlive() || !OllamaIsBotPlayer(p) ||
+            Roleplay_IsLanguageBarrier(player, p))
+            continue;
+        if (OllamaFindBotNameMention(msg, p->GetName()) != std::string::npos)
+            return transcript;   // a name says who it is to
+        bots.push_back(p);
+    }
+    if (bots.empty())
+        return transcript;
+
+    auto to = [](Player* bot, bool theirs)
+    {
+        ContextAddressee a;
+        a.guid   = bot->GetGUID().GetRawValue();
+        a.isBot  = true;
+        a.name   = bot->GetName();
+        a.theirs = theirs;
+        return a;
+    };
+    auto inEarshot = [&bots](uint64_t guid)
+    {
+        return std::any_of(bots.begin(), bots.end(),
+                           [guid](Player* b) { return b->GetGUID().GetRawValue() == guid; });
+    };
+
+    // Answering the one they are talking with, whoever they still have targeted.
+    if (transcript.guid && transcript.isBot && inEarshot(transcript.guid) &&
+        Governor_InConversation(ObjectGuid(transcript.guid), player->GetGUID(), scopeKey))
+        return transcript;
+
+    Player* target = player->GetSelectedPlayer();
+    if (target && std::find(bots.begin(), bots.end(), target) == bots.end())
+        target = nullptr;
+
+    // A kind of animal one of them has: the line is about theirs.
+    std::set<std::string> said;
+    for (const std::string& w : words)
+        said.insert(AnimalWord(w));
+    std::vector<Player*> owners;
+    for (Player* bot : bots)
+    {
+        const std::set<std::string> kinds = AnimalKindsOf(bot);
+        if (std::any_of(kinds.begin(), kinds.end(), [&said](const std::string& k) { return said.contains(k); }))
+            owners.push_back(bot);
+    }
+    if (target && std::find(owners.begin(), owners.end(), target) != owners.end())
+        return to(target, true);
+    if (owners.size() == 1)
+        return to(owners.front(), true);
+
+    if (target)
+        return to(target, false);
+    if (transcript.guid)
+        return transcript;
+
+    if (g_ContextBesideYards > 0.0f)
+    {
+        Player* nearest = nullptr;
+        float first  = std::numeric_limits<float>::max();
+        float second = std::numeric_limits<float>::max();
+        for (Player* bot : bots)
+        {
+            const float d = player->GetDistance(bot);
+            if (d < first)
+            {
+                second  = first;
+                first   = d;
+                nearest = bot;
+            }
+            else if (d < second)
+                second = d;
+        }
+        if (nearest && first <= g_ContextBesideYards && second >= std::max(first * 2.0f, first + 3.0f))
+            return to(nearest, false);
+    }
+    return transcript;
 }
 
 namespace
@@ -1454,9 +1616,13 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
                                             : Context_RecordLine(player, sourceLocal, contextChannel, Links_AsRead(msg),
                                                                  ContextLineKind::Human);
 
-    const ContextAddressee addressee = (sourceLocal == SRC_WHISPER_LOCAL)
+    ContextAddressee addressee = (sourceLocal == SRC_WHISPER_LOCAL)
         ? ContextAddressee{}
         : Context_LikelyAddressee(player, sourceLocal, contextChannel, contextSeq);
+    // Face to face, who it is to is also whom they target, whose wolf it is
+    // about, or who stands right beside them.
+    if (!senderIsBot)
+        addressee = OllamaFaceToFaceAddressee(player, sourceLocal, trimmedMsg, scopeKey, addressee);
 
     // Something a person said in party chat: now and then, a gossip in the
     // group whispers another real player about it. (Bot lines are noted when
@@ -2037,7 +2203,8 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
                     }
                     else if (addressee.guid && !senderIsBot)
                     {
-                        botChance = chance * g_ContextBystanderChancePct / 100;
+                        // Something of theirs is theirs to answer.
+                        botChance = addressee.theirs ? 0 : chance * g_ContextBystanderChancePct / 100;
                     }
 
                     // A bot on cooldown would only be dropped after being
@@ -2770,11 +2937,12 @@ static void PlanCrowdForHumanLine(Player* player, const std::string& msg,
     else if (!fixed.empty() || aimedAtSomeoneElse)
     {
         // Aimed at one bot (or at someone else): they answer, and now and
-        // then somebody else chimes in.
+        // then somebody else chimes in -- never on something of theirs ("ur
+        // wolf is cool af"), which is theirs to answer.
         kind  = CrowdLineKind::Aimed;
         total = static_cast<uint32_t>(fixed.size());
         const uint32_t room     = cap > total ? cap - total : 0;
-        const uint32_t maxExtra = std::min<uint32_t>(g_CrowdChimeInMax, room);
+        const uint32_t maxExtra = addressee.theirs ? 0 : std::min<uint32_t>(g_CrowdChimeInMax, room);
         for (uint32_t i = 0; i < maxExtra && urand(0, 99) < g_CrowdChimeInChance; ++i)
             ++total;
     }

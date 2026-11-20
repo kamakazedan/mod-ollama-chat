@@ -141,6 +141,9 @@ struct ContextAddressee
     uint64_t    guid  = 0;      // 0 = said to the room, no clear addressee
     bool        isBot = false;
     std::string name;
+    // The line is about something of theirs ("ur wolf is cool af"): theirs to
+    // answer, and nobody else chimes in.
+    bool        theirs = false;
 };
 
 // Who line `seq` by `speaker` was most likely aimed at: the latest other

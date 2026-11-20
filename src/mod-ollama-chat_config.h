@@ -254,6 +254,8 @@ extern uint32_t    g_ContextReplyWindowSeconds;
 // Other bots' reply chance, in percent of normal, when a person's line was
 // clearly aimed at someone else.
 extern uint32_t    g_ContextBystanderChancePct;
+extern bool        g_ContextFaceToFace;
+extern float       g_ContextBesideYards;
 // Chance a bot answers a bot that just replied to it (before chain decay).
 extern uint32_t    g_ContextBotAddressedChance;
 // BotReplyChance.* is the chance that ANY bot answers a bot's line, instead
