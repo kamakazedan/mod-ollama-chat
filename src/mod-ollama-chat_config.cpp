@@ -540,6 +540,12 @@ uint32_t    g_SaidMax             = 2;
 uint32_t    g_SaidMaxBasisChars   = 350;
 std::string g_SaidText;
 std::string g_SaidLineText;
+uint32_t    g_SaidAskMinutes      = 5;
+uint32_t    g_SaidAskMaxWords     = 8;
+std::vector<std::vector<std::string>> g_SaidAskWords;
+std::vector<std::vector<std::string>> g_SaidAskFiller;
+std::string g_SaidAskedText;
+std::string g_SaidAskedBasisText;
 
 bool        g_LinksLfgEnable      = true;
 std::vector<std::vector<std::string>> g_LinksLfgWords;
@@ -2801,7 +2807,8 @@ static void LoadNaturalChatV14Settings()
         "{subject}, the cheeky, gossipy or slightly catty kind of remark you would only make in a whisper, to get "
         "a laugh out of them. Base it on this, and nothing else: {fact}. Keep it playful, never "
         "cruel, nothing about anyone's real life, and make up nothing about {subject} beyond that. Do not say you "
-        "are whispering. One short line, under 20 words, no name in front, no quotes.");
+        "are whispering. Make it plain who it is about -- {who} -- so they know whom you mean. One short line, "
+        "under 20 words, not starting with your own name, no quotes.");
     g_AsideHistoryNote = sConfigMgr->GetOption<std::string>("OllamaChat.Aside.HistoryNote",
         "(nothing yet: you whispered them first)");
     g_AsideFactSaid = sConfigMgr->GetOption<std::string>("OllamaChat.Aside.FactSaid",
@@ -4125,6 +4132,24 @@ static void LoadNaturalChatV41Settings()
         "of it, answer from that -- what it is, where it is, how it goes -- and never make up more than it tells "
         "you: when it does not say, say you are not sure.");
     g_SaidLineText = text("OllamaChat.Said.LineText", "{ago} in {place} you said '{line}', going on this: {basis}");
+    g_SaidAskMinutes  = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Said.AskMinutes", 5), 60);
+    g_SaidAskMaxWords = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Said.AskMaxWords", 8), 1, 30);
+    g_SaidAskWords = phrases("OllamaChat.Said.AskWords",
+        "who|whom|whose|whos|what|whats|wat|wut|wot|which|where|wheres|why|whys|how|hows|huh|wdym|wym|eh|"
+        "meaning|mean|meant|explain|sorry|pardon|really|srsly|seriously");
+    g_SaidAskFiller = phrases("OllamaChat.Said.AskFillerWords",
+        "lol|lmao|lmfao|rofl|haha*|hehe*|ha|um*|uh*|er|erm|hm*|oh|ok|okay|wait|so|and|but|or|the|a|an|is|was|"
+        "are|were|be|do|does|did|you|u|ya|ye|yo|ur|your|youre|she|shes|her|hers|he|hes|him|his|they|theyre|"
+        "them|their|that|thats|this|it|its|those|these|there|one|ones|talking|talkin|on|about|bout|by|of|to|"
+        "in|at|for|with|again|exactly|guy|girl|dude|person|someone|thing|supposed|suppose|gonna|going|now|"
+        "then|xd|omg|wtf");
+    g_SaidAskedText = text("OllamaChat.Said.AskedText",
+        "{player_name} is asking you about what you said {ago}: '{line}'.{went_on} Answer it straight: say "
+        "exactly who or what you meant -- a person by name or by what they are in the group, a thing by its "
+        "name -- and why you said it. Do not be vague or evasive about it, do not act as if you are not sure "
+        "what you meant, and do not answer with a question. Anything more they ask, answer only from what you "
+        "had to go on, and what that does not say, say plainly you are not sure of.");
+    g_SaidAskedBasisText = text("OllamaChat.Said.AskedBasisText", " You said it going on this: {basis}.");
 
     // --- "anyone on [quest]?": looking for a group for it ------------------------------------
     g_LinksLfgEnable = sConfigMgr->GetOption<bool>("OllamaChat.Links.LfgEnable", true);

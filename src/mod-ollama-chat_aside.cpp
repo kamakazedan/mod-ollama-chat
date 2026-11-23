@@ -223,6 +223,35 @@ namespace
         PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
         if (!ai || !ai->GetChatHelper() || g_AsidePrompt.empty())
             return false;
+
+        // Who it is about, plainly: "lol who?" was the answer to "those
+        // leggings she's rocking are a bit much arent they?".
+        const char* duty = PlayerbotAI::IsTank(about) ? "the tank" : PlayerbotAI::IsHeal(about) ? "the healer" : "";
+        std::string handle = duty;
+        if (handle.empty())
+        {
+            bool sameClass = false;
+            for (GroupReference* ref = group->GetFirstMember(); ref && !sameClass; ref = ref->next())
+                if (Player* m = ref->GetSource())
+                    sameClass = m != about && m->getClass() == about->getClass();
+            if (!sameClass)
+            {
+                handle = ai->GetChatHelper()->FormatClass(about->getClass());
+                std::transform(handle.begin(), handle.end(), handle.begin(),
+                               [](unsigned char ch) { return char(std::tolower(ch)); });
+                handle = "the " + handle;
+            }
+        }
+        const std::string whoItIs = handle.empty() ? about->GetName() + " by name"
+                                                   : about->GetName() + " by name, or as " + handle;
+        // What it went on, kept with the line: asked "who?" or "what about
+        // them?", it knows (mod-ollama-chat_said).
+        const std::string basis =
+            fmt::format("{} is a level {} {} {} in your group{}; {}", about->GetName(), about->GetLevel(),
+                        ai->GetChatHelper()->FormatRace(about->getRace()),
+                        CleanRoleForPrompt(ChatHelper::FormatClass(about, AiFactory::GetPlayerSpecTab(about))),
+                        *duty ? std::string(", ") + duty : std::string(), fact);
+
         std::string prompt = SafeFormat(g_AsidePrompt,
                                         fmt::arg("bot_name", bot->GetName()),
                                         fmt::arg("bot_level", bot->GetLevel()),
@@ -231,6 +260,7 @@ namespace
                                         fmt::arg("bot_personality", GetPersonalityPromptAddition(GetBotPersonality(bot))),
                                         fmt::arg("player_name", to->GetName()),
                                         fmt::arg("subject", about->GetName()),
+                                        fmt::arg("who", whoItIs),
                                         fmt::arg("fact", fact));
         if (prompt.empty() || prompt == "[Format Error]")
             return false;
@@ -246,6 +276,7 @@ namespace
         request.prompt            = std::move(prompt);
         request.botName           = bot->GetName();
         request.originMessage     = g_AsideHistoryNote;
+        request.basis             = basis;
         request.kind              = OllamaRequestKind::ChatReply;
         request.triggerBotReplies = false;
         request.recordHistory     = true;    // a whisper back carries on from it

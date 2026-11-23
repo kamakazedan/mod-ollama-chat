@@ -385,6 +385,7 @@ namespace
         request.triggerBotReplies = false;   // the rest of the group need not answer it
         request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
         request.progressKey       = key;     // out: nobody else need say it
+        request.basis             = done + left;   // asked "what's left?", it knows (mod-ollama-chat_said)
         return OllamaDispatch_Submit(std::move(request));
     }
 }

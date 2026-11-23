@@ -139,10 +139,15 @@ namespace
         return out + Roleplay_BuildVoicePrompt(bot);
     }
 
+    std::string Where(Player* p)
+    {
+        return p->GetMap() ? std::string(p->GetMap()->GetMapName()) : std::string("the dungeon");
+    }
+
     // One line in the group's chat: the model's, or now and then a typed one
     // -- which also goes out when the model cannot be reached.
     bool Say(Player* bot, Group* group, const std::string& prompt, const std::vector<std::string>& typed,
-             uint32_t typedChance, uint32_t delayMs, bool answerable)
+             uint32_t typedChance, uint32_t delayMs, bool answerable, std::string basis)
     {
         if (!bot || !group || !OllamaIsBotPlayer(bot))
             return false;
@@ -166,6 +171,7 @@ namespace
         request.triggerBotReplies = answerable;
         request.extraDelayMs      = delayMs;
         request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
+        request.basis             = std::move(basis);   // asked "what happened?", it knows (mod-ollama-chat_said)
         if (!stock.empty() && (prompt.empty() || Chance(typedChance)))
             request.fixedText = stock;
         else if (!prompt.empty())
@@ -201,7 +207,8 @@ namespace
         if (!bot)
             return;
         if (Say(bot, group, BotPrompt(bot, g_WipeTankDownPrompt, w), g_WipeTankDownLines, g_WipeTypedChance,
-                Between(300, 1500), false))
+                Between(300, 1500), false,
+                tank->GetName() + ", your tank, died in the middle of a fight in " + Where(bot)))
         {
             ++g_stats.tankDown;
             if (g_DebugEnabled)
@@ -220,7 +227,7 @@ namespace
             tank = nullptr;
         if (tank && OllamaIsBotPlayer(tank) && Chance(g_WipeApologyChance) &&
             Say(tank, group, BotPrompt(tank, g_WipeApologyPrompt, w), g_WipeApologyLines, g_WipeTypedChance, delay,
-                true))
+                true, "your whole group has just died in " + Where(tank) + " -- a wipe -- with you tanking"))
         {
             ++g_stats.apologies;
             delay += Between(3500, 6000);
@@ -234,7 +241,8 @@ namespace
                 others.push_back(p);
         Player* bot = others.empty() ? (tank && OllamaIsBotPlayer(tank) ? tank : nullptr) : Pick(others);
         if (bot && Say(bot, group, BotPrompt(bot, g_WipeNoRezPrompt, w), g_WipeNoRezLines, g_WipeTypedChance, delay,
-                       true))
+                       true, "your whole group has just died in " + Where(bot) +
+                                 " -- a wipe -- and nobody was left alive who could resurrect anyone"))
             ++g_stats.noRez;
         if (g_DebugEnabled)
             LOG_INFO("module.ollamachat", "[Ollama Chat] {}'s group wiped{}.", group->GetLeaderName(),
@@ -354,7 +362,9 @@ namespace
                 return;
             Player* bot = Pick(deadBots);
             if (Say(bot, group, BotPrompt(bot, g_WipeRunBackPrompt, w), g_WipeRunBackLines, g_WipeTypedChance,
-                    Between(500, 2500), true))
+                    Between(500, 2500), true,
+                    "you died in that fight in " + Where(bot) +
+                        ", and nobody still alive in your group can resurrect you: you run back"))
                 ++g_stats.runBack;
         }
     }

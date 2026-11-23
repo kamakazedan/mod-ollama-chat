@@ -155,6 +155,9 @@ namespace
         request.extraDelayMs      = urand(1200, 3500);   // the moment it takes to read the rolls
         request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
         request.prompt            = prompt;
+        // Asked "what roll?", it knows (mod-ollama-chat_said).
+        request.basis = fmt::format("in your group's loot roll for {}, {} rolled {} out of 100{}", item,
+                                    roller->GetName(), r.number, outcome);
         if (OllamaDispatch_Submit(std::move(request)))
         {
             g_lastReaction[groupKey] = now;

@@ -122,6 +122,10 @@ namespace
         request.kind              = OllamaRequestKind::EventChatter;
         request.triggerBotReplies = true;
         request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
+        // Asked "what happened?", it knows (mod-ollama-chat_said).
+        request.basis = "for the last minute you were stuck at " + m.what + " in " + m.zone +
+                        ", getting on and off your mount over and over without managing to " + m.verb +
+                        " it, and you have just given up on it";
         // In a city's /say, only while nobody in earshot has heard a bot start
         // something there lately (mod-ollama-chat_citysay).
         if ((source != SRC_SAY_LOCAL || CitySay_Claim(bot)) && OllamaDispatch_Submit(std::move(request)))

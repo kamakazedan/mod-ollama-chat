@@ -218,6 +218,19 @@ namespace
         }
         if (request.prompt.empty() && request.fixedText.empty())
             return;
+        // How it came to be in the group: asked "how'd you end up here?", it
+        // knows (mod-ollama-chat_said).
+        if (ex)
+            request.basis = "you had just been talking with " + player->GetName() + " " + ex->where +
+                            " -- they said '" + ex->playerLine + "', you said '" + ex->botLine +
+                            "' -- and then joined their group";
+        else if (lfg)
+            request.basis = "the dungeon finder has just put you in a group with " + player->GetName() +
+                            " and a few others, for a dungeon";
+        else
+            request.basis = player->GetName() + ", a level " + std::to_string(player->GetLevel()) + " " +
+                            ai->GetChatHelper()->FormatClass(player->getClass()) +
+                            ", has just invited you to their group out of the blue, and you joined";
         if (!OllamaDispatch_Submit(std::move(request)))
             return;
 

@@ -5852,8 +5852,14 @@ OllamaChat.Aside.BotMinutes = 45
 
 #    OllamaChat.Aside.Prompt
 #        {bot_name}, {bot_level}, {bot_race}, {bot_class}, {bot_personality},
-#        {player_name} (whispered), {subject} (talked about), {fact}.
-OllamaChat.Aside.Prompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} You are in a group with {player_name} and with {subject}. Whisper {player_name} privately: a quick aside about {subject}, the cheeky, gossipy or slightly catty kind of remark you would only make in a whisper, to get a laugh out of them. Base it on this, and nothing else: {fact}. Keep it playful, never cruel, nothing about anyone's real life, and make up nothing about {subject} beyond that. Do not say you are whispering. One short line, under 20 words, no name in front, no quotes."
+#        {player_name} (whispered), {subject} (talked about), {fact}, {who}
+#        (how to make plain who it is about: "Nyxie by name, or as the
+#        healer"; "or as the hunter" only when nobody else in the group is
+#        one). Told only "no name in front", a bot whispered "those leggings
+#        she's rocking are a bit much arent they?" and was asked "lol who?".
+#        Who it was about and what it went on are kept with the line
+#        (OllamaChat.Said.*), for when it is asked.
+OllamaChat.Aside.Prompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}. Your chat style: {bot_personality} You are in a group with {player_name} and with {subject}. Whisper {player_name} privately: a quick aside about {subject}, the cheeky, gossipy or slightly catty kind of remark you would only make in a whisper, to get a laugh out of them. Base it on this, and nothing else: {fact}. Keep it playful, never cruel, nothing about anyone's real life, and make up nothing about {subject} beyond that. Do not say you are whispering. Make it plain who it is about -- {who} -- so they know whom you mean. One short line, under 20 words, not starting with your own name, no quotes."
 
 #    OllamaChat.Aside.HistoryNote
 OllamaChat.Aside.HistoryNote = "(nothing yet: you whispered them first)"
@@ -6882,7 +6888,11 @@ OllamaChat.Outlook.FactsText = "Anything from the game you name -- an item, ques
 #        it went on cut to MaxBasisChars; and its replies are told them (Text,
 #        a LineText each), so asked about any of it, it answers from that and
 #        makes nothing more up. Placeholders: Text {lines}; LineText {ago},
-#        {place} ("General", "/say"), {line}, {basis}. .ollama status chat
+#        {place} ("General", "a whisper", "party chat"), {line}, {basis}.
+#        Every line is kept, with or without anything behind it, for
+#        AskedText below. A line said to someone alone (a whisper) is told
+#        only to them, and one said in a group's chat only to that group: an
+#        aside about someone is never repeated to them. .ollama status chat
 #        counts it. 0 turns it off.
 #        Default: 1, 20, 2, 350, (below)
 OllamaChat.Said.Enable = 1
@@ -6891,6 +6901,37 @@ OllamaChat.Said.Max = 2
 OllamaChat.Said.MaxBasisChars = 350
 OllamaChat.Said.Text = "What you have said lately, and what you had to go on when you said it: {lines}. If anyone asks about any of it, answer from that -- what it is, where it is, how it goes -- and never make up more than it tells you: when it does not say, say you are not sure."
 OllamaChat.Said.LineText = "{ago} in {place} you said '{line}', going on this: {basis}"
+
+#    OllamaChat.Said.AskMinutes
+#    OllamaChat.Said.AskMaxWords
+#    OllamaChat.Said.AskWords
+#    OllamaChat.Said.AskFillerWords
+#    OllamaChat.Said.AskedText
+#    OllamaChat.Said.AskedBasisText
+#        Asked back about what it said. A bot whispered "those leggings
+#        she's rocking are a bit much arent they?", was asked "lol who?",
+#        and answered "the one in the group with the weird gear". Now a
+#        line of AskMaxWords words or fewer, within AskMinutes of a bot's
+#        line that the one asking heard -- the newest one said where they
+#        ask, else the newest at all -- asks back about it when it has an
+#        AskWords word in it (or a question mark) and nothing but those,
+#        AskFillerWords and words of that line: "lol who?", "what
+#        leggings?", "who are you on about", "?". "what level are you?" is a
+#        question of its own. The reply is told which line, what it went on
+#        (AskedBasisText, when it had anything), and to say exactly who or
+#        what it meant, and why (AskedText); what it went on is kept with the
+#        answer too, for the next question. Word lists are '|'-separated
+#        single words; a word ending in '*' matches any word starting so.
+#        Placeholders: AskedText {player_name}, {ago}, {place}, {line},
+#        {went_on}; AskedBasisText {basis}. .ollama status chat counts it.
+#        AskMinutes 0 turns it off.
+#        Default: 5, 8, (below)
+OllamaChat.Said.AskMinutes = 5
+OllamaChat.Said.AskMaxWords = 8
+OllamaChat.Said.AskWords = "who|whom|whose|whos|what|whats|wat|wut|wot|which|where|wheres|why|whys|how|hows|huh|wdym|wym|eh|meaning|mean|meant|explain|sorry|pardon|really|srsly|seriously"
+OllamaChat.Said.AskFillerWords = "lol|lmao|lmfao|rofl|haha*|hehe*|ha|um*|uh*|er|erm|hm*|oh|ok|okay|wait|so|and|but|or|the|a|an|is|was|are|were|be|do|does|did|you|u|ya|ye|yo|ur|your|youre|she|shes|her|hers|he|hes|him|his|they|theyre|them|their|that|thats|this|it|its|those|these|there|one|ones|talking|talkin|on|about|bout|by|of|to|in|at|for|with|again|exactly|guy|girl|dude|person|someone|thing|supposed|suppose|gonna|going|now|then|xd|omg|wtf"
+OllamaChat.Said.AskedText = "{player_name} is asking you about what you said {ago}: '{line}'.{went_on} Answer it straight: say exactly who or what you meant -- a person by name or by what they are in the group, a thing by its name -- and why you said it. Do not be vague or evasive about it, do not act as if you are not sure what you meant, and do not answer with a question. Anything more they ask, answer only from what you had to go on, and what that does not say, say plainly you are not sure of."
+OllamaChat.Said.AskedBasisText = " You said it going on this: {basis}."
 
 #    OllamaChat.Outlook.SideText
 #    OllamaChat.Outlook.HomeCityText

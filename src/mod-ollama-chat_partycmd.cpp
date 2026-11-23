@@ -1678,6 +1678,7 @@ namespace
         request.partyAck          = true;    // remembered, so the next one is worded differently
         request.readyAsk          = readyAsk;
         request.noEcho            = true;    // due now, and kept fresh by the line above instead
+        request.basis             = situation;   // asked "why?", it knows (mod-ollama-chat_said)
         request.maxReplyLength    = OllamaMaxReplyLengthFor(tank);
         if (must)
         {
@@ -1859,6 +1860,9 @@ namespace
             request.noEcho            = true;    // "gg" from everyone is the point
             request.extraDelayMs      = delay;
             request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
+            request.basis             = "your group has just finished " + w.dungeon + ", " + tank->GetName() +
+                                        " tanking" +
+                                        (w.skipped.empty() ? std::string() : ", skipping " + w.skipped + " on purpose");
             if (nextTyped < typed.size() && Between(1, 100) <= g_PartyCheerCannedChance)
                 request.fixedText = Personality_StyleCanned(bot, typed[nextTyped++]);
             else

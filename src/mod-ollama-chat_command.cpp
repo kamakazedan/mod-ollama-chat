@@ -669,9 +669,10 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
 
     const SaidStats said = Said_GetStats();
     if (show("chat"))
-        out("What bots said, kept with what they went on: {} - {} lines kept, {} replies told them, {} bots "
-            "with some now", g_SaidEnable ? "on" : "off", (unsigned long long)said.noted,
-            (unsigned long long)said.told, said.bots);
+        out("What bots said, kept with what they went on: {} - {} lines kept ({} with something behind them), {} "
+            "replies told them, {} asked back about one ('lol who?'), {} bots with some now",
+            g_SaidEnable ? "on" : "off", (unsigned long long)said.lines, (unsigned long long)said.noted,
+            (unsigned long long)said.told, (unsigned long long)said.askedBack, said.bots);
 
     const CrowdStats crowd = Crowd_GetStats();
     if (show("chat"))

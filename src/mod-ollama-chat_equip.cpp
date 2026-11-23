@@ -4,6 +4,7 @@
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_handler.h"
+#include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_world.h"
@@ -164,6 +165,10 @@ namespace
         request.kind              = OllamaRequestKind::EventChatter;
         request.triggerBotReplies = true;   // a "nice" from someone else is fair
         request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
+        // Asked "where'd you get that?" or "is it any good?", it knows
+        // (mod-ollama-chat_said).
+        request.basis = fmt::format("you just put on [{}] ({}), new: you got it in the last {} minutes. {}",
+                                    proto->Name1, WhatItIs(proto), g_EquipLootedMinutes, Links_DescribeItem(proto));
         if (OllamaDispatch_Submit(std::move(request)))
         {
             g_botSaid[self]     = now;

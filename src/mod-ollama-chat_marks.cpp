@@ -112,6 +112,7 @@ namespace
         request.directAddress     = true;    // an answer to the mark, not ambient chatter
         request.triggerBotReplies = false;
         request.maxReplyLength    = OllamaMaxReplyLengthFor(rogue);
+        request.basis             = what;   // asked "why not?", it knows (mod-ollama-chat_said)
         if (OllamaDispatch_Submit(std::move(request)))
         {
             g_said[key] = now;

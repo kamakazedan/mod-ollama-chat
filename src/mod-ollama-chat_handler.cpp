@@ -3394,8 +3394,12 @@ bool Crowd_FireSlot(CrowdPlan& plan, size_t index)
                                            excludeSeq, hint, leadUp, &facts);
     if (prompt.empty())
         return false;
-    // A turn in a conversation goes on its premise, too.
-    if (plan.kind == CrowdLineKind::Conversation && !slot.hint.empty())
+    // A turn in a conversation goes on its premise, too; an answer to an
+    // order, a favour or a party command on what it did (its hint): asked
+    // "why are we waiting?", it knows.
+    if ((plan.kind == CrowdLineKind::Conversation || plan.kind == CrowdLineKind::Command ||
+         plan.kind == CrowdLineKind::Order || plan.kind == CrowdLineKind::Favor) &&
+        !slot.hint.empty())
         facts += (facts.empty() ? "" : " ") + slot.hint;
     // An order or a favour is answered with its own instruction (slot.hint),
     // which says what the bot did. Only a plain answer to a line that told it
@@ -3815,10 +3819,13 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     if (!asked.empty())
         prompt += " " + asked;
 
-    // What it said lately of its own accord, and what it said it on: "kodo?
-    // where is it supposed to drop?" gets the real answer, not "no idea"
+    // What it said lately where they heard it, and what it said it on:
+    // "kodo? where is it supposed to drop?" gets the real answer, not "no
+    // idea" -- and "lol who?" a name, not "the one with the weird gear"
     // (mod-ollama-chat_said).
-    const std::string said = Said_PromptFor(bot);
+    std::string askedBasis;
+    const std::string said = Said_PromptFor(bot, player, playerMessage, Said_Place(source, channelName),
+                                            &askedBasis);
     if (!said.empty())
         prompt += " " + said;
 
@@ -3864,7 +3871,8 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     if (facts)
     {
         facts->clear();
-        for (const std::string* part : { &named, &lfg, &known, &wants, static_cast<const std::string*>(&lagState) })
+        for (const std::string* part : { &named, &lfg, &known, &wants, static_cast<const std::string*>(&lagState),
+                                         static_cast<const std::string*>(&askedBasis) })
             if (!part->empty())
                 *facts += (facts->empty() ? "" : " ") + *part;
     }

@@ -162,6 +162,11 @@ namespace
         request.kind              = OllamaRequestKind::EventChatter;
         request.triggerBotReplies = true;   // "lol close one" from someone else is fair
         request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
+        // Asked "what happened?", it knows (mod-ollama-chat_said).
+        request.basis = fmt::format("you are {} in {}; in the fight that just ended your {} got down to {}%, so you "
+                                    "drank {}, and came through it alive",
+                                    role, map->GetMapName(), n.mana ? "mana" : "health", n.pct,
+                                    TextRules::WithArticle(proto->Name1));
         if (OllamaDispatch_Submit(std::move(request)))
         {
             g_botSaid[self]      = now;

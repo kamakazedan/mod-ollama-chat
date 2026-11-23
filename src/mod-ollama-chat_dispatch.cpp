@@ -1345,12 +1345,18 @@ namespace
                 g_petNameGap.erase(gap);
         }
         Links_NoteSent(line);
-        // What it said, and what it went on: asked about it, it knows
-        // (mod-ollama-chat_said).
-        if (!c.request.basis.empty())
+        // What it said, to whom, and what it went on: asked about it -- "lol
+        // who?" -- it knows (mod-ollama-chat_said).
+        {
+            const bool whisper = c.request.source == SRC_WHISPER_LOCAL;
+            Group* saidIn = (c.request.source == SRC_PARTY_LOCAL || c.request.source == SRC_RAID_LOCAL)
+                                ? bot->GetGroup()
+                                : nullptr;
             Said_Note(bot, plain,
-                      Context_ChannelLabel(c.request.source, channel ? channel->GetName() : c.request.channelName),
-                      c.request.basis);
+                      Said_Place(c.request.source, channel ? channel->GetName() : c.request.channelName),
+                      c.request.basis, whisper ? c.request.targetGuid : 0,
+                      saidIn ? saidIn->GetGUID().GetCounter() : 0);
+        }
         if (c.request.offerEntry)   // "anyone want [Linen Cloth]?": out, so "me!" claims it
             Bags_NoteOffer(bot, c.request.offerEntry, c.request.scopeKey);
         else                        // "just have some [Ankh] if you want", asked what it has

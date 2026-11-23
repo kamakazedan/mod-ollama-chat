@@ -539,6 +539,12 @@ extern uint32_t    g_SaidMax;
 extern uint32_t    g_SaidMaxBasisChars;
 extern std::string g_SaidText;
 extern std::string g_SaidLineText;
+extern uint32_t    g_SaidAskMinutes;
+extern uint32_t    g_SaidAskMaxWords;
+extern std::vector<std::vector<std::string>> g_SaidAskWords;
+extern std::vector<std::vector<std::string>> g_SaidAskFiller;
+extern std::string g_SaidAskedText;
+extern std::string g_SaidAskedBasisText;
 
 // "anyone on [quest]?" is looking for a group for it (mod-ollama-chat_links).
 extern bool        g_LinksLfgEnable;

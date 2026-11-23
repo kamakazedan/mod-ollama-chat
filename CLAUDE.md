@@ -515,7 +515,15 @@ reply was told (`GenerateBotPrompt`'s `facts`: what the things named are,
 what the game says of where they are) -- kept with the line once it is out,
 and the bot's replies are told its last few (`Said_PromptFor`). Asked
 "kodo? where is it supposed to drop?", the kodo bot said "no idea": it had
-nothing of what it had been given left. A new kind of line sets `basis`.
+nothing of what it had been given left. A new kind of line sets `basis`:
+who or what it is about, by name, and what happened -- an event line too
+(gear put on, a potion, a roll, a wipe, the tank's calls), not just a topic.
+Asked back about a line ("lol who?", "what leggings?": `Said.Ask*`), the
+reply is told which line and to say exactly who or what it meant: an aside
+whispered "those leggings she's rocking are a bit much arent they?" and
+answered "lol who?" with "the one in the group with the weird gear". A line
+said in a whisper is told only to whom it was whispered, and one in a
+group's chat only to that group (`Said_Note`'s `to`, `group`).
 
 A quest's item is its quest's: told to a bot, it says whose quest it is for
 and how far along the bot is (`Links.QuestItemText`), and it is never talk of
