@@ -1158,6 +1158,14 @@ namespace
             able.push_back(bot);
         }
         std::shuffle(able.begin(), able.end(), Rng());
+        // Gear is an upgrade, if for anyone, for those near the level it is
+        // for: they are judged first. Judged at random, the looks went mostly
+        // to bots far past the level it is for, and a level 22 mace put up in
+        // Stormwind got no answer at any price.
+        constexpr uint32_t kGearLevelBand = 10;
+        if (wearable && p->RequiredLevel > 1)
+            std::stable_partition(able.begin(), able.end(), [&](Player* bot)
+                                  { return bot->GetLevel() <= p->RequiredLevel + kGearLevelBand; });
         if (able.size() > g_TradeMaxJudged)
             able.resize(g_TradeMaxJudged);
 

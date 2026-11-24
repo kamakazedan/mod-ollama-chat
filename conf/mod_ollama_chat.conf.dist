@@ -5109,7 +5109,10 @@ OllamaChat.Trade.MaxSpendPercent = 50
 #    OllamaChat.Trade.MaxJudged
 #        How many of the bots in the city that could use a thing (the right
 #        level and class, and some money) are asked how much use it is, for
-#        each thing put up.
+#        each thing put up. Gear is put first to those within 10 levels of
+#        the level it is for: it is an upgrade, if for anyone, for them.
+#        Only a bot it would be of real use to buys it (an upgrade, a quest
+#        item, its profession's): none buys to sell it on, however cheap.
 #        Default: 30
 OllamaChat.Trade.MaxJudged = 30
 
