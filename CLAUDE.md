@@ -243,7 +243,10 @@ module's, so the pause, the resume, and the end of a rest that ends by itself
 (the tank's "lets go" goes out first, and the run moves when it lands) stay
 together here, and so does skipping a boss someone asks to skip, and how
 hard the tank pulls ("be more aggressive" is Leeroy, "slow down" Dynamic
-again). It is only ever the tank's own `dc` actions, sent as the player
+again), and a ready check everyone answers ready to, which starts or resumes
+a bot tank's run as a typed "ready" does (`OllamaChatReadyCheckScript`: the
+packet hook notes the check and each answer, nothing more; the world tick
+decides). It is only ever the tank's own `dc` actions, sent as the player
 (`dc skip <boss>`, `dc unskip <boss>`, `dc go <boss>`, `dc pull
 off|dynamic`: what they take is mod-dungeon-clear's `DcCommandApi.h`),
 never its run state written from here; the skip list and the pull setting

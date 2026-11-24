@@ -3177,6 +3177,33 @@ OllamaChat.PartyCommands.HintBreak = "{player_name} asked for {reason}, so you h
 OllamaChat.PartyCommands.HintResume = "{player_name} is ready again, so the run carries on and you lead the way. Say so in a few words, in your own chat style.{recent_acks}"
 OllamaChat.PartyCommands.HintWaiting = "{player_name} wants to start, but not everyone is here yet: still waiting for {missing}. Tell them in a few words that you will start as soon as everyone is here.{recent_acks}"
 
+#    OllamaChat.PartyCommands.ReadyCheck
+#    OllamaChat.PartyCommands.ReadyCheckWaitMinutes
+#    OllamaChat.PartyCommands.ReadyCheckStartText
+#    OllamaChat.PartyCommands.ReadyCheckResumeText
+#    OllamaChat.PartyCommands.ReadyCheckWaitingText
+#        A ready check in a dungeon with a dungeon-clear bot tank. Once
+#        everyone in the group has answered it ready, the run starts -- or
+#        carries on, when it was paused or resting -- as if whoever did the
+#        check had typed "ready", and the tank says so in its own chat style
+#        (StartText, ResumeText). Everyone ready, then "r" typed to get the
+#        tank going, was the way before. Someone not here yet (MaxDistance
+#        from the tank, or not inside): the tank says it will start once
+#        they are (WaitingText), and does, within WaitMinutes ("wait" or
+#        "stop" calls that off). Anyone not ready, offline or not answering
+#        within the check's 35 seconds, and nothing happens. Only with a bot
+#        tank: a player who tanks starts when they like. Placeholders:
+#        {player_name} (who did the check), {missing} (WaitingText);
+#        {~a|b|c} picks one each time. The tank's line is
+#        OllamaChat.Party.AnnouncePrompt around the text. .ollama status
+#        party counts them. 0 turns it off.
+#        Default: 1, 5, (below)
+OllamaChat.PartyCommands.ReadyCheck = 1
+OllamaChat.PartyCommands.ReadyCheckWaitMinutes = 5
+OllamaChat.PartyCommands.ReadyCheckStartText = "{player_name} did a ready check and everyone said they are ready, so you have just started the run and are leading the group on. {~Tell them you are off|Get them moving|Say lets go|Say you are pulling}, in two to six words of your own, whatever suits your chat style."
+OllamaChat.PartyCommands.ReadyCheckResumeText = "{player_name} did a ready check and everyone said they are ready, so the run carries on now and you lead the way again. {~Tell them you are off again|Get them moving again|Say you are carrying on}, in a few words of your own, whatever suits your chat style."
+OllamaChat.PartyCommands.ReadyCheckWaitingText = "{player_name} did a ready check and everyone said they are ready, but {missing} is not here with you yet, so you will start the moment they are. Say so in a few words of your own."
+
 #    OllamaChat.PartyCommands.RecentAcks
 #    OllamaChat.PartyCommands.RecentAcksText
 #        How many of the tank's answers each group remembers, and how they

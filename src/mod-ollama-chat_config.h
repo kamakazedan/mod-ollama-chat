@@ -430,6 +430,12 @@ extern std::string g_PartyCmdHintStart;
 extern std::string g_PartyCmdHintPause;
 extern std::string g_PartyCmdHintResume;
 extern std::string g_PartyCmdHintWaiting;
+// A ready check everyone answers ready to starts or resumes the run (PartyCommands.ReadyCheck*)
+extern bool        g_PartyReadyCheckEnable;
+extern uint32_t    g_PartyReadyCheckWaitMinutes;
+extern std::string g_PartyReadyCheckStartText;
+extern std::string g_PartyReadyCheckResumeText;
+extern std::string g_PartyReadyCheckWaitingText;
 extern std::string g_PartyDungeonGlossary;
 extern uint32_t    g_PartyDungeonAmbientPercent;   // ambient lines inside, as a share of outside
 extern std::string g_PartyDungeonFocusText;        // ...and what they keep to

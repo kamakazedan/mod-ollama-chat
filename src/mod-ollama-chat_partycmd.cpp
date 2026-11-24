@@ -16,7 +16,10 @@
 #include "Log.h"
 #include "Map.h"
 #include "ObjectAccessor.h"
+#include "Opcodes.h"
 #include "Player.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
 
 #include "ChatHelper.h"
 #include "Event.h"
@@ -91,6 +94,19 @@ namespace
     std::mutex g_finderMutex;
     std::unordered_map<uint64_t, std::unordered_set<uint64_t>> g_finderJoins;
     std::unordered_map<uint64_t, Invite>                        g_invites;
+
+#if OLLAMA_CHAT_DC_RUN_STATE
+    // What a ready check packet said, from the packet hook (any thread):
+    // who started one, or who answered and how.
+    struct ReadyCheckNote
+    {
+        uint64_t guid  = 0;
+        bool     start = false;
+        bool     ready = false;
+    };
+    std::mutex                  g_readyCheckMutex;
+    std::vector<ReadyCheckNote> g_readyCheckNotes;
+#endif
 
 #if OLLAMA_CHAT_DC_RUN_STATE
     // A bot the finder matched into this group -- not one somebody in it
@@ -349,6 +365,18 @@ namespace
         std::chrono::steady_clock::time_point calledAt{};       // the tank's "lets go" went to be written
     };
     std::unordered_map<uint32_t, Break> g_breaks;
+
+#if OLLAMA_CHAT_DC_RUN_STATE
+    // Everyone answered a ready check ready, but someone was not here yet: the
+    // run starts once they are (PartyCommands.ReadyCheckWaitMinutes), by the
+    // group's guid counter. "wait" or "stop" calls it off.
+    struct ReadyWait
+    {
+        uint64_t                              initiator = 0;
+        std::chrono::steady_clock::time_point since{};
+    };
+    std::unordered_map<uint32_t, ReadyWait> g_readyWaits;
+#endif
 
     // Real players in the group who are not inside, and near the tank, yet.
     std::vector<std::string> MissingPeople(Player* tank)
@@ -1344,6 +1372,9 @@ bool PartyCmd_HandleHumanLine(Player* player, const std::string& msg,
     if (intent == TextRules::PartyIntent::Pause)
     {
         const BreakKind kind = KindOfBreak(clean);
+#if OLLAMA_CHAT_DC_RUN_STATE
+        g_readyWaits.erase(GroupKey(player));   // "wait": not once they are here after all
+#endif
 
         // Nothing running to pause: ordinary chat (with the glossary, so a
         // "mb" still reads as a mana break).
@@ -2164,14 +2195,239 @@ namespace
         if (!SubmitLeadOffLine(tank))
             LeadOff(tank, key);   // nothing to say it with: it just goes
     }
+
+    // ---- a ready check everyone answers ready ----------------------------------------
+
+    struct ReadyCheck
+    {
+        uint64_t                     initiator = 0;
+        std::unordered_set<uint64_t> ready;
+        bool                         notReady  = false;
+        WatchClock::time_point       at{};
+    };
+    std::unordered_map<uint32_t, ReadyCheck> g_readyChecks;   // by the group's guid counter
+
+    // The game's own check runs 35 seconds, and a bot that tops its buffs up
+    // first answers as it ends.
+    constexpr auto kReadyCheckWait = std::chrono::seconds(45);
+
+    std::string ReadyCheckLine(const std::string& templ, Player* initiator, const std::string& missing)
+    {
+        if (templ.empty())
+            return {};
+        const std::string out = SafeFormat(TextRules::ExpandChoices(templ, WrapRng()),
+                                           fmt::arg("player_name", initiator->GetName()),
+                                           fmt::arg("missing", missing));
+        return out == "[Format Error]" ? std::string() : out;
+    }
+
+    // Everyone answered `initiator`'s ready check ready: the run starts, or
+    // carries on, as if they had typed "ready" -- and the tank says so.
+    void ReadyCheckPassed(Player* initiator)
+    {
+        Map* map = initiator->GetMap();
+        if (!map || !map->IsDungeon() || map->IsBattlegroundOrArena() || !initiator->GetGroup())
+            return;
+        Player* tank = DcLeaderSignal::FindLeaderTank(initiator);
+        if (!tank || !tank->IsInWorld() || !OllamaIsBotPlayer(tank) || tank->GetMap() != map)
+            return;   // only a bot tank's run: a player who tanks starts when they like
+        const bool running = DcLeaderSignal::FindRunOwner(initiator) != nullptr;
+        const bool paused  = running && DcLeaderSignal::IsInPausedDungeonClearRun(initiator);
+        if (running && !paused)
+            return;   // going already
+
+        const std::vector<std::string> missing = MissingPeople(tank);
+        if (!missing.empty())
+        {
+            // It starts once they are here (WatchReadyChecks).
+            const bool told = g_readyWaits.count(GroupKey(initiator)) > 0;
+            g_readyWaits[GroupKey(initiator)] = { initiator->GetGUID().GetRawValue(), WatchClock::now() };
+            if (told)
+                return;
+            ++g_stats.waiting;
+            ++g_stats.readyCheckWaiting;
+            SubmitTankLine(tank,
+                           ReadyCheckLine(g_PartyReadyCheckWaitingText, initiator, CrowdText::JoinNames(missing)));
+            return;
+        }
+        g_readyWaits.erase(GroupKey(initiator));
+
+        if (paused)
+        {
+            Dispatch(initiator, tank, "dc pause", "resume");
+            if (DcLeaderSignal::IsInPausedDungeonClearRun(initiator))
+            {
+                ++g_stats.refused;   // dungeon clear whispered why
+                return;
+            }
+            ++g_stats.resumed;
+            ++g_stats.readyCheckResumes;
+            g_breaks.erase(GroupKey(initiator));   // everyone said ready: the rest is over all the same
+        }
+        else
+        {
+            Dispatch(initiator, tank, "dc on", std::string());
+            if (!DcLeaderSignal::FindRunOwner(initiator))
+            {
+                ++g_stats.refused;   // dungeon clear whispered why
+                return;
+            }
+            ++g_stats.started;
+            ++g_stats.readyCheckStarts;
+            g_readyAsked.erase(GroupKey(initiator));   // its "everyone ready?" is answered
+#if OLLAMA_CHAT_DC_SKIPS
+            ApplyPendingSkips(initiator, tank);   // "skip the first boss", said before
+#endif
+        }
+        ReleaseStaysFor(initiator);
+        SubmitTankLine(tank, ReadyCheckLine(paused ? g_PartyReadyCheckResumeText : g_PartyReadyCheckStartText,
+                                            initiator, std::string()));
+        if (g_DebugEnabled)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] Everyone answered {}'s ready check ready in {}: {} {} the "
+                     "dungeon clear.", initiator->GetName(), map->GetMapName(), tank->GetName(),
+                     paused ? "carries on with" : "starts");
+    }
+
+    // What the hook noted since the last tick, and every check under way.
+    void WatchReadyChecks()
+    {
+        std::vector<ReadyCheckNote> notes;
+        {
+            std::lock_guard<std::mutex> lock(g_readyCheckMutex);
+            notes.swap(g_readyCheckNotes);
+        }
+        if (notes.empty() && g_readyChecks.empty() && g_readyWaits.empty())
+            return;
+
+        const WatchClock::time_point now = WatchClock::now();
+        for (const ReadyCheckNote& n : notes)
+        {
+            Player* who = ObjectAccessor::FindConnectedPlayer(ObjectGuid(n.guid));
+            Group* group = who ? who->GetGroup() : nullptr;
+            if (!group)
+                continue;
+            const uint32_t key = group->GetGUID().GetCounter();
+            auto it = g_readyChecks.find(key);
+            if (n.start)
+            {
+                // The same check, as another of the group's clients got it.
+                if (it != g_readyChecks.end() && it->second.initiator == n.guid &&
+                    now - it->second.at < std::chrono::seconds(5))
+                    continue;
+                Map* map = who->GetMap();
+                if (!OllamaIsRealPlayer(who) || !map || !map->IsDungeon() || map->IsBattlegroundOrArena() ||
+                    !DcLeaderSignal::FindLeaderTank(who))
+                {
+                    if (it != g_readyChecks.end())
+                        g_readyChecks.erase(it);
+                    continue;   // not in a dungeon-clear run's dungeon
+                }
+                g_readyWaits.erase(key);   // a new check says afresh who is ready
+                ReadyCheck& rc = g_readyChecks[key];
+                rc           = ReadyCheck{};
+                rc.initiator = n.guid;
+                rc.at        = now;
+                rc.ready.insert(n.guid);   // whoever starts one is ready
+                ++g_stats.readyChecks;
+                continue;
+            }
+            if (it == g_readyChecks.end())
+                continue;
+            if (n.ready)
+                it->second.ready.insert(n.guid);
+            else
+                it->second.notReady = true;   // not ready, or offline
+        }
+
+        for (auto it = g_readyChecks.begin(); it != g_readyChecks.end();)
+        {
+            ReadyCheck& rc = it->second;
+            Player* initiator = ObjectAccessor::FindConnectedPlayer(ObjectGuid(rc.initiator));
+            Group* group = initiator ? initiator->GetGroup() : nullptr;
+            if (rc.notReady || now - rc.at > kReadyCheckWait || !group || group->GetGUID().GetCounter() != it->first)
+            {
+                ++g_stats.readyCheckNotAll;
+                it = g_readyChecks.erase(it);
+                continue;
+            }
+            uint32_t answered = 0;
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                if (Player* member = ref->GetSource())
+                    answered += rc.ready.count(member->GetGUID().GetRawValue()) ? 1 : 0;
+            if (answered < group->GetMembersCount())
+            {
+                ++it;
+                continue;   // still waiting on someone
+            }
+            it = g_readyChecks.erase(it);
+            if (g_PartyCmdEnable && g_PartyReadyCheckEnable && DcModule::IsEnabled())
+                ReadyCheckPassed(initiator);
+        }
+
+        // Everyone was ready but someone not here: once they are, it starts.
+        std::vector<Player*> due;
+        for (auto it = g_readyWaits.begin(); it != g_readyWaits.end();)
+        {
+            Player* initiator = ObjectAccessor::FindConnectedPlayer(ObjectGuid(it->second.initiator));
+            Group* group = initiator ? initiator->GetGroup() : nullptr;
+            Player* tank = group ? DcLeaderSignal::FindLeaderTank(initiator) : nullptr;
+            const bool going = initiator && DcLeaderSignal::FindRunOwner(initiator) &&
+                               !DcLeaderSignal::IsInPausedDungeonClearRun(initiator);
+            if (!group || group->GetGUID().GetCounter() != it->first || !tank || going ||
+                now - it->second.since > std::chrono::minutes(g_PartyReadyCheckWaitMinutes) || !g_PartyCmdEnable ||
+                !g_PartyReadyCheckEnable || !DcModule::IsEnabled())
+            {
+                it = g_readyWaits.erase(it);   // gone, going already, or too long ago
+                continue;
+            }
+            if (!MissingPeople(tank).empty())
+            {
+                ++it;
+                continue;
+            }
+            it = g_readyWaits.erase(it);
+            due.push_back(initiator);
+        }
+        for (Player* initiator : due)
+            ReadyCheckPassed(initiator);
+    }
 }
 #endif
+
+bool OllamaChatReadyCheckScript::CanPacketSend(WorldSession* /*session*/, WorldPacket const& packet)
+{
+    // Every packet to every client comes through here, from any thread: say
+    // yes to all of them, and look no further than the opcode.
+    const uint16 op = packet.GetOpcode();
+    if (op != MSG_RAID_READY_CHECK && op != MSG_RAID_READY_CHECK_CONFIRM)
+        return true;
+#if OLLAMA_CHAT_DC_RUN_STATE
+    if (!g_PartyCmdEnable || !g_PartyReadyCheckEnable)
+        return true;
+    // The check: who started it (u64). An answer: who (u64), ready or not
+    // (u8) -- WorldSession::HandleRaidReadyCheckOpcode, Group::OfflineReadyCheck.
+    ReadyCheckNote n;
+    if (packet.size() < (op == MSG_RAID_READY_CHECK ? 8u : 9u))
+        return true;
+    n.guid = packet.read<uint64>(0);
+    if (op == MSG_RAID_READY_CHECK)
+        n.start = true;
+    else
+        n.ready = packet.read<uint8>(8) != 0;
+    std::lock_guard<std::mutex> lock(g_readyCheckMutex);
+    if (g_readyCheckNotes.size() < 512)
+        g_readyCheckNotes.push_back(n);
+#endif
+    return true;
+}
 
 void PartyCmd_Update(uint32_t diff)
 {
 #if !OLLAMA_CHAT_DC_RUN_STATE
     (void)diff;
 #else
+    // A ready check everyone said ready to: at once, not on the next look.
+    WatchReadyChecks();
     static uint32_t timer = 0;
     timer += diff;
     if (timer < 2000)

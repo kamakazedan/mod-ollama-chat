@@ -3,11 +3,15 @@
 
 #include "mod-ollama-chat_handler.h"   // ChatChannelSourceLocal
 
+#include "ScriptMgr.h"
+
 #include <cstdint>
 #include <string>
 #include <vector>
 
 class Player;
+class WorldPacket;
+class WorldSession;
 
 // --------------------------------------------------------------------------
 // Party instructions for mod-dungeon-clear.
@@ -21,6 +25,7 @@ class Player;
 //                                             itself once everyone has rested
 //   "wait", "stop", "brb"                     pause it until someone is ready
 //   "ok im done", "full", "done drinking"     resume it -- only while paused
+//   a ready check everyone answers ready to   start it, or resume it
 //
 // The tank answers in party ("np", "drink up"), and the line gets no other
 // replies -- so "mb" is never read as "my bad" again. A start waits for every
@@ -179,6 +184,28 @@ public:
     void OnInviteMember(Group* group, ObjectGuid guid) override;
 };
 
+// A ready check in a dungeon with a dungeon-clear bot tank
+// (PartyCommands.ReadyCheck): once everyone in the group has answered ready,
+// the run starts, or carries on after a pause, as if whoever started the
+// check had typed "ready" -- and the tank says so in its own chat style
+// (PartyCommands.ReadyCheckStartText, ...ResumeText). Someone not here yet
+// keeps it waiting (...WaitingText); anyone not ready, offline or not
+// answering, and it is left alone. Everyone answered ready, then "r" typed to
+// get the tank going, was the way before.
+//
+// The game sends the check (MSG_RAID_READY_CHECK, who started it) to the
+// whole group, and each answer (MSG_RAID_READY_CHECK_CONFIRM) to its leader
+// and assistants -- one of them the one who started it. The hook runs on
+// whatever thread sends a packet (a bot answers from its AI, on a map
+// thread): it only notes what the packet says, under a lock, and the world
+// tick (PartyCmd_Update) does the rest.
+class OllamaChatReadyCheckScript : public ServerScript
+{
+public:
+    OllamaChatReadyCheckScript() : ServerScript("OllamaChatReadyCheckScript", { SERVERHOOK_CAN_PACKET_SEND }) {}
+    bool CanPacketSend(WorldSession* session, WorldPacket const& packet) override;
+};
+
 struct PartyCmdStats
 {
     uint64_t started = 0;
@@ -200,6 +227,11 @@ struct PartyCmdStats
     uint64_t paceFaster   = 0;   // asked to pull faster: Leeroy
     uint64_t paceSlower   = 0;   // asked to slow down: dynamic again
     uint64_t paceAlready  = 0;   // ...when it pulled that way already
+    uint64_t readyChecks       = 0;   // ready checks in a dungeon with a bot tank
+    uint64_t readyCheckStarts  = 0;   // ...everyone ready: the run started
+    uint64_t readyCheckResumes = 0;   // ...everyone ready: the run carried on
+    uint64_t readyCheckWaiting = 0;   // ...everyone ready, but someone not here yet
+    uint64_t readyCheckNotAll  = 0;   // ...someone not ready, or no answer in time
 };
 PartyCmdStats PartyCmd_GetStats();
 

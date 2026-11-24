@@ -54,6 +54,9 @@ void Addmod_ollama_chatScripts()
     // Who the dungeon finder put in a group: the ones that leave after a run.
     new OllamaChatFinderJoinScript();
 
+    // A ready check everyone answers ready to: the bot tank starts the run.
+    new OllamaChatReadyCheckScript();
+
     // A bot putting on a rare or epic it just got: noted as it goes on.
     new OllamaChatEquipScript();
 

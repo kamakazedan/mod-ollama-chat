@@ -463,6 +463,11 @@ std::string g_PartyCmdHintStart;
 std::string g_PartyCmdHintPause;
 std::string g_PartyCmdHintResume;
 std::string g_PartyCmdHintWaiting;
+bool        g_PartyReadyCheckEnable        = true;
+uint32_t    g_PartyReadyCheckWaitMinutes   = 5;
+std::string g_PartyReadyCheckStartText;
+std::string g_PartyReadyCheckResumeText;
+std::string g_PartyReadyCheckWaitingText;
 std::string g_PartyDungeonGlossary;
 uint32_t    g_PartyDungeonAmbientPercent   = 35;
 std::string g_PartyDungeonFocusText;
@@ -4335,6 +4340,29 @@ static void LoadNaturalChatV44Settings()
              g_MountsAnswerSeconds);
 }
 
+static void LoadNaturalChatV45Settings()
+{
+    // --- a ready check everyone answers ready to starts the run (mod-ollama-chat_partycmd) -----
+    g_PartyReadyCheckEnable      = sConfigMgr->GetOption<bool>("OllamaChat.PartyCommands.ReadyCheck", true);
+    g_PartyReadyCheckWaitMinutes = std::clamp<uint32_t>(
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.PartyCommands.ReadyCheckWaitMinutes", 5), 1, 60);
+    g_PartyReadyCheckStartText = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.ReadyCheckStartText",
+        "{player_name} did a ready check and everyone said they are ready, so you have just started the run and "
+        "are leading the group on. {~Tell them you are off|Get them moving|Say lets go|Say you are pulling}, in "
+        "two to six words of your own, whatever suits your chat style.");
+    g_PartyReadyCheckResumeText = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.ReadyCheckResumeText",
+        "{player_name} did a ready check and everyone said they are ready, so the run carries on now and you lead "
+        "the way again. {~Tell them you are off again|Get them moving again|Say you are carrying on}, in a few "
+        "words of your own, whatever suits your chat style.");
+    g_PartyReadyCheckWaitingText = sConfigMgr->GetOption<std::string>("OllamaChat.PartyCommands.ReadyCheckWaitingText",
+        "{player_name} did a ready check and everyone said they are ready, but {missing} is not here with you "
+        "yet, so you will start the moment they are. Say so in a few words of your own.");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v45: a ready check everyone answers ready to starts "
+             "or resumes a bot tank's dungeon clear {} (waiting up to {} min for anyone not there yet).",
+             g_PartyReadyCheckEnable ? "on" : "off", g_PartyReadyCheckWaitMinutes);
+}
+
 static void LoadNaturalChatV39Settings()
 {
     // "NAT_HYPE:100|NAT_QUIET:5" -> chat style -> percent.
@@ -5451,6 +5479,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV42Settings();
     LoadNaturalChatV43Settings();
     LoadNaturalChatV44Settings();
+    LoadNaturalChatV45Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

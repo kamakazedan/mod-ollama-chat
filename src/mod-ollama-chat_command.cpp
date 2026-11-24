@@ -727,7 +727,8 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
                              "{} waited for players, {} refused; {} runs called done, {} gg, {} bots left after, "
                              "{} groups asked to stay. Skipping bosses when asked: {} - {} skipped ({} asked before "
                              "the run started), {} said no to, {} taken back. Pull pace when asked: {} - {} faster "
-                             "(Leeroy), {} slower (dynamic again), {} pulling that way already",
+                             "(Leeroy), {} slower (dynamic again), {} pulling that way already. Ready checks: {} - {} "
+                             "seen, everyone ready: {} started, {} carried on, {} waited for someone; {} not everyone",
                              g_PartyCmdEnable ? "on" : "off",
                              PartyCmd_Available() ? "found" : "not in this build",
                              (unsigned long long)party.started,
@@ -751,7 +752,13 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
                              !PartyCmd_SkipsAvailable() ? "not in this build" : (g_PartyPaceEnable ? "on" : "off"),
                              (unsigned long long)party.paceFaster,
                              (unsigned long long)party.paceSlower,
-                             (unsigned long long)party.paceAlready);
+                             (unsigned long long)party.paceAlready,
+                             g_PartyReadyCheckEnable ? "on" : "off",
+                             (unsigned long long)party.readyChecks,
+                             (unsigned long long)party.readyCheckStarts,
+                             (unsigned long long)party.readyCheckResumes,
+                             (unsigned long long)party.readyCheckWaiting,
+                             (unsigned long long)party.readyCheckNotAll);
 
     const ConjureStats conjure = Conjure_GetStats();
     if (show("bots"))
