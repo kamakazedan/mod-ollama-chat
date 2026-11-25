@@ -37,6 +37,7 @@
 #include "mod-ollama-chat_progress.h"
 #include "mod-ollama-chat_stuck.h"
 #include "mod-ollama-chat_gifts.h"
+#include "mod-ollama-chat_vitals.h"
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_gear.h"
 #include "mod-ollama-chat_aside.h"
@@ -1056,6 +1057,13 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
                              "through the fight, {} said so after it",
                              g_PotionsEnable ? "on" : "off", (unsigned long long)potions.noted,
                              (unsigned long long)potions.lived, (unsigned long long)potions.said);
+    const VitalsStats vitals = Vitals_GetStats();
+    if (show("party"))
+        out("Health and mana, as they really were: {} - {} people in groups looked at now, {} replies told "
+            "how the last {} min had gone, {} lines of a close call or of no mana not said (there was none), {} "
+            "dips noted from potions",
+            g_VitalsEnable ? "on" : "off", vitals.members, (unsigned long long)vitals.told, g_VitalsMinutes,
+            (unsigned long long)vitals.keptIn, (unsigned long long)vitals.dips);
     const ContextThreadStats thread = Context_GetThreadStats();
     if (show("party"))
         out("Keeping the thread: {} unprompted lines held back where a real player had just "

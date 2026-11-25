@@ -67,6 +67,7 @@
 #include "mod-ollama-chat_stuck.h"
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_gifts.h"
+#include "mod-ollama-chat_vitals.h"
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_gear.h"
 #include "mod-ollama-chat_aside.h"
@@ -3776,6 +3777,20 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
             prompt += " " + deaths;
     }
 
+    // ...and, where the talk in its group is of health, mana or a close call,
+    // how the last few minutes have really gone for each of them
+    // (mod-ollama-chat_vitals): "nearly dead there for a sec" was said by a
+    // tank who had never been in any trouble.
+    std::string vitals;
+    {
+        std::vector<std::string> heard{ playerMessage };
+        for (const ContextRecentLine& line : Context_RecentLines(bot, source, channelName, 4, g_ContextMaxAgeSeconds))
+            heard.push_back(line.text);
+        vitals = Vitals_PromptFor(bot, source, heard);
+        if (!vitals.empty())
+            prompt += " " + vitals;
+    }
+
     // Asked what it has, or for something: what is in its bags, what it could
     // spare and what it keeps (mod-ollama-chat_bags). Only when the talk is
     // about that -- a list in every prompt is what a bot would talk about --
@@ -3872,7 +3887,8 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     {
         facts->clear();
         for (const std::string* part : { &named, &lfg, &known, &wants, static_cast<const std::string*>(&lagState),
-                                         static_cast<const std::string*>(&askedBasis) })
+                                         static_cast<const std::string*>(&askedBasis),
+                                         static_cast<const std::string*>(&vitals) })
             if (!part->empty())
                 *facts += (facts->empty() ? "" : " ") + *part;
     }

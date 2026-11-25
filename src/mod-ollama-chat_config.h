@@ -436,6 +436,22 @@ extern uint32_t    g_PartyReadyCheckWaitMinutes;
 extern std::string g_PartyReadyCheckStartText;
 extern std::string g_PartyReadyCheckResumeText;
 extern std::string g_PartyReadyCheckWaitingText;
+
+// How the fights have really gone: health and mana, lowest and average (mod-ollama-chat_vitals)
+extern bool        g_VitalsEnable;
+extern uint32_t    g_VitalsMinutes;       // how far back
+extern uint32_t    g_VitalsScarePct;      // health at this or less: a close call
+extern uint32_t    g_VitalsDryPct;        // mana at this or less: out of mana
+extern std::vector<std::vector<std::string>> g_VitalsTalkWords;    // the talk is of it: a reply is told
+extern std::vector<std::vector<std::string>> g_VitalsScareWords;   // says someone nearly died
+extern std::vector<std::vector<std::string>> g_VitalsDryWords;     // says someone ran out of mana
+extern std::string g_VitalsText;
+extern std::string g_VitalsLineText;
+extern std::string g_VitalsManaText;
+extern std::string g_VitalsDiedText;
+extern std::string g_VitalsQuietText;
+extern std::string g_VitalsScareNote;
+extern std::string g_VitalsDryNote;
 extern std::string g_PartyDungeonGlossary;
 extern uint32_t    g_PartyDungeonAmbientPercent;   // ambient lines inside, as a share of outside
 extern std::string g_PartyDungeonFocusText;        // ...and what they keep to

@@ -6327,7 +6327,84 @@ OllamaChat.Potions.GroupCooldownSeconds = 120
 #        same every time. No double quotes inside it.
 #        Default: (below)
 OllamaChat.Potions.HealPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, {role} in a {dungeon} run. Your chat style: {bot_personality} In the fight that just ended your health got down to {pct}%, so you used {item}, and it kept you alive. Say something about it in party chat the way players do -- {~that the pot saved you|how close that was|a joke about it|being glad you had one on you} -- in your own style. One short line, 3 to 12 words, no quotes, no name in front."
-OllamaChat.Potions.ManaPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, {role} in a {dungeon} run. Your chat style: {bot_personality} In the fight that just ended you were down to {pct}% mana, so you used {item}, and you all pulled through. Say something about it in party chat the way players do -- {~that the pot saved the day|how close that was|a joke about it|being glad you had one on you} -- in your own style. One short line, 3 to 12 words, no quotes, no name in front."
+OllamaChat.Potions.ManaPrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, {role} in a {dungeon} run. Your chat style: {bot_personality} In the fight that just ended you were down to {pct}% mana, so you used {item}, and you all pulled through. Say something about it in party chat the way players do -- {~that the pot saved the day|how low your mana got|a joke about it|being glad you had one on you} -- in your own style. One short line, 3 to 12 words, no quotes, no name in front."
+
+###############################################################################
+#
+#   OLLAMA CHAT - VITALS: HOW THE FIGHTS HAVE REALLY GONE
+#
+#   A healer drank a mana potion in a dungeon and said "THANK GOD FOR THAT MANA
+#   POTION!". The tank, who had never been in any trouble, answered "nearly
+#   dead there for a sec", and the healer "CLOSE CALL! YOU WERE LOOKING PRETTY
+#   SHAKY!". Nobody had been told how anyone's health had been, so the drama
+#   was made up.
+#
+#   Everyone in a group with someone playing in it is looked at once a
+#   second -- health, mana, fighting or not, alive or not -- and that is kept
+#   for a few minutes. Their chat is then told how it really went, when the
+#   talk turns to it, and a line that says someone nearly died or ran out of
+#   mana goes out only when someone did. .ollama status party counts it.
+#
+###############################################################################
+
+#    OllamaChat.Vitals.Enable
+#    OllamaChat.Vitals.Minutes
+#        On, and how far back the bots know: each member's health and mana
+#        at their lowest over this long, their average while fighting, and
+#        whether they died.
+#        Default: 1, 5
+OllamaChat.Vitals.Enable = 1
+OllamaChat.Vitals.Minutes = 5
+
+#    OllamaChat.Vitals.TalkWords
+#    OllamaChat.Vitals.Text
+#    OllamaChat.Vitals.LineText
+#    OllamaChat.Vitals.ManaText
+#    OllamaChat.Vitals.DiedText
+#    OllamaChat.Vitals.QuietText
+#        A reply in party or raid chat is told how it has gone when the line
+#        it answers, or one of the few before it, has one of TalkWords in it
+#        ('|'-separated; a word ending in '*' matches any word starting so).
+#        Not in every prompt: a list of percentages every time is what the
+#        bots would talk about. Text is what it is told, {lines} one LineText
+#        for each member who fought ("you" for the bot itself, "(the tank)"
+#        and "(the healer)" said), with ManaText for one who uses mana and
+#        DiedText for one who died. QuietText when nobody has fought.
+#        Placeholders: Text {minutes}, {lines}; LineText {name},
+#        {health_low}, {health_avg}, {mana}, {died}; ManaText {mana_low},
+#        {mana_avg}; DiedText {times} ("once", "3 times"), {deaths};
+#        QuietText {minutes}. What it was told is kept with its answer too
+#        (OllamaChat.Said.*).
+#        Default: (below)
+OllamaChat.Vitals.TalkWords = "hp|health|heal|heals|healed|healing|healer|mana|oom|drink|drinking|pot|pots|potion|potions|dead|died|die|dying|death|deaths|wipe|wiped|close|shaky|scared|scary|worried|squishy|tanky|damage|dmg|hurt|hurting|hit|hits|hard|rough|easy|smooth|struggling|struggle|carry|carried|aggro|bandage|low"
+OllamaChat.Vitals.Text = "How the last {minutes} minutes have really gone for your group -- each one's health and mana at its lowest, and on average while fighting: {lines}. That is how it was. Say nothing of anyone nearly dying, looking shaky, being in trouble or running out of mana unless those numbers show it; where they are all high, it was easy going."
+OllamaChat.Vitals.LineText = "{name}: health {health_low}% at its lowest, {health_avg}% on average{mana}{died}"
+OllamaChat.Vitals.ManaText = ", mana {mana_low}% at its lowest, {mana_avg}% on average"
+OllamaChat.Vitals.DiedText = ", died {times}"
+OllamaChat.Vitals.QuietText = "Nobody in your group has been in a fight in the last {minutes} minutes: there has been no close call, and nobody has been low on health or mana."
+
+#    OllamaChat.Vitals.ScareWords
+#    OllamaChat.Vitals.ScarePct
+#    OllamaChat.Vitals.ScareNote
+#    OllamaChat.Vitals.DryWords
+#    OllamaChat.Vitals.DryPct
+#    OllamaChat.Vitals.DryNote
+#        A bot's line in party or raid chat with one of ScareWords in it --
+#        someone nearly died, a close call, looking shaky -- goes out only
+#        if someone in the group was at ScarePct health or less in the last
+#        Minutes, or died. One with one of DryWords -- out of mana -- only if
+#        someone was at DryPct mana or less. A potion drunk in a pinch counts
+#        at what it was drunk at. Otherwise the line is not said: one owed to
+#        someone gets another go, told ScareNote or DryNote ({pct},
+#        {minutes}); one nobody asked for is dropped. A line answering a
+#        person who said so themselves is let through. No words: no check.
+#        Default: (below), 35, (below), (below), 20, (below)
+OllamaChat.Vitals.ScareWords = "nearly dead|almost dead|nearly died|almost died|nearly dying|almost dying|near death|close call|close one|that was close|too close|cutting it close|cut it close|nearly wiped|almost wiped|near wipe|looking shaky|looked shaky|pretty shaky|bit shaky|was shaky|were shaky|thought i was dead|thought you were dead|thought we were dead|thought i was a goner|thought you were a goner|nearly lost you|almost lost you|nearly lost me|almost lost me|barely made it|barely survived|barely alive|just about survived|skin of my teeth|skin of our teeth|deaths door|one hit from dead|one shot from dead|sliver of health|sliver of hp|1 hp|1hp|scared me|had me worried|heart attack"
+OllamaChat.Vitals.ScarePct = 35
+OllamaChat.Vitals.ScareNote = "Nobody in your group has been at {pct}% health or less, or died, in the last {minutes} minutes: do not say anyone nearly died, had a close call or looked shaky."
+OllamaChat.Vitals.DryWords = "oom|out of mana|outta mana|no mana|zero mana|ran dry|running dry|bone dry|ran out of mana|running out of mana|running on empty|running on fumes|on fumes|mana was gone|mana is gone"
+OllamaChat.Vitals.DryPct = 20
+OllamaChat.Vitals.DryNote = "Nobody in your group has been at {pct}% mana or less in the last {minutes} minutes: do not say anyone is, or was, out of mana."
 
 ###############################################################################
 #

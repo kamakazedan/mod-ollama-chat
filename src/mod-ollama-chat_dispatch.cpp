@@ -18,6 +18,7 @@
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_lag.h"
+#include "mod-ollama-chat_vitals.h"
 #include "mod-ollama-chat_links.h"
 #include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_mounts.h"
@@ -1168,6 +1169,39 @@ namespace
                         LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} talked of lag ('{}') on a realm with "
                                  "none; line dropped: '{}'", bot->GetName(), which, c.text);
                     if (!retryWith(g_LagNote, which))
+                        ++g_droppedPhrase;
+                    return;
+                }
+            }
+        }
+
+        // A close call, or someone out of mana, is said in a group's chat only
+        // when there was one (mod-ollama-chat_vitals): a tank who had never
+        // been in any trouble said "nearly dead there for a sec", and the
+        // healer "CLOSE CALL! YOU WERE LOOKING PRETTY SHAKY!". A line owed to
+        // someone gets another go, told how it really was.
+        {
+            std::string which, note;
+            const bool byPerson = c.request.chainDepth == 0 && !origin.empty();   // not a bot's line
+            if (!Vitals_MayGoOut(bot, c.request.source, c.text, origin, byPerson, which, note))
+            {
+                std::string stockWhich, stockNote;
+                if (!c.request.fallbackText.empty() && c.text != c.request.fallbackText &&
+                    Vitals_MayGoOut(bot, c.request.source, c.request.fallbackText, origin, byPerson, stockWhich,
+                                    stockNote))
+                {
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} talked of a close call or of no mana "
+                                 "('{}') when there was none: '{}' instead.", bot->GetName(), which,
+                                 c.request.fallbackText);
+                    c.text = c.request.fallbackText;
+                }
+                else
+                {
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} talked of a close call or of no mana "
+                                 "('{}') when there was none; line dropped: '{}'", bot->GetName(), which, c.text);
+                    if (!retryWith(note, which))
                         ++g_droppedPhrase;
                     return;
                 }

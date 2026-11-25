@@ -468,6 +468,21 @@ uint32_t    g_PartyReadyCheckWaitMinutes   = 5;
 std::string g_PartyReadyCheckStartText;
 std::string g_PartyReadyCheckResumeText;
 std::string g_PartyReadyCheckWaitingText;
+
+bool        g_VitalsEnable   = true;
+uint32_t    g_VitalsMinutes  = 5;
+uint32_t    g_VitalsScarePct = 35;
+uint32_t    g_VitalsDryPct   = 20;
+std::vector<std::vector<std::string>> g_VitalsTalkWords;
+std::vector<std::vector<std::string>> g_VitalsScareWords;
+std::vector<std::vector<std::string>> g_VitalsDryWords;
+std::string g_VitalsText;
+std::string g_VitalsLineText;
+std::string g_VitalsManaText;
+std::string g_VitalsDiedText;
+std::string g_VitalsQuietText;
+std::string g_VitalsScareNote;
+std::string g_VitalsDryNote;
 std::string g_PartyDungeonGlossary;
 uint32_t    g_PartyDungeonAmbientPercent   = 35;
 std::string g_PartyDungeonFocusText;
@@ -4363,6 +4378,61 @@ static void LoadNaturalChatV45Settings()
              g_PartyReadyCheckEnable ? "on" : "off", g_PartyReadyCheckWaitMinutes);
 }
 
+static void LoadNaturalChatV46Settings()
+{
+    auto phrases = [](const char* key, const char* def)
+    {
+        return CrowdText::ParsePhrases(sConfigMgr->GetOption<std::string>(key, def));
+    };
+    auto text = [](const char* key, const char* def)
+    {
+        return sConfigMgr->GetOption<std::string>(key, def);
+    };
+
+    // --- how the fights have really gone (mod-ollama-chat_vitals) ---------------------------
+    g_VitalsEnable   = sConfigMgr->GetOption<bool>("OllamaChat.Vitals.Enable", true);
+    g_VitalsMinutes  = std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Vitals.Minutes", 5), 1, 30);
+    g_VitalsScarePct = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Vitals.ScarePct", 35), 100);
+    g_VitalsDryPct   = std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Vitals.DryPct", 20), 100);
+    g_VitalsTalkWords = phrases("OllamaChat.Vitals.TalkWords",
+        "hp|health|heal|heals|healed|healing|healer|mana|oom|drink|drinking|pot|pots|potion|potions|dead|died|"
+        "die|dying|death|deaths|wipe|wiped|close|shaky|scared|scary|worried|squishy|tanky|damage|dmg|hurt|"
+        "hurting|hit|hits|hard|rough|easy|smooth|struggling|struggle|carry|carried|aggro|bandage|low");
+    g_VitalsScareWords = phrases("OllamaChat.Vitals.ScareWords",
+        "nearly dead|almost dead|nearly died|almost died|nearly dying|almost dying|near death|close call|"
+        "close one|that was close|too close|cutting it close|cut it close|nearly wiped|almost wiped|near wipe|"
+        "looking shaky|looked shaky|pretty shaky|bit shaky|was shaky|were shaky|thought i was dead|"
+        "thought you were dead|thought we were dead|thought i was a goner|thought you were a goner|"
+        "nearly lost you|almost lost you|nearly lost me|almost lost me|barely made it|barely survived|"
+        "barely alive|just about survived|skin of my teeth|skin of our teeth|deaths door|one hit from dead|"
+        "one shot from dead|sliver of health|sliver of hp|1 hp|1hp|scared me|had me worried|heart attack");
+    g_VitalsDryWords = phrases("OllamaChat.Vitals.DryWords",
+        "oom|out of mana|outta mana|no mana|zero mana|ran dry|running dry|bone dry|ran out of mana|"
+        "running out of mana|running on empty|running on fumes|on fumes|mana was gone|mana is gone");
+    g_VitalsText = text("OllamaChat.Vitals.Text",
+        "How the last {minutes} minutes have really gone for your group -- each one's health and mana at its "
+        "lowest, and on average while fighting: {lines}. That is how it was. Say nothing of anyone nearly "
+        "dying, looking shaky, being in trouble or running out of mana unless those numbers show it; where "
+        "they are all high, it was easy going.");
+    g_VitalsLineText = text("OllamaChat.Vitals.LineText",
+        "{name}: health {health_low}% at its lowest, {health_avg}% on average{mana}{died}");
+    g_VitalsManaText = text("OllamaChat.Vitals.ManaText", ", mana {mana_low}% at its lowest, {mana_avg}% on average");
+    g_VitalsDiedText = text("OllamaChat.Vitals.DiedText", ", died {times}");
+    g_VitalsQuietText = text("OllamaChat.Vitals.QuietText",
+        "Nobody in your group has been in a fight in the last {minutes} minutes: there has been no close "
+        "call, and nobody has been low on health or mana.");
+    g_VitalsScareNote = text("OllamaChat.Vitals.ScareNote",
+        "Nobody in your group has been at {pct}% health or less, or died, in the last {minutes} minutes: do "
+        "not say anyone nearly died, had a close call or looked shaky.");
+    g_VitalsDryNote = text("OllamaChat.Vitals.DryNote",
+        "Nobody in your group has been at {pct}% mana or less in the last {minutes} minutes: do not say "
+        "anyone is, or was, out of mana.");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v46: a group's health and mana of the last {} min "
+             "told to its chat {} (a close call said only at {}% health or less, out of mana at {}%).",
+             g_VitalsMinutes, g_VitalsEnable ? "on" : "off", g_VitalsScarePct, g_VitalsDryPct);
+}
+
 static void LoadNaturalChatV39Settings()
 {
     // "NAT_HYPE:100|NAT_QUIET:5" -> chat style -> percent.
@@ -4542,7 +4612,8 @@ static void LoadNaturalChatV29Settings()
         "You are {bot_name}, a level {bot_level} {bot_race} {bot_class}, {role} in a {dungeon} run. Your chat style: "
         "{bot_personality} In the fight that just ended you were down to {pct}% mana, so you used {item}, and you "
         "all pulled through. Say something about it in party chat the way players do -- {~that the pot saved the "
-        "day|how close that was|a joke about it|being glad you had one on you} -- in your own style. One short line, "
+        "day|how low your mana got|a joke about it|being glad you had one on you} -- in your own style. One short "
+        "line, "
         "3 to 12 words, no quotes, no name in front.");
 
     LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v29: a potion drunk in a pinch said after the fight {} (health "
@@ -5480,6 +5551,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV43Settings();
     LoadNaturalChatV44Settings();
     LoadNaturalChatV45Settings();
+    LoadNaturalChatV46Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

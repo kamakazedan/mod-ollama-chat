@@ -40,6 +40,7 @@
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_gifts.h"
 #include "mod-ollama-chat_gear.h"
+#include "mod-ollama-chat_vitals.h"
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_rolls.h"
@@ -580,6 +581,9 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 
     // The tank down mid-fight, a wipe, nobody left to rez: said, and known.
     Wipe_Update(diff);
+
+    // Each group's health and mana, a look a second: what a close call is held to.
+    Vitals_Update(diff);
 
     // The odd whispered aside about someone else in the group.
     Aside_Update(diff);

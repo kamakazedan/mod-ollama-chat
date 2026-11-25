@@ -152,7 +152,10 @@ namespace
         request.kind              = OllamaRequestKind::EventChatter;
         request.directAddress     = true;   // the moment calls for it
         request.triggerBotReplies = false;
-        request.extraDelayMs      = urand(1200, 3500);   // the moment it takes to read the rolls
+        // The moment it takes to read the rolls and start typing: the result
+        // has only just gone to everyone's screen, and a remark a second
+        // later reads as if it came first.
+        request.extraDelayMs      = urand(2500, 5000);
         request.maxReplyLength    = OllamaMaxReplyLengthFor(bot);
         request.prompt            = prompt;
         // Asked "what roll?", it knows (mod-ollama-chat_said).

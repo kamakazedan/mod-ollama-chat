@@ -6,6 +6,7 @@
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_textrules.h"
+#include "mod-ollama-chat_vitals.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
 
@@ -244,6 +245,11 @@ void Potions_Update()
     const Clock::time_point now = Clock::now();
     for (Noted& n : fresh)
     {
+        // How low it got, for what is said of the fight after: a look a
+        // second can miss it (mod-ollama-chat_vitals).
+        if (Player* drinker = ObjectAccessor::FindConnectedPlayer(ObjectGuid(n.bot)))
+            Vitals_NoteLow(drinker, n.mana ? -1 : int32_t(n.pct), n.mana ? int32_t(n.pct) : -1);
+
         // A second potion in the same fight is the same story.
         bool known = false;
         for (Noted& p : g_pending)

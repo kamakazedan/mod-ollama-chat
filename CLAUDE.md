@@ -488,6 +488,17 @@ talk is of it is told how the realm really is (`Lag_PromptFor`). "anyone else
 noticed the lag here?" went out in guild chat on a realm ticking at 16 ms,
 and made it look bad to everyone reading.
 
+So is how a fight went (`mod-ollama-chat_vitals`): everyone in a group with
+someone playing in it is looked at once a second, and the group's chat is
+told each member's health and mana at their lowest and on average over the
+last `Vitals.Minutes` when the talk is of it (`Vitals_PromptFor`); a line
+there that says someone nearly died or ran out of mana goes out only when
+someone did (`Vitals_MayGoOut`, at delivery). A healer drank a mana potion,
+and the tank, never in any trouble, answered "nearly dead there for a sec",
+and the healer "CLOSE CALL! YOU WERE LOOKING PRETTY SHAKY!". A prompt for a
+line about a fight says what happened in it, and offers "how close that was"
+only where it was.
+
 Nor is anything made up of the bot itself. A premise, template or topic never
 has a bot tell of a past it never had -- "how many times you have tried for
 {rare_mount}" had a level 25 in Duskwood say "still havent seen that kodo
