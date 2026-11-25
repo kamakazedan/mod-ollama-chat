@@ -336,6 +336,18 @@ bot buys: `Gifts_AgreeDeal`, exactly that many of that thing for exactly the
 price) or Conjure (the bot sells: `Conjure_SellItem`, that stack for exactly
 the price), the bot's side accepted only on an exact match.
 
+A bot buys only what is of real use to it, never to sell on. Gear nobody
+would wear may still go to an enchanter, for the dust (`EnchanterBuys`,
+`Trade.Disenchant.*`, mod-playerbots-plus API 12): what it pays is a share
+of what the piece disenchants into (`OllamaDisenchantWorth`), while a
+rip-off or a bargain is still one of what the piece is worth whole
+(`Talk::buyer.worth`), and an ask far over what it would pay is left alone
+rather than lowballed. Its why says dust, with no figure in it: a line may
+name no price but the deal's. The deal carries `toDisenchant`, and once the
+piece has changed hands Gifts tells mod-playerbots-plus it is the bot's to
+break down (`OllamaBoughtToDisenchant`), which it does to nothing but its
+own loot otherwise.
+
 ## Performance traps specific to this module
 
 - Never walk `Map::GetCreatureBySpawnIdStore()` — it is every spawn on the map.

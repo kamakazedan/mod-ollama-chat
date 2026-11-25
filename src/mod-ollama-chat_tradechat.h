@@ -112,6 +112,7 @@ struct TradeChatStats
     uint64_t wants     = 0;   // things they wanted to buy
     uint64_t checks    = 0;   // prices they asked about
     uint64_t nobody    = 0;   // nobody wanted it, or had one to spare
+    uint64_t forDust   = 0;   // gear nobody would wear that an enchanter answered for, to disenchant
     uint64_t answered  = 0;   // lines a bot said about a deal
     uint64_t counters  = 0;   // counter-offers
     uint64_t callouts  = 0;   // rip-offs and lowballs called out

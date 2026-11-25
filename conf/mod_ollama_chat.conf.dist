@@ -5112,9 +5112,36 @@ OllamaChat.Trade.MaxSpendPercent = 50
 #        each thing put up. Gear is put first to those within 10 levels of
 #        the level it is for: it is an upgrade, if for anyone, for them.
 #        Only a bot it would be of real use to buys it (an upgrade, a quest
-#        item, its profession's): none buys to sell it on, however cheap.
+#        item, its profession's; an enchanter for the dust,
+#        Trade.Disenchant.*): none buys to sell it on, however cheap.
 #        Default: 30
 OllamaChat.Trade.MaxJudged = 30
+
+#    OllamaChat.Trade.Disenchant.Enable
+#    OllamaChat.Trade.Disenchant.Chance
+#    OllamaChat.Trade.Disenchant.PayPercent
+#    OllamaChat.Trade.Disenchant.MaxAskPercent
+#    OllamaChat.Trade.Disenchant.WhyText
+#        A piece of gear put up that no bot would wear may still get an
+#        answer from an enchanter, who would break it down
+#        (mod-playerbots-plus's crafting, API 12; without it nobody does).
+#        Chance: the percent of the times one could that one answers. To it
+#        the piece is worth PayPercent (1-100) of what the dust, essences and
+#        shards it disenchants into are worth, by the same sums as everything
+#        else in Trade chat, and it haggles from there by its chat style like
+#        any buyer. That is usually well under what the piece is worth whole,
+#        so it answers no price named, or an asking price up to MaxAskPercent
+#        (100-1000) of what it would pay -- a piece put up for more than that
+#        is not its business, and gets no lowball. Bought, the piece is the
+#        bot's to disenchant (it breaks down only its own loot otherwise),
+#        and what comes out is its own to sell. WhyText is what the bot is
+#        told of why it wants it.
+#        Default: 1, 60, 70, 200
+OllamaChat.Trade.Disenchant.Enable = 1
+OllamaChat.Trade.Disenchant.Chance = 60
+OllamaChat.Trade.Disenchant.PayPercent = 70
+OllamaChat.Trade.Disenchant.MaxAskPercent = 200
+OllamaChat.Trade.Disenchant.WhyText = "you're an enchanter with no use for it yourself: you'd disenchant it, so to you it is worth only what it breaks down into, and that is all you'd pay"
 
 #    OllamaChat.Trade.TalkSeconds
 #    OllamaChat.Trade.MeetSeconds

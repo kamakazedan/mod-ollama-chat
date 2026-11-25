@@ -814,6 +814,11 @@ uint32_t    g_TradeMeetSeconds                 = 300;
 float       g_TradeWalkYards                   = 60.0f;
 uint32_t    g_TradeCalloutChance               = 50;
 uint32_t    g_TradePriceCheckChance            = 70;
+bool        g_TradeDisenchantBuy               = true;
+uint32_t    g_TradeDisenchantChance            = 60;
+uint32_t    g_TradeDisenchantPayPercent        = 70;
+uint32_t    g_TradeDisenchantMaxAskPercent     = 200;
+std::string g_TradeDisenchantWhy;
 uint32_t    g_TradeAdMinMinutes                = 8;
 uint32_t    g_TradeAdMaxMinutes                = 20;
 uint32_t    g_TradeAdMinCopper                 = 5000;
@@ -4433,6 +4438,27 @@ static void LoadNaturalChatV46Settings()
              g_VitalsMinutes, g_VitalsEnable ? "on" : "off", g_VitalsScarePct, g_VitalsDryPct);
 }
 
+static void LoadNaturalChatV47Settings()
+{
+    // --- Trade chat: an enchanter buys gear nobody would wear, for the dust ----------------
+    g_TradeDisenchantBuy = sConfigMgr->GetOption<bool>("OllamaChat.Trade.Disenchant.Enable", true);
+    g_TradeDisenchantChance =
+        std::min<uint32_t>(sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.Disenchant.Chance", 60), 100);
+    g_TradeDisenchantPayPercent = std::clamp<uint32_t>(
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.Disenchant.PayPercent", 70), 1, 100);
+    g_TradeDisenchantMaxAskPercent = std::clamp<uint32_t>(
+        sConfigMgr->GetOption<uint32_t>("OllamaChat.Trade.Disenchant.MaxAskPercent", 200), 100, 1000);
+    g_TradeDisenchantWhy = sConfigMgr->GetOption<std::string>("OllamaChat.Trade.Disenchant.WhyText",
+        "you're an enchanter with no use for it yourself: you'd disenchant it, so to you it is worth only "
+        "what it breaks down into, and that is all you'd pay");
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v47: in Trade, an enchanter buys gear nobody would wear "
+             "for its dust {} ({}% of the times one could, paying {}% of what the dust is worth, asks up to "
+             "{}% of that answered).",
+             g_TradeDisenchantBuy ? "on" : "off", g_TradeDisenchantChance, g_TradeDisenchantPayPercent,
+             g_TradeDisenchantMaxAskPercent);
+}
+
 static void LoadNaturalChatV39Settings()
 {
     // "NAT_HYPE:100|NAT_QUIET:5" -> chat style -> percent.
@@ -5552,6 +5578,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV44Settings();
     LoadNaturalChatV45Settings();
     LoadNaturalChatV46Settings();
+    LoadNaturalChatV47Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);

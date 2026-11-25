@@ -21,7 +21,9 @@
 // (mod-ollama-chat_drops: knowledge's answers and rare gear), 9 for what each
 // bot looted itself (OllamaLootedByBot): the only things a bot ever sells, 10
 // for group quests two bots talk each other into (OllamaGroupQuestFor, in
-// mod-ollama-chat_mingle).
+// mod-ollama-chat_mingle), 11 for what a bot made with its professions being
+// its own too, 12 for disenchanting (OllamaCanDisenchant: an enchanter buying
+// gear in Trade chat for its dust).
 // --------------------------------------------------------------------------
 
 #if __has_include("PlayerbotsPlus.h")
@@ -82,6 +84,45 @@ inline bool OllamaGroupQuestTogether(Player* a, Player* b, uint32_t quest)
     (void)b;
     (void)quest;
     return false;
+#endif
+}
+
+// Could `bot` disenchant one of these: an enchanter with the skill for it,
+// where the game's own loot tables say what it would give
+// (mod-playerbots-plus's crafting)? Never without it. World thread.
+inline bool OllamaCanDisenchant(Player* bot, uint32_t itemId)
+{
+#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 12
+    return PlayerbotsPlus::CanDisenchant(bot, itemId);
+#else
+    (void)bot;
+    (void)itemId;
+    return false;
+#endif
+}
+
+// What disenchanting one gives is worth on average, in copper, by the same
+// sums as everything else in Trade chat. 0: nothing known.
+inline uint64_t OllamaDisenchantWorth(uint32_t itemId)
+{
+#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 12
+    return PlayerbotsPlus::DisenchantWorth(itemId);
+#else
+    (void)itemId;
+    return 0;
+#endif
+}
+
+// `item`, now in `bot`'s bags, was bought to be disenchanted: it may be,
+// though the bot neither looted nor made it, and what comes out is its own.
+// World thread.
+inline void OllamaBoughtToDisenchant(Player* bot, Item* item)
+{
+#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 12
+    PlayerbotsPlus::BoughtToDisenchant(bot, item);
+#else
+    (void)bot;
+    (void)item;
 #endif
 }
 

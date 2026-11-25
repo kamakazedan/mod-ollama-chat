@@ -78,6 +78,7 @@ namespace
         uint64_t          vendor = 0;         // what a vendor pays for the lot
         uint64_t          theirs = 0;         // their last price
         std::string       why;                // buying: what use it is to it
+        bool              toBreak = false;    // buying: an enchanter, for the dust it breaks down into
         bool              asked  = false;     // buying: it asked how much, and has had no price yet
         uint64_t          spare  = 0;         // buying: all it can spare, when that is what holds it back
         std::vector<uint32_t> said;           // the prices it has named: it may name them again
@@ -745,7 +746,7 @@ namespace
 
         std::string why;
         if (t.side == Side::BotBuys)
-            Gifts_AgreeDeal(bot, player, t.entry, t.suffix, t.count, uint32_t(price), g_TradeMeetSeconds);
+            Gifts_AgreeDeal(bot, player, t.entry, t.suffix, t.count, uint32_t(price), g_TradeMeetSeconds, t.toBreak);
         else
         {
             std::string when;
@@ -1121,6 +1122,54 @@ namespace
         }
     }
 
+    // Nobody would wear it. An enchanter may still have it, for the dust: it
+    // pays a share of what that is worth (Trade.Disenchant.PayPercent), so it
+    // answers no price, or one near enough to haggle over
+    // (Trade.Disenchant.MaxAskPercent) -- a piece put up for what it is worth
+    // whole is not its business. Bought, the piece is the bot's to break down
+    // (mod-playerbots-plus, which has it disenchant only its own otherwise).
+    bool EnchanterBuys(Player* player, Channel* channel, ItemTemplate const* p, int32_t suffix, uint64_t ask,
+                       Worth const& w, std::vector<Player*> const& bots)
+    {
+        if (!g_TradeDisenchantBuy || p->Quality < ITEM_QUALITY_UNCOMMON || g_TradeDisenchantWhy.empty())
+            return false;
+        const uint64_t toIt = OllamaDisenchantWorth(p->ItemId) * g_TradeDisenchantPayPercent / 100;
+        if (!toIt || (ask && ask * 100 > toIt * g_TradeDisenchantMaxAskPercent))
+            return false;
+        std::vector<Player*> able;
+        for (Player* bot : bots)
+        {
+            // The gold for it first: asking mod-playerbots-plus is the dearer question.
+            const uint64_t spare    = uint64_t(bot->GetMoney()) * g_TradeMaxSpendPercent / 100;
+            const uint64_t wouldPay = toIt * StyleOf(bot).pay / 100;
+            if (wouldPay && spare >= (ask ? std::min(ask, wouldPay) : wouldPay) && OllamaCanDisenchant(bot, p->ItemId))
+                able.push_back(bot);
+        }
+        if (able.empty() || !Chance(g_TradeDisenchantChance))
+            return false;
+
+        Player* bot = Pick(able);
+        Talk t = NewTalk(player, bot, channel, Side::BotBuys, p, 1, suffix, w);
+        t.why     = g_TradeDisenchantWhy;
+        t.toBreak = true;
+        t.theirs  = ask;
+        // A rip-off or a bargain is one of what the piece is worth; what it
+        // pays is by the dust.
+        t.buyer.worth = w.lot;
+        t.buyer.limit = Haggle::BuyLimit(t.style, toIt, uint64_t(bot->GetMoney()) * g_TradeMaxSpendPercent / 100);
+        const Haggle::Decision d = Haggle::BuyerAnswer(g_TradeHaggle, t.style, t.buyer, ask, Roll100());
+        g_talks.push_back(std::move(t));
+        Talk& added = g_talks.back();
+        ++g_stats.forDust;
+        if (g_DebugEnabled)
+            LOG_INFO("module.ollamachat", "[Ollama Chat] Trade: {} sells {}{}; {}, an enchanter, answers for the dust "
+                     "(worth {} to it, pays up to {}).",
+                     player->GetName(), p->Name1, ask ? " for " + Money(ask) : std::string(), bot->GetName(),
+                     Money(toIt), Money(added.buyer.limit));
+        BuyerSays(added, bot, player, p, d, ask);
+        return true;
+    }
+
     void TheySell(Player* player, Channel* channel, ItemTemplate const* p, int32_t suffix, uint32_t count,
                   uint64_t ask)
     {
@@ -1184,6 +1233,8 @@ namespace
         }
         if (!best || !w.lot)
         {
+            if (w.lot && wearable && count == 1 && EnchanterBuys(player, channel, p, suffix, ask, w, bots))
+                return;
             ++g_stats.nobody;
             MaybeCallOut(player, channel, p, count, suffix, w, ask, bots);
             return;

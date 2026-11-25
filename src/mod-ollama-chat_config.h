@@ -886,6 +886,11 @@ extern uint32_t    g_TradeMeetSeconds;           // a deal waits this long for t
 extern float       g_TradeWalkYards;             // closer than this, it walks over to trade
 extern uint32_t    g_TradeCalloutChance;         // a rip-off nobody wants: someone says so
 extern uint32_t    g_TradePriceCheckChance;      // "pc [item]" answered
+extern bool        g_TradeDisenchantBuy;         // gear nobody would wear: an enchanter may buy it for the dust
+extern uint32_t    g_TradeDisenchantChance;      // ...percent of the times one could
+extern uint32_t    g_TradeDisenchantPayPercent;  // ...of what the dust is worth, what it is worth to it
+extern uint32_t    g_TradeDisenchantMaxAskPercent; // ...an ask over this much of that is left alone
+extern std::string g_TradeDisenchantWhy;         // ...why it wants it, for the prompt
 extern uint32_t    g_TradeAdMinMinutes;          // things bots put up, on each side
 extern uint32_t    g_TradeAdMaxMinutes;          // (0: none)
 extern uint32_t    g_TradeAdMinCopper;           // white things worth less are not put up

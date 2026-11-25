@@ -7,6 +7,7 @@
 #include "mod-ollama-chat_favor.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_personality.h"
+#include "mod-ollama-chat_plus.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
@@ -85,6 +86,8 @@ namespace
         int32_t           suffix  = 0;
         bool              market  = false;
         bool              ours    = false;   // the bot asked them to trade: theirs to take up
+        bool              toBreak = false;   // bought to be disenchanted (an enchanter, for its dust)
+        ObjectGuid        traded;            // ...the piece, as it lay in their side of the window
         uint32_t          offers  = 0;       // times it asked
         Clock::time_point nextOffer{};
         Clock::time_point offeredAt{};
@@ -757,7 +760,7 @@ int Gifts_Judge(Player* bot, ItemTemplate const* proto, int32_t suffix, std::str
 }
 
 void Gifts_AgreeDeal(Player* bot, Player* player, uint32_t entry, int32_t suffix, uint32_t count, uint32_t price,
-                     uint32_t seconds)
+                     uint32_t seconds, bool toDisenchant)
 {
     if (!bot || !player || !entry)
         return;
@@ -773,6 +776,7 @@ void Gifts_AgreeDeal(Player* bot, Player* player, uint32_t entry, int32_t suffix
     d.count  = std::max<uint32_t>(1, count);
     d.suffix = suffix;
     d.market = true;
+    d.toBreak = toDisenchant;
     d.made   = Clock::now();
     d.until  = d.made + std::chrono::seconds(std::max<uint32_t>(30, seconds));
     g_deals.push_back(d);
@@ -908,6 +912,11 @@ void Gifts_Tick()
                     ++g_stats.paid;
                     if (d.market)
                         ++g_stats.marketPaid;
+                    // Bought for its dust: the very piece is the bot's to
+                    // break down now (it keeps its guid across a trade).
+                    if (d.toBreak)
+                        if (Item* piece = bot->GetItemByGuid(d.traded))
+                            OllamaBoughtToDisenchant(bot, piece);
                     if (g_DebugEnabled)
                         LOG_INFO("module.ollamachat", "[Ollama Chat] {} paid {} {} for {}.", bot->GetName(),
                                  player->GetName(), TextRules::MoneyWords(d.price), d.entry);
@@ -931,7 +940,10 @@ void Gifts_Tick()
                 {
                     if (item->GetEntry() == d.entry &&
                         (!d.suffix || item->GetItemRandomPropertyId() == d.suffix))
+                    {
                         count += item->GetCount();
+                        d.traded = item->GetGUID();
+                    }
                     else
                         other = true;
                 }

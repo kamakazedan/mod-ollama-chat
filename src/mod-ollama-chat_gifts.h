@@ -71,9 +71,11 @@ int Gifts_Judge(Player* bot, ItemTemplate const* proto, int32_t suffix, std::str
 // property too) from `player`, who is outside its group. Its AI is held when
 // they are close, it asks them to trade once they are within reach, puts the
 // money in when they put exactly that in, and accepts its side only then.
-// Kept for `seconds`. World thread.
+// Kept for `seconds`. `toDisenchant`: it buys the piece to break it down, and
+// mod-playerbots-plus is told so once it has it (a bot disenchants only its
+// own otherwise). World thread.
 void Gifts_AgreeDeal(Player* bot, Player* player, uint32_t entry, int32_t suffix, uint32_t count, uint32_t price,
-                     uint32_t seconds);
+                     uint32_t seconds, bool toDisenchant = false);
 
 // A deal between them still stands (not paid, not forgotten).
 bool Gifts_HasDeal(Player* bot, Player* player);
