@@ -5,6 +5,7 @@
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
+#include "mod-ollama-chat_journal.h"
 
 #include "Creature.h"
 #include "Formulas.h"
@@ -350,7 +351,7 @@ void Corpse_NoteKill(Player* killer, Creature* victim)
 {
     const bool emotes = g_CorpseEnable && g_EnableBotEmotes;
     const bool tell   = g_ContextEnable && !g_CorpseKillEventText.empty();
-    if (!g_Enable || (!emotes && !tell) || !killer || !victim)
+    if (!g_Enable || (!emotes && !tell && !Journal_Wants()) || !killer || !victim)
         return;
     CreatureTemplate const* t = victim->GetCreatureTemplate();
     if (!t || victim->IsPet() || victim->IsTotem() || victim->GetOwnerGUID().IsPlayer())
@@ -413,6 +414,10 @@ void Corpse_Update()
         {
             if (g_Enable)
                 Tell(n);
+            // A dungeon's boss down: those of the group who were there have
+            // that between them from now on (mod-ollama-chat_journal).
+            if (g_Enable && n.worth == Worth::Boss)
+                Journal_BossDown(ObjectAccessor::FindConnectedPlayer(n.killer), n.name);
             if (emotes)
                 Consider(n, now, lookers);
         }

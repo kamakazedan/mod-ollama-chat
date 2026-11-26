@@ -2,6 +2,7 @@
 #include "mod-ollama-chat_clock.h"
 #include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_bags.h"
+#include "mod-ollama-chat_battleground.h"
 #include "mod-ollama-chat_citylife.h"
 #include "mod-ollama-chat_citysay.h"
 #include "mod-ollama-chat_congrats.h"
@@ -17,6 +18,7 @@
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_holidays.h"
+#include "mod-ollama-chat_weather.h"
 #include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_lag.h"
 #include "mod-ollama-chat_vitals.h"
@@ -88,6 +90,7 @@ namespace
         std::string scriptPrompt;
         uint32_t    scriptNumPredict = 0;
         float       scriptTemperature = -1.0f;
+        std::string scriptFormat;   // a JSON schema its text has to fit; empty for free text
     };
 
     struct Completion
@@ -365,7 +368,7 @@ namespace
         OllamaScriptResult result;
         result.scriptId = task.scriptId;
         OllamaApiResult api = QueryOllama(task.scriptPrompt, OllamaRequestKind::RandomChatter, task.scriptNumPredict,
-                                          task.scriptTemperature);
+                                          task.scriptTemperature, task.scriptFormat);
         if (api.ok && !api.text.empty())
         {
             result.ok   = true;
@@ -547,11 +550,16 @@ namespace
                     return false;
                 return botAI->SayToGuild(c.text);
 
+            // In a battleground a bot's group is its team, and what it says
+            // to its group goes out in battleground chat
+            // (mod-ollama-chat_battleground).
             case SRC_PARTY_LOCAL:
                 if (g_DisableForParty || !bot->GetGroup())
                     return false;
                 if (!OllamaGroupHasRealPlayer(bot))
                     return false;
+                if (Battleground_TeamChat(bot))
+                    return Battleground_Say(bot, c.text);
                 return botAI->SayToParty(c.text);
 
             case SRC_RAID_LOCAL:
@@ -559,6 +567,8 @@ namespace
                     return false;
                 if (!OllamaGroupHasRealPlayer(bot))
                     return false;
+                if (Battleground_TeamChat(bot))
+                    return Battleground_Say(bot, c.text);
                 return botAI->SayToRaid(c.text);
 
             case SRC_YELL_LOCAL:
@@ -709,6 +719,18 @@ namespace
             if (g_DebugEnabled)
                 LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {}'s unprompted line was overtaken by a real "
                          "player's; dropped: '{}'", bot->GetName(), c.text);
+            return;
+        }
+
+        // A line about a battleground says what was so when it was written --
+        // a flag carried off, a base under attack -- and seconds on it may not
+        // be: "they have our flag", with the flag home again
+        // (mod-ollama-chat_battleground, which keeps the count).
+        if (c.request.battleground && !Battleground_StillSo(bot, c.request.battleground))
+        {
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {}'s battleground line is no longer so; dropped: "
+                         "'{}'", bot->GetName(), c.text);
             return;
         }
 
@@ -1242,6 +1264,36 @@ namespace
             }
         }
 
+        // The weather is said to be what it is where the bot stands
+        // (mod-ollama-chat_weather), or answering someone who brought it up:
+        // no "lovely day for it" in a downpour. A line owed to someone gets
+        // another go, told how it is.
+        {
+            std::string which, note;
+            const bool byPerson = c.request.chainDepth == 0 && !origin.empty();   // not a bot's line
+            if (!Weather_MayGoOut(bot, c.text, origin, byPerson, which, note))
+            {
+                std::string stockWhich, stockNote;
+                if (!c.request.fallbackText.empty() && c.text != c.request.fallbackText &&
+                    Weather_MayGoOut(bot, c.request.fallbackText, origin, byPerson, stockWhich, stockNote))
+                {
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} had the weather wrong ('{}'): '{}' "
+                                 "instead.", bot->GetName(), which, c.request.fallbackText);
+                    c.text = c.request.fallbackText;
+                }
+                else
+                {
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} had the weather wrong ('{}'); line "
+                                 "dropped: '{}'", bot->GetName(), which, c.text);
+                    if (!retryWith(note, which))
+                        ++g_droppedPhrase;
+                    return;
+                }
+            }
+        }
+
         // A mount talked of is one being ridden in sight, now, and a remark on
         // someone's mount is theirs to answer (mod-ollama-chat_mounts): "nice
         // chestnut mare that is" went out after the one it was about had got
@@ -1421,7 +1473,7 @@ namespace
                                 ? bot->GetGroup()
                                 : nullptr;
             Said_Note(bot, plain,
-                      Said_Place(c.request.source, channel ? channel->GetName() : c.request.channelName),
+                      Said_Place(c.request.source, channel ? channel->GetName() : c.request.channelName, bot),
                       c.request.basis, whisper ? c.request.targetGuid : 0,
                       saidIn ? saidIn->GetGUID().GetCounter() : 0);
         }
@@ -1849,7 +1901,8 @@ void OllamaDispatch_SubmitRelationship(uint64_t botGuid, uint64_t otherGuid,
         g_queueCv.notify_one();
 }
 
-bool OllamaDispatch_SubmitScript(uint64_t scriptId, std::string prompt, uint32_t numPredict, float temperature)
+bool OllamaDispatch_SubmitScript(uint64_t scriptId, std::string prompt, uint32_t numPredict, float temperature,
+                                 std::string format)
 {
     if (scriptId == 0 || prompt.empty())
         return false;
@@ -1860,6 +1913,7 @@ bool OllamaDispatch_SubmitScript(uint64_t scriptId, std::string prompt, uint32_t
     task.scriptPrompt      = std::move(prompt);
     task.scriptNumPredict  = numPredict;
     task.scriptTemperature = temperature;
+    task.scriptFormat      = std::move(format);
 
     // Nobody is owed one: with the queue half full it is not asked for at
     // all, as for memories.

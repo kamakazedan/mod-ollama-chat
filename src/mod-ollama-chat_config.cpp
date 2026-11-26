@@ -14,6 +14,9 @@
 #include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_groupquests.h"
 #include "mod-ollama-chat_holidays.h"
+#include "mod-ollama-chat_weather.h"
+#include "mod-ollama-chat_arrive.h"
+#include "mod-ollama-chat_journal.h"
 #include "mod-ollama-chat_citylife.h"
 #include "mod-ollama-chat_marks.h"
 #include "mod-ollama-chat_outlook.h"
@@ -23,6 +26,8 @@
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat-utilities.h"
+#include "mod-ollama-chat_battleground.h"
+#include "mod-ollama-chat_mingle.h"
 #include "SharedDefines.h"
 #include <fmt/core.h>
 #include <algorithm>
@@ -68,6 +73,9 @@ std::string g_OllamaModel      = "llama3.2:1b";
 OllamaProvider g_OllamaProvider = OllamaProvider::Ollama;
 std::string g_OllamaApiKey;
 std::string g_OllamaApiKeyHeader;
+std::string g_OllamaBackgroundModel;
+std::string g_OllamaBackgroundUrl;
+bool        g_OllamaBackgroundThink = false;
 int32_t     g_OllamaVerifyCertificates = -1;
 
 namespace
@@ -4614,6 +4622,17 @@ static void LoadNaturalChatV48Settings()
              g_VitalsOomCall ? "on" : "off", g_HolidaysEnable ? "on" : "off");
 }
 
+// What the world is like around a bot, and what it has done with someone:
+// each of these parts reads its own settings (its .cpp says which).
+static void LoadNaturalChatV49Settings()
+{
+    Weather_LoadConfig();
+    Arrive_LoadConfig();
+    Journal_LoadConfig();
+    Mingle_LoadConfig();
+    Battleground_LoadConfig();
+}
+
 static void LoadNaturalChatV47Settings()
 {
     // --- Trade chat: an enchanter buys gear nobody would wear, for the dust ----------------
@@ -5201,6 +5220,9 @@ void LoadOllamaChatConfig()
     g_OllamaProvider                  = OllamaProvider_Parse(sConfigMgr->GetOption<std::string>("OllamaChat.Provider", "ollama"));
     g_OllamaApiKey                    = TrimApiKey(sConfigMgr->GetOption<std::string>("OllamaChat.ApiKey", ""));
     g_OllamaApiKeyHeader              = sConfigMgr->GetOption<std::string>("OllamaChat.ApiKeyHeader", "");
+    g_OllamaBackgroundModel           = sConfigMgr->GetOption<std::string>("OllamaChat.Background.Model", "");
+    g_OllamaBackgroundUrl             = sConfigMgr->GetOption<std::string>("OllamaChat.Background.Url", "");
+    g_OllamaBackgroundThink           = sConfigMgr->GetOption<bool>("OllamaChat.Background.Think", false);
     g_OllamaVerifyCertificates        = sConfigMgr->GetOption<int32_t>("OllamaChat.VerifyCertificates", -1);
 
     // The endpoint path is provider-specific and the most common mistake is
@@ -5756,6 +5778,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV46Settings();
     LoadNaturalChatV47Settings();
     LoadNaturalChatV48Settings();
+    LoadNaturalChatV49Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);
@@ -6221,6 +6244,7 @@ void OllamaChatConfigWorldScript::OnStartup()
     InitializeSentimentTracking();
     Roleplay_Load();
     Memory_Load();
+    Journal_Load();
 
     // Spread the three periodic saves so they do not all come due on the same
     // world tick. Each is incremental now, but they queue onto one database
@@ -6263,6 +6287,7 @@ void OllamaChatConfigWorldScript::OnShutdown()
 
     SaveBotConversationHistoryToDB();
     Memory_SaveAll();
+    Journal_SaveAll();
     if (g_EnableSentimentTracking)
         SaveBotPlayerSentimentsToDB();
 

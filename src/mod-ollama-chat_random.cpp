@@ -44,8 +44,12 @@
 #include "mod-ollama-chat_stay.h"
 #include "mod-ollama-chat_goodturn.h"
 #include "mod-ollama-chat_holidays.h"
+#include "mod-ollama-chat_weather.h"
+#include "mod-ollama-chat_arrive.h"
+#include "mod-ollama-chat_journal.h"
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_aside.h"
+#include "mod-ollama-chat_battleground.h"
 #include "mod-ollama-chat_rolls.h"
 #include "mod-ollama-chat_race.h"
 #include "mod-ollama-chat_potions.h"
@@ -341,6 +345,10 @@ namespace
         // (mod-ollama-chat_lag): a grumble about lag is then a true one.
         if (const std::string lagging = Lag_AmbientText(); !lagging.empty())
             prompt += " " + lagging;
+        // ...and while it rains or snows on it, now and then that
+        // (mod-ollama-chat_weather).
+        if (const std::string sky = Weather_AmbientText(bot); !sky.empty())
+            prompt += " " + sky;
 
         // Mid-run, the run is what is on its mind: what it is doing, and to
         // keep to that (no "did you hear about the druid that got kicked?"),
@@ -597,6 +605,18 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
     // Which holidays are on, by the game's own calendar: a look a minute.
     Holidays_Update(diff);
 
+    // Someone playing crossing into another zone with bots in their group: a
+    // word on getting there, a moment later.
+    Arrive_Update();
+
+    // What a bot and a person did together, as the hooks noted it; and the
+    // journal saved, a look a minute.
+    Journal_Update();
+
+    // A battleground with someone playing in it: what happens there is
+    // called out to their team, and gg said at the end.
+    Battleground_Update(diff);
+
     // The odd whispered aside about someone else in the group.
     Aside_Update(diff);
 
@@ -711,6 +731,11 @@ void OllamaBotRandomChatter::HandleRandomChatter()
             continue;
 
         if (g_DisableRepliesInCombat && bot->IsInCombat())
+            continue;
+
+        // In a battleground there is the match to talk of, and that has
+        // its own lines (mod-ollama-chat_battleground): no small talk there.
+        if (Battleground_TeamChat(bot))
             continue;
 
         // Away from the keyboard, hanging out in a city: nothing to say. In

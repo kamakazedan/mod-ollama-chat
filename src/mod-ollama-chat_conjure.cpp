@@ -10,6 +10,7 @@
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
+#include "mod-ollama-chat_journal.h"
 
 #include "Bag.h"
 #include "Containers.h"
@@ -1137,6 +1138,16 @@ void Conjure_Update()
                     ++g_stats.completed;
                     if (g.price)
                         ++g_stats.sold;
+                    // Something between the two of them from now on
+                    // (mod-ollama-chat_journal).
+                    if (!g.items.empty())
+                    {
+                        std::string what = Journal_ItemWords(g.items.front().itemId, g.items.front().count);
+                        if (!what.empty() && g.items.size() > 1)
+                            what += " and more";
+                        Journal_Note(g.price ? JournalKind::Sold : JournalKind::Gave, mage, req, what,
+                                     g.price ? TextRules::MoneyWords(g.price) : std::string());
+                    }
                 }
                 else
                     ++g_stats.lapsed;

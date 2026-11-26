@@ -142,9 +142,10 @@ namespace
     }
 }
 
-std::string Said_Place(ChatChannelSourceLocal source, const std::string& channelName)
+std::string Said_Place(ChatChannelSourceLocal source, const std::string& channelName, Player* speaker)
 {
-    return source == SRC_WHISPER_LOCAL ? std::string("a whisper") : Context_ChannelLabel(source, channelName);
+    return source == SRC_WHISPER_LOCAL ? std::string("a whisper")
+                                       : Context_ChannelLabel(source, channelName, speaker);
 }
 
 void Said_Note(Player* bot, const std::string& line, const std::string& place, const std::string& basis,

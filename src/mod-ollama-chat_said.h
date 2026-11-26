@@ -40,8 +40,9 @@ class Player;
 // --------------------------------------------------------------------------
 
 // Where a line was said, as these lines name it: "a whisper", "party chat",
-// "General", "/say nearby".
-std::string Said_Place(ChatChannelSourceLocal source, const std::string& channelName);
+// "General", "/say nearby"; with `speaker`, its group's chat is "battleground
+// chat" while it is in a battleground.
+std::string Said_Place(ChatChannelSourceLocal source, const std::string& channelName, Player* speaker = nullptr);
 
 // `bot` just said `line` in `place` (Said_Place), going on `basis` (empty:
 // nothing in particular). `to`: whom it was said to alone (a whisper), else 0;

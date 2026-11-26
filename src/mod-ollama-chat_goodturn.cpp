@@ -5,6 +5,7 @@
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_governor.h"
+#include "mod-ollama-chat_journal.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
@@ -60,6 +61,16 @@ namespace
         Clock::time_point until{};   // not ready by then (dead still, fighting): let go
     };
     std::vector<Pending> g_pending;
+
+    // Someone raising a bot: theirs to remember once it is back on its feet
+    // (mod-ollama-chat_journal), thanked or not.
+    struct Raising
+    {
+        uint64_t          giver = 0;
+        uint64_t          bot   = 0;
+        Clock::time_point until{};
+    };
+    std::vector<Raising> g_raising;
     std::map<std::pair<uint64_t, uint64_t>, Clock::time_point> g_last;   // (bot, giver): when it last weighed one
     GoodTurnStats g_stats;
 
@@ -208,9 +219,19 @@ void GoodTurn_Update()
         std::lock_guard<std::mutex> lock(g_mutex);
         fresh.swap(g_noted);
     }
-    if (fresh.empty() && g_pending.empty() && g_last.empty())
+    if (fresh.empty() && g_pending.empty() && g_last.empty() && g_raising.empty())
         return;
     const auto now = Clock::now();
+
+    for (auto it = g_raising.begin(); it != g_raising.end();)
+    {
+        Player* giver = ObjectAccessor::FindConnectedPlayer(ObjectGuid(it->giver));
+        Player* bot   = ObjectAccessor::FindConnectedPlayer(ObjectGuid(it->bot));
+        const bool up = giver && bot && bot->IsInWorld() && bot->IsAlive();
+        if (up)
+            Journal_Note(JournalKind::Raised, bot, giver);
+        it = (up || !giver || !bot || now >= it->until) ? g_raising.erase(it) : std::next(it);
+    }
 
     for (const Noted& n : fresh)
     {
@@ -220,6 +241,8 @@ void GoodTurn_Update()
             OllamaIsBotPlayer(giver) || bot->GetTeamId() != giver->GetTeamId())
             continue;
         ++g_stats.noted;
+        if (n.kind == Kind::Rez && g_raising.size() < kMaxNoted)
+            g_raising.push_back({ n.giver, n.bot, now + std::chrono::seconds(60) });
 
         // Once for the same player in a while, whatever it made of the last.
         const auto key = std::make_pair(n.bot, n.giver);

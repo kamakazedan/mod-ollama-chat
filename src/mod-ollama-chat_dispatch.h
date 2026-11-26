@@ -202,6 +202,12 @@ struct OllamaChatRequest
     // the run starts.
     bool leadOffCall = false;
 
+    // A line about what is going on in a battleground
+    // (mod-ollama-chat_battleground): what it was written on -- a flag
+    // carried, a base under attack -- is looked at again when it goes out,
+    // and it is not said if that is no longer so. 0: not such a line.
+    uint64_t battleground = 0;
+
     // A line of a /say exchange between bots (mod-ollama-chat_mingle): a
     // conversation running nearby does not take it for a turn of its own.
     bool mingle = false;
@@ -245,10 +251,12 @@ bool OllamaDispatch_DeliverNow(OllamaChatRequest request, uint32_t emoteId, cons
 // A whole /say exchange between bots, written by one generation
 // (mod-ollama-chat_mingle). The worker returns the model's text untouched --
 // several lines -- with up to `numPredict` tokens, at `temperature` (negative:
-// OllamaChat.Temperature). False when the queue is too full for it. The
-// prompt is built on the world thread, like any other.
+// OllamaChat.Temperature). With a `format` (a JSON schema), the text is JSON
+// that fits it where the server can hold a model to one, and free text where
+// it cannot. False when the queue is too full for it. The prompt is built on
+// the world thread, like any other.
 bool OllamaDispatch_SubmitScript(uint64_t scriptId, std::string prompt, uint32_t numPredict,
-                                 float temperature = -1.0f);
+                                 float temperature = -1.0f, std::string format = std::string());
 
 struct OllamaScriptResult
 {

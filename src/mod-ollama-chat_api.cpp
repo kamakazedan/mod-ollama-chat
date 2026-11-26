@@ -7,6 +7,7 @@
 #include "Log.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <chrono>
@@ -31,10 +32,20 @@ namespace
     //    know `max_tokens`
     //  - OpenAI reasoning models reject explicit temperature / top_p /
     //    penalty values and only accept their defaults
-    std::atomic<bool> g_useMaxCompletionTokens{ false };
-    std::atomic<bool> g_samplingRejected{ false };
-    std::atomic<bool> g_maxCompletionLogged{ false };
-    std::atomic<bool> g_samplingLogged{ false };
+    //
+    // What is learned is learned of a model: one of each for the model that
+    // writes chat and one for the background one (OllamaEndpointSettings::slot).
+    constexpr size_t kSlots = 2;
+    std::array<std::atomic<bool>, kSlots> g_useMaxCompletionTokens{};
+    std::array<std::atomic<bool>, kSlots> g_samplingRejected{};
+    std::array<std::atomic<bool>, kSlots> g_maxCompletionLogged{};
+    std::array<std::atomic<bool>, kSlots> g_samplingLogged{};
+    std::array<std::atomic<bool>, kSlots> g_formatRejected{};   // it would not take a schema for the answer
+
+    // The background model, of which nothing is probed: that it cannot think
+    // though Background.Think asks it to, or reasons whatever it is told.
+    std::atomic<bool> g_backgroundThinkRejected{ false };
+    std::atomic<bool> g_backgroundReasons{ false };
     std::atomic<bool> g_authFailureLogged{ false };
     std::atomic<bool> g_rateLimitLogged{ false };
 
@@ -128,6 +139,14 @@ namespace
         if (!cfg.systemPrompt.empty())
             request["system"] = SanitizeUTF8(cfg.systemPrompt);
 
+        // The answer held to a schema (structured output).
+        if (!cfg.format.empty())
+        {
+            nlohmann::json schema = nlohmann::json::parse(cfg.format, nullptr, false);
+            if (!schema.is_discarded())
+                request["format"] = std::move(schema);
+        }
+
         // Always explicit. Some models keep reasoning switched on unless they
         // are told otherwise, so omitting the field is not the same as
         // disabling it. The old code also sent "hidethinking", which Ollama
@@ -171,11 +190,11 @@ namespace
 
         if (cfg.numPredict > 0)
         {
-            const char* key = g_useMaxCompletionTokens.load() ? "max_completion_tokens" : "max_tokens";
+            const char* key = g_useMaxCompletionTokens[cfg.slot].load() ? "max_completion_tokens" : "max_tokens";
             request[key] = cfg.numPredict + reasoningReserve;
         }
 
-        if (!g_samplingRejected.load())
+        if (!g_samplingRejected[cfg.slot].load())
         {
             request["temperature"] = cfg.temperature;
             request["top_p"]       = cfg.topP;
@@ -198,6 +217,17 @@ namespace
             const std::vector<std::string> stopSeqs = ParseStopSequences(cfg.stop);
             if (!stopSeqs.empty())
                 request["stop"] = stopSeqs;
+        }
+
+        // The answer held to a schema (structured output).
+        if (!cfg.format.empty())
+        {
+            nlohmann::json schema = nlohmann::json::parse(cfg.format, nullptr, false);
+            if (!schema.is_discarded())
+                request["response_format"] = {
+                    { "type", "json_schema" },
+                    { "json_schema", { { "name", "answer" }, { "schema", std::move(schema) } } },
+                };
         }
 
         // There is no "think: false" in this format: a reasoning model reasons
@@ -555,6 +585,10 @@ void OllamaConfig_Publish()
     next.presencePenalty  = g_OllamaPresencePenalty;
     next.frequencyPenalty = g_OllamaFrequencyPenalty;
 
+    next.backgroundModel = g_OllamaBackgroundModel;
+    next.backgroundUrl   = g_OllamaBackgroundUrl;
+    next.backgroundThink = g_OllamaBackgroundThink;
+
     next.provider     = g_OllamaProvider;
     next.apiKey       = g_OllamaApiKey;
     next.apiKeyHeader = g_OllamaApiKeyHeader;
@@ -562,10 +596,16 @@ void OllamaConfig_Publish()
                         (g_OllamaVerifyCertificates < 0 && !g_OllamaApiKey.empty());
 
     // A provider or model change invalidates what was learned about the old one.
-    g_useMaxCompletionTokens.store(false);
-    g_samplingRejected.store(false);
-    g_maxCompletionLogged.store(false);
-    g_samplingLogged.store(false);
+    for (size_t slot = 0; slot < kSlots; ++slot)
+    {
+        g_useMaxCompletionTokens[slot].store(false);
+        g_samplingRejected[slot].store(false);
+        g_maxCompletionLogged[slot].store(false);
+        g_samplingLogged[slot].store(false);
+        g_formatRejected[slot].store(false);
+    }
+    g_backgroundThinkRejected.store(false);
+    g_backgroundReasons.store(false);
     g_authFailureLogged.store(false);
     g_rateLimitLogged.store(false);
 
@@ -619,7 +659,7 @@ OllamaHttpHeaders OllamaBuildRequestHeaders(const OllamaEndpointSettings& cfg)
 }
 
 OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, uint32_t numPredict,
-                            float temperature)
+                            float temperature, const std::string& format)
 {
     OllamaApiResult result;
 
@@ -635,14 +675,36 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
     if (temperature >= 0.0f)
         cfg.temperature = temperature;
 
+    // Memory, sentiment and relationship updates may have a model of their
+    // own (OllamaChat.Background.*), which leaves the one that writes chat to
+    // write chat. Nothing learned about one model is applied to the other:
+    // the background one is not probed, and is asked to think only when
+    // Background.Think says it can.
+    const bool background = kind == OllamaRequestKind::Sentiment && !cfg.backgroundModel.empty();
+    if (background)
+    {
+        cfg.slot  = 1;
+        cfg.model = cfg.backgroundModel;
+        if (!cfg.backgroundUrl.empty())
+            cfg.url = cfg.backgroundUrl;
+    }
+
+    if (!format.empty() && cfg.provider != OllamaProvider::Anthropic && !g_formatRejected[cfg.slot].load())
+        cfg.format = format;
+
     // One place decides what the "think" field should be: policy for this
     // request kind, plus everything learned about this model so far.
-    OllamaThinkRequest think = OllamaCapability_ResolveThink(kind);
+    OllamaThinkRequest think;
+    if (background)
+        think.wanted = think.enabled = cfg.backgroundThink && !g_backgroundThinkRejected.load();
+    else
+        think = OllamaCapability_ResolveThink(kind);
 
     // Reasoning tokens come out of the same num_predict budget as the answer.
     // Reserve headroom whenever we expect them -- because reasoning was asked
     // for, or because this model produces it regardless.
-    const bool expectReasoning = think.wanted || OllamaCapability_ReasonsUnconditionally();
+    const bool expectReasoning = think.wanted || (background ? g_backgroundReasons.load()
+                                                             : OllamaCapability_ReasonsUnconditionally());
     const uint32_t reserve     = expectReasoning ? g_ReasoningTokenReserve : 0;
 
     // Every attempt goes through here so a refused reasoning level self-heals
@@ -693,17 +755,17 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
         {
             const std::string lower = AsciiLower(r.error);
 
-            if (!g_useMaxCompletionTokens.load() &&
+            if (!g_useMaxCompletionTokens[cfg.slot].load() &&
                 lower.find("max_completion_tokens") != std::string::npos)
             {
-                g_useMaxCompletionTokens.store(true);
-                if (!g_maxCompletionLogged.exchange(true))
+                g_useMaxCompletionTokens[cfg.slot].store(true);
+                if (!g_maxCompletionLogged[cfg.slot].exchange(true))
                     LOG_INFO("module.ollamachat",
                              "[Ollama Chat] Model '{}' wants max_completion_tokens instead of "
                              "max_tokens; switching for the rest of this session.", cfg.model);
                 r = PerformOnce(cfg, prompt, req, budget);
             }
-            else if (!g_samplingRejected.load() &&
+            else if (!g_samplingRejected[cfg.slot].load() &&
                      (lower.find("unsupported") != std::string::npos ||
                       lower.find("not supported") != std::string::npos) &&
                      (lower.find("temperature") != std::string::npos ||
@@ -711,8 +773,8 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
                       lower.find("presence_penalty") != std::string::npos ||
                       lower.find("frequency_penalty") != std::string::npos))
             {
-                g_samplingRejected.store(true);
-                if (!g_samplingLogged.exchange(true))
+                g_samplingRejected[cfg.slot].store(true);
+                if (!g_samplingLogged[cfg.slot].exchange(true))
                     LOG_INFO("module.ollamachat",
                              "[Ollama Chat] Model '{}' rejects explicit sampling parameters "
                              "(temperature/top_p/penalties); sending its defaults for the rest "
@@ -741,9 +803,32 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
     if (!result.ok && think.wanted &&
         OllamaCapability_IsThinkRejection(result.status, result.error))
     {
-        OllamaCapability_NoteThinkRejected();
+        if (!background)
+            OllamaCapability_NoteThinkRejected();
+        else if (!g_backgroundThinkRejected.exchange(true))
+            LOG_INFO("module.ollamachat", "[Ollama Chat] The background model '{}' cannot think: "
+                     "OllamaChat.Background.Think is left out for it from here on.", cfg.model);
         think  = OllamaThinkRequest{};
         result = PerformOnce(cfg, prompt, think, 0);
+    }
+
+    // Self-heal: the server would not take a schema for the answer (an older
+    // Ollama, a proxy that passes on only what it knows). Ask for plain text
+    // instead -- whoever asked reads either -- and when that works where the
+    // schema did not, remember it. A request refused for some other reason
+    // (a model name it does not know) is refused again, and nothing is
+    // learned from it.
+    if (!result.ok && !cfg.format.empty() && result.status >= 400 && result.status < 500 &&
+        result.status != 401 && result.status != 403 && !IsRateLimited(result.status))
+    {
+        const int         refusedWith = result.status;
+        const std::string refusal     = result.error;
+        cfg.format.clear();
+        result = perform(think, reserve);
+        if (result.ok && !g_formatRejected[cfg.slot].exchange(true))
+            LOG_INFO("module.ollamachat", "[Ollama Chat] The server would not take a schema for an answer (HTTP "
+                     "{}): {}. Structured answers are asked for as plain text from here on.",
+                     refusedWith, refusal.empty() ? "no reason given" : refusal);
     }
 
     // Self-heal: HTTP 200, reasoning present, answer empty. The model spent
@@ -754,10 +839,14 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
     if (result.ok && result.text.empty() && !result.thinking.empty() &&
         cfg.numPredict > 0 && reserve == 0 && g_ReasoningTokenReserve > 0)
     {
-        if (!think.wanted)
-            OllamaCapability_NoteUnconditionalReasoning();
-
-        think  = OllamaCapability_ResolveThink(kind);
+        if (background)
+            g_backgroundReasons.store(true);   // it reasons whatever it is told: room for that from here on
+        else
+        {
+            if (!think.wanted)
+                OllamaCapability_NoteUnconditionalReasoning();
+            think = OllamaCapability_ResolveThink(kind);
+        }
         result = perform(think, g_ReasoningTokenReserve);
     }
 
@@ -773,7 +862,7 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
                   cfg.model, result.thinking.size(), cfg.numPredict, g_ReasoningTokenReserve);
     }
 
-    if (result.ok)
+    if (result.ok && !background)
         OllamaCapability_NoteLatency(result.latencyMs, result.thinkUsed);
 
     if (!result.ok)

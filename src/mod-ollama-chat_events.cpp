@@ -21,6 +21,8 @@
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat-utilities.h"
+#include "mod-ollama-chat_battleground.h"
+#include "mod-ollama-chat_journal.h"
 
 #include "AchievementMgr.h"
 #include "Containers.h"
@@ -427,9 +429,13 @@ void OllamaBotEventChatter::HandleGameEvent(Player* source, const std::string& t
         const bool partyAudience =
             bot->GetGroup() && !g_DisableForParty && OllamaGroupHasRealPlayer(bot);
 
+        // In a battleground its group is its team, a raid: its line goes
+        // with the team's other lines there, under one cooldown and one
+        // history (mod-ollama-chat_battleground).
         const ChatChannelSourceLocal source_ =
-            isGuildEvent ? SRC_GUILD_LOCAL
-                         : (partyAudience ? SRC_PARTY_LOCAL : SRC_SAY_LOCAL);
+            isGuildEvent     ? SRC_GUILD_LOCAL
+            : !partyAudience ? SRC_SAY_LOCAL
+                             : Battleground_TeamChat(bot) ? SRC_RAID_LOCAL : SRC_PARTY_LOCAL;
 
         const std::string scopeKey = Governor_MakeScopeKey(
             ChatChannelSourceLocalStr[source_], 0, "",
@@ -664,6 +670,7 @@ void ChatOnQuest::OnPlayerCompleteQuest(Player* player, Quest const* quest)
         return;
 
     Lately_NoteQuest(player, quest);
+    Journal_NoteQuestDone(player);   // done with whoever of their group was by them
 
     eventChatter.DispatchGameEvent(player, g_EventTypeCompletedQuest, quest->GetTitle());
 
@@ -713,10 +720,13 @@ void ChatOnDuel::OnPlayerDuelStart(Player* player1, Player* player2)
         eventChatter.DispatchGameEvent(player1, g_EventTypeStartedDueling, player2->GetName());
 }
 
-void ChatOnDuel::OnPlayerDuelEnd(Player* winner, Player* loser, DuelCompleteType /*type*/)
+void ChatOnDuel::OnPlayerDuelEnd(Player* winner, Player* loser, DuelCompleteType type)
 {
     if (winner && loser)
         eventChatter.DispatchGameEvent(winner, g_EventTypeWonDuel, loser->GetName());
+    // A duel fought to its end is something the two have between them.
+    if (winner && loser && type != DUEL_INTERRUPTED)
+        Journal_NoteDuel(winner, loser);
 }
 
 // --------------------------------------------------------------------------

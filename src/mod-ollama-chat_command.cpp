@@ -41,9 +41,13 @@
 #include "mod-ollama-chat_stay.h"
 #include "mod-ollama-chat_goodturn.h"
 #include "mod-ollama-chat_holidays.h"
+#include "mod-ollama-chat_weather.h"
+#include "mod-ollama-chat_arrive.h"
+#include "mod-ollama-chat_journal.h"
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_gear.h"
 #include "mod-ollama-chat_aside.h"
+#include "mod-ollama-chat_battleground.h"
 #include "mod-ollama-chat_knowledge.h"
 #include "mod-ollama-chat_wants.h"
 #include "mod-ollama-chat_mingle.h"
@@ -624,6 +628,9 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
                              g_OllamaUrl, g_OllamaModel,
                              g_OllamaApiKey.empty() ? "not set" : "set",
                              OllamaHttp_TlsAvailable() ? "available" : "NOT BUILT (no OpenSSL)");
+    if (show("chat") && !g_OllamaBackgroundModel.empty())
+        out("Background jobs (memory, sentiment, relationships) run on: {}{}{}", g_OllamaBackgroundModel,
+            g_OllamaBackgroundUrl.empty() ? "" : " at ", g_OllamaBackgroundUrl);
     if (show("chat"))
         out("Think: {}", OllamaCapability_StatusText());
 
@@ -1094,6 +1101,32 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
             g_HolidaysEnable ? "on" : "off", holidays.known, holidays.names.empty() ? "none" : holidays.names,
             (unsigned long long)holidays.told, (unsigned long long)holidays.topics,
             (unsigned long long)holidays.keptIn);
+    const OllamaWeatherStats sky = Weather_GetStats();
+    if (show("chat"))
+        out("Weather: {} zones heard of, {} with rain, snow or a storm now; {} replies told what it is doing, {} "
+            "ambient lines told, {} lines that had it wrong not said",
+            sky.zones, sky.unclear, (unsigned long long)sky.told, (unsigned long long)sky.ambient,
+            (unsigned long long)sky.keptIn);
+    const ArriveStats arrive = Arrive_GetStats();
+    if (show("party"))
+        out("Getting somewhere: {} zones crossed into with a group of bots by them, {} remarked on; {} not (a zone "
+            "they had just been in, or one said too lately), {} not (by chance, or nobody by them); {} waiting",
+            (unsigned long long)arrive.crossed, (unsigned long long)arrive.said, (unsigned long long)arrive.again,
+            (unsigned long long)arrive.passed, arrive.pending);
+    const BattlegroundStats battle = Battleground_GetStats();
+    if (show("party"))
+        out("Battlegrounds: {} being watched now, {} since startup; {} lines sent to be written, {} callouts typed, "
+            "{} gg; {} not said as no longer so, {} things that got no line (the chance, the gap, nobody free); {} "
+            "replies told how it stood",
+            battle.watched, (unsigned long long)battle.matches, (unsigned long long)battle.lines,
+            (unsigned long long)battle.typed, (unsigned long long)battle.gg, (unsigned long long)battle.stale,
+            (unsigned long long)battle.passed, (unsigned long long)battle.answered);
+    const JournalStats journal = Journal_GetStats();
+    if (show("talk"))
+        out("The journal: {} things kept of {} pairs of a bot and a person; {} written down since startup, {} "
+            "prompts told of them, {} pairs saved",
+            journal.entries, journal.pairs, (unsigned long long)journal.noted, (unsigned long long)journal.told,
+            (unsigned long long)journal.saved);
     const ContextThreadStats thread = Context_GetThreadStats();
     if (show("party"))
         out("Keeping the thread: {} unprompted lines held back where a real player had just "

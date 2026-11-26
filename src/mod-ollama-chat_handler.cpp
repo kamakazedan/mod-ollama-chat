@@ -68,6 +68,8 @@
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_gifts.h"
 #include "mod-ollama-chat_holidays.h"
+#include "mod-ollama-chat_weather.h"
+#include "mod-ollama-chat_journal.h"
 #include "mod-ollama-chat_vitals.h"
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_gear.h"
@@ -76,6 +78,7 @@
 #include "mod-ollama-chat_wants.h"
 #include "mod-ollama-chat_race.h"
 #include "mod-ollama-chat_banter.h"
+#include "mod-ollama-chat_battleground.h"
 #include "mod-ollama-chat_clock.h"
 #include "mod-ollama-chat_tradechat.h"
 #include "mod-ollama-chat_said.h"
@@ -472,6 +475,12 @@ std::string rtrim(const std::string& s)
     return (end == std::string::npos) ? "" : s.substr(0, end + 1);
 }
 
+// "/bg": what a team says to itself in a battleground.
+static bool OllamaIsBattlegroundChat(uint32_t type)
+{
+    return type == CHAT_MSG_BATTLEGROUND || type == CHAT_MSG_BATTLEGROUND_LEADER;
+}
+
 ChatChannelSourceLocal GetChannelSourceLocal(uint32_t type)
 {
     switch (type)
@@ -546,6 +555,11 @@ bool PlayerBotChatHandler::OnPlayerCanUseChat(Player* player, uint32_t type, uin
         return true;
 
     ChatChannelSourceLocal sourceLocal = GetChannelSourceLocal(type);
+    // Battleground chat is the team's own: heard and answered like a raid's,
+    // by the bots of the team (mod-ollama-chat_battleground). It was no
+    // source the module knew, so nobody answered it.
+    if (OllamaIsBattlegroundChat(type) && Battleground_TeamChat(player))
+        sourceLocal = SRC_RAID_LOCAL;
     ProcessChat(player, type, lang, msg, sourceLocal, nullptr, nullptr);
     return true;
 }
@@ -1364,7 +1378,7 @@ std::string GenerateBotGameStateSnapshot(Player* bot, bool local)
 }
 
 
-void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32_t lang, std::string& msg, ChatChannelSourceLocal sourceLocal, Channel* channel, Player* receiver, uint8_t chainDepth,
+void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t type, uint32_t lang, std::string& msg, ChatChannelSourceLocal sourceLocal, Channel* channel, Player* receiver, uint8_t chainDepth,
                                        uint64_t crowdPlanId)
 {
     if (player == nullptr) {
@@ -1453,10 +1467,17 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
             return;
         }
 
-        const PartyCmdLine partyLine = PartyCmd_Classify(player, msg, sourceLocal);
+        // Said to a battleground's team: chat, and nothing below that is a
+        // group's own business -- no run to steer, no water to conjure, no
+        // trade, no orders for bots that are nobody's to order
+        // (mod-ollama-chat_battleground).
+        const bool toTeam = OllamaIsBattlegroundChat(type) && sourceLocal == SRC_RAID_LOCAL;
+
+        const PartyCmdLine partyLine = toTeam ? PartyCmdLine::None : PartyCmd_Classify(player, msg, sourceLocal);
 
         // After a run: "wait, can you help me with..." keeps the group together.
-        PartyCmd_NoteHumanPartyLine(player, msg, sourceLocal);
+        if (!toTeam)
+            PartyCmd_NoteHumanPartyLine(player, msg, sourceLocal);
 
         // "yall are rude": the group's bots leave them be for a while.
         Gear_NoteHumanLine(player, msg);
@@ -1485,20 +1506,21 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // for free. After the instructions, so "mb, water pls" both pauses the
         // run and gets the water -- the mage answers after the tank. Before the
         // blacklist too, since "trade" starts a line people use to ask.
-        if (Conjure_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq))
+        if (!toTeam && Conjure_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq))
             handled = true;
 
         // "can i get a buff", "Verona int pls" in /say or a whisper: a bot
         // near that can buff them might, its own way; and the "ty" after is
         // the one that did's to answer (mod-ollama-chat_buffs). After conjure,
         // so "mage water pls" is the mage's.
-        if (!handled && Buff_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq))
+        if (!handled && !toTeam && Buff_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq))
             handled = true;
 
         // "anyone want my [Woolen Bag]?", "wts [Pagan Vest] 50s": what they are
         // giving away or selling, answered by the bot it is any use to. Before
         // the bag handlers, which would show every bot what it could spare.
-        if (!handled && Gifts_HandleHumanLine(player, msg, sourceLocal, contextChannel, receiver, scopeKey, humanSeq))
+        if (!handled && !toTeam &&
+            Gifts_HandleHumanLine(player, msg, sourceLocal, contextChannel, receiver, scopeKey, humanSeq))
             handled = true;
 
         // "can I have your [Linen Cloth]", "ill take the leggings", "me!" right
@@ -1506,15 +1528,17 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         // trade, what it keeps gets a no and why. Before orders, so "trade me
         // the cloth" is about the cloth; "come trade me" is still an order.
         // "actually no, take it out": a gift going over to them, called off.
-        if (!handled && Bags_HandleCancel(player, msg, sourceLocal, contextChannel, receiver, scopeKey, humanSeq))
+        if (!handled && !toTeam &&
+            Bags_HandleCancel(player, msg, sourceLocal, contextChannel, receiver, scopeKey, humanSeq))
             handled = true;
-        if (!handled && Bags_HandleHumanLine(player, msg, sourceLocal, contextChannel, receiver, scopeKey, humanSeq))
+        if (!handled && !toTeam &&
+            Bags_HandleHumanLine(player, msg, sourceLocal, contextChannel, receiver, scopeKey, humanSeq))
             handled = true;
 
         // "stay back", "Joanni come trade me", "res": orders, carried out and
         // answered by the bot it was for. Before the blacklist, since "stay",
         // "follow" and "trade" start lines that people use to say them.
-        if (!handled && Orders_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq))
+        if (!handled && !toTeam && Orders_HandleHumanLine(player, msg, sourceLocal, receiver, scopeKey, humanSeq))
             handled = true;
 
         if (handled)
@@ -3810,7 +3834,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     // how the last few minutes have really gone for each of them
     // (mod-ollama-chat_vitals): "nearly dead there for a sec" was said by a
     // tank who had never been in any trouble.
-    std::string vitals, holidays;
+    std::string vitals, holidays, weather, journal;
     {
         std::vector<std::string> heard{ playerMessage };
         for (const ContextRecentLine& line : Context_RecentLines(bot, source, channelName, 4, g_ContextMaxAgeSeconds))
@@ -3823,7 +3847,25 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         holidays = Holidays_PromptFor(heard);
         if (!holidays.empty())
             prompt += " " + holidays;
+        // ...and where it is of the weather, what that is really doing where
+        // it stands (mod-ollama-chat_weather).
+        weather = Weather_PromptFor(bot, heard);
+        if (!weather.empty())
+            prompt += " " + weather;
+        // ...and what it has done with them before, when the talk is of that
+        // or it has not spoken with them for a while (mod-ollama-chat_journal).
+        journal = Journal_ReplyPromptFor(bot, player, heard);
+        if (!journal.empty())
+            prompt += " " + journal;
     }
+
+    // ...and in a battleground, which one it is, how it is won and how it
+    // stands right now (mod-ollama-chat_battleground): "whats the score" gets
+    // the score. Not kept with the line as what it went on: how a match
+    // stands is out of date within the minute.
+    const std::string battleground = Battleground_PromptFor(bot, source);
+    if (!battleground.empty())
+        prompt += " " + battleground;
 
     // Asked what it has, or for something: what is in its bags, what it could
     // spare and what it keeps (mod-ollama-chat_bags). Only when the talk is
@@ -3873,7 +3915,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     // idea" -- and "lol who?" a name, not "the one with the weird gear"
     // (mod-ollama-chat_said).
     std::string askedBasis;
-    const std::string said = Said_PromptFor(bot, player, playerMessage, Said_Place(source, channelName),
+    const std::string said = Said_PromptFor(bot, player, playerMessage, Said_Place(source, channelName, bot),
                                             &askedBasis);
     if (!said.empty())
         prompt += " " + said;
@@ -3923,7 +3965,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         for (const std::string* part : { &named, &lfg, &known, &wants, static_cast<const std::string*>(&lagState),
                                          static_cast<const std::string*>(&askedBasis),
                                          static_cast<const std::string*>(&vitals),
-                                         static_cast<const std::string*>(&holidays) })
+                                         static_cast<const std::string*>(&holidays),
+                                         static_cast<const std::string*>(&weather),
+                                         static_cast<const std::string*>(&journal) })
             if (!part->empty())
                 *facts += (facts->empty() ? "" : " ") + *part;
     }

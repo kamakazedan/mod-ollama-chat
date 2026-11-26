@@ -11,6 +11,7 @@
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
+#include "mod-ollama-chat_journal.h"
 
 #include "Bag.h"
 #include "Group.h"
@@ -871,6 +872,8 @@ void Gifts_Tick()
                 if (bot->GetItemCount(d.entry) > d.countBefore)
                 {
                     ++g_stats.received;
+                    Journal_Note(JournalKind::Given, bot, player,
+                                 Journal_ItemWords(d.entry, bot->GetItemCount(d.entry) - d.countBefore));
                     if (g_DebugEnabled)
                         LOG_INFO("module.ollamachat", "[Ollama Chat] {} took {}'s {} in a trade.", bot->GetName(),
                                  player->GetName(), d.entry);
@@ -912,6 +915,8 @@ void Gifts_Tick()
                     ++g_stats.paid;
                     if (d.market)
                         ++g_stats.marketPaid;
+                    Journal_Note(JournalKind::Bought, bot, player, Journal_ItemWords(d.entry, d.count),
+                                 TextRules::MoneyWords(d.price));
                     // Bought for its dust: the very piece is the bot's to
                     // break down now (it keeps its guid across a trade).
                     if (d.toBreak)

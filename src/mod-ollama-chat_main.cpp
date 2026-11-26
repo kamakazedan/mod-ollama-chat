@@ -7,6 +7,8 @@
 #include "mod-ollama-chat_rag.h"
 #include "mod-ollama-chat_conjure.h"
 #include "mod-ollama-chat_equip.h"
+#include "mod-ollama-chat_weather.h"
+#include "mod-ollama-chat_arrive.h"
 #include "mod-ollama-chat_goodturn.h"
 #include "mod-ollama-chat_potions.h"
 #include "mod-ollama-chat_rolls.h"
@@ -64,4 +66,8 @@ void Addmod_ollama_chatScripts()
     // A bot drinking a potion in a pinch in a dungeon: noted as it drinks.
     new OllamaChatPotionScript();
     new OllamaChatGoodTurnScript();
+    // The core saying what a zone's weather now is: noted, for what is said of it.
+    new OllamaChatWeatherScript();
+    // Someone playing crossing into another zone: noted, for a word on getting there.
+    new OllamaChatArriveScript();
 }

@@ -148,6 +148,38 @@ OllamaChat.VerifyCertificates = -1
 #     Default:     llama3.2:1b
 OllamaChat.Model = llama3.2:1b
 
+# OllamaChat.Background.Model
+# OllamaChat.Background.Url
+# OllamaChat.Background.Think
+#     Description: A second model for the jobs nobody is waiting on: weighing
+#                  how a bot feels about someone after an exchange
+#                  (sentiment), condensing a bot's history into memories, and
+#                  writing how it feels about the people it knows
+#                  (relationships). With Background.Model empty they go to
+#                  OllamaChat.Model like everything else, as they always
+#                  have. With a model named here they go to that one, and the
+#                  model that writes chat only writes chat: these jobs are
+#                  short, and do not need a model that writes well.
+#
+#                  Background.Url is where that model is asked, when it is
+#                  not at OllamaChat.Url (another machine, say). It has to be
+#                  the same kind of server (OllamaChat.Provider) and takes
+#                  the same key. Background.Think asks it to reason before
+#                  it answers; one that cannot is found out and not asked
+#                  again.
+#
+#                  On one Ollama server both models have to fit in its memory
+#                  at once. Ollama keeps several loaded only while they fit
+#                  (and no more than its OLLAMA_MAX_LOADED_MODELS allows);
+#                  when they do not, it unloads one to load the other every
+#                  time the work changes hands, and everything gets slower,
+#                  not faster. .ollama status chat says which model these
+#                  jobs run on.
+#     Default:     "" (none: the main model), "" (OllamaChat.Url), 0
+OllamaChat.Background.Model =
+OllamaChat.Background.Url =
+OllamaChat.Background.Think = 0
+
 # OllamaChat.NumPredict
 #     Description: Maximum number of tokens to generate in Ollama responses.
 #     0 = unlimited. Only set if you want a hard cap.
@@ -6577,6 +6609,635 @@ OllamaChat.Holidays.OffNote = "{name} is not on at the moment: do not talk as if
 
 ###############################################################################
 #
+#   OLLAMA CHAT - THE WEATHER: TALKED OF AS IT IS
+#
+#   The game has weather -- rain over Elwynn, snow in Dun Morogh, sandstorms
+#   in Tanaris -- and everyone standing in a zone sees the same sky. A bot saw
+#   none of it: the model talks about the weather as freely as anyone and
+#   knows nothing of it, so "lovely day for it" could be said in a downpour.
+#
+#   What each zone's weather is doing is the game's own: the core says so
+#   whenever it changes (ActivateWeather in worldserver.conf has to be on, as
+#   it is unless it was switched off). With that:
+#
+#     - a reply where the talk is of the weather is told what it is doing
+#       where the bot stands, and whether the bot is indoors;
+#     - a bot's line that says it is raining, snowing, foggy, storming or
+#       fine goes out only when that is so where it stands, or answering a
+#       person who brought the weather up. One owed to someone gets another
+#       go, told how it is;
+#     - while it is doing something, an ambient line of a bot out in it is
+#       now and then told so: a grumble about the rain is then about rain
+#       that is falling.
+#
+#   Out in the world a zone has one sky. Inside an instance whose zone has
+#   weather (Alterac Valley, Arathi Basin, Stratholme and Ahn'Qiraj among
+#   them) every copy of it running has its own, and the core does not say
+#   which copy's has changed: there the weather is not known, so nothing is
+#   said of it and no line is held back.
+#
+#   .ollama status chat counts it.
+#
+###############################################################################
+
+#    OllamaChat.Weather.Enable
+#    OllamaChat.Weather.Guard
+#        Enable: any of it. Guard: a line that has the weather wrong is not
+#        said (0: replies are still told the weather, and nothing is held
+#        back).
+#        Default: 1, 1
+OllamaChat.Weather.Enable = 1
+OllamaChat.Weather.Guard = 1
+
+#    OllamaChat.Weather.AmbientChance
+#    OllamaChat.Weather.AmbientMinutes
+#        While a zone's weather is doing something, the percent of the
+#        ambient lines of bots out in it that are told so (0: none), and no
+#        more than one such line for a zone in AmbientMinutes (1-1440).
+#        Default: 8, 20
+OllamaChat.Weather.AmbientChance = 8
+OllamaChat.Weather.AmbientMinutes = 20
+
+#    OllamaChat.Weather.TalkWords
+#        A line with one of these in it talks of the weather (separated by |;
+#        the name of a thing in [brackets] does not count). A reply to it, or
+#        within a few lines of it, is told what the weather is doing; and a
+#        person who says one of them is answered whatever the answer says of
+#        the weather -- it was told how it is.
+OllamaChat.Weather.TalkWords = "weather|raining|rain|rainy|snowing|snow|snowy|sandstorm|thunderstorm|thunder|foggy|fog|sunny|sunshine|drizzle|downpour"
+
+#    OllamaChat.Weather.FineWords
+#    OllamaChat.Weather.FogWords
+#    OllamaChat.Weather.RainWords
+#    OllamaChat.Weather.SnowWords
+#    OllamaChat.Weather.SandstormWords
+#    OllamaChat.Weather.ThunderWords
+#        What a line says the weather is: one with any of FineWords in it
+#        says it is fine, and so on, and goes out only when it is (a
+#        thunderstorm is rain too). Keep them to what only says so: "rain" on
+#        its own would catch a mage's "rain of fire", and "snow" a name.
+OllamaChat.Weather.FineWords = "sunny|sunshine|clear skies|clear sky|nice weather|lovely weather|beautiful weather|weather is nice|weather's nice|not a cloud"
+OllamaChat.Weather.FogWords = "foggy|this fog|the fog"
+OllamaChat.Weather.RainWords = "raining|the rain|this rain|rain again|more rain|pouring rain|pouring down|downpour|drizzle|drizzling|chucking it down|bucketing down"
+OllamaChat.Weather.SnowWords = "snowing|snowstorm|snowfall|snow coming down"
+OllamaChat.Weather.SandstormWords = "sandstorm|sand storm|dust storm"
+OllamaChat.Weather.ThunderWords = "thunderstorm|thunder storm|thunder and lightning"
+
+#    OllamaChat.Weather.NotWords
+#        A line with one of these says what the weather is not, or might be
+#        ("at least its not raining", "if it rains"): it goes out whatever
+#        the weather is doing.
+OllamaChat.Weather.NotWords = "not raining|isnt raining|isn't raining|stopped raining|no rain|rain stopped|rain has stopped|not snowing|isnt snowing|isn't snowing|stopped snowing|no snow|not sunny|no sun|if it rains|when it rains|in case it rains|hope it doesnt rain|hope it doesn't rain"
+
+#    OllamaChat.Weather.Names
+#    OllamaChat.Weather.FineName
+#        What each of the game's thirteen kinds of weather is called in a
+#        prompt, in this order, separated by |: fog; light, medium and heavy
+#        rain; light, medium and heavy snow; light, medium and heavy
+#        sandstorm; thunderstorm; black rain; black snow. With any other
+#        number of them, weather is left out of prompts. FineName: a clear
+#        sky.
+OllamaChat.Weather.Names = "fog|light rain|rain|heavy rain|light snow|snow|heavy snow|a light sandstorm|a sandstorm|a heavy sandstorm|a thunderstorm|dark rain|dark snow"
+OllamaChat.Weather.FineName = "clear skies"
+
+#    OllamaChat.Weather.HereText
+#    OllamaChat.Weather.IndoorsText
+#    OllamaChat.Weather.Note
+#    OllamaChat.Weather.AmbientText
+#        What a reply is told, with IndoorsText after it when the bot is
+#        inside; what a line that had it wrong is told for its second go;
+#        and what an ambient line is told. {weather}: one of the names above.
+OllamaChat.Weather.HereText = "The weather where you are right now: {weather}."
+OllamaChat.Weather.IndoorsText = "You are indoors just now, out of it."
+OllamaChat.Weather.Note = "Right now, where you are: {weather}. Do not say the weather is anything else."
+OllamaChat.Weather.AmbientText = "Right now there is {weather} where you are. You may grumble about it or mention it in passing, or say nothing of it."
+
+###############################################################################
+#
+#   OLLAMA CHAT - GETTING SOMEWHERE: A WORD ON ARRIVING
+#
+#   A group rides out of Westfall into Duskwood and somebody says something:
+#   "ugh, this place", "so what's the plan", "bit high for me this". A bot
+#   crossed into a new zone beside the person it was grouped with and said
+#   nothing, every time.
+#
+#   When someone playing crosses into another zone out in the world with bots
+#   in their group, one of the bots by them may say a word about getting
+#   there, in the group's chat. It is told only what is so of the place: its
+#   name, the levels most of its quests are for, the dungeons whose way in is
+#   there, and the weather it has ridden into. Not whether it has been there
+#   before: it does not know.
+#
+#   Not into a city, a dungeon or a battleground, and not for a zone they
+#   were in a little while ago: a run along a border is not a journey. While
+#   they are flying, on a boat or in a fight it waits, for up to five
+#   minutes. .ollama status party counts it.
+#
+###############################################################################
+
+#    OllamaChat.Arrive.Enable
+#    OllamaChat.Arrive.Chance
+#        On, and the percent of arrivals that get a word.
+#        Default: 1, 40
+OllamaChat.Arrive.Enable = 1
+OllamaChat.Arrive.Chance = 40
+
+#    OllamaChat.Arrive.DelayMinSeconds
+#    OllamaChat.Arrive.DelayMaxSeconds
+#        It is weighed this long after they cross over (1-600 each): the
+#        group has a moment to get there too.
+#        Default: 20, 45
+OllamaChat.Arrive.DelayMinSeconds = 20
+OllamaChat.Arrive.DelayMaxSeconds = 45
+
+#    OllamaChat.Arrive.ZoneHours
+#    OllamaChat.Arrive.MinMinutes
+#        Nothing for a zone they were in within ZoneHours (1-168), and no
+#        more than one word for the same person in MinMinutes (1-1440).
+#        Default: 6, 15
+OllamaChat.Arrive.ZoneHours = 6
+OllamaChat.Arrive.MinMinutes = 15
+
+#    OllamaChat.Arrive.NearYards
+#        The one who says it is a bot of their group within this many yards
+#        of them (10-200), alive and not in a fight.
+#        Default: 60
+OllamaChat.Arrive.NearYards = 60
+
+#    OllamaChat.Arrive.Prompt
+#        {bot_name}, {bot_level}, {bot_race}, {bot_class},
+#        {bot_personality}; {zone}: the zone's name; {facts}: what is so of
+#        it, from the three texts below. "{~a|b|c}" is one of a, b and c,
+#        picked afresh each time.
+OllamaChat.Arrive.Prompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} in a group. Your chat style: {bot_personality} Your group has just got to {zone}. {facts} Say something about getting here in party chat the way players do -- {~the look of the place|asking what the plan is|whether the place suits your level|being glad the trip is over|a quick remark in passing} -- in your own style. Say nothing of whether you have been here before, and make up no reason for coming. One short line, 3 to 12 words, no quotes, no name in front."
+
+#    OllamaChat.Arrive.LevelsText
+#    OllamaChat.Arrive.DungeonsText
+#    OllamaChat.Arrive.WeatherText
+#        The facts, each left out when there is nothing to say. {lo} and
+#        {hi}: the levels the middle four fifths of the zone's quests are
+#        for (a zone with fewer than eight quests has none to speak of).
+#        {dungeons}: up to three of the dungeons the dungeon finder lists
+#        whose way in is in the zone, each with its levels. {weather}: what
+#        it is doing there, while it is doing something (OllamaChat.Weather.*).
+OllamaChat.Arrive.LevelsText = "Most of the quests here are for levels {lo} to {hi}."
+OllamaChat.Arrive.DungeonsText = "The way into {dungeons} is in this zone."
+OllamaChat.Arrive.WeatherText = "Right now there is {weather} here."
+
+###############################################################################
+#
+#   OLLAMA CHAT - THE JOURNAL: WHAT A BOT AND YOU HAVE DONE TOGETHER
+#
+#   Someone who ran the Deadmines with you last week says so when you group
+#   again. A bot met the person it had spent an evening with as a stranger,
+#   every time: what it remembers of people (LONG-TERM MEMORY, below) is
+#   condensed from what was said to it, and of what it did with them it kept
+#   nothing.
+#
+#   So what a bot and someone playing do together is written down as it
+#   happens, from the game itself and never by the model:
+#
+#     - a dungeon they were in together, the bosses that went down there and
+#       the times the group wiped (a wipe is one OllamaChat.Wipe.* saw);
+#     - the zone they quested in together, and how many quests were done;
+#     - a duel, and who won it;
+#     - something the bot sold them, bought from them, gave them or was given
+#       by them, and what was paid;
+#     - their bringing the bot back from the dead (one OllamaChat.GoodTurn.*
+#       saw);
+#     - a battleground they fought on the same team, and whether it was won
+#       (OllamaChat.Battleground.Journal).
+#
+#   It is kept in the characters database (mod_ollama_chat_journal, made at
+#   startup if it is not there) and told -- newest first, with how long ago
+#   it was -- only where it matters: to a bot greeting the group it has just
+#   joined, and to a reply to that person when the talk is of it, or when it
+#   is the first thing the bot has said to them in a while. Nothing is kept
+#   of two bots. .ollama status talk counts it.
+#
+###############################################################################
+
+#    OllamaChat.Journal.Enable
+#        Default: 1
+OllamaChat.Journal.Enable = 1
+
+#    OllamaChat.Journal.KeepDays
+#    OllamaChat.Journal.KeepPerPair
+#        A line of it is dropped, at startup, KeepDays (1-3650) after it was
+#        last added to; and a bot keeps no more than KeepPerPair (1-100) of
+#        them for one person, the oldest going first.
+#        Default: 180, 12
+OllamaChat.Journal.KeepDays = 180
+OllamaChat.Journal.KeepPerPair = 12
+
+#    OllamaChat.Journal.SessionHours
+#        The same thing again within this many hours (1-72) -- another boss in
+#        the same dungeon, another quest in the same zone, another match in
+#        the same battleground -- adds to the line there is. After that it is
+#        a new line.
+#        Default: 6
+OllamaChat.Journal.SessionHours = 6
+
+#    OllamaChat.Journal.RecallMax
+#        How many of them a prompt is told at most (1-10), the newest first.
+#        Default: 3
+OllamaChat.Journal.RecallMax = 3
+
+#    OllamaChat.Journal.ReunionHours
+#    OllamaChat.Journal.TalkWords
+#        A reply is told them when it is the first thing the bot has said to
+#        that person in ReunionHours (1-720; or since the server started), or
+#        when the line answered, or one of the few before it, has one of
+#        TalkWords in it (separated by |).
+#        Default: 6
+OllamaChat.Journal.ReunionHours = 6
+OllamaChat.Journal.TalkWords = "remember|last time|the other day|been a while|long time no see|a while back|we did|we ran|we killed|we wiped|know me|recognise me|recognize me|miss me|have we met|met before|do i know you"
+
+#    OllamaChat.Journal.NearYards
+#        A quest someone finishes counts for the bots of their group within
+#        this many yards of them (10-500).
+#        Default: 100
+OllamaChat.Journal.NearYards = 100
+
+#    OllamaChat.Journal.HistoryText
+#        What a prompt is told. {name}: the person; {history}: the lines
+#        below, newest first, with "; " between them.
+OllamaChat.Journal.HistoryText = "What you and {name} have done together before: {history}. That is how you know them, and all you have done together: do not add to it."
+
+#    OllamaChat.Journal.RunText
+#    OllamaChat.Journal.RunBossesText
+#    OllamaChat.Journal.RunWipesText
+#        A dungeon. {subject}: its name; {ago}: how long ago (AgoNames);
+#        {bosses}: RunBossesText with its {list} when any went down;
+#        {wipes}: RunWipesText with its {times} (TimesNames) when the group
+#        wiped.
+OllamaChat.Journal.RunText = "you were in {subject} together {ago}{bosses}{wipes}"
+OllamaChat.Journal.RunBossesText = ", and killed {list} there"
+OllamaChat.Journal.RunWipesText = ", wiping {times}"
+
+#    OllamaChat.Journal.QuestingText
+#        {subject}: the zone (or the dungeon); {quests}: how many
+#        (QuestNames).
+OllamaChat.Journal.QuestingText = "you quested together in {subject} {ago} ({quests} done)"
+
+#    OllamaChat.Journal.DuelText
+#    OllamaChat.Journal.DuelsText
+#        One duel, and several within SessionHours. {winner}: "you" or their
+#        name, of the last one; {count}: how many.
+OllamaChat.Journal.DuelText = "the two of you dueled {ago} and {winner} won"
+OllamaChat.Journal.DuelsText = "the two of you have dueled {count} times, the last {ago}, when {winner} won"
+
+#    OllamaChat.Journal.SoldText
+#    OllamaChat.Journal.BoughtText
+#    OllamaChat.Journal.GaveText
+#    OllamaChat.Journal.GivenText
+#        {subject}: what it was, as a link reads ("[Bolt of Silk Cloth] x5",
+#        with "and more" after it when other things went with it);
+#        {detail}: what was paid.
+OllamaChat.Journal.SoldText = "you sold them {subject} for {detail} {ago}"
+OllamaChat.Journal.BoughtText = "you bought {subject} from them for {detail} {ago}"
+OllamaChat.Journal.GaveText = "you gave them {subject} {ago}"
+OllamaChat.Journal.GivenText = "they gave you {subject} {ago}"
+
+#    OllamaChat.Journal.RaisedText
+#        {subject}: where it was.
+OllamaChat.Journal.RaisedText = "they brought you back from the dead in {subject} {ago}"
+
+#    OllamaChat.Journal.BattleWonText
+#    OllamaChat.Journal.BattleLostText
+#    OllamaChat.Journal.BattleDrawText
+#    OllamaChat.Journal.BattlesText
+#        One match in a battleground, by how it went; and several there
+#        within SessionHours. {subject}: the battleground; {count}: how
+#        many matches; {won}: how many of them their team won.
+OllamaChat.Journal.BattleWonText = "you fought in {subject} on the same team {ago}, and your team won"
+OllamaChat.Journal.BattleLostText = "you fought in {subject} on the same team {ago}, and your team lost"
+OllamaChat.Journal.BattleDrawText = "you fought in {subject} on the same team {ago}, and neither team won"
+OllamaChat.Journal.BattlesText = "you fought {count} matches in {subject} on the same team, the last {ago}, and your team won {won} of them"
+
+#    OllamaChat.Journal.AgoNames
+#    OllamaChat.Journal.TimesNames
+#    OllamaChat.Journal.QuestNames
+#        How long ago, in seven steps separated by |: under an hour and a
+#        half; under 20 hours; under 44 hours; under a week ({n} days);
+#        under two weeks; under 60 days ({n} weeks); longer ({n} months).
+#        TimesNames: once, twice, and more ({n}). QuestNames: one, and more
+#        ({n}). With any other number of parts the default is used.
+OllamaChat.Journal.AgoNames = "a little while ago|a few hours ago|yesterday|{n} days ago|last week|{n} weeks ago|{n} months ago"
+OllamaChat.Journal.TimesNames = "once|twice|{n} times"
+OllamaChat.Journal.QuestNames = "1 quest|{n} quests"
+
+###############################################################################
+#
+#   OLLAMA CHAT - BATTLEGROUNDS: CALLOUTS, AND A TEAM THAT ANSWERS
+#
+#   A battleground's chat is where a team talks: "inc farm 3", "they have our
+#   flag", "nice cap", "gg". With bots for a team it was silent, and a line
+#   typed in battleground chat got no answer: the module did not hear it.
+#
+#   In a battleground with someone playing in it, for that someone's team:
+#
+#     - what is typed in battleground chat (/bg) is heard and answered by the
+#       bots of the team, in battleground chat, as a line in a raid's chat is
+#       (the same chances and pacing: OllamaChat.PlayerReplyChance.Party,
+#       OllamaChat.Crowd.*). A reply is told which battleground it is, how it
+#       is won and how it stands right now;
+#     - the bots call out what happens: the match about to start; in Warsong
+#       Gulch a flag picked up, got back or captured; in Arathi Basin a base
+#       under attack, taken, saved or lost; in Eye of the Storm a tower taken
+#       or lost, and the flag; the match nearly over;
+#     - "inc farm 3" is typed by a bot standing at a base its team holds when
+#       the enemy turn up there in numbers;
+#     - at the end a few say gg, typed at once: a bot leaves a battleground
+#       the moment it is over.
+#
+#   Everything said is read from the battleground itself at the moment the
+#   line is written -- the score, who holds what, who carries which flag and
+#   where on the field they are -- and looked at again when it goes out: a
+#   line takes seconds to write, and "they have our flag" is not said once
+#   the flag is home again.
+#
+#   Warsong Gulch, Arathi Basin and Eye of the Storm are read in full.
+#   Alterac Valley, Isle of Conquest and Strand of the Ancients keep how they
+#   stand where a module cannot read it: there the bots only wish luck,
+#   answer (told what the battleground is and how it is won, nothing of how
+#   it stands) and say gg. Arenas are left alone.
+#
+#   In a battleground a bot's group is its team: a line of its to its group
+#   -- one of these, a reaction to a kill nearby, an answer -- goes out in
+#   battleground chat, and the small talk a bot makes elsewhere is not made
+#   there. Nothing is said for a team with nobody playing on it. A match
+#   fought on the same team goes in the journal (OllamaChat.Journal.*).
+#   .ollama status party counts all of it.
+#
+#   Whether bots are in a battleground at all is playerbots' own:
+#   Playerbots.RandomBotJoinBG has them fill one you queue for, and
+#   Playerbots.RandomBotAutoJoinBG has them start their own (playerbots.conf).
+#
+###############################################################################
+
+#    OllamaChat.Battleground.Enable
+#    OllamaChat.Battleground.Journal
+#        Enable 0: as it was before -- battleground chat is not heard, a
+#        bot's line to its group in a battleground goes out as party or raid
+#        chat, and it makes its small talk there too. Journal: a match fought
+#        on the same team is written in the journal.
+#        Default: 1, 1
+OllamaChat.Battleground.Enable = 1
+OllamaChat.Battleground.Journal = 1
+
+#    OllamaChat.Battleground.GapSeconds
+#    OllamaChat.Battleground.HoldSeconds
+#        No more than one called-out line for a team in GapSeconds (0-600;
+#        the typed "inc" aside), and what happens meanwhile goes unsaid. None
+#        is started within HoldSeconds (0-600) of someone playing saying
+#        something in the team's chat: that is being answered. It is shorter
+#        than OllamaChat.Context.AmbientHoldSeconds, which holds small talk
+#        back: a callout does not keep. A line written before they spoke is
+#        not sent, as anywhere.
+#        Default: 20, 10
+OllamaChat.Battleground.GapSeconds = 20
+OllamaChat.Battleground.HoldSeconds = 10
+
+#    OllamaChat.Battleground.StartMinSeconds
+#    OllamaChat.Battleground.StartMaxSeconds
+#    OllamaChat.Battleground.StartChance
+#        The line before the start is weighed with between StartMinSeconds
+#        and StartMaxSeconds to go (1-110 each), once a team a match, and
+#        said StartChance percent of the time.
+#        Default: 10, 45, 70
+OllamaChat.Battleground.StartMinSeconds = 10
+OllamaChat.Battleground.StartMaxSeconds = 45
+OllamaChat.Battleground.StartChance = 70
+
+#    OllamaChat.Battleground.FlagTakenChance
+#    OllamaChat.Battleground.FlagOursChance
+#    OllamaChat.Battleground.FlagReturnedChance
+#    OllamaChat.Battleground.CaptureChance
+#        The percent of the times each gets a line (0: never): the enemy
+#        picking up the team's flag (in Eye of the Storm, the flag in the
+#        middle); one of the team picking up the enemy's (four times in ten
+#        it is the one carrying it who says so, when that is a bot); the
+#        team's flag got back to its base; a capture, either side's.
+#        Default: 70, 40, 35, 70
+OllamaChat.Battleground.FlagTakenChance = 70
+OllamaChat.Battleground.FlagOursChance = 40
+OllamaChat.Battleground.FlagReturnedChance = 35
+OllamaChat.Battleground.CaptureChance = 70
+
+#    OllamaChat.Battleground.BaseAttackedChance
+#    OllamaChat.Battleground.BaseTakenChance
+#    OllamaChat.Battleground.BaseLostChance
+#    OllamaChat.Battleground.NearEndChance
+#        The same for a base of the team's that the enemy begins to take
+#        (Arathi Basin); a base or tower taken, or saved from being taken;
+#        one lost; and either team's score getting to seven eighths of what
+#        wins. When several things happen in the same second only the
+#        weightiest is weighed: a capture, a flag picked up by the enemy, a
+#        base attacked, the enemy's flag picked up, a base lost or the flag
+#        got back, a base taken, the end coming.
+#        Default: 65, 25, 45, 60
+OllamaChat.Battleground.BaseAttackedChance = 65
+OllamaChat.Battleground.BaseTakenChance = 25
+OllamaChat.Battleground.BaseLostChance = 45
+OllamaChat.Battleground.NearEndChance = 60
+
+#    OllamaChat.Battleground.IncomingChance
+#    OllamaChat.Battleground.IncomingMin
+#    OllamaChat.Battleground.IncomingSeconds
+#    OllamaChat.Battleground.IncomingYards
+#    OllamaChat.Battleground.IncomingLines
+#        "inc farm 3". Weighed when at least IncomingMin (1-40) of the enemy,
+#        alive, are within IncomingYards (10-100) of a base the team holds or
+#        is taking -- as many of them as the team has there, or more -- and
+#        a bot of the team is there to see it; said IncomingChance percent of
+#        the time, by that bot, at once. Once for a base in IncomingSeconds
+#        (5-600), said or not, and no two of them for a team within ten
+#        seconds. IncomingLines: what is typed, separated by |, in the bot's
+#        own chat style (OllamaChat.Personality.CannedStyles); {base}: the
+#        base's short name, {count}: how many of the enemy. Not in roleplay
+#        mode. Arathi Basin and Eye of the Storm.
+#        Default: 75, 2, 45, 45
+OllamaChat.Battleground.IncomingChance = 75
+OllamaChat.Battleground.IncomingMin = 2
+OllamaChat.Battleground.IncomingSeconds = 45
+OllamaChat.Battleground.IncomingYards = 45
+OllamaChat.Battleground.IncomingLines = "inc {base} {count}|{count} inc {base}|{base} inc {count}|{count} at {base}|inc {base}, {count} of them|{base} needs help, {count} inc"
+
+#    OllamaChat.Battleground.GgChance
+#    OllamaChat.Battleground.GgMax
+#    OllamaChat.Battleground.GgDelayMinSeconds
+#    OllamaChat.Battleground.GgDelayMaxSeconds
+#    OllamaChat.Battleground.GgWinLines
+#    OllamaChat.Battleground.GgLossLines
+#    OllamaChat.Battleground.GgDrawLines
+#        At the end up to GgMax (0-10) bots of the team say gg, each GgChance
+#        percent of the time, between GgDelayMinSeconds and GgDelayMaxSeconds
+#        (0-60 each) after it. The lines are separated by |, by how it went,
+#        in the bot's own chat style. Not in roleplay mode.
+#        Default: 60, 3, 1, 7
+OllamaChat.Battleground.GgChance = 60
+OllamaChat.Battleground.GgMax = 3
+OllamaChat.Battleground.GgDelayMinSeconds = 1
+OllamaChat.Battleground.GgDelayMaxSeconds = 7
+OllamaChat.Battleground.GgWinLines = "gg|gg all|gg wp|nice one all|good game|well played"
+OllamaChat.Battleground.GgLossLines = "gg|gg all|gg wp|unlucky|good game|well tried all|gg, next one"
+OllamaChat.Battleground.GgDrawLines = "gg|gg all|good game"
+
+#    OllamaChat.Battleground.Arathi.Bases
+#    OllamaChat.Battleground.Eye.Towers
+#        "name;short name" for each, separated by |, in the game's own order:
+#        the Stables, the Blacksmith, the Farm, the Lumber Mill and the Gold
+#        Mine; the Fel Reaver Ruins, the Blood Elf Tower, the Draenei Ruins
+#        and the Mage Tower. The name is what a prompt calls it, the short
+#        name what a typed "inc" does. With any other number of them, that
+#        battleground's bases are left out of what is said.
+OllamaChat.Battleground.Arathi.Bases = "the Stables;stables|the Blacksmith;BS|the Farm;farm|the Lumber Mill;LM|the Gold Mine;mine"
+OllamaChat.Battleground.Eye.Towers = "the Fel Reaver Ruins;FR|the Blood Elf Tower;BE|the Draenei Ruins;DR|the Mage Tower;MT"
+
+#    OllamaChat.Battleground.LinePrompt
+#    OllamaChat.Battleground.ReplyText
+#        The prompt a called-out line is written from, and what a reply in a
+#        battleground's chat is told on top of everything else. {bot_name},
+#        {bot_level}, {bot_race}, {bot_class}, {bot_personality};
+#        {battleground}: its name; {side}: Alliance or Horde; {rules}: the
+#        Rules text for it; {state}: how it stands, from the texts below;
+#        {ask}: what the line is to say, one of the texts further down.
+OllamaChat.Battleground.LinePrompt = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} playing in {battleground}, a battleground, on the {side} team. Your chat style: {bot_personality} {rules} {state} {ask} Say it in battleground chat, which only your own team reads, the way players do in a battleground: a few words, in your own style. Say only what is so: nothing of where you will go or what you will do next, and no score or news but what is above. One short line, 2 to 9 words, no quotes, no name in front."
+OllamaChat.Battleground.ReplyText = "You are in {battleground}, a battleground, on the {side} team, and this is battleground chat: only your own team reads it. {rules} {state} That is for you to know, not to read out: answer what was said, in a few words, the way players do in a battleground. Say only what is so: nothing of where you will go or what you will do next, and no score or news but what is above."
+
+#    OllamaChat.Battleground.Rules.Warsong
+#    OllamaChat.Battleground.Rules.Arathi
+#    OllamaChat.Battleground.Rules.Eye
+#    OllamaChat.Battleground.Rules.Alterac
+#    OllamaChat.Battleground.Rules.Isle
+#    OllamaChat.Battleground.Rules.Strand
+#        What each battleground is and how it is won: the model knows them by
+#        name and gets the rest wrong (asked only "Warsong Gulch", a bot
+#        wondered why nobody kited the mobs there; there are none). {size}:
+#        players a side; {target}: what wins, as worldserver.conf has it
+#        (Battleground.Warsong.Flags, Battleground.Arathi.CapturePoints,
+#        Battleground.EyeOfTheStorm.CapturePoints).
+OllamaChat.Battleground.Rules.Warsong = "Warsong Gulch is {size} against {size}, with no creatures to fight, only the other team. Each team has a flag in its base, and scores by carrying the enemy's flag to where its own flag stands, which counts only while its own flag is there. The first to {target} captures wins."
+OllamaChat.Battleground.Rules.Arathi = "Arathi Basin is {size} against {size}, with no creatures to fight, only the other team. There are five bases -- the Stables, the Blacksmith, the Farm, the Lumber Mill and the Gold Mine -- each taken by using the flag at it and holding it for a minute. Bases held earn resources, the more bases the faster, and the first team to {target} resources wins."
+OllamaChat.Battleground.Rules.Eye = "Eye of the Storm is {size} against {size}, with no creatures to fight, only the other team. There are four towers -- the Mage Tower, the Draenei Ruins, the Blood Elf Tower and the Fel Reaver Ruins -- each taken by having more of your team standing at it than the enemy has. Towers held earn points, and so does carrying the flag from the middle to a tower your team holds. The first team to {target} points wins."
+OllamaChat.Battleground.Rules.Alterac = "Alterac Valley is {size} against {size}. Each team fights its way along the valley to the other's base, taking graveyards and burning towers on the way, and wins by killing the other team's general -- the Alliance's is Vanndar Stormpike, the Horde's is Drek'Thar -- or when the other team runs out of reinforcements."
+OllamaChat.Battleground.Rules.Isle = "Isle of Conquest is {size} against {size}. The teams fight over the Docks, the Hangar and the Workshop, which give the siege weapons to break into the other team's keep with, and a team wins by killing the general in that keep -- the Alliance's is High Commander Halford Wyrmbane, the Horde's is Overlord Agmar -- or when the other team runs out of reinforcements."
+OllamaChat.Battleground.Rules.Strand = "Strand of the Ancients is {size} against {size}, in two rounds. One team lands on the beach and breaks through the gates with demolishers and bombs to reach the relic at the top, while the other defends; then they change over, and the team that got to the relic faster wins."
+
+#    OllamaChat.Battleground.WaitingText
+#    OllamaChat.Battleground.GoingText
+#    OllamaChat.Battleground.WonText
+#    OllamaChat.Battleground.LostText
+#    OllamaChat.Battleground.DrawText
+#        {state}, for any battleground: before the start (and nothing more
+#        then); how long it has been going ({minutes}; left out in the first
+#        minute); and how it ended.
+OllamaChat.Battleground.WaitingText = "The match has not started yet: both teams are waiting for it to."
+OllamaChat.Battleground.GoingText = "The match has been going {minutes} minutes."
+OllamaChat.Battleground.WonText = "The match is over, and your team won."
+OllamaChat.Battleground.LostText = "The match is over, and your team lost."
+OllamaChat.Battleground.DrawText = "The match is over, and neither team won."
+
+#    OllamaChat.Battleground.Warsong.StateText
+#    OllamaChat.Battleground.Warsong.ClockText
+#    OllamaChat.Battleground.Arathi.StateText
+#    OllamaChat.Battleground.Eye.StateText
+#        The rest of {state} for the three that are read. {us} and {them}:
+#        the score; {target}: what wins; {ours} and {theirs}: where each
+#        flag is; {minutes}: what is left on Warsong Gulch's clock; {bases}:
+#        who holds what; {flag}: where the Eye's flag is.
+OllamaChat.Battleground.Warsong.StateText = "The score is {us} to {them} in captures. Your team's flag is {ours}. The enemy's flag is {theirs}."
+OllamaChat.Battleground.Warsong.ClockText = "About {minutes} minutes are left on the clock; when it runs out, the team with more captures wins."
+OllamaChat.Battleground.Arathi.StateText = "Your team has {us} resources and the enemy {them}. {bases}"
+OllamaChat.Battleground.Eye.StateText = "Your team has {us} points and the enemy {them}. {bases} The flag in the middle is {flag}."
+
+#    OllamaChat.Battleground.FlagHomeText
+#    OllamaChat.Battleground.Eye.FlagHomeText
+#    OllamaChat.Battleground.FlagDroppedText
+#    OllamaChat.Battleground.FlagCarriedText
+#    OllamaChat.Battleground.FlagSelfText
+#    OllamaChat.Battleground.FlagFriendText
+#    OllamaChat.Battleground.FlagEnemyText
+#    OllamaChat.Battleground.Warsong.WhereTexts
+#        Where a flag is. {name}: who carries it; {race} and {class}:
+#        theirs; {where}: in Warsong Gulch, one of the five WhereTexts
+#        (separated by |: from the team's own base across the field to the
+#        enemy's), by how far the carrier is from each team's flag stand.
+#        FlagCarriedText is for a carrier who cannot be made out.
+OllamaChat.Battleground.FlagHomeText = "safe in its base"
+OllamaChat.Battleground.Eye.FlagHomeText = "at its place, with nobody carrying it"
+OllamaChat.Battleground.FlagDroppedText = "lying on the ground where whoever had it dropped it"
+OllamaChat.Battleground.FlagCarriedText = "being carried"
+OllamaChat.Battleground.FlagSelfText = "being carried by you"
+OllamaChat.Battleground.FlagFriendText = "being carried by {name} of your team{where}"
+OllamaChat.Battleground.FlagEnemyText = "being carried by {name}, an enemy {race} {class}{where}"
+OllamaChat.Battleground.Warsong.WhereTexts = "who is in your base|who is on your side of the field|who is in the middle of the field|who is on the enemy's side of the field|who is in the enemy's base"
+
+#    OllamaChat.Battleground.HoldText
+#    OllamaChat.Battleground.HoldNoneText
+#    OllamaChat.Battleground.EnemyHoldText
+#    OllamaChat.Battleground.TakingText
+#    OllamaChat.Battleground.EnemyTakingText
+#        {bases}: who holds which base or tower, and in Arathi Basin which
+#        are being taken. {list}: their names.
+OllamaChat.Battleground.HoldText = "Your team holds {list}."
+OllamaChat.Battleground.HoldNoneText = "Your team holds none of them."
+OllamaChat.Battleground.EnemyHoldText = "The enemy holds {list}."
+OllamaChat.Battleground.TakingText = "Your team is taking {list}."
+OllamaChat.Battleground.EnemyTakingText = "The enemy is taking {list}, which is theirs within a minute unless they are stopped."
+
+#    OllamaChat.Battleground.StartText
+#    OllamaChat.Battleground.FlagTakenText
+#    OllamaChat.Battleground.FlagOursText
+#    OllamaChat.Battleground.FlagMineText
+#    OllamaChat.Battleground.FlagReturnedText
+#    OllamaChat.Battleground.CaptureUsText
+#    OllamaChat.Battleground.CaptureThemText
+#        {ask}: before the start, and Warsong Gulch's flags. {name}, {race}
+#        and {class}: who picked the flag up; {us} and {them}: the score
+#        after a capture. "{~a|b|c}" is one of a, b and c, picked afresh
+#        each time.
+OllamaChat.Battleground.StartText = "The match is about to start. {~Wish your team luck|Say something short about how this one is won|Say what the team should not forget to do|Greet your team}."
+OllamaChat.Battleground.FlagTakenText = "{name}, an enemy {race} {class}, has just picked up your team's flag. Call it out to your team."
+OllamaChat.Battleground.FlagOursText = "{name} of your team has just picked up the enemy's flag. {~Tell the team to help get it home|Cheer them on|Tell the team to keep your own flag safe meanwhile}."
+OllamaChat.Battleground.FlagMineText = "You have just picked up the enemy's flag yourself. Tell your team, and ask for help getting it home."
+OllamaChat.Battleground.FlagReturnedText = "Your team's flag has just been got back, and is in your base again. {~Say well done|Say to go and get theirs now|Say that was close}."
+OllamaChat.Battleground.CaptureUsText = "Your team has just captured the enemy's flag: it is {us} to {them} now. {~Cheer|Say well done|Say one more like that}."
+OllamaChat.Battleground.CaptureThemText = "The enemy has just captured your team's flag: it is {us} to {them} now. {~Rally the team|Grumble about it|Say what the team has to do now}."
+
+#    OllamaChat.Battleground.BaseAttackedText
+#    OllamaChat.Battleground.BaseTakenText
+#    OllamaChat.Battleground.BaseSavedText
+#    OllamaChat.Battleground.BaseLostText
+#    OllamaChat.Battleground.TowerLostText
+#        {ask}: a base or a tower. {base}: its name. TowerLostText is for a
+#        tower of the Eye's that nobody holds any more.
+OllamaChat.Battleground.BaseAttackedText = "The enemy is taking {base} from your team: it is theirs within a minute unless someone stops them. Call it out to your team."
+OllamaChat.Battleground.BaseTakenText = "Your team has just taken {base}. {~Say well done|Say to hold it now|Say what to go for next}."
+OllamaChat.Battleground.BaseSavedText = "Your team has just stopped the enemy taking {base}: it is still yours. {~Say well done|Say that was close|Say to keep someone there}."
+OllamaChat.Battleground.BaseLostText = "Your team has just lost {base} to the enemy. {~Say so|Tell the team to take it back|Grumble about it}."
+OllamaChat.Battleground.TowerLostText = "Your team has just lost its hold on {base}: nobody holds it now. {~Say so|Tell the team to get back there}."
+
+#    OllamaChat.Battleground.Eye.FlagEnemyText
+#    OllamaChat.Battleground.Eye.FlagOursText
+#    OllamaChat.Battleground.Eye.FlagMineText
+#    OllamaChat.Battleground.Eye.CaptureUsText
+#    OllamaChat.Battleground.Eye.CaptureThemText
+#    OllamaChat.Battleground.NearEndWinText
+#    OllamaChat.Battleground.NearEndLoseText
+#        {ask}: Eye of the Storm's flag, and the match nearly over, by
+#        whether the team is ahead.
+OllamaChat.Battleground.Eye.FlagEnemyText = "{name}, an enemy {race} {class}, has just picked up the flag in the middle. Call it out to your team."
+OllamaChat.Battleground.Eye.FlagOursText = "{name} of your team has just picked up the flag in the middle. {~Tell the team to cover them|Cheer them on}."
+OllamaChat.Battleground.Eye.FlagMineText = "You have just picked up the flag in the middle yourself. Tell your team."
+OllamaChat.Battleground.Eye.CaptureUsText = "Your team has just captured the flag. {~Cheer|Say well done}."
+OllamaChat.Battleground.Eye.CaptureThemText = "The enemy has just captured the flag. {~Tell the team to watch the middle|Grumble about it}."
+OllamaChat.Battleground.NearEndWinText = "The match is nearly over, and your team is ahead. {~Tell the team to hold what it has|Say it is nearly done|Cheer the team on}."
+OllamaChat.Battleground.NearEndLoseText = "The match is nearly over, and your team is behind. {~Say what it would take to turn it round|Say well tried|Grumble a little}."
+
+###############################################################################
+#
 #   OLLAMA CHAT - VITALS: HOW THE FIGHTS HAVE REALLY GONE
 #
 #   A healer drank a mana potion in a dungeon and said "THANK GOD FOR THAT MANA
@@ -6790,6 +7451,26 @@ OllamaChat.Mingle.NumPredict = 320
 #        Negative: OllamaChat.Temperature.
 #        Default: 0.7
 OllamaChat.Mingle.Temperature = 0.7
+
+#    OllamaChat.Mingle.Structured
+#    OllamaChat.Mingle.StructuredText
+#        One is written all at once, as lines of "Name: what they say", and
+#        read back line by line; one that comes back in some other shape is
+#        thrown away (.ollama status talk: "written (N unusable)"). With
+#        Structured on it is asked for as JSON instead -- a list of who says
+#        what, which the server holds the model to (Ollama's "format", an
+#        OpenAI-style server's response_format) -- and StructuredText is
+#        added to the prompt to say so. What comes back is read into the same
+#        lines as before, and a reply cut off part way keeps the lines that
+#        were whole. A server that will not take a shape is asked for plain
+#        text from then on, and says so in the log once; Anthropic's is never
+#        asked.
+#        It costs about a third more tokens for the same exchange
+#        (Mingle.NumPredict is raised by that much for it). Off by default:
+#        try it with your own model, and keep it if fewer come back unusable.
+#        Default: 0
+OllamaChat.Mingle.Structured = 0
+OllamaChat.Mingle.StructuredText = "Give the whole exchange as JSON: an object with a list called lines, one entry for each message in order, each with who (the speaker's name, exactly as given above) and says (what they type, or the slash emote on its own)."
 
 #    OllamaChat.Mingle.ReadMinMs
 #    OllamaChat.Mingle.ReadMaxMs

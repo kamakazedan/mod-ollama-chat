@@ -8,6 +8,7 @@
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
+#include "mod-ollama-chat_journal.h"
 
 #include "Group.h"
 #include "Log.h"
@@ -220,6 +221,7 @@ namespace
     void Wiped(Watch& w, Group* group, const std::vector<Player*>& here)
     {
         ++g_stats.wipes;
+        Journal_Wiped(here);   // something they have been through together
         uint32_t delay = Between(2500, 4500);
 
         Player* tank = w.tank ? ObjectAccessor::FindConnectedPlayer(ObjectGuid(w.tank)) : nullptr;

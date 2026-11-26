@@ -68,6 +68,19 @@ struct OllamaEndpointSettings
     float   minP             = -1.0f;
     float   presencePenalty  = -1000.0f;
     float   frequencyPenalty = -1000.0f;
+
+    // The model background jobs run on instead (OllamaChat.Background.*):
+    // memory, sentiment and relationship updates, the requests of kind
+    // Sentiment. Empty: the same model as everything else. QueryOllama puts
+    // them in `model` and `url` for such a request and sets `slot`.
+    std::string backgroundModel;
+    std::string backgroundUrl;             // empty: the same server
+    bool        backgroundThink = false;   // it can think, and is to
+    uint8_t     slot            = 0;       // 0: the model itself; 1: this request is the background one's
+
+    // A JSON schema this one answer has to fit (structured output), from
+    // QueryOllama's `format`. Empty: free text.
+    std::string format;
 };
 
 // Republish from the g_Ollama* globals. Call on the world thread after config
@@ -92,9 +105,13 @@ OllamaHttpHeaders OllamaBuildRequestHeaders(const OllamaEndpointSettings& cfg);
 // OllamaChat.NumPredict -- a whole /say exchange is longer than one line
 // (mod-ollama-chat_mingle). 0 for the usual one. `temperature`: the one for
 // this request instead of OllamaChat.Temperature -- an exchange written all at
-// once holds together better cooler. Negative for the usual one.
+// once holds together better cooler. Negative for the usual one. `format`: a
+// JSON schema the answer has to fit, where the provider can hold a model to
+// one (Ollama and the OpenAI format; not Anthropic's): the text that comes
+// back is then that JSON. A server that will not take one is asked again
+// without it, and from then on, so a caller reads either. Empty for free text.
 OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, uint32_t numPredict = 0,
-                            float temperature = -1.0f);
+                            float temperature = -1.0f, const std::string& format = std::string());
 
 // Legacy shim: returns the text, or empty on any failure.
 std::string QueryOllamaAPI(const std::string& prompt);

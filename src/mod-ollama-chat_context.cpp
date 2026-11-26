@@ -138,8 +138,13 @@ namespace
         }
     }
 
-    std::string SpaceLabel(ChatChannelSourceLocal source, const std::string& channelName)
+    // `viewer`, when given, is the one the label is for: in a battleground
+    // its group is its team, and its group's chat battleground chat.
+    std::string SpaceLabel(ChatChannelSourceLocal source, const std::string& channelName, Player* viewer = nullptr)
     {
+        if (viewer && (source == SRC_PARTY_LOCAL || source == SRC_RAID_LOCAL) && viewer->InBattleground() &&
+            viewer->GetGroup() && viewer->GetGroup()->isBGGroup())
+            return "battleground chat";
         switch (source)
         {
             case SRC_PARTY_LOCAL:   return "party chat";
@@ -495,9 +500,9 @@ std::vector<ContextRecentLine> Context_RecentLines(Player* viewer, ChatChannelSo
     return out;
 }
 
-std::string Context_ChannelLabel(ChatChannelSourceLocal source, const std::string& channelName)
+std::string Context_ChannelLabel(ChatChannelSourceLocal source, const std::string& channelName, Player* viewer)
 {
-    return SpaceLabel(source, channelName);
+    return SpaceLabel(source, channelName, viewer);
 }
 
 uint64_t Context_NextSeq()
@@ -703,7 +708,7 @@ std::string Context_BuildTranscript(Player* viewer, ChatChannelSourceLocal sourc
         return {};
 
     std::string out = SafeFormat(g_ContextHistoryHeader,
-                                 fmt::arg("channel", SpaceLabel(source, channelName)));
+                                 fmt::arg("channel", SpaceLabel(source, channelName, viewer)));
     if (out == "[Format Error]")
         out = "Recent chat:";
 

@@ -36,17 +36,19 @@ real player spoke there is dropped at delivery, and none starts within
 or it talks over people.
 
 A hook that fires on a map thread (a kill, loot, a death, a ding, an
-achievement, gear put on, a potion, a spell cast on a bot) notes what
+achievement, gear put on, a potion, a spell cast on a bot, a zone crossed
+into, a zone's weather changing, a duel ending, a quest handed in) notes what
 happened under a mutex and nothing more; the world tick acts on it
 (`Events_Update`, `Equip_Update`, `Potions_Update`, `Corpse_Update`,
-`GoodTurn_Update`, ...). Event chatter used to build its prompts in the hook
-itself, on whichever map thread raised it -- with five map threads running at
-once, a guild event read bots anywhere in the world from there. The one hook
-that answers where it is, `ChatOnEmote` (a text emote is handled on the map
-thread), reads only the two players on that map and state behind a lock --
-the personalities included (`g_BotPersonalityMutex`). It sends its line to be
-written from there, so anything `OllamaDispatch_Submit` does on the way only
-notes too (`Stay_Begin`).
+`GoodTurn_Update`, `Arrive_Update`, `Journal_Update`, ...). Event chatter
+used to build its prompts in the hook itself, on whichever map thread raised
+it -- with five map threads running at once, a guild event read bots anywhere
+in the world from there. The one hook that answers where it is, `ChatOnEmote`
+(a text emote is handled on the map thread), reads only the two players on
+that map and state behind a lock -- the personalities included
+(`g_BotPersonalityMutex`). It sends its line to be written from there, so
+anything `OllamaDispatch_Submit` does on the way only notes too
+(`Stay_Begin`).
 
 `EventProcessor::AddEvent` (`bot->m_Events`) is **not** a way around this. It
 mutates a container that `Player::Update` walks, so calling it off-thread is the
@@ -90,6 +92,26 @@ one parser and one header function per provider, selected on
 the provider except the capability probe, which is skipped for non-Ollama
 providers because a live probe there is a billed request. Add a provider by
 adding a builder/parser pair and an enum value; do not teach callers about it.
+
+Two more things live there and nowhere else:
+
+- A second model for the jobs nobody waits on (`OllamaChat.Background.*`:
+  sentiment, memory, relationships -- `OllamaRequestKind::Sentiment`). It is
+  `OllamaEndpointSettings::slot` 1. Whatever is learned about a model in that
+  file (it wants `max_completion_tokens`, it refuses sampling settings, it
+  refuses a schema) is kept by slot, and the capability module's probe and
+  what it has learned -- think support, latency, reasoning whatever it is
+  told -- are the main model's alone: the background path never reads or
+  writes them. One model's quirks applied to the other is the bug this
+  avoids.
+- An answer asked for in a shape (`QueryOllama`'s `format`, a JSON schema;
+  `OllamaDispatch_SubmitScript` passes one for a /say exchange with
+  `OllamaChat.Mingle.Structured`). Each builder sends it the way its provider
+  takes it. A server that refuses it is asked again without, and that is
+  remembered only when the plain request then works -- a 4xx for some other
+  reason teaches nothing. So a caller that passes a `format` reads plain text
+  too (`FromStructured` in mingle.cpp does, and keeps the whole entries of a
+  reply cut off part way).
 
 ## Channels are resolved by id, never by name
 
@@ -551,6 +573,44 @@ one that is not on is not said, unless it answers a person who brought it up
 (`Holidays_MayGoOut`, at delivery). The model has read about every one of
 them and knows nothing of the date.
 
+So is the weather (`mod-ollama-chat_weather`). What a zone's is doing is the
+core's own: its weather-change hook, which runs on a map thread and only
+notes the zone and the state. A reply where the talk is of it is told what it
+is doing where the bot stands (`Weather_PromptFor`); a line that says it is
+raining, snowing or fine goes out only when it is (`Weather_MayGoOut`, at
+delivery), unless it answers a person who brought it up; and an ambient line
+of a bot out in it is now and then told so (`Weather_AmbientText`). The hook
+says which zone, not which map. Out in the world that is one sky; an
+instance whose zone has weather (game_weather has Alterac Valley, Arathi
+Basin, Stratholme and Ahn'Qiraj) has one for every copy of it running, so
+there the weather is not known -- `Seen::known` -- and nothing is said of it
+and nothing held back. Never read "inside an instance" as a clear sky: the
+first version did, and would have kept "its snowing" in while it snowed in
+Alterac Valley.
+
+So is what a bot and someone playing have done together
+(`mod-ollama-chat_journal`, the `mod_ollama_chat_journal` table): a dungeon
+with its bosses and wipes, quests in a zone, a duel, a sale, a gift, a
+resurrection, a battleground on the same team. It is written down from the
+game as it happens -- `Journal_Note`, `Journal_BossDown`, `Journal_Wiped`,
+`Journal_Battle` from the world thread; `Journal_NoteDuel` and
+`Journal_NoteQuestDone` from hooks, which only note -- never by the model, and
+never of a thing the game has no name for. It is told (`Journal.HistoryText`,
+newest first, with how long ago) to a bot greeting the group it has joined and
+to a reply when the talk is of it or it is the first to that person in a
+while, and nowhere else: a list in every prompt is what every line would be
+about. A bot met the person it had spent an evening with as a stranger; what
+it remembers of people (`_memory`) is distilled from what was said to it, and
+of what it did with them it kept nothing. Something new a bot and a person do
+together gets a `JournalKind`, a text, and a call where it happens.
+
+A word on getting somewhere (`mod-ollama-chat_arrive`: someone playing
+crossing into another zone with bots in their group) is told what is so of
+the zone -- the levels its quests are for (`Facts_ZoneQuestLevels`), the
+dungeons whose way in is there (`Facts_DungeonsIn`), the weather
+(`Weather_NameFor`) -- and nothing of whether the bot has been there before:
+it does not know.
+
 So is who a reply is to. `GenerateBotPrompt` says whether they are in the
 bot's own group (`{bot_group_status}`, `{player_group_status}`:
 `Chat.Group*Text`) and where they are (`{player_where}`: yards when near on
@@ -698,6 +758,64 @@ the same way. Rare gear has its own: the same item not again on the realm
 for `RareGear.ItemMinutes`, one line in a city's General in
 `RareGear.PlaceMinutes`, a bot one in `RareGear.BotMinutes`.
 
+## A battleground's chat is its team's
+
+In a battleground a bot's group is its team (`Group::isBGGroup`), and
+`Battleground_TeamChat` says so. Three things follow, and a new line to a
+group needs nothing for any of them:
+
+- a bot's line to its group -- `SRC_PARTY_LOCAL` or `SRC_RAID_LOCAL`, whatever
+  made it -- goes out in battleground chat (`Battleground_Say`, from the
+  dispatcher's `RouteMessage`), and is named so in transcripts and in what
+  it said (`Context_ChannelLabel`'s and `Said_Place`'s `viewer`);
+- `/bg` typed by someone playing is heard as their team's raid chat
+  (`OnPlayerCanUseChat`'s Group overload). It was a chat type the module did
+  not know, so nobody answered it. What is a group's own business -- a run's
+  instructions, conjuring, buffs asked for, bags, gifts, orders -- is skipped
+  for it (`toTeam` in `ProcessChat`): a team of strangers is not a party;
+- ambient chatter leaves a bot there alone, and event chatter's line (a kill
+  nearby) is the team's too, on the raid scope the rest use.
+
+What is called out (`mod-ollama-chat_battleground`) is read from the
+battleground itself on the world tick -- `Battleground_Update`, a look a
+second at every battleground with someone playing in it, no hooks -- and is
+whatever changed since the last look, for the teams with someone playing on
+them. Only what the core lets a module read: Warsong Gulch, Arathi Basin and
+Eye of the Storm have getters for their flags, bases and scores. Alterac
+Valley, Isle of Conquest and Strand of the Ancients keep theirs private
+(and `BattlegroundAV::FillInitialWorldStates` sends packets as it fills), so
+there nothing is said of how the match stands: luck before, answers told what
+the battleground is and how it is won, gg after. Do not fill that from the
+model's memory of the game.
+
+A line about a battleground carries `OllamaChatRequest::battleground`: what
+it was written on -- a flag with a carrier, a base in a state, the score --
+looked at again at delivery (`Battleground_StillSo`) and dropped when it is
+no longer so. A line takes seconds to write, and a dropped flag is home again
+in ten. A new kind of battleground line makes a claim, or it tells a team
+"they have our flag" with the flag back in its base.
+
+A callout that cannot wait is typed (`Battleground.IncomingLines`, through
+`Personality_StyleCanned`), as the healer's oom is. And "gg" is typed and
+sent by the module itself a moment after the end (`g_later`), to those of the
+team still there: playerbots has a bot leave a battleground on its first AI
+tick after it ends (`BGTactics`: `STATUS_WAIT_LEAVE`, `LeaveBG`), so the end
+is looked for on every world tick, and a line through the dispatcher would
+find its bot out of the group.
+
+The core hands a finished battleground's instance id to the next one made. A
+`Match` is told apart by the battleground's address as well (`Match::self`,
+compared and never followed), or a new match inherits the last one's "over".
+
+The module's own hold after someone speaks is shorter there
+(`Battleground.HoldSeconds`, not `Context.AmbientHoldSeconds`): a callout
+does not keep. A line written before they spoke is still dropped
+(`writtenAtSeq`).
+
+Whether bots are in a battleground at all is playerbots'
+(`Playerbots.RandomBotJoinBG`, `RandomBotAutoJoinBG`): nothing here queues
+anyone.
+
 ## Conventions
 
 - Log to `module.ollamachat`, not `server.loading`. It falls back to the
@@ -706,7 +824,16 @@ for `RareGear.ItemMinutes`, one line in a city's General in
   `server.loading`.
 - Every new setting goes in `conf/mod_ollama_chat.conf.dist` with a comment
   block explaining what it does and its default. That file is the module's real
-  documentation surface.
+  documentation surface. `python3 apps/check_conf.py` (from the module's
+  root) says whether every setting the code reads is in it; with a prefix
+  (`OllamaChat.Journal.`) it also says whether that part's values there are
+  the code's own defaults.
+- A new part reads its own settings in an `X_LoadConfig()` in its own .cpp,
+  into globals of that file, called from `LoadNaturalChatV49Settings()` in
+  config.cpp (`Weather_LoadConfig`, `Journal_LoadConfig`,
+  `Battleground_LoadConfig`): config.h and config.cpp are long enough. It
+  runs on the world thread at startup and on `.ollama reload`, so a hook of
+  the part's that runs on a map thread reads nothing it sets but a `bool`.
 - Source files are globbed by AzerothCore (`modules/*/src/*.cpp`); new files
   need no CMake change.
 - New tables go in `data/sql/characters/base/` and must be

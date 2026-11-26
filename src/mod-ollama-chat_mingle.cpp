@@ -25,6 +25,7 @@
 #include "mod-ollama-chat-utilities.h"
 
 #include "CellImpl.h"
+#include "Config.h"
 #include "DBCStores.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
@@ -45,6 +46,7 @@
 #include "RandomPlayerbotMgr.h"
 
 #include <fmt/core.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -83,6 +85,7 @@ namespace
         uint32_t                 mapId = 0;
         std::string              scopeKey;  // the /say scope, as for any other /say line
         bool                     waiting = true;
+        bool                     structured = false;   // asked for as JSON (Mingle.Structured)
         Clock::time_point        waitUntil{};
         std::vector<Line>        lines;
         size_t                   next = 0;
@@ -103,6 +106,84 @@ namespace
     uint64_t          g_nextId = 1;
     Clock::time_point g_nextLook{};
     MingleStats       g_stats;
+
+    // Mingle.Structured: the exchange asked for as JSON -- {"lines": [{"who":
+    // a name, "says": what they type}, ...]} -- where the server can hold the
+    // model to that shape, so a line cannot come back in a form the reader
+    // does not know. What is read out of it is the same "Name: words" lines
+    // the plain form has, and is read the same way from there.
+    bool        g_structured = false;
+    std::string g_structuredText;
+
+    std::string SchemaFor(const std::vector<std::string>& names)
+    {
+        const nlohmann::json line = {
+            { "type", "object" },
+            { "properties", { { "who", { { "type", "string" }, { "enum", names } } },
+                              { "says", { { "type", "string" } } } } },
+            { "required", { "who", "says" } },
+            { "additionalProperties", false },
+        };
+        const nlohmann::json schema = {
+            { "type", "object" },
+            { "properties", { { "lines", { { "type", "array" }, { "items", line } } } } },
+            { "required", { "lines" } },
+            { "additionalProperties", false },
+        };
+        return schema.dump();
+    }
+
+    // One {"who": ..., "says": ...} as a "Name: words" line; empty when it is
+    // not one. Words that begin with the name and a colon again lose that.
+    std::string LineOf(const nlohmann::json& entry)
+    {
+        if (!entry.is_object() || !entry.contains("who") || !entry.contains("says") ||
+            !entry["who"].is_string() || !entry["says"].is_string())
+            return {};
+        const std::string who = entry["who"].get<std::string>();
+        std::string says = entry["says"].get<std::string>();
+        std::replace(says.begin(), says.end(), '\n', ' ');
+        if (says.size() > who.size() + 1 && says.compare(0, who.size(), who) == 0 && says[who.size()] == ':')
+            says.erase(0, who.size() + 1);
+        says.erase(0, says.find_first_not_of(' '));
+        return who.empty() ? std::string() : who + ": " + says;
+    }
+
+    // The exchange as lines, from what came back for Mingle.Structured. Text
+    // that is not that JSON at all is handed back as it is: the server could
+    // not hold the model to a shape, and it wrote the plain form. JSON cut
+    // off part way (out of tokens) gives the entries that are whole.
+    std::string FromStructured(const std::string& text)
+    {
+        std::string out;
+        const nlohmann::json whole = nlohmann::json::parse(text, nullptr, false);
+        if (!whole.is_discarded() && whole.is_object() && whole.contains("lines") && whole["lines"].is_array())
+        {
+            for (const nlohmann::json& entry : whole["lines"])
+                if (const std::string line = LineOf(entry); !line.empty())
+                    out += line + "\n";
+            return out;
+        }
+        size_t at = text.find("\"lines\"");
+        if (at == std::string::npos)
+            return text;
+        while ((at = text.find('{', at + 1)) != std::string::npos)
+        {
+            // To the first closing brace that makes it whole (one inside the
+            // words is passed over).
+            for (size_t end = text.find('}', at); end != std::string::npos; end = text.find('}', end + 1))
+            {
+                const nlohmann::json entry = nlohmann::json::parse(text.substr(at, end - at + 1), nullptr, false);
+                if (entry.is_discarded())
+                    continue;
+                if (const std::string line = LineOf(entry); !line.empty())
+                    out += line + "\n";
+                at = end;
+                break;
+            }
+        }
+        return out;
+    }
 
     // Logouts, queued from whichever thread logged the character out.
     std::mutex            g_forgetMutex;
@@ -854,12 +935,15 @@ namespace
         // A line or two past the length it was asked for, to finish properly,
         // is let through: an exchange cut off before its goodbye is worse.
         std::vector<TextRules::ScriptLine> parsed;
+        const bool structured = e.structured;
         if (r.ok)
-            parsed = TextRules::ParseScript(r.text, e.names, g_MingleMaxLines + 4,
+            parsed = TextRules::ParseScript(structured ? FromStructured(r.text) : r.text, e.names,
+                                            g_MingleMaxLines + 4,
                                             [](const std::string& w) { return LookupTextEmoteId(w) != 0; });
 
-        // Out of tokens mid-line: that last line is not said half-typed.
-        if (!parsed.empty() && r.text.size() >= size_t(g_MingleNumPredict) * 3)
+        // Out of tokens mid-line: that last line is not said half-typed. (As
+        // JSON, an entry cut short is not read at all.)
+        if (!structured && !parsed.empty() && r.text.size() >= size_t(g_MingleNumPredict) * 3)
         {
             const std::string& tail = parsed.back().text;
             if (!tail.empty() && std::string(".!?)~:").find(tail.back()) == std::string::npos)
@@ -987,7 +1071,14 @@ namespace
             e.held.push_back(!HangingOut(p));
         }
 
-        if (!OllamaDispatch_SubmitScript(e.id, prompt, g_MingleNumPredict, g_MingleTemperature))
+        // As JSON it takes a few tokens more a line.
+        e.structured = g_structured;
+        const bool sent = e.structured
+            ? OllamaDispatch_SubmitScript(e.id, g_structuredText.empty() ? prompt : prompt + " " + g_structuredText,
+                                          g_MingleNumPredict + g_MingleNumPredict / 3, g_MingleTemperature,
+                                          SchemaFor(e.names))
+            : OllamaDispatch_SubmitScript(e.id, prompt, g_MingleNumPredict, g_MingleTemperature);
+        if (!sent)
             return false;
         for (Player* p : group)
             CitySay_Claim(p);   // in a city: those in earshot are hearing one now
@@ -1282,6 +1373,15 @@ void Mingle_ForgetPlayer(uint64_t guid)
     if (g_forget.size() < 4096)
         g_forget.push_back(guid);
     g_forgetPending.store(true);
+}
+
+void Mingle_LoadConfig()
+{
+    g_structured = sConfigMgr->GetOption<bool>("OllamaChat.Mingle.Structured", false);
+    g_structuredText = sConfigMgr->GetOption<std::string>("OllamaChat.Mingle.StructuredText",
+        "Give the whole exchange as JSON: an object with a list called lines, one entry for each message in "
+        "order, each with who (the speaker's name, exactly as given above) and says (what they type, or the "
+        "slash emote on its own).");
 }
 
 void Mingle_Reset()

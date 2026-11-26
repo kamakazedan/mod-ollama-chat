@@ -69,6 +69,9 @@ extern std::string g_OllamaModel;
 extern OllamaProvider g_OllamaProvider;
 extern std::string g_OllamaApiKey;            // never log this
 extern std::string g_OllamaApiKeyHeader;      // empty = provider default header
+extern std::string g_OllamaBackgroundModel;   // memory, sentiment and relationship updates run on this; empty = the model
+extern std::string g_OllamaBackgroundUrl;     // ...at this endpoint; empty = the same one
+extern bool        g_OllamaBackgroundThink;   // ...and it is asked to think
 extern int32_t     g_OllamaVerifyCertificates; // -1 auto (on when ApiKey set), 0 off, 1 on
 extern uint32_t    g_OllamaNumPredict;
 extern float       g_OllamaTemperature;

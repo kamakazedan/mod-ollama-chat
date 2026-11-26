@@ -88,8 +88,11 @@ std::vector<ContextRecentLine> Context_RecentLines(Player* viewer, ChatChannelSo
                                                    uint32_t maxAgeSeconds);
 
 // The channel as a prompt names it: "party chat", "guild chat", "General"
-// (for "General - Elwynn Forest"), "/say nearby".
-std::string Context_ChannelLabel(ChatChannelSourceLocal source, const std::string& channelName);
+// (for "General - Elwynn Forest"), "/say nearby". With `viewer`, the one it
+// is named for: a group's chat is "battleground chat" for someone in a
+// battleground, where their group is their team.
+std::string Context_ChannelLabel(ChatChannelSourceLocal source, const std::string& channelName,
+                                 Player* viewer = nullptr);
 
 // The sequence number the next line, anywhere, will get. An unprompted line
 // notes it when it is asked for (OllamaChatRequest::writtenAtSeq).

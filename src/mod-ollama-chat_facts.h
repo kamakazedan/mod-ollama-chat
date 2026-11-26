@@ -48,4 +48,14 @@ std::string Facts_ClassRaces(const std::string& cls, bool alliance);
 // Whispering Taverns", "a dungeon in the northern wastes".
 std::string Facts_Dungeon(uint32_t level);
 
+// The dungeon finder's dungeons whose way in is in the zone called `zone`,
+// with the levels it lists each for: "The Deadmines (levels 15 to 21)". No
+// more than three. Empty when there is none.
+std::string Facts_DungeonsIn(const std::string& zone);
+
+// The levels most of the quests of `zone` (an area id) are for: the middle
+// four fifths of them, so one stray quest of another bracket does not stretch
+// it. False for a zone with too few quests to say.
+bool Facts_ZoneQuestLevels(uint32_t zone, uint32_t& lo, uint32_t& hi);
+
 #endif // MOD_OLLAMA_CHAT_FACTS_H

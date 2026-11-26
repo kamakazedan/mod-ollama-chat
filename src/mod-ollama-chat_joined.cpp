@@ -8,6 +8,7 @@
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
+#include "mod-ollama-chat_journal.h"
 
 #include "Group.h"
 #include "Log.h"
@@ -185,6 +186,10 @@ namespace
             }
         }
 
+        // What the two of them have done together before, if anything
+        // (mod-ollama-chat_journal): the hello of someone who knows them.
+        const std::string history = ex ? std::string() : Journal_PromptFor(bot, player);
+
         OllamaChatRequest request;
         request.botGuid           = bot->GetGUID().GetRawValue();
         request.targetGuid        = player->GetGUID().GetRawValue();
@@ -208,8 +213,8 @@ namespace
             if (lfg)
                 request.prompt = Fill(g_JoinedLfgPrompt.empty() ? g_JoinedGreetPrompt : g_JoinedLfgPrompt, bot, ai,
                                       player, nullptr);
-            else if (!g_RoleplayEnable && !g_JoinedGreetLines.empty() && g_JoinedCannedChance > 0 &&
-                     urand(1, 100) <= g_JoinedCannedChance)
+            else if (history.empty() && !g_RoleplayEnable && !g_JoinedGreetLines.empty() &&
+                     g_JoinedCannedChance > 0 && urand(1, 100) <= g_JoinedCannedChance)
                 request.fixedText = Personality_StyleCanned(bot, TextRules::FormatCannedLine(
                     g_JoinedGreetLines[std::uniform_int_distribution<size_t>(0, g_JoinedGreetLines.size() - 1)(Rng())],
                     player->GetName(), Rng()));
@@ -218,6 +223,8 @@ namespace
         }
         if (request.prompt.empty() && request.fixedText.empty())
             return;
+        if (!request.prompt.empty() && !history.empty())
+            request.prompt += " " + history;
         // How it came to be in the group: asked "how'd you end up here?", it
         // knows (mod-ollama-chat_said).
         if (ex)
@@ -231,6 +238,8 @@ namespace
             request.basis = player->GetName() + ", a level " + std::to_string(player->GetLevel()) + " " +
                             ai->GetChatHelper()->FormatClass(player->getClass()) +
                             ", has just invited you to their group out of the blue, and you joined";
+        if (!history.empty())
+            request.basis += ". " + history;
         if (!OllamaDispatch_Submit(std::move(request)))
             return;
 

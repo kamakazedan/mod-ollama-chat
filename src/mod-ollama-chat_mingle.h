@@ -61,6 +61,10 @@ class Player;
 
 void Mingle_Update(uint32_t diff);   // world tick, after OllamaDispatch_Update
 
+// Mingle.Structured and its text: the exchange asked for as JSON (the
+// module's other Mingle settings are read with the rest of the config).
+void Mingle_LoadConfig();
+
 // A real player's /say or yell. An exchange it is aimed at -- naming one of
 // its bots, or answering one (`addresseeGuid`) -- stops, so that bot can
 // answer them instead.

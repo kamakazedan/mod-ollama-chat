@@ -187,7 +187,8 @@ namespace
         uint32      minLevel = 0;      // the least it lets in
         uint32      lo = 0, hi = 0;    // the levels it suggests it for
         bool        wing     = false;  // one of several on its map
-        bool        looked   = false;
+        bool        looked   = false;  // its bosses are looked up
+        bool        zoned    = false;  // ...and the zone its way in is in
         std::string zone, bosses;
     };
 
@@ -241,6 +242,40 @@ namespace
                 return zone->area_name[0];
         }
         return {};
+    }
+
+    const std::string& ZoneOf(LevelDungeon& d)
+    {
+        if (!d.zoned)
+        {
+            d.zoned = true;
+            d.zone  = EntranceZone(d.map);
+        }
+        return d.zone;
+    }
+
+    std::string LevelsOf(const LevelDungeon& d)
+    {
+        return d.lo == d.hi ? "level " + std::to_string(d.lo)
+                            : "levels " + std::to_string(d.lo) + " to " + std::to_string(d.hi);
+    }
+
+    // The levels of each zone's quests, sorted: read from the quests once.
+    const std::vector<uint32>* ZoneQuestLevels(uint32 zone)
+    {
+        static std::unordered_map<uint32, std::vector<uint32>> byZone;
+        static bool built = false;
+        if (!built)
+        {
+            built = true;
+            for (const auto& [id, quest] : sObjectMgr->GetQuestTemplates())
+                if (quest && quest->GetZoneOrSort() > 0 && quest->GetQuestLevel() > 0)
+                    byZone[uint32(quest->GetZoneOrSort())].push_back(uint32(quest->GetQuestLevel()));
+            for (auto& [id, levels] : byZone)
+                std::sort(levels.begin(), levels.end());
+        }
+        const auto it = byZone.find(zone);
+        return it == byZone.end() ? nullptr : &it->second;
     }
 }
 
@@ -354,7 +389,6 @@ std::string Facts_Dungeon(uint32_t level)
     if (!d.looked)
     {
         d.looked = true;
-        d.zone   = EntranceZone(d.map);
         if (!d.wing)
         {
             d.bosses = Facts_Bosses(d.name);
@@ -363,9 +397,33 @@ std::string Facts_Dungeon(uint32_t level)
         }
     }
     std::string out = d.name + ", a dungeon";
-    if (!d.zone.empty())
+    if (!ZoneOf(d).empty())
         out += " in " + d.zone;
-    out += d.lo == d.hi ? " for level " + std::to_string(d.lo)
-                        : " for levels " + std::to_string(d.lo) + " to " + std::to_string(d.hi);
-    return out + d.bosses;
+    return out + " for " + LevelsOf(d) + d.bosses;
+}
+
+std::string Facts_DungeonsIn(const std::string& zone)
+{
+    if (zone.empty())
+        return {};
+    std::vector<std::string> found;
+    for (LevelDungeon& d : LevelDungeons())
+        if (found.size() < 3 && ZoneOf(d) == zone)
+            found.push_back(d.name + " (" + LevelsOf(d) + ")");
+    std::string out;
+    for (size_t i = 0; i < found.size(); ++i)
+        out += (i ? (i + 1 == found.size() ? " and " : ", ") : "") + found[i];
+    return out;
+}
+
+bool Facts_ZoneQuestLevels(uint32_t zone, uint32_t& lo, uint32_t& hi)
+{
+    const std::vector<uint32>* levels = ZoneQuestLevels(zone);
+    if (!levels || levels->size() < 8)
+        return false;
+    // The middle four fifths of them.
+    const size_t n = levels->size();
+    lo = (*levels)[n / 10];
+    hi = (*levels)[n - 1 - n / 10];
+    return true;
 }
