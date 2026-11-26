@@ -540,8 +540,10 @@ and goes through it.
 So is what is on in the world (`mod-ollama-chat_holidays`). Which holidays
 the realm is running is the game's own calendar (`IsHolidayActive`, a look a
 minute); `Holidays.List` has for each its id, the words only it goes by, and
-a line of what is true of it -- checked against the game, as a race's phrases
-are. A reply where the talk is of one is told whether it is on
+a line of what is true of it. Check a new one against the world database or
+the Warcraft wiki, as with a race's phrases: the people and things named in
+the ones shipped were checked against `creature_template` and
+`item_template`. A reply where the talk is of one is told whether it is on
 (`Holidays_PromptFor`); a premise about one carries `{holiday}`, filled only
 with one that is on and not picked otherwise; and a bot's line that talks of
 one that is not on is not said, unless it answers a person who brought it up
