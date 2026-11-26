@@ -1,5 +1,8 @@
 #include "mod-ollama-chat_vitals.h"
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_dispatch.h"
+#include "mod-ollama-chat_governor.h"
+#include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_textrules.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat-utilities.h"
@@ -7,6 +10,7 @@
 #include "Group.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
+#include "Random.h"
 
 #include "PlayerbotAI.h"
 
@@ -46,6 +50,8 @@ namespace
         Clock::time_point seen{};
     };
     std::unordered_map<uint64_t, Member> g_members;   // by player
+    // By group: when its healer's "oom" was last weighed.
+    std::unordered_map<uint32_t, Clock::time_point> g_oomWeighed;
     VitalsStats                          g_stats;
     const Clock::time_point              g_epoch = Clock::now();
 
@@ -195,6 +201,44 @@ namespace
     }
 }
 
+namespace
+{
+    // The healer out of mana says so (Vitals.OomCall*): the one thing a group
+    // has to be told, and what a healer types. A typed line in its own chat
+    // style; weighed once in a while for a group, said or not.
+    void MaybeOomCall(Group* group, Player* healer, uint8_t manaPct, Clock::time_point now)
+    {
+        const uint32_t key = group->GetGUID().GetCounter();
+        auto weighed = g_oomWeighed.find(key);
+        if (weighed != g_oomWeighed.end() && now - weighed->second < std::chrono::seconds(g_VitalsOomCallSeconds))
+            return;
+        g_oomWeighed[key] = now;
+        if (g_RoleplayEnable || g_DisableForParty || g_VitalsOomLines.empty() || g_VitalsOomCallChance == 0 ||
+            urand(1, 100) > g_VitalsOomCallChance)
+            return;
+        const std::string line = Personality_StyleCanned(
+            healer, g_VitalsOomLines[urand(0, uint32_t(g_VitalsOomLines.size() - 1))]);
+        if (line.empty())
+            return;
+
+        const ChatChannelSourceLocal source = group->isRaidGroup() ? SRC_RAID_LOCAL : SRC_PARTY_LOCAL;
+        OllamaChatRequest request;
+        request.botGuid           = healer->GetGUID().GetRawValue();
+        request.source            = source;
+        request.scopeKey          = Governor_MakeScopeKey(ChatChannelSourceLocalStr[source], 0, std::string(), 0, key);
+        request.botName           = healer->GetName();
+        request.kind              = OllamaRequestKind::EventChatter;
+        request.fixedText         = line;
+        request.directAddress     = true;    // the moment calls for it: no pacing cooldown
+        request.noEcho            = true;    // "oom" is what everyone says
+        request.triggerBotReplies = false;   // nobody needs to answer it
+        // Asked "how low?", it knows (mod-ollama-chat_said).
+        request.basis = fmt::format("you, the healer, were down to {}% mana", uint32_t(manaPct));
+        if (OllamaDispatch_Submit(std::move(request)))
+            ++g_stats.oomCalls;
+    }
+}
+
 void Vitals_Update(uint32_t diff)
 {
     if (!g_VitalsEnable)
@@ -220,16 +264,38 @@ void Vitals_Update(uint32_t diff)
             continue;
         if (!looked.insert(group->GetGUID().GetCounter()).second)
             continue;
+        Player* dry = nullptr;
+        uint8_t dryPct = 100;
         for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
-            if (Player* member = ref->GetSource())
-                if (member->IsInWorld())
-                    Look(member, now);
+        {
+            Player* member = ref->GetSource();
+            if (!member || !member->IsInWorld())
+                continue;
+            Look(member, now);
+            // Its healer, when that is a bot: how little mana it has left.
+            if (g_VitalsOomCall && member->IsAlive() && UsesMana(member) && OllamaIsBotPlayer(member) &&
+                PlayerbotAI::IsHeal(member))
+            {
+                const uint8_t pct =
+                    Pct(100.0f * float(member->GetPower(POWER_MANA)) / float(member->GetMaxPower(POWER_MANA)));
+                if (pct <= g_VitalsOomCallPct && pct < dryPct)
+                {
+                    dry    = member;
+                    dryPct = pct;
+                }
+            }
+        }
+        if (dry)
+            MaybeOomCall(group, dry, dryPct, now);
     }
 
     // Out of such a group, or offline, for longer than is kept: forgotten.
     const auto keep = std::chrono::minutes(g_VitalsMinutes) + std::chrono::seconds(kSlotSeconds);
     for (auto it = g_members.begin(); it != g_members.end();)
         it = now - it->second.seen > keep ? g_members.erase(it) : std::next(it);
+    const auto forget = std::chrono::seconds(g_VitalsOomCallSeconds) + std::chrono::minutes(1);
+    for (auto it = g_oomWeighed.begin(); it != g_oomWeighed.end();)
+        it = now - it->second > forget ? g_oomWeighed.erase(it) : std::next(it);
 }
 
 void Vitals_NoteLow(Player* who, int32_t healthPct, int32_t manaPct)

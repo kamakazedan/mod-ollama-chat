@@ -77,7 +77,10 @@ namespace
         PlayerbotAI* ai = observer ? PlayerbotsMgr::instance().GetPlayerbotAI(observer) : nullptr;
         if (!ai || !ai->GetChatHelper())
             return "adventurer";
-        return ai->GetChatHelper()->FormatRace(subject->getRace()) + " " +
+        // A man or a woman, as anyone looking at them sees: left out, "he"
+        // or "she" in a remark about them is a guess from a name.
+        return std::string(subject->getGender() == GENDER_FEMALE ? "female " : "male ") +
+               ai->GetChatHelper()->FormatRace(subject->getRace()) + " " +
                ai->GetChatHelper()->FormatClass(subject->getClass());
     }
 

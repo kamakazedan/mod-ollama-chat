@@ -65,8 +65,14 @@ uint64_t Context_LatestLineFrom(Player* speaker, ChatChannelSourceLocal source,
 // leaving out line `excludeSeq` (the one being answered; 0 = none). Ends with a
 // blank line so it can be put in front of a prompt. Empty when there is nothing
 // recent.
+//
+// Time that went by is said (Context.GapSeconds): between two lines, and
+// after the last -- as time before the line being answered (`excludeSeq`, or
+// `answering` when that line is not in the space), else as how long it has
+// been quiet. Who of the others in it is a he and who a she comes after
+// (Context.GenderNotes).
 std::string Context_BuildTranscript(Player* viewer, ChatChannelSourceLocal source,
-                                    const std::string& channelName, uint64_t excludeSeq);
+                                    const std::string& channelName, uint64_t excludeSeq, bool answering = false);
 
 // The newest lines of that space that `viewer` could have seen, newest first:
 // at most `max`, none older than `maxAgeSeconds`, events left out.

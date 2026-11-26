@@ -6,6 +6,7 @@
 #include "mod-ollama-chat-utilities.h"
 
 #include "Group.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
 
 #include <fmt/core.h>
@@ -666,7 +667,7 @@ ContextThreadStats Context_GetThreadStats()
 }
 
 std::string Context_BuildTranscript(Player* viewer, ChatChannelSourceLocal source,
-                                    const std::string& channelName, uint64_t excludeSeq)
+                                    const std::string& channelName, uint64_t excludeSeq, bool answering)
 {
     if (!g_ContextEnable || !viewer || g_ContextMaxLines == 0)
         return {};
@@ -706,8 +707,26 @@ std::string Context_BuildTranscript(Player* viewer, ChatChannelSourceLocal sourc
     if (out == "[Format Error]")
         out = "Recent chat:";
 
+    // Time that went by between two lines is said: read one under the other,
+    // a line from four minutes ago was answered as if it had just been typed.
+    auto gapNote = [](const std::string& templ, double seconds)
+    {
+        const uint32_t minutes = uint32_t(seconds / 60.0 + 0.5);
+        const std::string note = SafeFormat(
+            templ, fmt::arg("gap", minutes <= 1 ? std::string("a minute") : fmt::format("{} minutes", minutes)));
+        return note == "[Format Error]" ? std::string() : note;
+    };
+    const double gap = double(g_ContextGapSeconds);
+    Clock::time_point last{};
+    std::vector<std::pair<uint64_t, std::string>> others;   // who else spoke, for he or she
+
     for (auto line = picked.rbegin(); line != picked.rend(); ++line)
     {
+        if (gap > 0.0 && last != Clock::time_point{} && SecondsBetween(last, line->when) >= gap)
+            if (const std::string note = gapNote(g_ContextGapNote, SecondsBetween(last, line->when)); !note.empty())
+                out += '\n' + note;
+        last = line->when;
+
         out += '\n';
         if (line->kind == ContextLineKind::Event)
         {
@@ -718,7 +737,37 @@ std::string Context_BuildTranscript(Player* viewer, ChatChannelSourceLocal sourc
         out += line->speakerName;
         if (line->speakerGuid == viewerGuid)
             out += " (you)";
+        else if (std::none_of(others.begin(), others.end(),
+                              [&](const auto& o) { return o.first == line->speakerGuid; }))
+            others.emplace_back(line->speakerGuid, line->speakerName);
         out += ": " + line->text;
+    }
+
+    // ...and since the last of them: before the line being answered (which is
+    // quoted after this, not in it), or with nothing said since.
+    if (gap > 0.0 && SecondsBetween(last, now) >= gap)
+        if (const std::string note = gapNote(excludeSeq || answering ? g_ContextGapNote : g_ContextQuietNote,
+                                             SecondsBetween(last, now));
+            !note.empty())
+            out += '\n' + note;
+
+    // Who of them is a he and who a she: a name alone does not say, and the
+    // model guesses. Those online; nobody else is sure.
+    if (g_ContextGenderNotes && !g_ContextGenderNote.empty())
+    {
+        std::string list;
+        size_t named = 0;
+        for (const auto& [guid, name] : others)
+        {
+            Player* who = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid));
+            if (!who || named >= 6)
+                continue;
+            ++named;
+            list += (list.empty() ? "" : ", ") + name + (who->getGender() == GENDER_FEMALE ? " is female" : " is male");
+        }
+        const std::string note = list.empty() ? std::string() : SafeFormat(g_ContextGenderNote, fmt::arg("list", list));
+        if (!note.empty() && note != "[Format Error]")
+            out += '\n' + note;
     }
 
     out += "\n\n";

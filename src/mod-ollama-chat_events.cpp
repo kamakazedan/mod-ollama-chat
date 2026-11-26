@@ -647,8 +647,10 @@ ChatOnDeath::ChatOnDeath()
 
 void ChatOnDeath::OnPlayerJustDied(Player* player)
 {
-    if (player)
-        eventChatter.DispatchGameEvent(player, g_EventTypeDied, "");
+    if (!player)
+        return;
+    Lately_NoteDeath(player);   // what it has to grumble about, for a while
+    eventChatter.DispatchGameEvent(player, g_EventTypeDied, "");
 }
 
 // --------------------------------------------------------------------------

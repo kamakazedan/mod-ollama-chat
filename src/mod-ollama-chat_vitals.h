@@ -34,6 +34,11 @@ class Player;
 //   told how it was (Vitals.ScareNote, Vitals.DryNote). A line answering a
 //   person who said so themselves is let through: it was told how it was.
 //
+// And the healer out of mana says so (Vitals.OomCall*): a bot that heals,
+// in such a group, down to Vitals.OomCallPct mana types "oom" -- a typed
+// line in its own chat style, weighed once in Vitals.OomCallSeconds for a
+// group. It is true when it is said, so the check above lets it through.
+//
 // World thread only.
 // --------------------------------------------------------------------------
 
@@ -62,6 +67,7 @@ struct VitalsStats
     uint64_t told    = 0;   // replies told how it had gone
     uint64_t keptIn  = 0;   // lines of a scare or of no mana not said: there was none
     uint64_t dips    = 0;   // dips noted between looks (a potion)
+    uint64_t oomCalls = 0;  // a healer out of mana saying so (Vitals.OomCall)
 };
 VitalsStats Vitals_GetStats();
 

@@ -38,6 +38,9 @@
 #include "mod-ollama-chat_stuck.h"
 #include "mod-ollama-chat_gifts.h"
 #include "mod-ollama-chat_vitals.h"
+#include "mod-ollama-chat_stay.h"
+#include "mod-ollama-chat_goodturn.h"
+#include "mod-ollama-chat_holidays.h"
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_gear.h"
 #include "mod-ollama-chat_aside.h"
@@ -1066,6 +1069,31 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
             "dips noted from potions",
             g_VitalsEnable ? "on" : "off", vitals.members, (unsigned long long)vitals.told, g_VitalsMinutes,
             (unsigned long long)vitals.keptIn, (unsigned long long)vitals.dips);
+    if (show("party"))
+        out("The healer's oom: {} - {} said (at {}% mana or less, weighed once in {}s for a group)",
+            g_VitalsEnable && g_VitalsOomCall ? "on" : "off", (unsigned long long)vitals.oomCalls, g_VitalsOomCallPct,
+            g_VitalsOomCallSeconds);
+    const StayStats stay = Stay_GetStats();
+    if (show("talk"))
+        out("Staying to answer: {} - {} bots stopped for someone who spoke to them in /say ({} standing there "
+            "now); {} said their line there, {} let go for a fight, {} whose line never came",
+            g_StayEnable ? "on" : "off", (unsigned long long)stay.stayed, stay.now, (unsigned long long)stay.spoke,
+            (unsigned long long)stay.fights, (unsigned long long)stay.gaveUp);
+    const GoodTurnStats turns = GoodTurn_GetStats();
+    if (show("talk"))
+        out("A good turn thanked: {} - {} buffs, heals and resurrections real players cast on bots; {} thanked "
+            "with the emote, {} with a word as well, {} with a buff back; {} the same player's a moment before, {} "
+            "gone, fighting or dead by then",
+            g_GoodTurnEnable ? "on" : "off", (unsigned long long)turns.noted, (unsigned long long)turns.thanked,
+            (unsigned long long)turns.said, (unsigned long long)turns.buffed, (unsigned long long)turns.again,
+            (unsigned long long)turns.missed);
+    const HolidaysStats holidays = Holidays_GetStats();
+    if (show("chat"))
+        out("Holidays: {} - {} known, on now: {}; {} replies told of one, {} conversations about one, {} lines "
+            "about one that is not on not said",
+            g_HolidaysEnable ? "on" : "off", holidays.known, holidays.names.empty() ? "none" : holidays.names,
+            (unsigned long long)holidays.told, (unsigned long long)holidays.topics,
+            (unsigned long long)holidays.keptIn);
     const ContextThreadStats thread = Context_GetThreadStats();
     if (show("party"))
         out("Keeping the thread: {} unprompted lines held back where a real player had just "

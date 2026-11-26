@@ -41,6 +41,9 @@
 #include "mod-ollama-chat_gifts.h"
 #include "mod-ollama-chat_gear.h"
 #include "mod-ollama-chat_vitals.h"
+#include "mod-ollama-chat_stay.h"
+#include "mod-ollama-chat_goodturn.h"
+#include "mod-ollama-chat_holidays.h"
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_aside.h"
 #include "mod-ollama-chat_rolls.h"
@@ -584,6 +587,15 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
 
     // Each group's health and mana, a look a second: what a close call is held to.
     Vitals_Update(diff);
+
+    // A bot spoken to in /say stays where it is until it has answered.
+    Stay_Update();
+
+    // A buff, a heal or a resurrection from a real player: thanked, and maybe returned.
+    GoodTurn_Update();
+
+    // Which holidays are on, by the game's own calendar: a look a minute.
+    Holidays_Update(diff);
 
     // The odd whispered aside about someone else in the group.
     Aside_Update(diff);

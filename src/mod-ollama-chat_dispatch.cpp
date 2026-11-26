@@ -16,6 +16,7 @@
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_hangout.h"
+#include "mod-ollama-chat_holidays.h"
 #include "mod-ollama-chat_joined.h"
 #include "mod-ollama-chat_lag.h"
 #include "mod-ollama-chat_vitals.h"
@@ -30,6 +31,7 @@
 #include "mod-ollama-chat_response.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_said.h"
+#include "mod-ollama-chat_stay.h"
 #include "mod-ollama-chat_sentiment.h"
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_world.h"
@@ -582,6 +584,8 @@ namespace
                 // mid-sentence (mod-playerbots-plus's city life).
                 Hangout_Spoke(bot);
                 Hangout_Busy(bot, 8);
+                // One that stopped to answer stays a moment more (mod-ollama-chat_stay).
+                Stay_Spoke(bot);
                 // In a city, a line not owed to a real player who spoke (one
                 // answering them has chainDepth 0 and what they said): those
                 // in earshot heard one, and the quiet there starts again
@@ -1208,6 +1212,36 @@ namespace
             }
         }
 
+        // A holiday is talked of while it is on (mod-ollama-chat_holidays), or
+        // answering someone who brought it up: nobody wishes anyone a merry
+        // Winter Veil in July. A line owed to someone gets another go, told
+        // it is not on.
+        {
+            std::string which, note;
+            const bool byPerson = c.request.chainDepth == 0 && !origin.empty();   // not a bot's line
+            if (!Holidays_MayGoOut(c.text, origin, byPerson, which, note))
+            {
+                std::string stockWhich, stockNote;
+                if (!c.request.fallbackText.empty() && c.text != c.request.fallbackText &&
+                    Holidays_MayGoOut(c.request.fallbackText, origin, byPerson, stockWhich, stockNote))
+                {
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} talked of {}, which is not on: '{}' "
+                                 "instead.", bot->GetName(), which, c.request.fallbackText);
+                    c.text = c.request.fallbackText;
+                }
+                else
+                {
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} talked of {}, which is not on; line "
+                                 "dropped: '{}'", bot->GetName(), which, c.text);
+                    if (!retryWith(note, which))
+                        ++g_droppedPhrase;
+                    return;
+                }
+            }
+        }
+
         // A mount talked of is one being ridden in sight, now, and a remark on
         // someone's mount is theirs to answer (mod-ollama-chat_mounts): "nice
         // chestnut mare that is" went out after the one it was about had got
@@ -1573,6 +1607,14 @@ bool OllamaDispatch_Submit(OllamaChatRequest request)
     if (says)
         AwaitedSent(says);
 
+    // An answer in /say owed to a real player who spoke: its bot stays to
+    // give it (mod-ollama-chat_stay), once the line is on its way.
+    const uint64_t stayBot = request.source == SRC_SAY_LOCAL && request.chainDepth == 0 &&
+                                     !request.originMessage.empty() && request.targetGuid
+                                 ? request.botGuid
+                                 : 0;
+    const uint64_t stayFor = request.targetGuid;
+
     Task task;
     task.type    = TaskType::ChatReply;
     task.request = std::move(request);
@@ -1604,6 +1646,8 @@ bool OllamaDispatch_Submit(OllamaChatRequest request)
 
     ++g_totalSubmitted;
     g_queueCv.notify_one();
+    if (stayBot)
+        Stay_Begin(stayBot, stayFor);
     return true;
 }
 
@@ -1748,7 +1792,12 @@ void OllamaChat_DispatchEmoteReaction(Player* bot, Player* player, uint32_t text
     if (request.prompt.empty())
         return;
 
-    OllamaDispatch_Submit(std::move(request));
+    // Waved at and about to answer in words: it stays to, as one spoken to
+    // does (mod-ollama-chat_stay; only noted here -- this is a map thread).
+    const uint64_t botGuid = request.botGuid;
+    const uint64_t toGuid  = request.targetGuid;
+    if (OllamaDispatch_Submit(std::move(request)))
+        Stay_Begin(botGuid, toGuid);
 }
 
 namespace

@@ -67,6 +67,7 @@
 #include "mod-ollama-chat_stuck.h"
 #include "mod-ollama-chat_hangout.h"
 #include "mod-ollama-chat_gifts.h"
+#include "mod-ollama-chat_holidays.h"
 #include "mod-ollama-chat_vitals.h"
 #include "mod-ollama-chat_wipe.h"
 #include "mod-ollama-chat_gear.h"
@@ -1074,7 +1075,9 @@ std::vector<std::string> ChatHandler_GetGroupStatus(Player* bot)
         Player* member = ref->GetSource();
         if (!member || !member->GetMap()) continue;
         if(bot == member) continue;
-        float dist = bot->GetDistance(member);
+        // On another map there is no distance between them to speak of.
+        const bool here = member->GetMap() == bot->GetMap();
+        float dist = here ? bot->GetDistance(member) : 0.0f;
         std::string beingAttacked = "";
         if (Unit* attacker = member->GetVictim())
         {
@@ -1090,7 +1093,8 @@ std::vector<std::string> ChatHandler_GetGroupStatus(Player* bot)
             ", Class: " + className +
             ", Race: " + raceName +
             ", HP: " + std::to_string(member->GetHealth()) + "/" + std::to_string(member->GetMaxHealth()) +
-            ", Dist: " + std::to_string(dist) + ")" + beingAttacked
+            (here ? ", Dist: " + std::to_string(uint32_t(dist + 0.5f)) + " yards)" : std::string(", elsewhere)")) +
+            beingAttacked
         );
 
     }
@@ -3582,7 +3586,13 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     std::string botGender           = (botGenderByte == 0 ? "Male" : "Female");
     std::string botFaction          = (bot->GetTeamId() == TEAM_ALLIANCE ? "Alliance" : "Horde");
     std::string botGuild            = (bot->GetGuild() ? bot->GetGuild()->GetName() : "No Guild");
-    std::string botGroupStatus      = (bot->GetGroup() ? "In a group" : "Solo");
+    // In a group, and whether it is the one they are in: told only "In a
+    // group", a bot answering someone of its own party in General or a
+    // whisper could not tell them from a stranger.
+    const bool sameGroup            = bot->GetGroup() && bot->GetGroup() == player->GetGroup();
+    std::string botGroupStatus      = !bot->GetGroup() ? g_ChatGroupNoneText
+                                      : sameGroup      ? g_ChatGroupSameText
+                                                       : g_ChatGroupOtherText;
     uint32_t botGold                = bot->GetMoney() / 10000;
 
     std::string playerName          = player->GetName();
@@ -3596,9 +3606,27 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     std::string playerGender        = (playerGenderByte == 0 ? "Male" : "Female");
     std::string playerFaction       = (player->GetTeamId() == TEAM_ALLIANCE ? "Alliance" : "Horde");
     std::string playerGuild         = (player->GetGuild() ? player->GetGuild()->GetName() : "No Guild");
-    std::string playerGroupStatus   = (player->GetGroup() ? "In a group" : "Solo");
+    std::string playerGroupStatus   = !player->GetGroup() ? g_ChatTheirGroupNoneText
+                                      : sameGroup         ? g_ChatTheirGroupSameText
+                                                          : g_ChatTheirGroupOtherText;
     uint32_t playerGold             = player->GetMoney() / 10000;
-    float playerDistance            = player->IsInWorld() && bot->IsInWorld() ? player->GetDistance(bot) : -1.0f;
+    // How far off they are means something only on the same map: across
+    // two, the sum is of coordinates that have nothing to do with each
+    // other. Out of reach of sight, it is where they are that is told.
+    const bool sameMap              = player->IsInWorld() && bot->IsInWorld() && player->GetMap() == bot->GetMap();
+    float playerDistance            = sameMap ? player->GetDistance(bot) : -1.0f;
+    std::string playerWhere;
+    {
+        AreaTableEntry const* theirZone = sAreaTableStore.LookupEntry(player->GetZoneId());
+        const std::string zone = theirZone ? std::string(theirZone->area_name[0]) : std::string("another place");
+        const std::string& templ = sameMap && playerDistance <= float(g_ChatWhereNearYards) ? g_ChatWhereNearText
+                                   : sameMap && player->GetZoneId() == bot->GetZoneId()    ? g_ChatWhereZoneText
+                                                                                           : g_ChatWhereFarText;
+        playerWhere = SafeFormat(templ, fmt::arg("yards", uint32_t(std::max(0.0f, playerDistance) + 0.5f)),
+                                 fmt::arg("zone", zone));
+        if (playerWhere == "[Format Error]")
+            playerWhere.clear();
+    }
 
     std::string chatHistory         = TextRules::StripChatMarkup(GetBotHistoryPrompt(botGuid, playerGuid, playerMessage));
     std::string sentimentInfo       = GetSentimentPromptAddition(bot, player);
@@ -3606,7 +3634,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     // What everyone in this channel said lately, not only this bot's own past
     // exchanges with this person. When it has lines, the per-pair history
     // would mostly repeat them, so it is dropped.
-    std::string channelHistory = Context_BuildTranscript(bot, source, channelName, contextExcludeSeq);
+    std::string channelHistory = Context_BuildTranscript(bot, source, channelName, contextExcludeSeq, true);
     if (!channelHistory.empty() && g_ContextSuppressPairHistory)
         chatHistory.clear();
 
@@ -3644,6 +3672,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         fmt::arg("player_group_status", playerGroupStatus),
         fmt::arg("player_gold", playerGold),
         fmt::arg("player_distance", playerDistance),
+        fmt::arg("player_where", playerWhere),
         fmt::arg("bot_area", botAreaName),
         fmt::arg("bot_zone", botZoneName),
         fmt::arg("bot_map", botMapName)
@@ -3781,7 +3810,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     // how the last few minutes have really gone for each of them
     // (mod-ollama-chat_vitals): "nearly dead there for a sec" was said by a
     // tank who had never been in any trouble.
-    std::string vitals;
+    std::string vitals, holidays;
     {
         std::vector<std::string> heard{ playerMessage };
         for (const ContextRecentLine& line : Context_RecentLines(bot, source, channelName, 4, g_ContextMaxAgeSeconds))
@@ -3789,6 +3818,11 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         vitals = Vitals_PromptFor(bot, source, heard);
         if (!vitals.empty())
             prompt += " " + vitals;
+        // ...and where it is of a holiday, whether that is on, and what is true
+        // of it (mod-ollama-chat_holidays).
+        holidays = Holidays_PromptFor(heard);
+        if (!holidays.empty())
+            prompt += " " + holidays;
     }
 
     // Asked what it has, or for something: what is in its bags, what it could
@@ -3888,7 +3922,8 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         facts->clear();
         for (const std::string* part : { &named, &lfg, &known, &wants, static_cast<const std::string*>(&lagState),
                                          static_cast<const std::string*>(&askedBasis),
-                                         static_cast<const std::string*>(&vitals) })
+                                         static_cast<const std::string*>(&vitals),
+                                         static_cast<const std::string*>(&holidays) })
             if (!part->empty())
                 *facts += (facts->empty() ? "" : " ") + *part;
     }

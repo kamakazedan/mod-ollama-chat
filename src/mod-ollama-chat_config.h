@@ -438,6 +438,52 @@ extern std::string g_PartyReadyCheckResumeText;
 extern std::string g_PartyReadyCheckWaitingText;
 
 // How the fights have really gone: health and mana, lowest and average (mod-ollama-chat_vitals)
+// --- v48: who and where the one spoken to is, time between lines, staying to answer, a good turn
+//          thanked, the healer's oom, and what is on in the world ---------------------------------
+extern std::string g_ChatGroupNoneText;
+extern std::string g_ChatGroupSameText;
+extern std::string g_ChatGroupOtherText;
+extern std::string g_ChatTheirGroupNoneText;
+extern std::string g_ChatTheirGroupSameText;
+extern std::string g_ChatTheirGroupOtherText;
+extern std::string g_ChatWhereNearText;
+extern std::string g_ChatWhereZoneText;
+extern std::string g_ChatWhereFarText;
+extern std::string g_ContextGapNote;
+extern std::string g_ContextQuietNote;
+extern std::string g_ContextGenderNote;
+extern std::string g_HolidaysFactText;
+extern std::string g_HolidaysOnText;
+extern std::string g_HolidaysOffText;
+extern std::string g_HolidaysOffNote;
+extern std::vector<std::string> g_GoodTurnBuffLines;
+extern std::vector<std::string> g_GoodTurnHealLines;
+extern std::vector<std::string> g_GoodTurnRezLines;
+extern std::vector<std::string> g_VitalsOomLines;
+extern bool        g_StayEnable;
+extern bool        g_StayFace;
+extern bool        g_GoodTurnEnable;
+extern bool        g_VitalsOomCall;
+extern bool        g_HolidaysEnable;
+extern bool        g_HolidaysGuard;
+extern bool        g_ContextGenderNotes;
+extern uint32_t    g_ChatWhereNearYards;
+extern uint32_t    g_ContextGapSeconds;
+extern uint32_t    g_StayMaxSeconds;
+extern uint32_t    g_StayLingerSeconds;
+extern uint32_t    g_GoodTurnChance;
+extern uint32_t    g_GoodTurnInGroupChance;
+extern uint32_t    g_GoodTurnSayChance;
+extern uint32_t    g_GoodTurnBuffBackChance;
+extern uint32_t    g_GoodTurnPairMinutes;
+extern uint32_t    g_GoodTurnBuffMinMinutes;
+extern uint32_t    g_GoodTurnHealPct;
+extern uint32_t    g_GoodTurnDelayMinMs;
+extern uint32_t    g_GoodTurnDelayMaxMs;
+extern uint32_t    g_VitalsOomCallPct;
+extern uint32_t    g_VitalsOomCallSeconds;
+extern uint32_t    g_VitalsOomCallChance;
+
 extern bool        g_VitalsEnable;
 extern uint32_t    g_VitalsMinutes;       // how far back
 extern uint32_t    g_VitalsScarePct;      // health at this or less: a close call

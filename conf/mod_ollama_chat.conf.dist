@@ -747,7 +747,42 @@ OllamaChat.ChatPromptTemplate = "You're a WoW player familiar with 3.3.5 version
 #   {bot_role} and {player_role} are spec and class ("holy priest"): a player can guess that from someone's
 #   gear. {player_gold} is not something another player could know: leave it out unless you want bots to
 #   know it.
-OllamaChat.ChatExtraInfoTemplate = "Your Info: {bot_race} {bot_gender}, Spec: {bot_role}, Faction: {bot_faction}, Guild: {bot_guild}, Group: {bot_group_status}, Gold: {bot_gold}. Player Info: {player_race} {player_gender}, Spec: {player_role}, Faction: {player_faction}, Guild: {player_guild}, Group: {player_group_status}, Distance: {player_distance} yards. Location: {bot_area}, Zone: {bot_zone}, Map: {bot_map}. Only respond to the new message. No commentary, no meta-talk, no prefix—just the reply."
+OllamaChat.ChatExtraInfoTemplate = "Your Info: {bot_race} {bot_gender}, Spec: {bot_role}, Faction: {bot_faction}, Guild: {bot_guild}, Group: {bot_group_status}, Gold: {bot_gold}. Player Info: {player_race} {player_gender}, Spec: {player_role}, Faction: {player_faction}, Guild: {player_guild}, Group: {player_group_status}, {player_where}. Location: {bot_area}, Zone: {bot_zone}, Map: {bot_map}. Only respond to the new message. No commentary, no meta-talk, no prefix—just the reply."
+
+#    OllamaChat.Chat.GroupNoneText
+#    OllamaChat.Chat.GroupSameText
+#    OllamaChat.Chat.GroupOtherText
+#    OllamaChat.Chat.TheirGroupNoneText
+#    OllamaChat.Chat.TheirGroupSameText
+#    OllamaChat.Chat.TheirGroupOtherText
+#        What {bot_group_status} and {player_group_status} say in
+#        ChatExtraInfoTemplate: whether each is in a group, and whether it is
+#        the same one. Told only "In a group", a bot answering someone of its
+#        own party in General or a whisper could not tell them from a
+#        stranger.
+OllamaChat.Chat.GroupNoneText = "not in a group"
+OllamaChat.Chat.GroupSameText = "in a group with them"
+OllamaChat.Chat.GroupOtherText = "in a group they are not in"
+OllamaChat.Chat.TheirGroupNoneText = "not in a group"
+OllamaChat.Chat.TheirGroupSameText = "in your group"
+OllamaChat.Chat.TheirGroupOtherText = "in a group you are not in"
+
+#    OllamaChat.Chat.WhereNearYards
+#    OllamaChat.Chat.WhereNearText
+#    OllamaChat.Chat.WhereZoneText
+#    OllamaChat.Chat.WhereFarText
+#        What {player_where} says in ChatExtraInfoTemplate: how far off the
+#        one answered is when they are on the same map within WhereNearYards
+#        (10-500; {yards}), else where they are ({zone}): in the same zone
+#        but out of sight, or somewhere else. {player_distance} is still
+#        there, but only means anything on the same map (-1 otherwise):
+#        across two maps the sum is of coordinates that have nothing to do
+#        with each other, and it used to be given all the same.
+#        Default: 100, (below)
+OllamaChat.Chat.WhereNearYards = 100
+OllamaChat.Chat.WhereNearText = "about {yards} yards from you"
+OllamaChat.Chat.WhereZoneText = "elsewhere in {zone}, not in sight"
+OllamaChat.Chat.WhereFarText = "far from you, in {zone}"
 
 # --------------------------------------------
 # ENVIRONMENTAL/CONTEXTUAL TEMPLATES
@@ -1867,6 +1902,30 @@ OllamaChat.Context.PassToken = NOREPLY
 #        "General", "/say nearby" and so on.
 OllamaChat.Context.HistoryHeader = "Recent {channel}, oldest first (context only):"
 
+#    OllamaChat.Context.GapSeconds
+#    OllamaChat.Context.GapNote
+#    OllamaChat.Context.QuietNote
+#        Time that went by between two lines of a transcript is said. Read
+#        one under the other, a line from four minutes ago was answered as if
+#        it had just been typed. A gap of GapSeconds or more (0: never) puts
+#        GapNote between the two lines, and before the line being answered;
+#        for a line nobody asked for, QuietNote after the last one says how
+#        long it has been quiet. {gap}: "a minute", "4 minutes".
+#        Default: 90, (below)
+OllamaChat.Context.GapSeconds = 90
+OllamaChat.Context.GapNote = "* ({gap} later)"
+OllamaChat.Context.QuietNote = "* (that was {gap} ago; nothing has been said since)"
+
+#    OllamaChat.Context.GenderNotes
+#    OllamaChat.Context.GenderNote
+#        After a transcript, who of the others in it is a he and who a she
+#        ({list}: "Nyxie is female, Lordel is male"; those online, six at
+#        most): a name alone does not say, and the model guesses. Someone a
+#        bot sees nearby is described as male or female too.
+#        Default: 1, (below)
+OllamaChat.Context.GenderNotes = 1
+OllamaChat.Context.GenderNote = "* (for he or she: {list})"
+
 #    OllamaChat.Context.HintAddressed
 #    OllamaChat.Context.HintBystander
 #    OllamaChat.Context.HintOpen
@@ -2308,7 +2367,7 @@ OllamaChat.Conversation.Premises = "which class is the most overpowered right no
 #                         only one race of its side can)
 #        A pool of the same name is not used for these.
 #        Default: "", 70, 120, 8, no pools
-OllamaChat.Conversation.PremiseTemplates = "a silly would-you-rather question about {creature}|a would-you-rather between {zone} and {zone2}|which of {class} and {class2} has it easier levelling|a hot take about {class}|what {race} are really like, going by the ones you have met|[10+] running down {enemy_race}, who are on the other side|the worst thing about {profession}|whether {profession} is worth levelling at all|[15+] the best and worst bits of {dungeon}{bosses}|[15+] what usually wipes a group in {dungeon}{bosses}|[15-39] whether {dungeon} is a good first dungeon{bosses}|a daft question about {creature} that nobody ever asks, and a daft guess at the answer|what {lore} is really up to these days, a joking guess from where they really are in the story|whether {lore} is any good as a leader|a daft rumour about {lore}, plainly made up for a laugh and spun out of something really true of them|whether {lore} or {lore2} would win in a fight|the most pointless thing about {city}|the best spot in {city} to stand around in|good names people give {beast} as a hunter pet|whether {beast} or {beast2} makes the better hunter pet|whether {mount} or {mount2} looks daftest|[20+] whether {mount} is worth the gold|a guess at how many {creature} you have killed in total|whether {creature} are overrated or underrated as enemies|something you would change about {zone} if you could|the quickest way through {zone}|[10+] whether {other_faction} players are any good at {activity}|{activity}: fun or a chore|the most embarrassing way to die to {creature}|what {creature} would say if they could talk|which race on your side makes the best {class}, and which the worst (on your side, only {class_races} can be one)|the best thing to do in {zone} when you are bored|what you would do with a million gold|[30+] the toughest boss in {dungeon}{bosses}|a would-you-rather between {trinket} and {trinket2}|whether {itemset} or {itemset2} looks better|whether {rare} is worth hunting down"
+OllamaChat.Conversation.PremiseTemplates = "a silly would-you-rather question about {creature}|a would-you-rather between {zone} and {zone2}|which of {class} and {class2} has it easier levelling|a hot take about {class}|what {race} are really like, going by the ones you have met|[10+] running down {enemy_race}, who are on the other side|the worst thing about {profession}|whether {profession} is worth levelling at all|[15+] the best and worst bits of {dungeon}{bosses}|[15+] what usually wipes a group in {dungeon}{bosses}|[15-39] whether {dungeon} is a good first dungeon{bosses}|a daft question about {creature} that nobody ever asks, and a daft guess at the answer|what {lore} is really up to these days, a joking guess from where they really are in the story|whether {lore} is any good as a leader|a daft rumour about {lore}, plainly made up for a laugh and spun out of something really true of them|whether {lore} or {lore2} would win in a fight|the most pointless thing about {city}|the best spot in {city} to stand around in|good names people give {beast} as a hunter pet|whether {beast} or {beast2} makes the better hunter pet|whether {mount} or {mount2} looks daftest|[20+] whether {mount} is worth the gold|a guess at how many {creature} you have killed in total|whether {creature} are overrated or underrated as enemies|something you would change about {zone} if you could|the quickest way through {zone}|[10+] whether {other_faction} players are any good at {activity}|{activity}: fun or a chore|the most embarrassing way to die to {creature}|what {creature} would say if they could talk|which race on your side makes the best {class}, and which the worst (on your side, only {class_races} can be one)|the best thing to do in {zone} when you are bored|what you would do with a million gold|[30+] the toughest boss in {dungeon}{bosses}|a would-you-rather between {trinket} and {trinket2}|whether {itemset} or {itemset2} looks better|whether {rare} is worth hunting down|what there is to do for {holiday}|whether {holiday} is worth the bother|the best and the worst of {holiday}"
 OllamaChat.Conversation.PremiseTemplateChance = 70
 OllamaChat.Conversation.PremiseCooldownMinutes = 120
 OllamaChat.Conversation.PremiseValueMemory = 8
@@ -6358,6 +6417,166 @@ OllamaChat.Potions.ManaPrompt = "You are {bot_name}, a level {bot_level} {bot_ra
 
 ###############################################################################
 #
+#   OLLAMA CHAT - SPOKEN TO, A BOT STAYS TO ANSWER
+#
+#   Someone says something in /say to a bot going about its business. The
+#   answer takes a few seconds to write, and by then the bot had walked on:
+#   out of earshot the line was dropped as it went out and they got nothing,
+#   or it came from someone running the other way.
+#
+#   With this on, a bot picked to answer a real player face to face stops and
+#   turns to them, as anyone spoken to does, waits for its own line, and
+#   stays a moment after it in case they say more -- their next line starts
+#   the wait again -- before it goes on with what it was doing. The same for
+#   one waved at (any emote done at it) that answers in words. Only a bot on
+#   its own: one in a group goes where its group goes. A fight ends the wait
+#   at once. .ollama status talk counts it.
+#
+###############################################################################
+
+#    OllamaChat.Stay.Enable
+#    OllamaChat.Stay.MaxSeconds
+#    OllamaChat.Stay.LingerSeconds
+#    OllamaChat.Stay.Face
+#        On; how long it waits for its own answer at most (3-60) and how long
+#        it stays once that is out (0-30); and whether it turns to face them
+#        (with OllamaChat.EnableBotFacing).
+#        Default: 1, 15, 8, 1
+OllamaChat.Stay.Enable = 1
+OllamaChat.Stay.MaxSeconds = 15
+OllamaChat.Stay.LingerSeconds = 8
+OllamaChat.Stay.Face = 1
+
+###############################################################################
+#
+#   OLLAMA CHAT - ONE GOOD TURN: A BUFF, A HEAL OR A RESURRECTION THANKED
+#
+#   A real player puts Fortitude on someone running past, and gets a /thank,
+#   a "ty", often a buff back. A bot said nothing and ran on.
+#
+#   With this on, when a real player casts a buff that lasts on a bot, heals
+#   one that was hurt, or resurrects one, the bot may acknowledge it: it
+#   thanks them with the emote, sometimes with a word as well (a typed line
+#   in its own chat style -- in /say, or the group's chat for someone in its
+#   group), and, when it has a buff of its own they are without, with a buff
+#   back (its own cast, as for a buff asked for: OllamaChat.Buff.*). What
+#   counts is what the game says: a helpful spell cast on the bot by name,
+#   with an aura that lasts, an effect that heals or one that resurrects.
+#   .ollama status talk counts it.
+#
+###############################################################################
+
+#    OllamaChat.GoodTurn.Enable
+#    OllamaChat.GoodTurn.Chance
+#    OllamaChat.GoodTurn.InGroupChance
+#    OllamaChat.GoodTurn.PairMinutes
+#        On, and the percent of the times a bot acknowledges it: Chance for a
+#        stranger's, InGroupChance for someone's in its own group, where buffs
+#        and heals are routine. Once for the same player in PairMinutes
+#        (1-1440), whatever it made of the last one.
+#        Default: 1, 70, 15, 10
+OllamaChat.GoodTurn.Enable = 1
+OllamaChat.GoodTurn.Chance = 70
+OllamaChat.GoodTurn.InGroupChance = 15
+OllamaChat.GoodTurn.PairMinutes = 10
+
+#    OllamaChat.GoodTurn.BuffMinMinutes
+#    OllamaChat.GoodTurn.HealPct
+#        A buff counts when it lasts at least this many minutes (1-120); a
+#        heal when the bot was at this percent health or less (1-100).
+#        Default: 5, 50
+OllamaChat.GoodTurn.BuffMinMinutes = 5
+OllamaChat.GoodTurn.HealPct = 50
+
+#    OllamaChat.GoodTurn.SayChance
+#    OllamaChat.GoodTurn.BuffBackChance
+#    OllamaChat.GoodTurn.DelayMinMs
+#    OllamaChat.GoodTurn.DelayMaxMs
+#        Of those it acknowledges: the percent with a word as well as the
+#        emote (in a city's streets only where OllamaChat.City.* lets a /say
+#        line be started just now; not in roleplay mode), and the percent with
+#        a buff back (never in its own group, which playerbots keeps buffed).
+#        It reacts DelayMinMs to DelayMaxMs after the cast -- once it is up
+#        again, for a resurrection.
+#        Default: 35, 50, 1200, 3500
+OllamaChat.GoodTurn.SayChance = 35
+OllamaChat.GoodTurn.BuffBackChance = 50
+OllamaChat.GoodTurn.DelayMinMs = 1200
+OllamaChat.GoodTurn.DelayMaxMs = 3500
+
+#    OllamaChat.GoodTurn.BuffLines
+#    OllamaChat.GoodTurn.HealLines
+#    OllamaChat.GoodTurn.RezLines
+#        The word, separated by |; a repeated line is picked more often.
+#        {name} is who it thanks, lowercased about half the time.
+OllamaChat.GoodTurn.BuffLines = "ty|ty|ty|thanks|thx|ty!|cheers|ty {name}|thanks {name}|thx for the buff|ty for the buff|cheers for the buff"
+OllamaChat.GoodTurn.HealLines = "ty|ty|thanks|thx|ty for the heal|thanks for the heal|cheers for the heal|ty {name}|thx, needed that"
+OllamaChat.GoodTurn.RezLines = "ty|ty|thanks|thx for the rez|ty for the rez|thanks for the res|cheers for the res|ty {name}"
+
+###############################################################################
+#
+#   OLLAMA CHAT - HOLIDAYS: WHAT IS ON IN THE WORLD
+#
+#   Brewfest, Hallow's End, Winter Veil, the Darkmoon Faire, a battleground's
+#   bonus weekend, the fishing tournament: when one is on, people talk about
+#   it, and when it is not, nobody does. A bot knew neither: the model has
+#   read about all of them, and would as soon wish everyone a merry Winter
+#   Veil in July as have nothing to say of the feast tables outside the gates
+#   in the week they stand there.
+#
+#   Which holidays the realm is running is the game's own calendar (the
+#   game_event table's holidays, looked at once a minute). For each one in
+#   Holidays.List:
+#
+#     - while it is on, it is something to talk about: a conversation premise
+#       with {holiday} in it (OllamaChat.Conversation.PremiseTemplates) is
+#       filled with its name and what is true of it, and is not picked when
+#       nothing is on;
+#     - a reply where the talk is of one is told whether it is on, and what
+#       is true of it;
+#     - a bot's line that talks of one that is not on is not said, unless it
+#       answers a person who brought it up (Holidays.Guard). One owed to
+#       someone gets another go, told it is not on.
+#
+#   .ollama status chat says which are on.
+#
+###############################################################################
+
+#    OllamaChat.Holidays.Enable
+#    OllamaChat.Holidays.Guard
+#        Default: 1, 1
+OllamaChat.Holidays.Enable = 1
+OllamaChat.Holidays.Guard = 1
+
+#    OllamaChat.Holidays.List
+#        "id;Name;words;what is true of it", separated by |:
+#          id      the holiday's id in the game's calendar (Holidays.dbc; the
+#                  holiday column of game_event)
+#          Name    as a line names it: "Brewfest", "the Darkmoon Faire"
+#          words   what it goes by in chat, lower case, separated by commas:
+#                  a line with one of them talks of it. Names of things in
+#                  [brackets] do not count: a linked [Great Brewfest Kodo] is
+#                  a mount. Keep them to what only the holiday is called.
+#          what is true of it   a line a bot can talk from. Only what is so:
+#                  where it is, who is there, what there is to do.
+#        Several that go by the same words (the Darkmoon Faire's three
+#        grounds) are told apart by which one is on. No double quotes.
+OllamaChat.Holidays.List = "62;the Fireworks Spectacular;fireworks spectacular;fireworks go up over the cities tonight|141;the Feast of Winter Veil;winter veil,winterveil,greatfather winter,greench;Greatfather Winter is in Ironforge and Orgrimmar with presents under the tree from the 25th, and the Abominable Greench is up in the Alterac Mountains|181;Noblegarden;noblegarden;there are brightly coloured eggs to hunt in the starting towns, with chocolate in them to spend on holiday things|201;Children's Week;childrens week,children's week;an orphan from the orphanage in Stormwind, Orgrimmar, Shattrath or Dalaran wants taking round the world|283;the Alterac Valley bonus weekend;av weekend,alterac valley weekend,alterac weekend;Alterac Valley gives extra honor until the weekend is over|284;the Warsong Gulch bonus weekend;wsg weekend,warsong weekend,warsong gulch weekend;Warsong Gulch gives extra honor until the weekend is over|285;the Arathi Basin bonus weekend;ab weekend,arathi weekend,arathi basin weekend;Arathi Basin gives extra honor until the weekend is over|301;the Stranglethorn Fishing Extravaganza;fishing extravaganza,fishing tournament,fishing contest,tastyfish;the first to bring forty Speckled Tastyfish to Riggle Bassbait in Booty Bay wins|321;the Harvest Festival;harvest festival;there are tributes to pay to the fallen, at Uther's Tomb for the Alliance and Grom's Monument for the Horde|324;Hallow's End;hallows end,hallow's end,headless horseman,trick or treat;the Headless Horseman is in the Scarlet Monastery's graveyard, and there are candy buckets at the inns|327;the Lunar Festival;lunar festival,coins of ancestry,coin of ancestry;there are elders to honour all over the world for Coins of Ancestry, and Omen to fight in Moonglade|341;the Midsummer Fire Festival;midsummer,fire festival,ahune;there are bonfires to honour across the world and the other side's to put out, and Ahune is in the Slave Pens|353;the Eye of the Storm bonus weekend;eots weekend,eye of the storm weekend;Eye of the Storm gives extra honor until the weekend is over|372;Brewfest;brewfest,direbrew;the camps are up outside Ironforge and Orgrimmar with ram racing for tokens, and Coren Direbrew is in Blackrock Depths|374;the Darkmoon Faire;darkmoon faire,the faire;it is set up outside Goldshire in Elwynn Forest this time, with games for prize tickets and card decks to hand in|375;the Darkmoon Faire;darkmoon faire,the faire;it is set up outside Thunder Bluff in Mulgore this time, with games for prize tickets and card decks to hand in|376;the Darkmoon Faire;darkmoon faire,the faire;it is set up outside Shattrath in Terokkar Forest this time, with games for prize tickets and card decks to hand in|398;Pirates' Day;pirates day,pirates' day,pirate's day;Dread Captain DeMeza and her crew are in Booty Bay|400;the Strand of the Ancients bonus weekend;sota weekend,strand weekend,strand of the ancients weekend;Strand of the Ancients gives extra honor until the weekend is over|404;Pilgrim's Bounty;pilgrims bounty,pilgrim's bounty,pilgrim bounty;there are feast tables outside the cities and cooking dailies, and it is a quick way to level Cooking|409;the Day of the Dead;day of the dead;people are remembering their dead in the cities' graveyards, with Catrina there to dance with|420;the Isle of Conquest bonus weekend;ioc weekend,isle of conquest weekend;Isle of Conquest gives extra honor until the weekend is over|423;Love is in the Air;love is in the air,love tokens,love token,crown chemical;the Crown Chemical Company's apothecaries are in Shadowfang Keep, and there are love tokens to earn|424;the Kalu'ak Fishing Derby;fishing derby,kaluak derby,kalu'ak derby;the first to bring a Blacktip Shark to Elder Clearwater in Dalaran wins"
+
+#    OllamaChat.Holidays.FactText
+#    OllamaChat.Holidays.OnText
+#    OllamaChat.Holidays.OffText
+#    OllamaChat.Holidays.OffNote
+#        What {holiday} becomes in a premise; what a reply is told of one
+#        that is on, and of one that is not; and what a line kept in is told
+#        for its second go. {name}, and {about}: what is true of it.
+OllamaChat.Holidays.FactText = "{name} (which is on right now: {about})"
+OllamaChat.Holidays.OnText = "{name} is on right now: {about}."
+OllamaChat.Holidays.OffText = "{name} is not on at the moment: nothing of it is about until it comes round again."
+OllamaChat.Holidays.OffNote = "{name} is not on at the moment: do not talk as if it is."
+
+###############################################################################
+#
 #   OLLAMA CHAT - VITALS: HOW THE FIGHTS HAVE REALLY GONE
 #
 #   A healer drank a mana potion in a dungeon and said "THANK GOD FOR THAT MANA
@@ -6432,6 +6651,26 @@ OllamaChat.Vitals.ScareNote = "Nobody in your group has been at {pct}% health or
 OllamaChat.Vitals.DryWords = "oom|out of mana|outta mana|no mana|zero mana|ran dry|running dry|bone dry|ran out of mana|running out of mana|running on empty|running on fumes|on fumes|mana was gone|mana is gone"
 OllamaChat.Vitals.DryPct = 20
 OllamaChat.Vitals.DryNote = "Nobody in your group has been at {pct}% mana or less in the last {minutes} minutes: do not say anyone is, or was, out of mana."
+
+#    OllamaChat.Vitals.OomCall
+#    OllamaChat.Vitals.OomCallPct
+#    OllamaChat.Vitals.OomCallSeconds
+#    OllamaChat.Vitals.OomCallChance
+#    OllamaChat.Vitals.OomLines
+#        The healer out of mana says so, as a healer does: a bot that heals,
+#        in a group with someone playing in it, down to OomCallPct mana (1-50)
+#        types one of OomLines (separated by |, a repeated one picked more
+#        often) in the group's chat, in its own chat style. Weighed once in
+#        OomCallSeconds (30-3600) for a group, and said OomCallChance percent
+#        of those times. Not in roleplay mode. OomCallPct is never taken as
+#        more than Vitals.DryPct: the line is true by the check above when it
+#        is said, and goes through it.
+#        Default: 1, 15, 180, 60, (below)
+OllamaChat.Vitals.OomCall = 1
+OllamaChat.Vitals.OomCallPct = 15
+OllamaChat.Vitals.OomCallSeconds = 180
+OllamaChat.Vitals.OomCallChance = 60
+OllamaChat.Vitals.OomLines = "oom|oom|oom|mana|need mana|oom, sec|drinking, sec|need a drink|mana break pls|oom, need to drink"
 
 ###############################################################################
 #

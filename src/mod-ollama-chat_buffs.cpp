@@ -929,6 +929,18 @@ bool Buff_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSou
     return true;
 }
 
+bool Buff_GiveBack(Player* bot, Player* to)
+{
+    if (!g_BuffEnable || !bot || !to || bot == to || !bot->IsInWorld() || !to->IsInWorld() || !bot->IsAlive() ||
+        !to->IsAlive() || bot->IsInCombat() || bot->GetTeamId() != to->GetTeamId() || PvpStops(bot, to))
+        return false;
+    const Choice c = Choose(bot, to, TextRules::BUFF_NONE, ComingTo(to->GetGUID().GetRawValue()), false);
+    if (c.casts.empty() || !RangeProblem(bot, to, c).empty())
+        return false;
+    Schedule(bot, to, c);
+    return true;
+}
+
 void Buff_Update()
 {
     const auto now = Clock::now();

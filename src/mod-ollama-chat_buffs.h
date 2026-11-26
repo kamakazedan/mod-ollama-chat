@@ -41,6 +41,12 @@ class Player;
 bool Buff_HandleHumanLine(Player* player, const std::string& msg, ChatChannelSourceLocal source,
                           Player* receiver, const std::string& scopeKey, uint64_t& seq);
 
+// One good turn deserves another (mod-ollama-chat_goodturn): `bot` puts its
+// usual buff on `to`, unasked, when it has one of its own they are without
+// and the mana for it. The same cast as one asked for. True when one is on
+// its way.
+bool Buff_GiveBack(Player* bot, Player* to);
+
 // World tick: cast the buffs that are due, and forget old asks and thanks.
 void Buff_Update();
 

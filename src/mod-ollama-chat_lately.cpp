@@ -44,6 +44,9 @@ namespace
         time_t      itemAt      = 0;
         uint32_t    level     = 0;
         time_t      levelAt   = 0;
+        uint32_t    deaths    = 0;     // times it died lately
+        uint32_t    deathZone = 0;     // ...where, the last time
+        time_t      deathAt   = 0;
         time_t      touched   = 0;
     };
 
@@ -177,6 +180,22 @@ void Lately_NoteLevel(Player* player)
     l.levelAt = now;
 }
 
+void Lately_NoteDeath(Player* player)
+{
+    if (!g_LatelyEnable || !player || !OllamaIsBotPlayer(player))
+        return;
+    const uint32_t zone = player->GetZoneId();
+    const time_t   now  = time(nullptr);
+    std::lock_guard<std::mutex> lock(g_mutex);
+    Lately& l = Entry(player->GetGUID().GetRawValue(), now);
+    // The deaths of one bad spell: a long while since the last, and the count starts again.
+    if (now - l.deathAt > time_t(g_LatelyMinutes) * 60)
+        l.deaths = 0;
+    ++l.deaths;
+    l.deathZone = zone;
+    l.deathAt   = now;
+}
+
 std::string Lately_Text(Player* bot)
 {
     if (!g_LatelyEnable || !bot)
@@ -218,6 +237,15 @@ std::string Lately_Text(Player* bot)
             facts.push_back("got " + t->Name1 + " " + Ago(now - l.itemAt));
     if (l.level && l.level == bot->GetLevel() && now - l.levelAt <= window)
         facts.push_back("reached level " + std::to_string(l.level) + " " + Ago(now - l.levelAt));
+    // Dying is something people grumble about.
+    if (l.deaths && now - l.deathAt <= window)
+    {
+        const std::string zone = ZoneName(l.deathZone);
+        facts.push_back((l.deaths == 1 ? std::string("died once")
+                         : l.deaths == 2 ? std::string("died twice")
+                                         : "died " + std::to_string(l.deaths) + " times, the last") +
+                        (zone.empty() ? std::string() : " in " + zone) + " " + Ago(now - l.deathAt));
+    }
 
     std::string out;
     for (const std::string& f : facts)

@@ -19,7 +19,8 @@ struct ItemTemplate;
 // bot's own last half hour or so is kept: the run of kills it was on (in
 // which zone, killing what, how many), the last quest it handed in and
 // where, the best thing it got (a green or better piece of gear, or anything
-// rare), and the last level it reached. Lately_Text puts it in a few words
+// rare), the last level it reached, and how often it died. Lately_Text puts
+// it in a few words
 // for a prompt; a mingle exchange gets it for each of them, and a bot asked
 // what it has been up to gets it (Lately.Words).
 //
@@ -32,6 +33,7 @@ void Lately_NoteKill(Player* killer, Creature* victim);
 void Lately_NoteQuest(Player* player, Quest const* quest);
 void Lately_NoteLevel(Player* player);
 void Lately_NoteItem(Player* player, ItemTemplate const* item);
+void Lately_NoteDeath(Player* player);
 
 // "out in Westfall for about 25 minutes killing Murloc Coastrunner (12) and
 // Murloc Tidehunter (5), until a few minutes ago; handed in the quest The

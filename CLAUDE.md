@@ -36,14 +36,17 @@ real player spoke there is dropped at delivery, and none starts within
 or it talks over people.
 
 A hook that fires on a map thread (a kill, loot, a death, a ding, an
-achievement, gear put on, a potion) notes what happened under a mutex and
-nothing more; the world tick acts on it (`Events_Update`, `Equip_Update`,
-`Potions_Update`, `Corpse_Update`, ...). Event chatter used to build its prompts in the hook
+achievement, gear put on, a potion, a spell cast on a bot) notes what
+happened under a mutex and nothing more; the world tick acts on it
+(`Events_Update`, `Equip_Update`, `Potions_Update`, `Corpse_Update`,
+`GoodTurn_Update`, ...). Event chatter used to build its prompts in the hook
 itself, on whichever map thread raised it -- with five map threads running at
 once, a guild event read bots anywhere in the world from there. The one hook
 that answers where it is, `ChatOnEmote` (a text emote is handled on the map
 thread), reads only the two players on that map and state behind a lock --
-the personalities included (`g_BotPersonalityMutex`).
+the personalities included (`g_BotPersonalityMutex`). It sends its line to be
+written from there, so anything `OllamaDispatch_Submit` does on the way only
+notes too (`Stay_Begin`).
 
 `EventProcessor::AddEvent` (`bot->m_Events`) is **not** a way around this. It
 mutates a container that `Player::Update` walks, so calling it off-thread is the
@@ -226,6 +229,26 @@ horse behind him: "thanks! i love it too".
   city hangout's), call it off in a fight, and never hold a bot for a trade
   that is not one of this module's. How the bot takes the ask is its chat
   style's (`Favor_Roll`), the same weights as a buff.
+- A bot picked to answer someone face to face stays to answer
+  (`mod-ollama-chat_stay`). Its line takes seconds to write, the bot went on
+  with what it was doing meanwhile, and a /say line whose target is out of
+  earshot by then is dropped at delivery. The dispatcher notes it as the line
+  is sent to be written (`Stay_Begin`: a /say answer with `chainDepth` 0 and
+  what they said in `originMessage`; an emote answered in words calls it
+  itself), and the world tick stops the bot, turns it to them and holds its
+  AI with `YieldThread` every tick until the line is out (`Stay_Spoke`, at
+  delivery) and `Stay.LingerSeconds` more. Only a random bot on its own, on
+  the ground: never one in a group or with a master, and a fight lets it go
+  at once. A new kind of /say answer owed to someone that carries no
+  `originMessage` calls `Stay_Begin` itself.
+- A good turn is thanked (`mod-ollama-chat_goodturn`): a real player's buff
+  that lasts, heal of a hurt bot or resurrection, cast on a bot by name. The
+  cast hook only notes who, on whom and what; the world tick has the bot
+  /thank them, now and then with a typed word (`Personality_StyleCanned`; in
+  a city's streets only with `CitySay_Claim`) and with a buff back
+  (`Buff_GiveBack`: its own cast, the same as one asked for). Once a pair in
+  `GoodTurn.PairMinutes`, and seldom in its own group (`InGroupChance`),
+  where buffs and heals are routine.
 - Packet hooks (`ServerScript::CanPacketSend`) run on any thread: read only a
   snapshot published from the world thread (mod-playerbots-plus's
   `PlayerbotsPlusMute.cpp` does).
@@ -403,11 +426,11 @@ what just happened, where they are — over facts about the bot itself. The
 weights in `OllamaChat.Topic.*` encode this deliberately.
 
 When a prompt leaves a bot to say what it has been doing, give it the facts
-(`Lately_Text`: its run of kills, last quest, best thing it got, last ding),
-or the model makes something vague up ("just finished some grinds"). Its
-hooks run on map threads and only note names and numbers under a mutex. A
-mingle premise that needs something real carries a tag (`[mount]`, `[pet]`,
-`[loot]`, `[quest]`) and is only picked when it is there.
+(`Lately_Text`: its run of kills, last quest, best thing it got, last ding,
+how often it died), or the model makes something vague up ("just finished
+some grinds"). Its hooks run on map threads and only note names and numbers
+under a mutex. A mingle premise that needs something real carries a tag
+(`[mount]`, `[pet]`, `[loot]`, `[quest]`) and is only picked when it is there.
 
 Name mounts, pets and companions as what they are, everywhere a prompt
 mentions one: build the words with `Pets_Seen` and `TextRules::AnimalPhrases`
@@ -509,7 +532,33 @@ someone did (`Vitals_MayGoOut`, at delivery). A healer drank a mana potion,
 and the tank, never in any trouble, answered "nearly dead there for a sec",
 and the healer "CLOSE CALL! YOU WERE LOOKING PRETTY SHAKY!". A prompt for a
 line about a fight says what happened in it, and offers "how close that was"
-only where it was.
+only where it was. A healer out of mana says so itself (`Vitals.OomCall*`): a
+typed line, weighed once in `OomCallSeconds` for a group. `OomCallPct` is
+never taken as more than `Vitals.DryPct`, so the line is true by that check
+and goes through it.
+
+So is what is on in the world (`mod-ollama-chat_holidays`). Which holidays
+the realm is running is the game's own calendar (`IsHolidayActive`, a look a
+minute); `Holidays.List` has for each its id, the words only it goes by, and
+a line of what is true of it -- checked against the game, as a race's phrases
+are. A reply where the talk is of one is told whether it is on
+(`Holidays_PromptFor`); a premise about one carries `{holiday}`, filled only
+with one that is on and not picked otherwise; and a bot's line that talks of
+one that is not on is not said, unless it answers a person who brought it up
+(`Holidays_MayGoOut`, at delivery). The model has read about every one of
+them and knows nothing of the date.
+
+So is who a reply is to. `GenerateBotPrompt` says whether they are in the
+bot's own group (`{bot_group_status}`, `{player_group_status}`:
+`Chat.Group*Text`) and where they are (`{player_where}`: yards when near on
+the same map, else their zone). `GetDistance` across two maps is a sum of
+coordinates that have nothing to do with each other: never give a distance
+without checking the map first. A transcript says the time that went by
+between its lines and since the last (`Context.GapNote`, `QuietNote`: a line
+from four minutes ago is not one just typed) and who of the others in it is
+a he and who a she (`Context.GenderNote`), and someone seen nearby is
+described as male or female (`Presence_Describe`): a name alone does not
+say, and the model guesses.
 
 Nor is anything made up of the bot itself. A premise, template or topic never
 has a bot tell of a past it never had -- "how many times you have tried for

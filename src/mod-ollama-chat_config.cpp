@@ -13,6 +13,7 @@
 #include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_market.h"
 #include "mod-ollama-chat_groupquests.h"
+#include "mod-ollama-chat_holidays.h"
 #include "mod-ollama-chat_citylife.h"
 #include "mod-ollama-chat_marks.h"
 #include "mod-ollama-chat_outlook.h"
@@ -468,6 +469,51 @@ uint32_t    g_PartyReadyCheckWaitMinutes   = 5;
 std::string g_PartyReadyCheckStartText;
 std::string g_PartyReadyCheckResumeText;
 std::string g_PartyReadyCheckWaitingText;
+
+// --- v48 ---
+std::string g_ChatGroupNoneText;
+std::string g_ChatGroupSameText;
+std::string g_ChatGroupOtherText;
+std::string g_ChatTheirGroupNoneText;
+std::string g_ChatTheirGroupSameText;
+std::string g_ChatTheirGroupOtherText;
+std::string g_ChatWhereNearText;
+std::string g_ChatWhereZoneText;
+std::string g_ChatWhereFarText;
+std::string g_ContextGapNote;
+std::string g_ContextQuietNote;
+std::string g_ContextGenderNote;
+std::string g_HolidaysFactText;
+std::string g_HolidaysOnText;
+std::string g_HolidaysOffText;
+std::string g_HolidaysOffNote;
+std::vector<std::string> g_GoodTurnBuffLines;
+std::vector<std::string> g_GoodTurnHealLines;
+std::vector<std::string> g_GoodTurnRezLines;
+std::vector<std::string> g_VitalsOomLines;
+bool        g_StayEnable = true;
+bool        g_StayFace = true;
+bool        g_GoodTurnEnable = true;
+bool        g_VitalsOomCall = true;
+bool        g_HolidaysEnable = true;
+bool        g_HolidaysGuard = true;
+bool        g_ContextGenderNotes = true;
+uint32_t    g_ChatWhereNearYards = 100;
+uint32_t    g_ContextGapSeconds = 90;
+uint32_t    g_StayMaxSeconds = 15;
+uint32_t    g_StayLingerSeconds = 8;
+uint32_t    g_GoodTurnChance = 70;
+uint32_t    g_GoodTurnInGroupChance = 15;
+uint32_t    g_GoodTurnSayChance = 35;
+uint32_t    g_GoodTurnBuffBackChance = 50;
+uint32_t    g_GoodTurnPairMinutes = 10;
+uint32_t    g_GoodTurnBuffMinMinutes = 5;
+uint32_t    g_GoodTurnHealPct = 50;
+uint32_t    g_GoodTurnDelayMinMs = 1200;
+uint32_t    g_GoodTurnDelayMaxMs = 3500;
+uint32_t    g_VitalsOomCallPct = 15;
+uint32_t    g_VitalsOomCallSeconds = 180;
+uint32_t    g_VitalsOomCallChance = 60;
 
 bool        g_VitalsEnable   = true;
 uint32_t    g_VitalsMinutes  = 5;
@@ -4438,6 +4484,136 @@ static void LoadNaturalChatV46Settings()
              g_VitalsMinutes, g_VitalsEnable ? "on" : "off", g_VitalsScarePct, g_VitalsDryPct);
 }
 
+static void LoadNaturalChatV48Settings()
+{
+    auto text = [](const char* key, const char* def)
+    {
+        return sConfigMgr->GetOption<std::string>(key, def);
+    };
+    auto lines = [](const char* key, const char* def)
+    {
+        std::vector<std::string> out;
+        for (const std::string& item : SplitString(sConfigMgr->GetOption<std::string>(key, def), '|'))
+            if (!item.empty())
+                out.push_back(item);
+        return out;
+    };
+    auto number = [](const char* key, uint32_t def, uint32_t lo, uint32_t hi)
+    {
+        return std::clamp<uint32_t>(sConfigMgr->GetOption<uint32_t>(key, def), lo, hi);
+    };
+
+    g_StayEnable = sConfigMgr->GetOption<bool>("OllamaChat.Stay.Enable", true);
+    g_StayFace = sConfigMgr->GetOption<bool>("OllamaChat.Stay.Face", true);
+    g_GoodTurnEnable = sConfigMgr->GetOption<bool>("OllamaChat.GoodTurn.Enable", true);
+    g_VitalsOomCall = sConfigMgr->GetOption<bool>("OllamaChat.Vitals.OomCall", true);
+    g_HolidaysEnable = sConfigMgr->GetOption<bool>("OllamaChat.Holidays.Enable", true);
+    g_HolidaysGuard = sConfigMgr->GetOption<bool>("OllamaChat.Holidays.Guard", true);
+    g_ContextGenderNotes = sConfigMgr->GetOption<bool>("OllamaChat.Context.GenderNotes", true);
+    g_ChatWhereNearYards = number("OllamaChat.Chat.WhereNearYards", 100, 10, 500);
+    g_ContextGapSeconds = number("OllamaChat.Context.GapSeconds", 90, 0, 3600);
+    g_StayMaxSeconds = number("OllamaChat.Stay.MaxSeconds", 15, 3, 60);
+    g_StayLingerSeconds = number("OllamaChat.Stay.LingerSeconds", 8, 0, 30);
+    g_GoodTurnChance = number("OllamaChat.GoodTurn.Chance", 70, 0, 100);
+    g_GoodTurnInGroupChance = number("OllamaChat.GoodTurn.InGroupChance", 15, 0, 100);
+    g_GoodTurnSayChance = number("OllamaChat.GoodTurn.SayChance", 35, 0, 100);
+    g_GoodTurnBuffBackChance = number("OllamaChat.GoodTurn.BuffBackChance", 50, 0, 100);
+    g_GoodTurnPairMinutes = number("OllamaChat.GoodTurn.PairMinutes", 10, 1, 1440);
+    g_GoodTurnBuffMinMinutes = number("OllamaChat.GoodTurn.BuffMinMinutes", 5, 1, 120);
+    g_GoodTurnHealPct = number("OllamaChat.GoodTurn.HealPct", 50, 1, 100);
+    g_GoodTurnDelayMinMs = number("OllamaChat.GoodTurn.DelayMinMs", 1200, 0, 60000);
+    g_GoodTurnDelayMaxMs = number("OllamaChat.GoodTurn.DelayMaxMs", 3500, 0, 60000);
+    // Never above what the check at delivery calls out of mana, or its own line would be kept in.
+    g_VitalsOomCallPct = std::min(number("OllamaChat.Vitals.OomCallPct", 15, 1, 50), g_VitalsDryPct);
+    g_VitalsOomCallSeconds = number("OllamaChat.Vitals.OomCallSeconds", 180, 30, 3600);
+    g_VitalsOomCallChance = number("OllamaChat.Vitals.OomCallChance", 60, 0, 100);
+    g_ChatGroupNoneText = text("OllamaChat.Chat.GroupNoneText",
+        "not in a group");
+    g_ChatGroupSameText = text("OllamaChat.Chat.GroupSameText",
+        "in a group with them");
+    g_ChatGroupOtherText = text("OllamaChat.Chat.GroupOtherText",
+        "in a group they are not in");
+    g_ChatTheirGroupNoneText = text("OllamaChat.Chat.TheirGroupNoneText",
+        "not in a group");
+    g_ChatTheirGroupSameText = text("OllamaChat.Chat.TheirGroupSameText",
+        "in your group");
+    g_ChatTheirGroupOtherText = text("OllamaChat.Chat.TheirGroupOtherText",
+        "in a group you are not in");
+    g_ChatWhereNearText = text("OllamaChat.Chat.WhereNearText",
+        "about {yards} yards from you");
+    g_ChatWhereZoneText = text("OllamaChat.Chat.WhereZoneText",
+        "elsewhere in {zone}, not in sight");
+    g_ChatWhereFarText = text("OllamaChat.Chat.WhereFarText",
+        "far from you, in {zone}");
+    g_ContextGapNote = text("OllamaChat.Context.GapNote",
+        "* ({gap} later)");
+    g_ContextQuietNote = text("OllamaChat.Context.QuietNote",
+        "* (that was {gap} ago; nothing has been said since)");
+    g_ContextGenderNote = text("OllamaChat.Context.GenderNote",
+        "* (for he or she: {list})");
+    g_HolidaysFactText = text("OllamaChat.Holidays.FactText",
+        "{name} (which is on right now: {about})");
+    g_HolidaysOnText = text("OllamaChat.Holidays.OnText",
+        "{name} is on right now: {about}.");
+    g_HolidaysOffText = text("OllamaChat.Holidays.OffText",
+        "{name} is not on at the moment: nothing of it is about until it comes round again.");
+    g_HolidaysOffNote = text("OllamaChat.Holidays.OffNote",
+        "{name} is not on at the moment: do not talk as if it is.");
+    g_GoodTurnBuffLines = lines("OllamaChat.GoodTurn.BuffLines",
+        "ty|ty|ty|thanks|thx|ty!|cheers|ty {name}|thanks {name}|thx for the buff|ty for the buff|cheers for the "
+        "buff");
+    g_GoodTurnHealLines = lines("OllamaChat.GoodTurn.HealLines",
+        "ty|ty|thanks|thx|ty for the heal|thanks for the heal|cheers for the heal|ty {name}|thx, needed that");
+    g_GoodTurnRezLines = lines("OllamaChat.GoodTurn.RezLines",
+        "ty|ty|thanks|thx for the rez|ty for the rez|thanks for the res|cheers for the res|ty {name}");
+    g_VitalsOomLines = lines("OllamaChat.Vitals.OomLines",
+        "oom|oom|oom|mana|need mana|oom, sec|drinking, sec|need a drink|mana break pls|oom, need to drink");
+    Holidays_Load(text("OllamaChat.Holidays.List",
+        "62;the Fireworks Spectacular;fireworks spectacular;fireworks go up over the cities tonight|141;the Feast"
+        " of Winter Veil;winter veil,winterveil,greatfather winter,greench;Greatfather Winter is in Ironforge and"
+        " Orgrimmar with presents under the tree from the 25th, and the Abominable Greench is up in the Alterac "
+        "Mountains|181;Noblegarden;noblegarden;there are brightly coloured eggs to hunt in the starting towns, "
+        "with chocolate in them to spend on holiday things|201;Children's Week;childrens week,children's week;an "
+        "orphan from the orphanage in Stormwind, Orgrimmar, Shattrath or Dalaran wants taking round the "
+        "world|283;the Alterac Valley bonus weekend;av weekend,alterac valley weekend,alterac weekend;Alterac "
+        "Valley gives extra honor until the weekend is over|284;the Warsong Gulch bonus weekend;wsg "
+        "weekend,warsong weekend,warsong gulch weekend;Warsong Gulch gives extra honor until the weekend is "
+        "over|285;the Arathi Basin bonus weekend;ab weekend,arathi weekend,arathi basin weekend;Arathi Basin "
+        "gives extra honor until the weekend is over|301;the Stranglethorn Fishing Extravaganza;fishing "
+        "extravaganza,fishing tournament,fishing contest,tastyfish;the first to bring forty Speckled Tastyfish to"
+        " Riggle Bassbait in Booty Bay wins|321;the Harvest Festival;harvest festival;there are tributes to pay "
+        "to the fallen, at Uther's Tomb for the Alliance and Grom's Monument for the Horde|324;Hallow's "
+        "End;hallows end,hallow's end,headless horseman,trick or treat;the Headless Horseman is in the Scarlet "
+        "Monastery's graveyard, and there are candy buckets at the inns|327;the Lunar Festival;lunar "
+        "festival,coins of ancestry,coin of ancestry;there are elders to honour all over the world for Coins of "
+        "Ancestry, and Omen to fight in Moonglade|341;the Midsummer Fire Festival;midsummer,fire "
+        "festival,ahune;there are bonfires to honour across the world and the other side's to put out, and Ahune is "
+        "in the Slave Pens|353;the Eye of the Storm bonus weekend;eots weekend,eye of the storm weekend;Eye of "
+        "the Storm gives extra honor until the weekend is over|372;Brewfest;brewfest,direbrew;the camps are up "
+        "outside Ironforge and Orgrimmar with ram racing for tokens, and Coren Direbrew is in Blackrock "
+        "Depths|374;the Darkmoon Faire;darkmoon faire,the faire;it is set up outside Goldshire in Elwynn Forest "
+        "this time, with games for prize tickets and card decks to hand in|375;the Darkmoon Faire;darkmoon "
+        "faire,the faire;it is set up outside Thunder Bluff in Mulgore this time, with games for prize tickets "
+        "and card decks to hand in|376;the Darkmoon Faire;darkmoon faire,the faire;it is set up outside Shattrath"
+        " in Terokkar Forest this time, with games for prize tickets and card decks to hand in|398;Pirates' "
+        "Day;pirates day,pirates' day,pirate's day;Dread Captain DeMeza and her crew are in Booty Bay|400;the "
+        "Strand of the Ancients bonus weekend;sota weekend,strand weekend,strand of the ancients weekend;Strand "
+        "of the Ancients gives extra honor until the weekend is over|404;Pilgrim's Bounty;pilgrims "
+        "bounty,pilgrim's bounty,pilgrim bounty;there are feast tables outside the cities and cooking dailies, "
+        "and it is a quick way to level Cooking|409;the Day of the Dead;day of the dead;people are "
+        "remembering their dead in the cities' graveyards, with Catrina there to dance with|420;the Isle of "
+        "Conquest bonus weekend;ioc weekend,isle of conquest weekend;Isle of Conquest gives extra honor until the"
+        " weekend is over|423;Love is in the Air;love is in the air,love tokens,love token,crown chemical;the "
+        "Crown Chemical Company's apothecaries are in Shadowfang Keep, and there are love tokens to earn|424;the "
+        "Kalu'ak Fishing Derby;fishing derby,kaluak derby,kalu'ak derby;the first to bring a Blacktip Shark to "
+        "Elder Clearwater in Dalaran wins"));
+
+    LOG_INFO("module.ollamachat", "[Ollama Chat] Chat v48: a bot spoken to in /say stays to answer {} (up to {} s); "
+             "a buff, heal or resurrection from a player thanked {}; the healer's oom {}; holidays known {}.",
+             g_StayEnable ? "on" : "off", g_StayMaxSeconds, g_GoodTurnEnable ? "on" : "off",
+             g_VitalsOomCall ? "on" : "off", g_HolidaysEnable ? "on" : "off");
+}
+
 static void LoadNaturalChatV47Settings()
 {
     // --- Trade chat: an enchanter buys gear nobody would wear, for the dust ----------------
@@ -5579,6 +5755,7 @@ void LoadOllamaChatConfig()
     LoadNaturalChatV45Settings();
     LoadNaturalChatV46Settings();
     LoadNaturalChatV47Settings();
+    LoadNaturalChatV48Settings();
 
     // --- Topic engine ----------------------------------------------------
     g_TopicWeightPeople               = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.WeightPeople", 30);
@@ -5907,6 +6084,10 @@ void LoadOllamaChatConfig()
     g_GuildEventTypeGuildLeave = sConfigMgr->GetOption<std::string>("OllamaChat.GuildEventTypeGuildLeave", "");
     g_GuildEventTypeGuildPromotion = sConfigMgr->GetOption<std::string>("OllamaChat.GuildEventTypeGuildPromotion", "");
     g_GuildEventTypeGuildDemotion = sConfigMgr->GetOption<std::string>("OllamaChat.GuildEventTypeGuildDemotion", "");
+    // Its chance was read and its name never was: with the name left empty, a
+    // guildmate's achievement was never told to the guild at all.
+    g_GuildEventTypeGuildAchievement =
+        sConfigMgr->GetOption<std::string>("OllamaChat.GuildEventTypeGuildAchievement", "");
 
     // Load chance variables for normal events
     g_EventTypeDefeated_Chance = sConfigMgr->GetOption<int>("OllamaChat.EventTypeDefeated_Chance", 0);

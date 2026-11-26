@@ -38,6 +38,7 @@ namespace
     struct Seen
     {
         bool     won    = false;   // SMSG_LOOT_ROLL_WON: the winner
+        uint64_t roll   = 0;       // ...and the roll's own guid (the numbers come without it)
         uint32_t slot   = 0;       // the loot slot rolled for
         uint32_t item   = 0;
         uint64_t roller = 0;       // who rolled, or who won
@@ -62,7 +63,11 @@ namespace
         Clock::time_point   at;
     };
     std::map<std::pair<uint32_t, uint32_t>, Open> g_open;              // (item, slot) -> rolls
-    std::map<std::tuple<uint32_t, uint32_t, uint64_t>, Clock::time_point> g_decided;   // (item, slot, winner)
+    // By the roll's own guid, which the game makes afresh for each thing
+    // rolled for and sends with the winner. By item, slot and winner, the
+    // same player winning two of the same thing a few seconds apart was told
+    // once.
+    std::map<uint64_t, Clock::time_point> g_decided;   // roll -> when its winner was told
     std::unordered_map<uint64_t, Clock::time_point> g_lastReaction;   // group -> when
 
     RollsStats g_stats;
@@ -172,11 +177,9 @@ namespace
     void Decide(const Seen& won)
     {
         const auto now = Clock::now();
-        const auto key = std::make_tuple(won.item, won.slot, won.roller);
-        auto done = g_decided.find(key);
-        if (done != g_decided.end() && now - done->second < std::chrono::seconds(10))
+        if (g_decided.contains(won.roll))
             return;   // another member's copy of the same news
-        g_decided[key] = now;
+        g_decided[won.roll] = now;
 
         Open open;
         auto it = g_open.find({ won.item, won.slot });
@@ -266,6 +269,7 @@ bool OllamaChatRollsScript::CanPacketSend(WorldSession* session, WorldPacket con
         if (packet.size() < 34)
             return true;
         s.won    = true;
+        s.roll   = packet.read<uint64>(0);
         s.slot   = packet.read<uint32>(8);
         s.item   = packet.read<uint32>(12);
         s.roller = packet.read<uint64>(24);

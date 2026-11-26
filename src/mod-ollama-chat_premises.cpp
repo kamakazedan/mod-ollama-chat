@@ -1,6 +1,7 @@
 #include "mod-ollama-chat_premises.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_facts.h"
+#include "mod-ollama-chat_holidays.h"
 #include "mod-ollama-chat_textrules.h"
 
 #include "Player.h"
@@ -138,6 +139,11 @@ std::string Premises_Pick(Player* bot)
                         return Facts_ItemSet(level, taken);
                     if (slot == "rare")
                         return Facts_Rare(level, taken);
+                    // A holiday that is on now, with what is true of it; none
+                    // when nothing is, and the premise is not picked
+                    // (mod-ollama-chat_holidays).
+                    if (slot == "holiday")
+                        return Holidays_Fact();
                     if (slot == "bosses" || slot == "class_races")
                     {
                         // About the dungeon, raid or class picked just before it.
