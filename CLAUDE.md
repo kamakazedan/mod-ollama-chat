@@ -231,8 +231,9 @@ horse behind him: "thanks! i love it too".
   style's (`Favor_Roll`), the same weights as a buff.
 - A bot picked to answer someone face to face stays to answer
   (`mod-ollama-chat_stay`). Its line takes seconds to write, the bot went on
-  with what it was doing meanwhile, and a /say line whose target is out of
-  earshot by then is dropped at delivery. The dispatcher notes it as the line
+  with what it was doing meanwhile, and the line went out wherever it had got
+  to: out of the asker's earshot, or, with nobody near, not at all
+  (`AnyoneInRange`, at delivery). The dispatcher notes it as the line
   is sent to be written (`Stay_Begin`: a /say answer with `chainDepth` 0 and
   what they said in `originMessage`; an emote answered in words calls it
   itself), and the world tick stops the bot, turns it to them and holds its
