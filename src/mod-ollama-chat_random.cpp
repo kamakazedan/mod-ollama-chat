@@ -45,6 +45,7 @@
 #include "mod-ollama-chat_goodturn.h"
 #include "mod-ollama-chat_holidays.h"
 #include "mod-ollama-chat_weather.h"
+#include "mod-ollama-chat_professions.h"
 #include "mod-ollama-chat_arrive.h"
 #include "mod-ollama-chat_journal.h"
 #include "mod-ollama-chat_wipe.h"
@@ -349,6 +350,10 @@ namespace
         // (mod-ollama-chat_weather).
         if (const std::string sky = Weather_AmbientText(bot); !sky.empty())
             prompt += " " + sky;
+        // ...and a bot all about gold, now and then what it really has: a
+        // boast of its bank is then a true one (mod-ollama-chat_professions).
+        if (const std::string gold = Professions_GoldFor(bot); !gold.empty())
+            prompt += " " + gold;
 
         // Mid-run, the run is what is on its mind: what it is doing, and to
         // keep to that (no "did you hear about the druid that got kicked?"),

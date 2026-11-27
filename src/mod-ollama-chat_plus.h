@@ -37,6 +37,7 @@
 #endif
 
 #include <cstdint>
+#include <string>
 
 class Item;
 class Player;
@@ -123,6 +124,34 @@ inline void OllamaBoughtToDisenchant(Player* bot, Item* item)
 #else
     (void)bot;
     (void)item;
+#endif
+}
+
+// How `bot`'s two professions came of the leaning its personality is
+// (mod-playerbots-plus, Professions.Leanings): "own" a pair the leaning
+// names, "armour" the one that makes the armour it wears, "race" its race's
+// knack, "rare" what the fewest of its class take, "class" one of its
+// class's pairs. Empty without it, with no leaning, or for a pair the
+// leaning would not have. World thread.
+inline std::string OllamaLeaningMatch(Player* bot)
+{
+#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 13
+    return PlayerbotsPlus::LeaningMatch(bot);
+#else
+    (void)bot;
+    return {};
+#endif
+}
+
+// The profession a race is better at than the rest, by its racial
+// ("Engineering" for a gnome). Empty for the rest, and without it.
+inline std::string OllamaRaceKnack(uint8_t race)
+{
+#if OLLAMA_CHAT_PLAYERBOTS_PLUS >= 13
+    return PlayerbotsPlus::RaceKnack(race);
+#else
+    (void)race;
+    return {};
 #endif
 }
 

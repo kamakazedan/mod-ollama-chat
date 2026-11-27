@@ -7238,6 +7238,106 @@ OllamaChat.Battleground.NearEndLoseText = "The match is nearly over, and your te
 
 ###############################################################################
 #
+#   OLLAMA CHAT - PROFESSIONS: A BOT'S TRADES, AND WHY IT HAS THEM
+#
+#   With mod-playerbots-plus, random bots earn their professions, and the
+#   kind of person a bot is leans it to some (PlayerbotsPlus.Skills.Leaning.*
+#   in its conf): a gold maker to herbalism and mining, whose herbs and ore
+#   sell as they are; a pet lover to engineering's mechanical pets, never to
+#   skinning; a roleplayer to its race's knack. Which kind each bot is, is
+#   this module's to say, by its personality.
+#
+#   Asked "what profs u got?", a bot made its answer up: nothing told it. A
+#   reply where the talk is of professions is now told what its are, and,
+#   where its leaning chose them, why; so is a /say exchange between bots
+#   about their professions (Mingle's [prof]). And a bot whose personality
+#   is all about gold is now and then told its real gold for a line nobody
+#   asked for: "a little smug about your bank", it boasted of a bank it did
+#   not have. .ollama status chat counts it.
+#
+###############################################################################
+
+#    OllamaChat.Professions.Enable
+#        Off: no leanings told to mod-playerbots-plus (its bots go by their
+#        class's pairs alone), nothing told of professions, no gold.
+#        Default: 1
+OllamaChat.Professions.Enable = 1
+
+#    OllamaChat.Professions.Leanings
+#        Each personality's leaning, as mod-playerbots-plus names them
+#        (PlayerbotsPlus.Skills.Leaning.<Name>), as |-separated
+#        personality:leaning pairs. A personality not here leans nowhere:
+#        its class's pairs. Personalities have to be on
+#        (EnableRPPersonalities): with them off, nobody leans.
+#        Default: the gold maker and the rude one Profit; the min-maxer,
+#        raider and expert Power; the PvPer PvP; the friendly one, the
+#        helpful veteran and the social one Maker; the social butterfly
+#        Style; the prankster, joker, troll and hype Tinker; the pet lover
+#        Pets; the loner and the chill one Outdoors; the lore buff Scholar;
+#        the nostalgic one OldWays; the roleplayer Heritage; the contrarian
+#        Contrary; the newbie Newbie
+OllamaChat.Professions.Leanings = "NAT_GOLDMAKER:Profit|NAT_RUDE:Profit|NAT_MINMAXER:Power|NAT_RAIDER:Power|NAT_EXPERT:Power|NAT_PVPER:PvP|NAT_FRIENDLY:Maker|NAT_HELPFUL_VET:Maker|NAT_SOCIAL:Maker|NAT_BUTTERFLY:Style|NAT_PRANKSTER:Tinker|NAT_JOKER:Tinker|NAT_TROLL:Tinker|NAT_HYPE:Tinker|NAT_PETLOVER:Pets|NAT_LONER:Outdoors|NAT_CHILL:Outdoors|NAT_LOREBUFF:Scholar|NAT_NOSTALGIC:OldWays|NAT_ROLEPLAYER:Heritage|NAT_CONTRARIAN:Contrary|NAT_NEWBIE:Newbie"
+
+#    OllamaChat.Professions.Reason.<Leaning>.<How>
+#        Why a bot has its two professions, when its leaning chose them.
+#        <How> is how its pair came of the leaning (mod-playerbots-plus):
+#        Own a pair the leaning names, Armour the pair that makes the armour
+#        it wears, Race its race's knack ({knack}: "engineering"), Rare what
+#        the fewest of its class take, Class one of its class's pairs. Each
+#        follows the pair's names ("herbalism and mining for the gold: ...")
+#        and reads the same whoever it is said of. Said as it is now, never
+#        a story of how it came to them, which would be made up. A pair with
+#        no reason here is given none. With none of these lines these are
+#        the reasons; with any, only those there are.
+#        Default: (below)
+OllamaChat.Professions.Reason.Profit.Own = "for the gold: herbs and ore sell well as they are, with nothing to make first"
+OllamaChat.Professions.Reason.Power.Own = "for the gear: they cut gems that go in anything"
+OllamaChat.Professions.Reason.Power.Armour = "for the gear: they make armour of the very kind worn"
+OllamaChat.Professions.Reason.PvP.Own = "for engineering's gadgets, which win fights against other players"
+OllamaChat.Professions.Reason.PvP.Armour = "for the gear: they make armour of the very kind worn"
+OllamaChat.Professions.Reason.Maker.Own = "for the love of making things"
+OllamaChat.Professions.Reason.Style.Own = "for looking good: they make things to wear"
+OllamaChat.Professions.Reason.Tinker.Own = "for the gadgets, and the things that go bang"
+OllamaChat.Professions.Reason.Pets.Own = "for engineering's mechanical pets; skinning a beast is out of the question"
+OllamaChat.Professions.Reason.Outdoors.Own = "for being out in the world gathering, not stood at a forge or a bench"
+OllamaChat.Professions.Reason.Scholar.Own = "for the learning in them: the scholar's trades"
+OllamaChat.Professions.Reason.OldWays.Class = "for being the old trades, nothing that came in later"
+OllamaChat.Professions.Reason.Heritage.Race = "for the knack for {knack} that comes with the race"
+OllamaChat.Professions.Reason.Contrary.Rare = "for being what hardly anyone of the class takes"
+OllamaChat.Professions.Reason.Newbie.Class = "because the guides say they suit the class"
+
+#    OllamaChat.Professions.Words
+#    OllamaChat.Professions.ReplyText
+#    OllamaChat.Professions.NoneText
+#    OllamaChat.Professions.WhyText
+#        A reply where the talk -- the line answered or the few before it --
+#        has one of Words (|-separated, whole words) is told its professions
+#        with how far along each is (ReplyText, {professions}: "mining 150,
+#        herbalism 120, cooking 75"; NoneText with none), and why when its
+#        leaning chose its pair (WhyText: {pair} is "herbalism and mining",
+#        {reason} the reason). It is kept with the reply as what it went on.
+#        Default: (below)
+OllamaChat.Professions.Words = "profession|professions|prof|profs|trade skill|trade skills|crafting|crafter|gathering|herbalism|herbalist|herbing|mining|miner|skinning|skinner|tailoring|tailor|enchanting|enchanter|alchemy|alchemist|blacksmithing|blacksmith|engineering|engineer|jewelcrafting|jewelcrafter|jc|leatherworking|leatherworker|inscription|scribe"
+OllamaChat.Professions.ReplyText = "Your professions: {professions}."
+OllamaChat.Professions.NoneText = "You have no professions."
+OllamaChat.Professions.WhyText = "You have {pair} {reason}."
+
+#    OllamaChat.Professions.GoldLeanings
+#    OllamaChat.Professions.GoldChance
+#    OllamaChat.Professions.GoldText
+#        A bot whose leaning is one of GoldLeanings (|-separated) is told its
+#        real gold on GoldChance in a hundred of the lines it starts itself
+#        (GoldText, {gold}: "1234g 56s", or "no money"): a boast of its bank
+#        is then a true one. Not every line: a sum in every prompt is what
+#        every line would be about. A reply is told its gold already, by
+#        ChatExtraInfoTemplate's {bot_gold}. GoldChance 0 turns it off.
+#        Default: Profit, 20, (below)
+OllamaChat.Professions.GoldLeanings = "Profit"
+OllamaChat.Professions.GoldChance = 20
+OllamaChat.Professions.GoldText = "You have {gold} to your name right now: any talk of your gold or your bank goes by that."
+
+###############################################################################
+#
 #   OLLAMA CHAT - VITALS: HOW THE FIGHTS HAVE REALLY GONE
 #
 #   A healer drank a mana potion in a dungeon and said "THANK GOD FOR THAT MANA
@@ -7534,8 +7634,10 @@ OllamaChat.Mingle.PromptTemplate = "{count} World of Warcraft players are standi
 #        [gear]: one of them wears something worth a look -- {gear} in it is
 #        whose and what, "Thimack's [Arcanite Reaper] (purple two-handed
 #        axe)", so a compliment is about the real thing. [prof]: one of them
-#        has a profession -- {professions} is each one's, with how far along
-#        ("Thimack: mining 150, skinning 120; Grigohm: none"). [people]:
+#        has a profession -- {professions} is each one's, with how far along,
+#        and why where the kind of person it is chose them
+#        (Professions.Reason): "Thimack: mining 150, herbalism 120 (herbalism
+#        and mining for the gold: ...); Grigohm: none". [people]:
 #        others are about to watch -- {passersby} is up to three of them
 #        within 30 yards, as anyone could see them ("Lianon, an orc warrior,
 #        riding their mount, a Swift Brown Wolf"), so people-watching is of

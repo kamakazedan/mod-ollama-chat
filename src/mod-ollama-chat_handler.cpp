@@ -69,6 +69,7 @@
 #include "mod-ollama-chat_gifts.h"
 #include "mod-ollama-chat_holidays.h"
 #include "mod-ollama-chat_weather.h"
+#include "mod-ollama-chat_professions.h"
 #include "mod-ollama-chat_journal.h"
 #include "mod-ollama-chat_vitals.h"
 #include "mod-ollama-chat_wipe.h"
@@ -3834,7 +3835,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     // how the last few minutes have really gone for each of them
     // (mod-ollama-chat_vitals): "nearly dead there for a sec" was said by a
     // tank who had never been in any trouble.
-    std::string vitals, holidays, weather, journal;
+    std::string vitals, holidays, weather, journal, professions;
     {
         std::vector<std::string> heard{ playerMessage };
         for (const ContextRecentLine& line : Context_RecentLines(bot, source, channelName, 4, g_ContextMaxAgeSeconds))
@@ -3852,6 +3853,12 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         weather = Weather_PromptFor(bot, heard);
         if (!weather.empty())
             prompt += " " + weather;
+        // ...and where it is of professions, what its are and, when the kind
+        // of person it is chose them, why (mod-ollama-chat_professions):
+        // "what profs u got?" got a made-up answer.
+        professions = Professions_PromptFor(bot, heard);
+        if (!professions.empty())
+            prompt += " " + professions;
         // ...and what it has done with them before, when the talk is of that
         // or it has not spoken with them for a while (mod-ollama-chat_journal).
         journal = Journal_ReplyPromptFor(bot, player, heard);
@@ -3967,7 +3974,8 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
                                          static_cast<const std::string*>(&vitals),
                                          static_cast<const std::string*>(&holidays),
                                          static_cast<const std::string*>(&weather),
-                                         static_cast<const std::string*>(&journal) })
+                                         static_cast<const std::string*>(&journal),
+                                         static_cast<const std::string*>(&professions) })
             if (!part->empty())
                 *facts += (facts->empty() ? "" : " ") + *part;
     }

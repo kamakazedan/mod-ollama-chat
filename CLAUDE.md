@@ -633,6 +633,20 @@ topic's `{lately}`, skipped with nothing to tell), what it wears (mingle's
 `{professions}`). A pool value only some levels could talk of carries a level
 tag. `Outlook.FactsText` says so to every bot.
 
+Nor why it has its trades (`mod-ollama-chat_professions`). mod-playerbots-plus
+leans a bot's professions by the kind of person it is (its leanings,
+`PlayerbotsPlus.Skills.Leaning.*`); which leaning each personality is, is
+this module's (`Professions.Leanings`, given to plus with
+`SetLeaningProvider`, API 13). A reply where the talk is of professions is
+told its professions (`Professions_PromptFor`: "what profs u got?" got a
+made-up answer), and so is a mingle's `[prof]`; the why only when its
+leaning chose the pair (`OllamaLeaningMatch`, `Professions.Reason.<Leaning>.
+<How>`), said as it stands, never as a story of how it came to them: a
+reason for a pair the leaning did not choose would be made up. A bot all
+about gold is told its real gold on a share of the lines it starts itself
+(`Professions_GoldFor`, `GoldChance`): a sum in every prompt is what every
+line would be about, and a reply has `{bot_gold}` already.
+
 Made-up fun is wanted, plainly as fun: a daft rumour about a lore figure, a
 conspiracy theory about an NPC, an imagine-if (the user's call -- they were
 taken out once and had to go back). It lands when it twists something true,

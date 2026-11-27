@@ -42,6 +42,7 @@
 #include "mod-ollama-chat_goodturn.h"
 #include "mod-ollama-chat_holidays.h"
 #include "mod-ollama-chat_weather.h"
+#include "mod-ollama-chat_professions.h"
 #include "mod-ollama-chat_arrive.h"
 #include "mod-ollama-chat_journal.h"
 #include "mod-ollama-chat_wipe.h"
@@ -1101,6 +1102,12 @@ std::vector<std::string> OllamaStatus_Lines(const std::string& want)
             g_HolidaysEnable ? "on" : "off", holidays.known, holidays.names.empty() ? "none" : holidays.names,
             (unsigned long long)holidays.told, (unsigned long long)holidays.topics,
             (unsigned long long)holidays.keptIn);
+    const ProfessionsStats trades = Professions_GetStats();
+    if (show("chat"))
+        out("Professions: {} personalities with a leaning{}; {} replies told their professions ({} with why), {} "
+            "lines nobody asked for told their gold",
+            trades.leanings, OLLAMA_CHAT_PLAYERBOTS_PLUS >= 13 ? "" : " (without mod-playerbots-plus: nobody leans)",
+            (unsigned long long)trades.told, (unsigned long long)trades.why, (unsigned long long)trades.gold);
     const OllamaWeatherStats sky = Weather_GetStats();
     if (show("chat"))
         out("Weather: {} zones heard of, {} with rain, snow or a storm now; {} replies told what it is doing, {} "

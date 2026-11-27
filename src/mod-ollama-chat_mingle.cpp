@@ -18,6 +18,7 @@
 #include "mod-ollama-chat_pets.h"
 #include "mod-ollama-chat_plus.h"
 #include "mod-ollama-chat_presence.h"
+#include "mod-ollama-chat_professions.h"
 #include "mod-ollama-chat_race.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_textrules.h"
@@ -26,7 +27,6 @@
 
 #include "CellImpl.h"
 #include "Config.h"
-#include "DBCStores.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "Group.h"
@@ -419,30 +419,6 @@ namespace
     // People-watching is of the people really about, this near.
     constexpr float kPassersbyYards = 30.0f;
 
-    // The professions `p` has, with how far along: "mining 150, skinning
-    // 120". Empty when it has none.
-    std::string ProfessionsOf(Player* p)
-    {
-        static const uint32 skills[] = { SKILL_ALCHEMY, SKILL_BLACKSMITHING, SKILL_ENCHANTING, SKILL_ENGINEERING,
-                                         SKILL_HERBALISM, SKILL_INSCRIPTION, SKILL_JEWELCRAFTING,
-                                         SKILL_LEATHERWORKING, SKILL_MINING, SKILL_SKINNING, SKILL_TAILORING,
-                                         SKILL_COOKING, SKILL_FIRST_AID, SKILL_FISHING };
-        std::string out;
-        for (uint32 skill : skills)
-        {
-            if (!p->HasSkill(skill))
-                continue;
-            SkillLineEntry const* line = sSkillLineStore.LookupEntry(skill);
-            if (!line || !line->name[0] || !*line->name[0])
-                continue;
-            std::string name = line->name[0];
-            for (char& c : name)
-                c = char(std::tolower(static_cast<unsigned char>(c)));
-            out += (out.empty() ? "" : ", ") + name + " " + std::to_string(p->GetPureSkillValue(skill));
-        }
-        return out;
-    }
-
     // What there is among them for a premise to need: "[gear]" something one
     // of them wears worth a look, "[prof]" a profession among them (and how
     // far along each is), "[mount]" one of them riding one, "[pet]" a pet or
@@ -491,9 +467,13 @@ namespace
                     places.gear = p->GetName() + "'s " + piece;
                     facts.insert("gear");
                 }
-            const std::string profs = ProfessionsOf(p);
+            // ...with why, where its leaning chose its pair: "herbalism and
+            // mining for the gold", never a reason made up.
+            const std::string profs = Professions_Of(p);
+            const std::string why = profs.empty() ? std::string() : Professions_WhyOf(p);
             places.professions += (places.professions.empty() ? "" : "; ") + p->GetName() + ": " +
-                                  (profs.empty() ? std::string("none") : profs);
+                                  (profs.empty() ? std::string("none") : profs) +
+                                  (why.empty() ? std::string() : " (" + why + ")");
             if (!profs.empty())
                 facts.insert("prof");
             const TextRules::Animals a = Pets_Seen(p).animals;

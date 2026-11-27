@@ -28,6 +28,7 @@
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_battleground.h"
 #include "mod-ollama-chat_mingle.h"
+#include "mod-ollama-chat_professions.h"
 #include "SharedDefines.h"
 #include <fmt/core.h>
 #include <algorithm>
@@ -4631,6 +4632,7 @@ static void LoadNaturalChatV49Settings()
     Journal_LoadConfig();
     Mingle_LoadConfig();
     Battleground_LoadConfig();
+    Professions_LoadConfig();
 }
 
 static void LoadNaturalChatV47Settings()
@@ -6239,6 +6241,7 @@ void OllamaChatConfigWorldScript::OnStartup()
     Marks_Init();
     GroupQuests_Init();
     CityLife_Init();
+    Professions_Init();
     LoadBotPersonalityList();
     LoadBotConversationHistoryFromDB();
     InitializeSentimentTracking();
